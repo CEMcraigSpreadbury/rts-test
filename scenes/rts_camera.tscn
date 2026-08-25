@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/rts_camera.gd" id="1_script"]
+
+[node name="CameraRig" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Yaw" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+
+[node name="Pitch" type="Node3D" parent="Yaw"]
+
+[node name="Camera3D" type="Camera3D" parent="Yaw/Pitch"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 18)
+current = true
+fov = 45.0
