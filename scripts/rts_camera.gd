@@ -47,7 +47,12 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	## Input.is_key_pressed() polls raw OS key state and ignores whatever has UI
 	## focus, so without this a focused text field (e.g. chat) wouldn't stop WASD/Q/E.
-	if get_viewport().gui_get_focus_owner() != null:
+	## Specifically checking for a LineEdit (not "any focused Control") matters:
+	## clicking a Button (construction/production panels) leaves it focused too,
+	## and Buttons don't release focus on their own, which was blocking WASD
+	## panning after any button click until something else happened to steal focus.
+	var focus_owner := get_viewport().gui_get_focus_owner()
+	if focus_owner is LineEdit:
 		return
 
 	var input_dir := Vector2.ZERO

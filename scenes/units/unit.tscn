@@ -1,6 +1,7 @@
-[gd_scene load_steps=6 format=3 uid="uid://c8n1w7q1yj0kx"]
+[gd_scene load_steps=8 format=3 uid="uid://c8n1w7q1yj0kx"]
 
 [ext_resource type="Script" path="res://scripts/unit.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath(".:position")
@@ -9,6 +10,9 @@ properties/0/replication_mode = 1
 properties/1/path = NodePath(".:rotation")
 properties/1/spawn = true
 properties/1/replication_mode = 1
+properties/2/path = NodePath(".:status_current_health")
+properties/2/spawn = true
+properties/2/replication_mode = 1
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -50,6 +54,32 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ring")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="."]
 radius = 0.45
+
+[node name="HealthBar" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+visible = false
+
+[node name="Background" type="Sprite3D" parent="HealthBar"]
+transform = Transform3D(1, 0, 0, 0, 0.15, 0, 0, 0, 1, 0, 0, 0)
+billboard = 1
+cast_shadow = 0
+shaded = false
+double_sided = true
+texture_filter = 0
+pixel_size = 0.1
+modulate = Color(0.1, 0.1, 0.1, 0.85)
+texture = ExtResource("2_bar_tex")
+
+[node name="Fill" type="Sprite3D" parent="HealthBar"]
+transform = Transform3D(0.925, 0, 0, 0, 0.1, 0, 0, 0, 1, 0, 0, 0.01)
+billboard = 1
+cast_shadow = 0
+shaded = false
+double_sided = true
+texture_filter = 0
+pixel_size = 0.1
+modulate = Color(0.25, 0.9, 0.3, 1)
+texture = ExtResource("2_bar_tex")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_1")

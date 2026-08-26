@@ -219,3 +219,31 @@ offset_bottom = -176.0
 grow_horizontal = 2
 grow_vertical = 0
 placeholder_text = "Enter to send — try: cmd add wood 10"
+
+[node name="GameOverPanel" type="PanelContainer" parent="UI"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -140.0
+offset_top = -70.0
+offset_right = 140.0
+offset_bottom = 70.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="ResultLabel" type="Label" parent="UI/GameOverPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+text = "Game Over"
+
+[node name="ReturnButton" type="Button" parent="UI/GameOverPanel/VBox"]
+layout_mode = 2
+text = "Return to Lobby"

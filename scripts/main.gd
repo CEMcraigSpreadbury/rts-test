@@ -30,6 +30,9 @@ const TEAM_COLORS: Array[Color] = [
 @onready var chat_log: RichTextLabel = $UI/ChatLog
 @onready var chat_input: LineEdit = $UI/ChatInput
 
+@onready var game_over_panel: PanelContainer = $UI/GameOverPanel
+@onready var game_over_label: Label = $UI/GameOverPanel/VBox/ResultLabel
+
 var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
 var drag_start: Vector2 = Vector2.ZERO
@@ -44,9 +47,17 @@ var placing_type: BuildingType = null
 var placement_ghost: MeshInstance3D = null
 var placement_valid: bool = false
 
+## Purely local visual: only ever shown for the local player's own selected
+## building, so it's built on demand rather than living in a networked scene.
+var rally_marker: Node3D = null
+
 ## Host-only bookkeeping: which team index / Town Center belongs to each peer.
 var team_index_by_peer: Dictionary = {}
 var town_centers: Dictionary = {}
+## Host-only: peer_id -> how many is_main_base buildings they still have.
+var main_base_count_by_peer: Dictionary = {}
+var defeated_peers: Dictionary = {}
+var game_over: bool = false
 
 const MAX_CHAT_LINES: int = 8
 ## Extend this when new resource types (Stone, Gold, ...) are added.
@@ -67,6 +78,9 @@ func _ready() -> void:
 		_spawn_all_players()
 
 	chat_input.text_submitted.connect(_on_chat_submitted)
+
+	game_over_panel.visible = false
+	$UI/GameOverPanel/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
 
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
@@ -129,7 +143,49 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 	building.owner_peer_id = data.peer_id
 	building.position = data.position
 	building.item_completed.connect(_on_building_item_completed.bind(building))
+	building.destroyed.connect(_on_building_destroyed.bind(building))
+	if multiplayer.is_server() and building.is_main_base:
+		main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
 	return building
+
+## --- Win condition (host only) ---
+
+func _on_building_destroyed(building: ProductionBuilding) -> void:
+	if not multiplayer.is_server() or not building.is_main_base or game_over:
+		return
+	var peer_id: int = building.owner_peer_id
+	main_base_count_by_peer[peer_id] = maxi(main_base_count_by_peer.get(peer_id, 1) - 1, 0)
+	if main_base_count_by_peer[peer_id] <= 0 and not defeated_peers.has(peer_id):
+		defeated_peers[peer_id] = true
+		_check_for_game_over()
+
+func _check_for_game_over() -> void:
+	var all_peers: Array = main_base_count_by_peer.keys()
+	if all_peers.size() <= 1:
+		return
+	var remaining: Array = []
+	for peer_id in all_peers:
+		if not defeated_peers.has(peer_id):
+			remaining.append(peer_id)
+	if remaining.size() <= 1:
+		game_over = true
+		var winner_id: int = remaining[0] if remaining.size() == 1 else -1
+		_rpc_game_over.rpc(winner_id)
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_game_over(winner_peer_id: int) -> void:
+	game_over = true
+	game_over_panel.visible = true
+	if winner_peer_id == -1:
+		game_over_label.text = "Draw!"
+	elif winner_peer_id == _my_peer_id():
+		game_over_label.text = "Victory!"
+	else:
+		game_over_label.text = "Defeat"
+
+func _on_return_to_lobby_pressed() -> void:
+	Network.leave_game()
+	get_tree().change_scene_to_file("res://scenes/lobby.tscn")
 
 func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
@@ -138,13 +194,22 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		return
 	var spawn_point: Node3D = building.get_node_or_null(building.spawn_point_path)
 	var spawn_pos: Vector3 = spawn_point.global_position if spawn_point else building.global_position
+	## A previously-spawned, un-ordered unit may still be standing exactly on the
+	## spawn point; spawning a new one at those identical coordinates makes their
+	## avoidance radii perfectly overlap, which sends NavigationAgent3D's RVO
+	## avoidance into a degenerate case (near-zero separation) that can fling one
+	## of them across the map trying to resolve it. A small jitter keeps spawns
+	## from ever landing exactly on top of each other.
+	spawn_pos += Vector3(randf_range(-0.6, 0.6), 0.0, randf_range(-0.6, 0.6))
 	var team_index: int = team_index_by_peer.get(building.owner_peer_id, 0)
-	unit_spawner.spawn({
+	var unit: Unit = unit_spawner.spawn({
 		"scene_path": item.unit_scene.resource_path,
 		"peer_id": building.owner_peer_id,
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 		"position": spawn_pos,
 	})
+	if building.can_rally and building.has_rally_point:
+		unit.command_move(building.rally_point)
 
 func _get_dropoff_for(peer_id: int) -> Node3D:
 	var town_center: ProductionBuilding = town_centers.get(peer_id)
@@ -159,6 +224,9 @@ func _process(_delta: float) -> void:
 		_update_placement_ghost()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if game_over:
+		return
+
 	if event is InputEventKey and event.pressed and not event.echo:
 		if chat_input.visible and event.keycode == KEY_ESCAPE:
 			_close_chat_input()
@@ -185,7 +253,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				selection_box.visible = false
 				_finish_selection(drag_start, event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			_issue_move_order(event.position)
+			if selected_building != null and selected_building.can_rally:
+				_set_rally_point(event.position)
+			else:
+				_issue_move_order(event.position)
 	elif event is InputEventMouseMotion and dragging:
 		if drag_start.distance_to(event.position) > CLICK_DRAG_THRESHOLD:
 			selection_box.visible = true
@@ -197,7 +268,15 @@ func _update_selection_box(current_pos: Vector2) -> void:
 	selection_box.position = top_left
 	selection_box.size = size
 
+## Units can die (and be freed) between selection and the next click/order, so
+## any stored reference must be validity-checked before use, not just trusted.
+func _prune_selected_units() -> void:
+	for i in range(selected_units.size() - 1, -1, -1):
+		if not is_instance_valid(selected_units[i]):
+			selected_units.remove_at(i)
+
 func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
+	_prune_selected_units()
 	var rect := Rect2(
 		Vector2(min(start_pos.x, end_pos.x), min(start_pos.y, end_pos.y)),
 		(end_pos - start_pos).abs()
@@ -237,6 +316,7 @@ func _raycast(screen_pos: Vector2) -> Dictionary:
 ## Selection is local, but actually moving/gathering only ever happens on the
 ## host, so the command is sent there and executed on its authoritative units.
 func _issue_move_order(screen_pos: Vector2) -> void:
+	_prune_selected_units()
 	if selected_units.is_empty():
 		return
 	var result := _raycast(screen_pos)
@@ -250,7 +330,7 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 	var target_path := NodePath()
 	if result.collider is Gatherable:
 		target_path = result.collider.get_path()
-	elif result.collider is Unit and result.collider.owner_peer_id != _my_peer_id():
+	elif (result.collider is Unit or result.collider is ProductionBuilding) and result.collider.owner_peer_id != _my_peer_id():
 		target_path = result.collider.get_path()
 
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position)
@@ -271,7 +351,7 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			continue
 		if target_node is Gatherable:
 			unit.command_gather(target_node, _get_dropoff_for(sender_id))
-		elif target_node is Unit and target_node.owner_peer_id != unit.owner_peer_id:
+		elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
 			unit.command_attack(target_node)
 		else:
 			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
@@ -283,6 +363,7 @@ func _on_stockpile_changed(resource_name: String, amount: int) -> void:
 func _select_building(building: ProductionBuilding) -> void:
 	selected_building = building
 	build_panel.visible = building != null
+	_update_rally_marker()
 	if building == null:
 		return
 
@@ -327,6 +408,72 @@ func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
 	if item_index < 0 or item_index >= building.producibles.size():
 		return
 	building.enqueue(building.producibles[item_index])
+
+## --- Rally points ---
+
+## Applied to our own local copy immediately (for instant marker feedback and,
+## if we're the host, because that copy IS the authoritative one), and also
+## sent to the host so a non-host owner's rally point actually affects spawning.
+func _set_rally_point(screen_pos: Vector2) -> void:
+	var result := _raycast(screen_pos)
+	if result.is_empty():
+		return
+	selected_building.rally_point = result.position
+	selected_building.has_rally_point = true
+	_update_rally_marker()
+	_rpc_set_rally_point.rpc_id(1, selected_building.get_path(), result.position)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var building := get_node_or_null(building_path) as ProductionBuilding
+	if building == null or building.owner_peer_id != sender_id or not building.can_rally:
+		return
+	building.rally_point = world_pos
+	building.has_rally_point = true
+
+func _update_rally_marker() -> void:
+	if selected_building != null and selected_building.can_rally and selected_building.has_rally_point:
+		_ensure_rally_marker()
+		rally_marker.visible = true
+		rally_marker.global_position = selected_building.rally_point
+	elif rally_marker:
+		rally_marker.visible = false
+
+func _ensure_rally_marker() -> void:
+	if rally_marker:
+		return
+	rally_marker = Node3D.new()
+	add_child(rally_marker)
+
+	var pole := MeshInstance3D.new()
+	var pole_mesh := CylinderMesh.new()
+	pole_mesh.top_radius = 0.05
+	pole_mesh.bottom_radius = 0.05
+	pole_mesh.height = 1.4
+	pole.mesh = pole_mesh
+	pole.position = Vector3(0, 0.7, 0)
+	var pole_mat := StandardMaterial3D.new()
+	pole_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	pole_mat.albedo_color = Color(0.9, 0.9, 0.9)
+	pole.set_surface_override_material(0, pole_mat)
+	rally_marker.add_child(pole)
+
+	var flag := MeshInstance3D.new()
+	var flag_mesh := BoxMesh.new()
+	flag_mesh.size = Vector3(0.5, 0.3, 0.02)
+	flag.mesh = flag_mesh
+	flag.position = Vector3(0.27, 1.15, 0)
+	var flag_mat := StandardMaterial3D.new()
+	flag_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	flag_mat.albedo_color = Color(1.0, 0.85, 0.2)
+	flag.set_surface_override_material(0, flag_mat)
+	rally_marker.add_child(flag)
 
 func _update_queue_label() -> void:
 	if selected_building.is_under_construction:

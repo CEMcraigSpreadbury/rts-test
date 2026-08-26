@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="2_cost_script"]
 [ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
 [ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="5_soldier_scene"]
+[ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(3, 2, 3)
@@ -47,6 +48,9 @@ properties/4/replication_mode = 1
 properties/5/path = NodePath(".:synced_current_item_name")
 properties/5/spawn = true
 properties/5/replication_mode = 2
+properties/6/path = NodePath(".:health_fraction")
+properties/6/spawn = true
+properties/6/replication_mode = 1
 
 [node name="ProductionBuilding" type="StaticBody3D"]
 script = ExtResource("1_building_script")
@@ -69,6 +73,32 @@ avoidance_enabled = true
 
 [node name="SpawnPoint" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, 2.5)
+
+[node name="HealthBar" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
+visible = false
+
+[node name="Background" type="Sprite3D" parent="HealthBar"]
+transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
+billboard = 1
+cast_shadow = 0
+shaded = false
+double_sided = true
+texture_filter = 0
+pixel_size = 0.2
+modulate = Color(0.1, 0.1, 0.1, 0.85)
+texture = ExtResource("6_bar_tex")
+
+[node name="Fill" type="Sprite3D" parent="HealthBar"]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+billboard = 1
+cast_shadow = 0
+shaded = false
+double_sided = true
+texture_filter = 0
+pixel_size = 0.2
+modulate = Color(0.25, 0.9, 0.3, 1)
+texture = ExtResource("6_bar_tex")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_building")

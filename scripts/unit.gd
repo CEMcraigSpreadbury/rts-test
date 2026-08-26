@@ -66,34 +66,46 @@ signal animation_changed(anim_name: String)
 @export var status_activity: Activity = Activity.IDLE
 @export var status_carried_amount: int = 0
 @export var status_carried_type: ResourceType = null
+## Was a plain (non-exported, non-networked) var, so it never showed a live
+## value in the remote inspector and never updated on non-authoritative peers.
+@export var status_current_health: int = 1
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var sprite: AnimatedSprite3D = $Sprite
 @onready var selection_ring: MeshInstance3D = $SelectionRing
+@onready var health_bar: Node3D = $HealthBar
+@onready var health_bar_fill: Sprite3D = $HealthBar/Fill
 
 var selected: bool = false:
 	set(value):
 		selected = value
 		selection_ring.visible = value
 
-var current_health: int = 1
+## Captured from the scene's authored (full-health) scale so the fill's
+## aspect-ratio/sizing lives in the scene file, not duplicated in script.
+var _fill_base_scale_x: float = 1.0
+
 var target_resource: Gatherable = null
 var dropoff_point: Node3D = null
 var gather_timer: float = 0.0
-var attack_target: Unit = null
+## Unit or ProductionBuilding — anything with owner_peer_id/current_health/take_damage().
+var attack_target: Node3D = null
 var attack_timer: float = 0.0
 var _dying: bool = false
 
 func _ready() -> void:
-	current_health = max_health
+	status_current_health = max_health
+	if health_bar_fill:
+		_fill_base_scale_x = health_bar_fill.scale.x
 	if sprite_sheet:
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, {
 			"idle": {"row": idle_row, "frames": idle_frame_count, "fps": 5.0, "loop": true},
 			"walk": {"row": walk_row, "frames": walk_frame_count, "fps": 8.0, "loop": true},
-			"attack": {"row": attack_row, "frames": attack_frame_count, "fps": 10.0, "loop": true},
+			"attack": {"row": attack_row, "frames": attack_frame_count, "fps": 10.0, "loop": false},
 			"death": {"row": death_row, "frames": death_frame_count, "fps": 8.0, "loop": false},
 		})
 		sprite.play("idle")
+	sprite.animation_finished.connect(_on_attack_animation_finished)
 	sprite.modulate = team_tint
 	nav_agent.path_desired_distance = 0.5
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
@@ -132,7 +144,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	dropoff_point = dropoff
 	_head_to_resource()
 
-func command_attack(target: Unit) -> void:
+func command_attack(target: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
 		return
 	status_command = Command.ATTACK
@@ -140,12 +152,18 @@ func command_attack(target: Unit) -> void:
 	attack_target = target
 	_head_to_target()
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
-	current_health = maxi(current_health - amount, 0)
-	if current_health <= 0:
+	status_current_health = maxi(status_current_health - amount, 0)
+	if status_current_health <= 0:
 		_die()
+		return
+
+	if can_fight and attacker != null and is_instance_valid(attacker):
+		if status_command != Command.ATTACK:
+			command_attack(attacker)
+		CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
 
 func _physics_process(delta: float) -> void:
 	## Only the host simulates movement/gathering/combat; other peers just display
@@ -177,8 +195,6 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 		_face_attack_target(delta)
 		_tick_attacking(delta)
-		if sprite.sprite_frames:
-			_set_animation("attack")
 		move_and_slide()
 		return
 
@@ -234,6 +250,8 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 ## the host) must derive it locally, every frame, from the unit's already-synced
 ## world rotation plus that peer's own current camera.
 func _process(_delta: float) -> void:
+	_update_health_bar_visual()
+
 	var camera := get_viewport().get_camera_3d()
 	if not camera:
 		return
@@ -242,6 +260,17 @@ func _process(_delta: float) -> void:
 	var screen_dot: float = forward.dot(cam_right)
 	if absf(screen_dot) > FLIP_DOT_THRESHOLD:
 		sprite.flip_h = screen_dot < 0.0
+
+## Reads from status_current_health, which is now a real synced property, so
+## this displays correctly on every peer, not just the authoritative one.
+func _update_health_bar_visual() -> void:
+	if not health_bar:
+		return
+	var fraction: float = clampf(float(status_current_health) / float(maxi(max_health, 1)), 0.0, 1.0)
+	health_bar.visible = fraction < 0.999 and status_activity != Activity.DEAD
+	## Scale from center only (no position offset) so Fill can't visually drift
+	## away from Background as the unit/camera rotates.
+	health_bar_fill.scale.x = _fill_base_scale_x * maxf(fraction, 0.001)
 
 ## Applied locally immediately; main.gd relays the change to other peers via
 ## its own broadcast RPC (see note on the signal above). AnimatedSprite3D.animation
@@ -252,6 +281,21 @@ func _set_animation(anim_name: String) -> void:
 		return
 	sprite.play(anim_name)
 	animation_changed.emit(anim_name)
+
+## Called exactly when a hit actually lands, so the swing is synced to
+## attack_cooldown instead of looping on its own independent timer. Unlike
+## _set_animation(), this always restarts the clip even if "attack" is
+## already playing (e.g. a very short cooldown re-triggering mid-swing).
+func _play_attack_swing() -> void:
+	sprite.play("attack")
+	animation_changed.emit("attack")
+
+## "attack" is non-looping; once a swing finishes, settle back to idle until
+## the next hit fires. This runs on every peer (not just the authority) since
+## it just reacts to that peer's own local sprite finishing its own playback.
+func _on_attack_animation_finished() -> void:
+	if sprite.animation == "attack":
+		_set_animation("idle")
 
 ## --- Gathering ---
 
@@ -312,12 +356,21 @@ func _end_gather_command() -> void:
 
 ## --- Combat ---
 
+## Buildings have a large NavigationObstacle3D footprint that keeps agents
+## pushed back well beyond a typical melee attack_range, so units must count
+## that footprint as part of "close enough" or they'd approach, get stopped
+## by avoidance short of attack_range, and never actually start attacking.
+func _effective_attack_range() -> float:
+	if attack_target is ProductionBuilding:
+		return attack_range + attack_target.get_footprint_radius()
+	return attack_range
+
 func _head_to_target() -> void:
 	if not _is_target_alive(attack_target):
 		_find_new_target_or_idle()
 		return
 	status_activity = Activity.TO_TARGET
-	nav_agent.target_desired_distance = attack_range
+	nav_agent.target_desired_distance = _effective_attack_range()
 	move_to(attack_target.global_position)
 
 func _start_attacking() -> void:
@@ -343,19 +396,30 @@ func _tick_attacking(delta: float) -> void:
 		return
 
 	var dist := global_position.distance_to(attack_target.global_position)
-	if dist > attack_range * ATTACK_LEASH_SLACK:
+	if dist > _effective_attack_range() * ATTACK_LEASH_SLACK:
 		_head_to_target()
 		return
 
 	attack_timer += delta
 	if attack_timer >= attack_cooldown:
 		attack_timer = 0.0
-		attack_target.take_damage(attack_damage)
+		_play_attack_swing()
+		attack_target.take_damage(attack_damage, self)
 		if not _is_target_alive(attack_target):
 			_find_new_target_or_idle()
 
-func _is_target_alive(target: Unit) -> bool:
-	return is_instance_valid(target) and target.status_activity != Activity.DEAD
+## Untyped parameter is deliberate: a statically-typed Node3D parameter makes
+## GDScript type-check the argument before the function body even runs, and
+## that check throws on an already-freed object instead of letting
+## is_instance_valid() safely catch it below.
+func _is_target_alive(target) -> bool:
+	if not is_instance_valid(target):
+		return false
+	if target is Unit:
+		return target.status_activity != Activity.DEAD
+	if target is ProductionBuilding:
+		return not target.is_destroyed
+	return false
 
 func _find_new_target_or_idle() -> void:
 	if status_command != Command.ATTACK:
