@@ -13,6 +13,7 @@ const TEAM_COLORS: Array[Color] = [
 @export var available_building_types: Array[BuildingType] = []
 
 @onready var camera: Camera3D = $CameraRig/Yaw/Pitch/Camera3D
+@onready var camera_rig: Node3D = $CameraRig
 @onready var selection_box: ColorRect = $UI/SelectionBox
 @onready var resource_label: Label = $UI/ResourceLabel
 @onready var units_root: Node3D = $Units
@@ -37,6 +38,15 @@ var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
 var drag_start: Vector2 = Vector2.ZERO
 var dragging: bool = false
+
+## Purely local UI state: which units/buildings belong to each numbered
+## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
+var control_groups: Dictionary = {}
+## Which group number the CURRENT selection came from via a number-key press
+## — cleared by any other selection action, so pressing the same digit twice
+## in a row (with nothing else selected in between) means "snap the camera
+## there" rather than "reselect it".
+var _active_group_number: int = -1
 
 const CLICK_DRAG_THRESHOLD: float = 6.0
 
@@ -308,6 +318,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_placement_input(event)
 		return
 
+	if event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode >= KEY_1 and event.keycode <= KEY_9:
+		var group_number: int = event.keycode - KEY_1 + 1
+		if event.ctrl_pressed:
+			_assign_control_group(group_number)
+		else:
+			_activate_control_group(group_number)
+		get_viewport().set_input_as_handled()
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -340,8 +360,75 @@ func _prune_selected_units() -> void:
 		if not is_instance_valid(selected_units[i]):
 			selected_units.remove_at(i)
 
+## --- Control groups ---
+
+func _assign_control_group(number: int) -> void:
+	_prune_selected_units()
+	var members: Array[Node3D] = []
+	for unit in selected_units:
+		members.append(unit)
+	if selected_building != null and is_instance_valid(selected_building):
+		members.append(selected_building)
+	control_groups[number] = members
+	## Assigning doesn't change what's currently selected, but the group this
+	## selection "came from" (if any) is no longer meaningfully this number
+	## specifically — next press of it should reselect, not recenter.
+	_active_group_number = -1
+
+func _activate_control_group(number: int) -> void:
+	var members: Array = control_groups.get(number, [])
+	for i in range(members.size() - 1, -1, -1):
+		if not is_instance_valid(members[i]):
+			members.remove_at(i)
+	control_groups[number] = members
+	if members.is_empty():
+		_active_group_number = -1
+		return
+
+	if _active_group_number == number:
+		_center_camera_on(members)
+		return
+
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	_select_building(null)
+
+	## A mixed group (units + a building) selects the units, same as
+	## drag-select already does — only a building-only group opens its panel.
+	var units_in_group: Array[Unit] = []
+	var building_in_group: ProductionBuilding = null
+	for member in members:
+		if member is Unit:
+			units_in_group.append(member)
+		elif member is ProductionBuilding and building_in_group == null:
+			building_in_group = member
+
+	if not units_in_group.is_empty():
+		for unit in units_in_group:
+			unit.selected = true
+			selected_units.append(unit)
+	elif building_in_group != null:
+		_select_building(building_in_group)
+
+	_active_group_number = number
+
+func _center_camera_on(members: Array) -> void:
+	var sum := Vector3.ZERO
+	var count := 0
+	for member in members:
+		if is_instance_valid(member):
+			sum += member.global_position
+			count += 1
+	if count == 0:
+		return
+	var avg := sum / count
+	camera_rig.global_position.x = avg.x
+	camera_rig.global_position.z = avg.z
+
 func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 	_prune_selected_units()
+	_active_group_number = -1
 	var rect := Rect2(
 		Vector2(min(start_pos.x, end_pos.x), min(start_pos.y, end_pos.y)),
 		(end_pos - start_pos).abs()
