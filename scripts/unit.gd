@@ -52,6 +52,9 @@ signal animation_changed(anim_name: String)
 @export var attack_frame_count: int = 6
 @export var death_row: int = 6
 @export var death_frame_count: int = 4
+## Only played by units with can_gather; harmless (just unused) otherwise.
+@export var gather_row: int = 2
+@export var gather_frame_count: int = 10
 
 @export_group("Gathering")
 @export var can_gather: bool = true
@@ -115,6 +118,7 @@ func _ready() -> void:
 			"walk": {"row": walk_row, "frames": walk_frame_count, "fps": 8.0, "loop": true},
 			"attack": {"row": attack_row, "frames": attack_frame_count, "fps": 10.0, "loop": false},
 			"death": {"row": death_row, "frames": death_frame_count, "fps": 8.0, "loop": false},
+			"gather": {"row": gather_row, "frames": gather_frame_count, "fps": 8.0, "loop": true},
 		})
 		sprite.play("idle")
 	sprite.animation_finished.connect(_on_attack_animation_finished)
@@ -249,7 +253,7 @@ func _physics_process(delta: float) -> void:
 		velocity.z = 0.0
 		_tick_gathering(delta)
 		if sprite.sprite_frames:
-			_set_animation("idle")
+			_set_animation("gather")
 		move_and_slide()
 		return
 
