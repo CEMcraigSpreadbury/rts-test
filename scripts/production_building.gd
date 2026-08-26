@@ -35,8 +35,14 @@ const DESTROY_SINK_DURATION: float = 1.5
 ## Set alongside owner_peer_id at spawn time; used only for the minimap dot
 ## color (buildings have no sprite to modulate the way units do).
 @export var team_tint: Color = Color.WHITE
-## How far the model sinks below its resting position at the start of construction.
+## How far the model sinks into the ground as it's destroyed.
 @export var construction_sink_depth: float = 3.0
+## Set (via spawn data, resolved per-peer from a NodePath since Gatherables
+## aren't networked nodes) when this building was placed via requires_deposit
+## (e.g. a Mine on a Gold Deposit). Its collision commonly overlaps the
+## deposit's own, and either way "right-click the building itself" should
+## still gather from the resource it sits on rather than just moving there.
+var linked_deposit: Gatherable = null
 
 @export_group("Combat")
 @export var max_health: int = 100
@@ -50,13 +56,26 @@ const DESTROY_SINK_DURATION: float = 1.5
 @export var synced_time_remaining: float = 0.0
 @export var synced_current_item_name: String = ""
 @export var health_fraction: float = 1.0
+## Mirrored purely for the "N building" UI display.
+@export var synced_builder_count: int = 0
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
 
+## How long a SINGLE builder takes to finish this from 0%; each additional
+## villager assigned via add_builder() scales progress proportionally, so N
+## builders finish in construction_time / N seconds. No progress is made at
+## all with zero builders — see _process().
 var construction_time: float = 0.0
-var _construction_timer: float = 0.0
-var _rest_position_y: float = 0.0
+var builders: Array[Unit] = []
+
+## mesh_instance -> Array of its original per-surface material overrides
+## (null entries mean "no override", i.e. use the mesh's own material),
+## captured so the translucent under-construction look can be reverted
+## exactly. Applied/removed on every peer (see _update_construction_visual),
+## not just the host, since materials aren't a networked property.
+var _construction_visual_applied: bool = false
+var _original_materials: Dictionary = {}
 
 ## Not networked: only the host's copy is ever read (when spawning units), and
 ## the one peer allowed to set it (the owner) writes their own local copy
@@ -84,16 +103,28 @@ func _ready() -> void:
 ## Called by whatever places this building (e.g. the placement system) once
 ## it's positioned in the world. Buildings placed directly in a scene file
 ## (like a level's starting Town Center) simply never call this, so they
-## start fully built with no rising animation.
+## start fully built. The building appears immediately at its real position
+## (never sunk below the ground) so it's clickable right away — a builder has
+## to be assigned to make any progress at all, so a buried-and-unclickable
+## building would be a permanent soft-lock. See _update_construction_visual()
+## for the translucent "not finished yet" look instead.
 func begin_construction(duration: float) -> void:
 	if duration <= 0.0:
 		return
 	construction_time = duration
 	is_under_construction = true
 	construction_progress = 0.0
-	_construction_timer = 0.0
-	_rest_position_y = position.y
-	position.y = _rest_position_y - construction_sink_depth
+
+## Called by Unit when a builder arrives at (or leaves) this site.
+func add_builder(unit: Unit) -> void:
+	if not is_under_construction or is_destroyed or builders.has(unit):
+		return
+	builders.append(unit)
+	synced_builder_count = builders.size()
+
+func remove_builder(unit: Unit) -> void:
+	builders.erase(unit)
+	synced_builder_count = builders.size()
 
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.costs):
@@ -142,6 +173,10 @@ func _begin_destruction() -> void:
 
 func _process(delta: float) -> void:
 	_update_health_bar_visual()
+	## Materials aren't a networked property, so every peer must apply/revert
+	## this locally off the already-synced is_under_construction flag, not
+	## just the host.
+	_update_construction_visual()
 
 	if not is_multiplayer_authority():
 		return
@@ -155,12 +190,22 @@ func _process(delta: float) -> void:
 		return
 
 	if is_under_construction:
-		_construction_timer += delta
-		construction_progress = clampf(_construction_timer / construction_time, 0.0, 1.0)
-		position.y = lerpf(_rest_position_y - construction_sink_depth, _rest_position_y, construction_progress)
+		## Prune builders that died, were freed, or otherwise left without
+		## formally releasing this site (shouldn't normally happen since
+		## Unit._leave_build_site() covers those paths, but stay defensive).
+		for i in range(builders.size() - 1, -1, -1):
+			if not is_instance_valid(builders[i]) or builders[i].status_activity == Unit.Activity.DEAD:
+				builders.remove_at(i)
+		synced_builder_count = builders.size()
+
+		if not builders.is_empty():
+			construction_progress = clampf(
+				construction_progress + (builders.size() / maxf(construction_time, 0.01)) * delta, 0.0, 1.0
+			)
 		if construction_progress >= 1.0:
 			is_under_construction = false
-			position.y = _rest_position_y
+			for builder in builders.duplicate():
+				builder.end_build_command()
 			construction_finished.emit()
 		return
 
@@ -186,3 +231,75 @@ func _update_health_bar_visual() -> void:
 	## Scale from center only (no position offset) so Fill can't visually drift
 	## away from Background as the camera orbits.
 	health_bar_fill.scale.x = _fill_base_scale_x * maxf(fraction, 0.001)
+
+func _update_construction_visual() -> void:
+	if is_under_construction:
+		if not _construction_visual_applied:
+			_apply_construction_transparency()
+			_construction_visual_applied = true
+		_update_construction_rise()
+	elif _construction_visual_applied:
+		_restore_materials()
+		_construction_visual_applied = false
+
+const _CONSTRUCTION_ALPHA: float = 0.45
+
+func _apply_construction_transparency() -> void:
+	_original_materials.clear()
+	_tint_recursive(self)
+
+## Only the mesh nodes are affected (never the root/collision, which must
+## stay put and clickable from the moment the building is placed). Each
+## mesh's own local Y and the local Y of its own bottom edge (from its AABB)
+## are remembered so it can grow from a thin sliver at ground level up to its
+## full height as construction_progress advances — the bottom edge stays
+## fixed the whole time (so it's never invisible below the ground, and never
+## needs to "pop in" at 100%), only the top rises.
+func _tint_recursive(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance: MeshInstance3D = node
+		var surface_count: int = mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+		var originals: Array = []
+		for i in surface_count:
+			originals.append(mesh_instance.get_surface_override_material(i))
+			var base: Material = mesh_instance.get_active_material(i)
+			var ghost: StandardMaterial3D = base.duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+			ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			ghost.albedo_color.a = _CONSTRUCTION_ALPHA
+			mesh_instance.set_surface_override_material(i, ghost)
+		if surface_count > 0:
+			_original_materials[mesh_instance] = {
+				"materials": originals,
+				"base_y": mesh_instance.position.y,
+				"base_scale_y": mesh_instance.scale.y,
+				"aabb_bottom": mesh_instance.mesh.get_aabb().position.y if mesh_instance.mesh else 0.0,
+			}
+	for child in node.get_children():
+		_tint_recursive(child)
+
+## Never lets progress reach a literal 0 scale — a completely flat mesh is an
+## easy-to-misread "did it vanish?" state, so there's always a thin sliver
+## visible immediately on placement.
+const _MIN_RISE_FRACTION: float = 0.05
+
+func _update_construction_rise() -> void:
+	var t: float = clampf(construction_progress, _MIN_RISE_FRACTION, 1.0)
+	for mesh_instance in _original_materials:
+		if not is_instance_valid(mesh_instance):
+			continue
+		var info: Dictionary = _original_materials[mesh_instance]
+		var base_scale_y: float = info["base_scale_y"]
+		var scale_y: float = base_scale_y * t
+		mesh_instance.scale.y = scale_y
+		mesh_instance.position.y = info["base_y"] + info["aabb_bottom"] * base_scale_y * (1.0 - t)
+
+func _restore_materials() -> void:
+	for mesh_instance in _original_materials:
+		if is_instance_valid(mesh_instance):
+			var info: Dictionary = _original_materials[mesh_instance]
+			var originals: Array = info["materials"]
+			for i in originals.size():
+				mesh_instance.set_surface_override_material(i, originals[i])
+			mesh_instance.position.y = info["base_y"]
+			mesh_instance.scale.y = info["base_scale_y"]
+	_original_materials.clear()

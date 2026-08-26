@@ -14,12 +14,15 @@ const MOVE_ARRIVAL_DISTANCE: float = 0.5
 const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
 ## How much further than attack_range a target can drift before we bother re-approaching.
 const ATTACK_LEASH_SLACK: float = 1.2
+## Building footprints push agents back via avoidance same as for melee attacks.
+const BUILD_ARRIVAL_DISTANCE: float = 1.0
 
-## The player's standing order. Move is one-shot; Gather/Attack loop
-## (resource->dropoff->resource / target->next target) until interrupted or exhausted.
-enum Command { NONE, MOVE, GATHER, ATTACK }
+## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
+## hold (resource->dropoff->resource / target->next target / stay building
+## until done) until interrupted or exhausted.
+enum Command { NONE, MOVE, GATHER, ATTACK, BUILD }
 ## The current step within a command, e.g. Gather cycles TO_RESOURCE -> GATHERING -> TO_DROPOFF.
-enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, DEAD }
+enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD }
 
 ## main.gd (which owns a proven-reliable broadcast RPC channel) relays this to
 ## other peers; RPCs declared directly on this dynamically-spawned node were
@@ -55,6 +58,8 @@ signal animation_changed(anim_name: String)
 ## Higher levels gather faster and carry more; upgradable later.
 @export var gather_level: int = 1
 @export var carry_capacity: int = 10
+## Whether this unit can be sent to help construct a building.
+@export var can_build: bool = true
 
 @export_group("Combat")
 @export var can_fight: bool = true
@@ -97,6 +102,7 @@ var gather_timer: float = 0.0
 ## Unit or ProductionBuilding — anything with owner_peer_id/current_health/take_damage().
 var attack_target: Node3D = null
 var attack_timer: float = 0.0
+var build_target: ProductionBuilding = null
 var _dying: bool = false
 
 func _ready() -> void:
@@ -134,6 +140,7 @@ func move_to(target_position: Vector3) -> void:
 func command_move(target_position: Vector3) -> void:
 	if status_activity == Activity.DEAD:
 		return
+	_leave_build_site()
 	status_command = Command.MOVE
 	status_activity = Activity.MOVING
 	target_resource = null
@@ -144,6 +151,7 @@ func command_move(target_position: Vector3) -> void:
 func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_gather or resource_node == null:
 		return
+	_leave_build_site()
 	status_command = Command.GATHER
 	attack_target = null
 	target_resource = resource_node
@@ -153,10 +161,59 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 func command_attack(target: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
 		return
+	_leave_build_site()
 	status_command = Command.ATTACK
 	target_resource = null
 	attack_target = target
 	_head_to_target()
+
+## --- Building ---
+
+func command_build(building: ProductionBuilding) -> void:
+	if status_activity == Activity.DEAD or not can_build or building == null:
+		return
+	if not is_instance_valid(building) or not building.is_under_construction:
+		return
+	_leave_build_site()
+	status_command = Command.BUILD
+	target_resource = null
+	attack_target = null
+	build_target = building
+	_head_to_build_site()
+
+func _head_to_build_site() -> void:
+	if not is_instance_valid(build_target) or not build_target.is_under_construction:
+		end_build_command()
+		return
+	status_activity = Activity.TO_BUILD_SITE
+	nav_agent.target_desired_distance = build_target.get_footprint_radius() + BUILD_ARRIVAL_DISTANCE
+	move_to(build_target.global_position)
+
+func _start_building() -> void:
+	if not is_instance_valid(build_target) or not build_target.is_under_construction:
+		end_build_command()
+		return
+	status_activity = Activity.BUILDING
+	build_target.add_builder(self)
+
+func _tick_building() -> void:
+	if not is_instance_valid(build_target) or build_target.is_destroyed or not build_target.is_under_construction:
+		end_build_command()
+
+## Leaves whatever construction site this unit was contributing to, if any,
+## without otherwise touching status_command/status_activity — called both
+## when a new command interrupts building and when the build naturally ends.
+func _leave_build_site() -> void:
+	if build_target != null and is_instance_valid(build_target):
+		build_target.remove_builder(self)
+	build_target = null
+
+## Public: ProductionBuilding calls this directly on each of its builders
+## when construction finishes, to send them back to idle.
+func end_build_command() -> void:
+	_leave_build_site()
+	status_command = Command.NONE
+	status_activity = Activity.IDLE
 
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
@@ -204,12 +261,23 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	if status_activity == Activity.BUILDING:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		_tick_building()
+		if sprite.sprite_frames:
+			_set_animation("idle")
+		move_and_slide()
+		return
+
 	if status_activity == Activity.TO_RESOURCE and nav_agent.is_navigation_finished():
 		_start_gathering()
 	elif status_activity == Activity.TO_DROPOFF and nav_agent.is_navigation_finished():
 		_deposit_and_continue()
 	elif status_activity == Activity.TO_TARGET and nav_agent.is_navigation_finished():
 		_start_attacking()
+	elif status_activity == Activity.TO_BUILD_SITE and nav_agent.is_navigation_finished():
+		_start_building()
 
 	var direction := Vector3.ZERO
 	if not nav_agent.is_navigation_finished():
@@ -227,7 +295,7 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## armed, even after we stop calling set_velocity() — so states that manage
 	## their own animation/velocity (and already call move_and_slide() themselves)
 	## must ignore these stale callbacks rather than have them stomp the animation.
-	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.DEAD:
+	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD:
 		return
 
 	velocity.x = safe_velocity.x
@@ -462,6 +530,7 @@ func _die() -> void:
 	status_command = Command.NONE
 	attack_target = null
 	target_resource = null
+	_leave_build_site()
 	## take_damage() (the only caller of _die()) already gates on
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
 	Population.release(owner_peer_id, population_cost)

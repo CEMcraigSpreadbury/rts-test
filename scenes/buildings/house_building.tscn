@@ -34,6 +34,9 @@ properties/5/replication_mode = 2
 properties/6/path = NodePath(".:health_fraction")
 properties/6/spawn = true
 properties/6/replication_mode = 1
+properties/7/path = NodePath(".:synced_builder_count")
+properties/7/spawn = true
+properties/7/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")

@@ -44,12 +44,30 @@ const VALID_GHOST_COLOR: Color = Color(0.3, 1.0, 0.3, 0.45)
 const INVALID_GHOST_COLOR: Color = Color(1.0, 0.3, 0.3, 0.45)
 
 var placing_type: BuildingType = null
-var placement_ghost: MeshInstance3D = null
+## Root of a stripped-down, translucent copy of the real building model (not
+## the actual networked building) — purely a local visual preview.
+var placement_ghost: Node3D = null
+## (material, base_albedo_color) pairs collected while building the ghost, so
+## its valid/invalid tint can be updated every frame without re-walking the
+## node tree — see _set_ghost_valid().
+var _ghost_surfaces: Array = []
 var placement_valid: bool = false
+## Only set when placing_type.requires_deposit — the specific world node the
+## ghost is currently snapped to, sent to the host so it can position the
+## building there itself rather than trusting a client-supplied position.
+var _placement_target: Gatherable = null
 
 ## Purely local visual: only ever shown for the local player's own selected
 ## building, so it's built on demand rather than living in a networked scene.
 var rally_marker: Node3D = null
+
+## Purely local visual too — just feedback for whatever the mouse is
+## currently over, built on demand like rally_marker.
+var hover_ring: MeshInstance3D = null
+## The last Unit/ProductionBuilding/Gatherable single-left-clicked (own or
+## not) — keeps the hover ring showing on it even when the mouse moves away,
+## until a different single-click or a click on empty space replaces/clears it.
+var clicked_ring_target: Node3D = null
 
 ## Host-only bookkeeping: which team index / Town Center belongs to each peer.
 var team_index_by_peer: Dictionary = {}
@@ -181,6 +199,11 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.destroyed.connect(_on_building_destroyed.bind(building))
 		if multiplayer.is_server() and building.is_main_base:
 			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
+		if data.has("deposit_path"):
+			## Resolved independently on every peer (Gatherables aren't
+			## networked nodes, but every peer has the same static resource
+			## nodes at the same NodePath, so this still lines up correctly).
+			building.linked_deposit = get_node_or_null(data.deposit_path) as Gatherable
 	elif node is Gatherable:
 		## Unlike natural resources (trees, berry bushes, gold mines — always
 		## owner_peer_id 0), a player-built Farm is locked to whoever built it.
@@ -263,6 +286,7 @@ func _process(_delta: float) -> void:
 		_update_queue_label()
 	if placing_type:
 		_update_placement_ghost()
+	_update_hover_ring()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over:
@@ -333,13 +357,22 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 			collider.selected = true
 			selected_units.append(collider)
 			_select_building(null)
+			clicked_ring_target = collider
 		elif collider is ProductionBuilding and collider.owner_peer_id == _my_peer_id():
 			_select_building(collider)
+			clicked_ring_target = collider
+		elif collider is Unit or collider is ProductionBuilding or collider is Gatherable:
+			## Not "selectable" (enemy unit/building, or a resource node) but
+			## still a valid thing to click-highlight.
+			_select_building(null)
+			clicked_ring_target = collider
 		else:
 			_select_building(null)
+			clicked_ring_target = null
 		return
 
 	_select_building(null)
+	clicked_ring_target = null
 	for child in units_root.get_children():
 		if child is Unit and child.owner_peer_id == _my_peer_id() and not camera.is_position_behind(child.global_position):
 			var screen_pos: Vector2 = camera.unproject_position(child.global_position)
@@ -371,7 +404,15 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 	var target_path := NodePath()
 	if result.collider is Gatherable:
 		target_path = result.collider.get_path()
-	elif (result.collider is Unit or result.collider is ProductionBuilding) and result.collider.owner_peer_id != _my_peer_id():
+	elif result.collider is Unit and result.collider.owner_peer_id != _my_peer_id():
+		target_path = result.collider.get_path()
+	## A friendly building under construction is also a valid target (to send
+	## builders to it), and so is a friendly building with a linked_deposit
+	## (e.g. a Mine — right-clicking the mine itself should still gather from
+	## the deposit it sits on), alongside the existing enemy-building-attack case.
+	elif result.collider is ProductionBuilding and \
+			(result.collider.owner_peer_id != _my_peer_id() or result.collider.is_under_construction \
+				or result.collider.linked_deposit != null):
 		target_path = result.collider.get_path()
 
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position)
@@ -391,13 +432,27 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		if unit == null or unit.owner_peer_id != sender_id:
 			continue
 		## Natural resources (owner_peer_id 0) are gatherable by anyone; a
-		## player-built Farm is locked to whoever built it — this is the
+		## player-built Farm is locked to whoever built it. A resource that
+		## requires_building_on_top (e.g. a Gold Deposit) also isn't gatherable
+		## until that building has actually finished — this is the
 		## authoritative check, since the client only proposes a target and
 		## the host decides what actually happens.
-		if target_node is Gatherable and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id):
+		if target_node is Gatherable and target_node.can_be_gathered() \
+				and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id):
 			unit.command_gather(target_node, _get_dropoff_for(sender_id))
+		## Right-clicking a finished building built on a deposit (e.g. a Mine)
+		## should gather from what it sits on, same as clicking the deposit
+		## directly — checked before the attack/build branches since a
+		## same-owner building would never match attack anyway, and this only
+		## applies once construction is done (still-building falls through to
+		## the command_build branch below).
+		elif target_node is ProductionBuilding and target_node.linked_deposit != null \
+				and not target_node.is_under_construction and target_node.linked_deposit.can_be_gathered():
+			unit.command_gather(target_node.linked_deposit, _get_dropoff_for(sender_id))
 		elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
 			unit.command_attack(target_node)
+		elif target_node is ProductionBuilding and target_node.is_under_construction:
+			unit.command_build(target_node)
 		else:
 			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
 			unit.command_move(world_pos + offset)
@@ -431,7 +486,7 @@ func _select_building(building: ProductionBuilding) -> void:
 			child.queue_free()
 
 	if building.is_under_construction:
-		build_panel_queue_label.text = "Constructing... %d%%" % int(building.construction_progress * 100)
+		build_panel_queue_label.text = _format_construction_status(building)
 		if not building.construction_finished.is_connected(_on_selected_building_constructed):
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
 		return
@@ -533,9 +588,78 @@ func _ensure_rally_marker() -> void:
 	flag.set_surface_override_material(0, flag_mat)
 	rally_marker.add_child(flag)
 
+## --- Hover highlight ---
+
+const HOVER_RING_COLOR: Color = Color(1.0, 1.0, 1.0, 0.55)
+## Units have no NavigationObstacle3D to read a radius from, so this is just
+## a reasonable fixed size matching their own SelectionRing.
+const HOVER_RING_UNIT_RADIUS: float = 0.75
+
+func _ensure_hover_ring() -> void:
+	if hover_ring:
+		return
+	var mesh := TorusMesh.new()
+	mesh.inner_radius = 0.9
+	mesh.outer_radius = 1.0
+	hover_ring = MeshInstance3D.new()
+	hover_ring.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = HOVER_RING_COLOR
+	hover_ring.set_surface_override_material(0, material)
+	hover_ring.visible = false
+	add_child(hover_ring)
+
+func _is_ring_target(node: Object) -> bool:
+	return node is Unit or node is ProductionBuilding or node is Gatherable
+
+## Not shown while some other exclusive mode already owns the mouse
+## (placing a building, dragging a selection box, chatting, game over).
+## Otherwise prefers whatever's currently under the mouse (fog-of-war-hidden
+## things don't count, even if their collider is still technically hit), and
+## falls back to the last single-clicked target so the ring keeps showing on
+## it even once the mouse moves away — see clicked_ring_target.
+func _update_hover_ring() -> void:
+	if placing_type or dragging or chat_input.visible or game_over:
+		if hover_ring:
+			hover_ring.visible = false
+		return
+
+	var collider: Object = _raycast(get_viewport().get_mouse_position()).get("collider")
+	var hovered: Node3D = collider if (collider != null and _is_ring_target(collider) and collider.visible) else null
+	var target: Node3D = hovered if hovered else (clicked_ring_target if is_instance_valid(clicked_ring_target) else null)
+
+	## Selected units already show their own green SelectionRing — showing
+	## this one too on top would be redundant.
+	if target == null or (target is Unit and target.selected):
+		if hover_ring:
+			hover_ring.visible = false
+		return
+
+	_ensure_hover_ring()
+	var radius: float = _hover_ring_radius(target)
+	var mesh: TorusMesh = hover_ring.mesh
+	mesh.outer_radius = radius
+	mesh.inner_radius = maxf(radius - 0.08, 0.01)
+	hover_ring.global_position = target.global_position + Vector3(0, 0.05, 0)
+	hover_ring.visible = true
+
+func _hover_ring_radius(node: Node) -> float:
+	if node is Unit:
+		return HOVER_RING_UNIT_RADIUS
+	var obstacle: NavigationObstacle3D = node.get_node_or_null("NavigationObstacle3D")
+	return obstacle.radius + 0.2 if obstacle else 1.0
+
+func _format_construction_status(building: ProductionBuilding) -> String:
+	var percent := int(building.construction_progress * 100)
+	if building.synced_builder_count <= 0:
+		return "Constructing... %d%% (needs a builder)" % percent
+	return "Constructing... %d%% (%d building)" % [percent, building.synced_builder_count]
+
 func _update_queue_label() -> void:
 	if selected_building.is_under_construction:
-		build_panel_queue_label.text = "Constructing... %d%%" % int(selected_building.construction_progress * 100)
+		build_panel_queue_label.text = _format_construction_status(selected_building)
 		return
 	if selected_building.synced_queue_size <= 0:
 		build_panel_queue_label.text = "Queue: empty"
@@ -564,21 +688,63 @@ func _start_placement(building_type: BuildingType) -> void:
 	_cancel_placement()
 	placing_type = building_type
 	_select_building(null)
-
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = building_type.footprint_radius
-	mesh.bottom_radius = building_type.footprint_radius
-	mesh.height = 0.2
-
-	placement_ghost = MeshInstance3D.new()
-	placement_ghost.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	placement_ghost.set_surface_override_material(0, material)
+	placement_ghost = _build_ghost(building_type.scene)
 	add_child(placement_ghost)
 
+## Builds a translucent, script-less, collision-less copy of a building's
+## real scene for the placement preview — so the ghost always looks exactly
+## like what will actually be built, not a generic stand-in shape.
+func _build_ghost(scene: PackedScene) -> Node3D:
+	var ghost: Node3D = scene.instantiate()
+	ghost.set_script(null)
+	_strip_ghost_children(ghost)
+	_ghost_surfaces.clear()
+	_collect_ghost_surfaces(ghost)
+	return ghost
+
+## Removes anything that would make the preview behave like a real building
+## (collide, block pathing, replicate) — it's purely a harmless visual.
+func _strip_ghost_children(node: Node) -> void:
+	for child in node.get_children():
+		var should_strip := child.name == "HealthBar" \
+			or child is CollisionShape3D \
+			or child is NavigationObstacle3D \
+			or child is MultiplayerSynchronizer
+		if should_strip:
+			child.free()
+		else:
+			_strip_ghost_children(child)
+
+## Applies a translucent material to every mesh surface and remembers each
+## one's original color, so _set_ghost_valid() can re-tint them green/red
+## every frame without re-walking the tree or losing each part's own color.
+func _collect_ghost_surfaces(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance: MeshInstance3D = node
+		var surface_count: int = mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+		for i in surface_count:
+			var base: Material = mesh_instance.get_active_material(i)
+			var base_color: Color = base.albedo_color if base is StandardMaterial3D else Color.WHITE
+			var ghost_material := StandardMaterial3D.new()
+			ghost_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			ghost_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mesh_instance.set_surface_override_material(i, ghost_material)
+			_ghost_surfaces.append({"material": ghost_material, "base_color": base_color})
+	for child in node.get_children():
+		_collect_ghost_surfaces(child)
+
+func _set_ghost_valid(valid: bool) -> void:
+	var tint: Color = VALID_GHOST_COLOR if valid else INVALID_GHOST_COLOR
+	for entry in _ghost_surfaces:
+		var material: StandardMaterial3D = entry["material"]
+		var base_color: Color = entry["base_color"]
+		material.albedo_color = Color(base_color.r * tint.r, base_color.g * tint.g, base_color.b * tint.b, tint.a)
+
 func _update_placement_ghost() -> void:
+	if placing_type.requires_deposit:
+		_update_deposit_snap_ghost()
+		return
+
 	var mouse_pos := get_viewport().get_mouse_position()
 	var result := _raycast(mouse_pos)
 	if result.is_empty():
@@ -588,8 +754,36 @@ func _update_placement_ghost() -> void:
 	placement_ghost.global_position = result.position
 
 	placement_valid = _is_placement_valid(result.position, placing_type.footprint_radius)
-	var material: StandardMaterial3D = placement_ghost.get_surface_override_material(0)
-	material.albedo_color = VALID_GHOST_COLOR if placement_valid else INVALID_GHOST_COLOR
+	_set_ghost_valid(placement_valid)
+
+## Snap-to-target variant: the ghost only ever shows at an existing,
+## unclaimed instance of placing_type.deposit_scene under the mouse, never
+## following the mouse freely.
+func _update_deposit_snap_ghost() -> void:
+	var mouse_pos := get_viewport().get_mouse_position()
+	var result := _raycast(mouse_pos)
+	_placement_target = _find_valid_deposit(result.get("collider"))
+
+	if _placement_target == null:
+		placement_ghost.visible = false
+		placement_valid = false
+		return
+
+	placement_ghost.visible = true
+	placement_ghost.global_position = _placement_target.global_position
+	placement_valid = true
+	_set_ghost_valid(true)
+
+func _find_valid_deposit(collider: Object) -> Gatherable:
+	if collider == null or not (collider is Gatherable):
+		return null
+	var deposit: Gatherable = collider
+	if deposit.is_claimed or not _matches_scene(deposit, placing_type.deposit_scene):
+		return null
+	return deposit
+
+func _matches_scene(node: Node, scene: PackedScene) -> bool:
+	return scene != null and node.scene_file_path == scene.resource_path
 
 func _is_placement_valid(pos: Vector3, radius: float) -> bool:
 	var space_state := get_world_3d().direct_space_state
@@ -619,11 +813,12 @@ func _confirm_placement() -> void:
 		_cancel_placement()
 		return
 	var type_index: int = available_building_types.find(placing_type)
-	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position)
+	var target_path := _placement_target.get_path() if _placement_target else NodePath()
+	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path)
 	_cancel_placement()
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_build(type_index: int, world_pos: Vector3) -> void:
+func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -635,17 +830,34 @@ func _rpc_request_build(type_index: int, world_pos: Vector3) -> void:
 	var building_type: BuildingType = available_building_types[type_index]
 	if not ResourceStockpile.can_afford(sender_id, building_type.costs):
 		return
-	if not _is_placement_valid(world_pos, building_type.footprint_radius):
+
+	## Deposit-snapped buildings ignore the client's proposed position — the
+	## host looks the target up itself and uses its real position, so a
+	## tampered/stale client position can't matter.
+	var build_pos := world_pos
+	var deposit: Gatherable = null
+	if building_type.requires_deposit:
+		deposit = get_node_or_null(target_path) as Gatherable
+		if deposit == null or deposit.is_claimed or not _matches_scene(deposit, building_type.deposit_scene):
+			return
+		build_pos = deposit.global_position
+	elif not _is_placement_valid(world_pos, building_type.footprint_radius):
 		return
+
 	ResourceStockpile.spend(sender_id, building_type.costs)
+	if deposit:
+		deposit.is_claimed = true
 
 	var team_index: int = team_index_by_peer.get(sender_id, 0)
-	var spawned: Node = building_spawner.spawn({
+	var spawn_data: Dictionary = {
 		"scene_path": building_type.scene.resource_path,
 		"peer_id": sender_id,
-		"position": world_pos,
+		"position": build_pos,
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
-	})
+	}
+	if deposit:
+		spawn_data["deposit_path"] = deposit.get_path()
+	var spawned: Node = building_spawner.spawn(spawn_data)
 	## Farm (a buildable Gatherable, not a ProductionBuilding) has no
 	## construction phase — it just appears complete.
 	if spawned is ProductionBuilding:
@@ -658,12 +870,22 @@ func _rpc_request_build(type_index: int, world_pos: Vector3) -> void:
 					func(): Population.add_cap(sender_id, -building.population_capacity), CONNECT_ONE_SHOT
 				)
 			, CONNECT_ONE_SHOT)
+		if deposit:
+			building.construction_finished.connect(func():
+				deposit.has_required_building = true
+			, CONNECT_ONE_SHOT)
+			building.destroyed.connect(func():
+				deposit.has_required_building = false
+				deposit.is_claimed = false
+			, CONNECT_ONE_SHOT)
 
 func _cancel_placement() -> void:
 	if placement_ghost:
 		placement_ghost.queue_free()
 		placement_ghost = null
+	_ghost_surfaces.clear()
 	placing_type = null
+	_placement_target = null
 
 ## --- Chat / debug console ---
 ## Type a normal message to broadcast it to everyone, or "cmd ..." for a

@@ -1,17 +1,15 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://c6lf7yot5o577"]
 
-[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="1_unit"]
-[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="2_swordman"]
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="2_swordman"]
 
-[node name="Soldier" instance=ExtResource("1_unit")]
-sprite_sheet = ExtResource("2_swordman")
-walk_frame_count = 6
-attack_row = 3
-attack_frame_count = 6
-death_row = 5
-death_frame_count = 4
+[node name="Soldier" unique_id=93520634 instance=ExtResource("1_unit")]
 team_tint = Color(0.35, 0.6, 1, 1)
+sprite_sheet = ExtResource("2_swordman")
+walk_row = 1
+death_row = 5
 can_gather = false
+can_build = false
 max_health = 30
 attack_damage = 6
 attack_range = 1.3
