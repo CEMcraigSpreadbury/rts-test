@@ -3,7 +3,9 @@ extends Node3D
 
 @export var pan_speed: float = 24.0
 @export var edge_pan_margin: int = 14
-@export var edge_pan_enabled: bool = true
+## Off by default: with two windows open side-by-side for multiplayer testing,
+## the mouse sitting near a window's edge would otherwise pan that camera unintentionally.
+@export var edge_pan_enabled: bool = false
 @export var rotate_speed: float = 2.0
 @export var mouse_rotate_sensitivity: float = 0.005
 @export var zoom_speed: float = 2.0

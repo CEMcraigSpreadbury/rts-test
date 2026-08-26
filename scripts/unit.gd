@@ -22,6 +22,8 @@ enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF }
 @export var move_speed: float = 5.0
 @export var rotation_speed: float = 10.0
 @export var team_tint: Color = Color.WHITE
+## Which player controls this unit. The host is always peer 1.
+@export var owner_peer_id: int = 1
 
 @export_group("Sprite Sheet")
 @export var sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png")
@@ -92,6 +94,11 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	_head_to_resource()
 
 func _physics_process(delta: float) -> void:
+	## Only the host simulates movement/gathering; other peers just display the
+	## position/animation replicated by this unit's MultiplayerSynchronizer.
+	if not is_multiplayer_authority():
+		return
+
 	if not is_on_floor():
 		velocity.y -= GRAVITY * delta
 	else:

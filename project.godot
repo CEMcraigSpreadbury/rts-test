@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="RTS Test"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/lobby.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 ResourceStockpile="*res://scripts/resource_stockpile.gd"
+Network="*res://scripts/network_manager.gd"
 
 [display]
 

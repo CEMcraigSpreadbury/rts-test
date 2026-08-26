@@ -1,11 +1,21 @@
 extends Node3D
 
+const UNIT_SCENE: PackedScene = preload("res://scenes/units/unit.tscn")
+
+const SPAWN_POINTS: Array[Vector3] = [
+	Vector3(-3, 0, -3), Vector3(23, 0, -3), Vector3(-3, 0, 23), Vector3(23, 0, 23)
+]
+const TEAM_COLORS: Array[Color] = [
+	Color(0.25, 0.55, 1.0), Color(1.0, 0.35, 0.3), Color(0.35, 1.0, 0.45), Color(1.0, 0.85, 0.3)
+]
+
 @export var available_building_types: Array[BuildingType] = []
 
 @onready var camera: Camera3D = $CameraRig/Yaw/Pitch/Camera3D
 @onready var selection_box: ColorRect = $UI/SelectionBox
 @onready var resource_label: Label = $UI/ResourceLabel
 @onready var units_root: Node3D = $Units
+@onready var unit_spawner: MultiplayerSpawner = $UnitSpawner
 @onready var dropoff_point: Node3D = $TownCenter/DropoffPoint
 
 @onready var build_panel: PanelContainer = $UI/BuildPanel
@@ -36,6 +46,39 @@ func _ready() -> void:
 		button.text = "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
 		button.pressed.connect(_start_placement.bind(building_type))
 		construction_panel_vbox.add_child(button)
+
+	unit_spawner.spawn_function = _spawn_unit_from_data
+	if multiplayer.is_server():
+		_spawn_all_players()
+
+func _my_peer_id() -> int:
+	return multiplayer.get_unique_id()
+
+## --- Player / unit spawning (host only) ---
+
+func _spawn_all_players() -> void:
+	var peer_ids: Array = [1]
+	if multiplayer.multiplayer_peer != null:
+		peer_ids.append_array(multiplayer.get_peers())
+	for i in peer_ids.size():
+		_spawn_player_squad(peer_ids[i], i)
+
+func _spawn_player_squad(peer_id: int, index: int) -> void:
+	var base_pos: Vector3 = SPAWN_POINTS[index % SPAWN_POINTS.size()]
+	var tint: Color = TEAM_COLORS[index % TEAM_COLORS.size()]
+	for i in 2:
+		unit_spawner.spawn({
+			"peer_id": peer_id,
+			"tint": tint,
+			"position": base_pos + Vector3(i * 1.5, 0.0, 0.0),
+		})
+
+func _spawn_unit_from_data(data: Dictionary) -> Node:
+	var unit: Unit = UNIT_SCENE.instantiate()
+	unit.owner_peer_id = data.peer_id
+	unit.team_tint = data.tint
+	unit.position = data.position
+	return unit
 
 func _process(_delta: float) -> void:
 	if selected_building:
@@ -82,7 +125,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 
 	if start_pos.distance_to(end_pos) <= CLICK_DRAG_THRESHOLD:
 		var collider: Object = _raycast(end_pos).get("collider")
-		if collider is Unit:
+		if collider is Unit and collider.owner_peer_id == _my_peer_id():
 			collider.selected = true
 			selected_units.append(collider)
 			_select_building(null)
@@ -94,7 +137,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 
 	_select_building(null)
 	for child in units_root.get_children():
-		if child is Unit and not camera.is_position_behind(child.global_position):
+		if child is Unit and child.owner_peer_id == _my_peer_id() and not camera.is_position_behind(child.global_position):
 			var screen_pos: Vector2 = camera.unproject_position(child.global_position)
 			if rect.has_point(screen_pos):
 				child.selected = true
@@ -107,6 +150,8 @@ func _raycast(screen_pos: Vector2) -> Dictionary:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	return space_state.intersect_ray(query)
 
+## Selection is local, but actually moving/gathering only ever happens on the
+## host, so the command is sent there and executed on its authoritative units.
 func _issue_move_order(screen_pos: Vector2) -> void:
 	if selected_units.is_empty():
 		return
@@ -114,15 +159,35 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 	if result.is_empty():
 		return
 
-	if result.collider is Gatherable:
-		for unit in selected_units:
-			unit.command_gather(result.collider, dropoff_point)
-		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
 
-	var target: Vector3 = result.position
-	for i in selected_units.size():
-		var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
-		selected_units[i].command_move(target + offset)
+	var target_path := NodePath()
+	if result.collider is Gatherable:
+		target_path = result.collider.get_path()
+
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position)
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var target_node: Node = get_node_or_null(target_path) if target_path != NodePath() else null
+
+	for i in unit_paths.size():
+		var unit := get_node_or_null(unit_paths[i]) as Unit
+		if unit == null or unit.owner_peer_id != sender_id:
+			continue
+		if target_node is Gatherable:
+			unit.command_gather(target_node, dropoff_point)
+		else:
+			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
+			unit.command_move(world_pos + offset)
 
 func _on_stockpile_changed(resource_type: ResourceType, amount: int) -> void:
 	resource_label.text = "%s: %d" % [resource_type.display_name, amount]
