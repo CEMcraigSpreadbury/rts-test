@@ -101,9 +101,10 @@ shape = SubResource("BoxShape3D_ground")
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
 
-[node name="TownCenter" parent="." unique_id=540041903 instance=ExtResource("7_town_center")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
-units_container_path = NodePath("../Units")
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="BuildingSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Buildings")
 
 [node name="ResourceNodes" type="Node3D" parent="." unique_id=1084375618]
 

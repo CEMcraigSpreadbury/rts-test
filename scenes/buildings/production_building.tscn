@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="2_cost_script"]
@@ -28,6 +28,26 @@ build_time = 5.0
 costs = Array[Resource]([SubResource("ResourceCost_villager")])
 unit_scene = ExtResource("5_unit_scene")
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:is_under_construction")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+properties/2/path = NodePath(".:construction_progress")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:synced_queue_size")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:synced_time_remaining")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+properties/5/path = NodePath(".:synced_current_item_name")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+
 [node name="ProductionBuilding" type="StaticBody3D" groups=["dropoff_points"]]
 script = ExtResource("1_building_script")
 building_name = "Town Center"
@@ -52,3 +72,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.5)
 
 [node name="SpawnPoint" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, 2.5)
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_building")

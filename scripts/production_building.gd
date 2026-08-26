@@ -4,6 +4,10 @@ extends StaticBody3D
 ## building "is" (Town Center, Barracks, ...) is entirely defined by the
 ## `building_name` and `producibles` configured on the instance in the inspector.
 ## The build menu UI reads `producibles` to know what buttons to show.
+##
+## Only the host ever actually runs the queue/construction simulation (see the
+## is_multiplayer_authority() guard in _process); everyone else just displays
+## the handful of fields below that are kept in sync for the UI.
 
 signal queue_changed
 signal item_completed(item: ProducibleItem)
@@ -11,18 +15,23 @@ signal construction_finished
 
 @export var building_name: String = "Production Building"
 @export var producibles: Array[ProducibleItem] = []
-## Where completed units are parented into the scene tree; defaults to this building's parent.
-@export var units_container_path: NodePath
+## Which player owns this building; only they may queue production on it.
+@export var owner_peer_id: int = 1
 ## Where completed units appear in the world.
 @export var spawn_point_path: NodePath = ^"SpawnPoint"
 ## How far the model sinks below its resting position at the start of construction.
 @export var construction_sink_depth: float = 3.0
 
+## Mirrored to non-authoritative peers purely so their build panel UI reads correctly.
+@export var is_under_construction: bool = false
+@export var construction_progress: float = 1.0
+@export var synced_queue_size: int = 0
+@export var synced_time_remaining: float = 0.0
+@export var synced_current_item_name: String = ""
+
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
 
-var is_under_construction: bool = false
-var construction_progress: float = 1.0
 var construction_time: float = 0.0
 var _construction_timer: float = 0.0
 var _rest_position_y: float = 0.0
@@ -42,9 +51,9 @@ func begin_construction(duration: float) -> void:
 	position.y = _rest_position_y - construction_sink_depth
 
 func enqueue(item: ProducibleItem) -> bool:
-	if is_under_construction or item == null or not ResourceStockpile.can_afford(item.costs):
+	if is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.costs):
 		return false
-	ResourceStockpile.spend(item.costs)
+	ResourceStockpile.spend(owner_peer_id, item.costs)
 	queue.append(item)
 	queue_changed.emit()
 	return true
@@ -55,6 +64,9 @@ func time_remaining() -> float:
 	return maxf(queue[0].build_time - build_timer, 0.0)
 
 func _process(delta: float) -> void:
+	if not is_multiplayer_authority():
+		return
+
 	if is_under_construction:
 		_construction_timer += delta
 		construction_progress = clampf(_construction_timer / construction_time, 0.0, 1.0)
@@ -67,24 +79,14 @@ func _process(delta: float) -> void:
 
 	if queue.is_empty():
 		build_timer = 0.0
-		return
-	build_timer += delta
-	if build_timer >= queue[0].build_time:
-		var item: ProducibleItem = queue.pop_front()
-		build_timer = 0.0
-		_complete_item(item)
-		queue_changed.emit()
+	else:
+		build_timer += delta
+		if build_timer >= queue[0].build_time:
+			var item: ProducibleItem = queue.pop_front()
+			build_timer = 0.0
+			item_completed.emit(item)
+			queue_changed.emit()
 
-func _complete_item(item: ProducibleItem) -> void:
-	item_completed.emit(item)
-	if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
-		return
-
-	var container: Node = get_node_or_null(units_container_path)
-	if container == null:
-		container = get_parent()
-	var unit: Node3D = item.unit_scene.instantiate()
-	container.add_child(unit)
-
-	var spawn: Node3D = get_node_or_null(spawn_point_path)
-	unit.global_position = spawn.global_position if spawn else global_position
+	synced_queue_size = queue.size()
+	synced_time_remaining = time_remaining()
+	synced_current_item_name = queue[0].item_name if not queue.is_empty() else ""

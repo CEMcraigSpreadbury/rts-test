@@ -201,7 +201,7 @@ func _head_to_dropoff() -> void:
 
 func _deposit_and_continue() -> void:
 	if status_carried_amount > 0 and status_carried_type != null:
-		ResourceStockpile.add(status_carried_type, status_carried_amount)
+		ResourceStockpile.add(owner_peer_id, status_carried_type, status_carried_amount)
 	status_carried_amount = 0
 	status_carried_type = null
 

@@ -1,6 +1,7 @@
 extends Node3D
 
 const UNIT_SCENE: PackedScene = preload("res://scenes/units/unit.tscn")
+const TOWN_CENTER_SCENE_PATH: String = "res://scenes/buildings/production_building.tscn"
 
 const SPAWN_POINTS: Array[Vector3] = [
 	Vector3(-3, 0, -3), Vector3(23, 0, -3), Vector3(-3, 0, 23), Vector3(23, 0, 23)
@@ -16,7 +17,8 @@ const TEAM_COLORS: Array[Color] = [
 @onready var resource_label: Label = $UI/ResourceLabel
 @onready var units_root: Node3D = $Units
 @onready var unit_spawner: MultiplayerSpawner = $UnitSpawner
-@onready var dropoff_point: Node3D = $TownCenter/DropoffPoint
+@onready var buildings_root: Node3D = $Buildings
+@onready var building_spawner: MultiplayerSpawner = $BuildingSpawner
 
 @onready var build_panel: PanelContainer = $UI/BuildPanel
 @onready var build_panel_vbox: VBoxContainer = $UI/BuildPanel/VBox
@@ -39,6 +41,10 @@ var placing_type: BuildingType = null
 var placement_ghost: MeshInstance3D = null
 var placement_valid: bool = false
 
+## Host-only bookkeeping: which team index / Town Center belongs to each peer.
+var team_index_by_peer: Dictionary = {}
+var town_centers: Dictionary = {}
+
 func _ready() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	for building_type in available_building_types:
@@ -48,24 +54,27 @@ func _ready() -> void:
 		construction_panel_vbox.add_child(button)
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
+	building_spawner.spawn_function = _spawn_building_from_data
 	if multiplayer.is_server():
 		_spawn_all_players()
 
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
-## --- Player / unit spawning (host only) ---
+## --- Player / unit / building spawning (host only) ---
 
 func _spawn_all_players() -> void:
 	var peer_ids: Array = [1]
 	if multiplayer.multiplayer_peer != null:
 		peer_ids.append_array(multiplayer.get_peers())
 	for i in peer_ids.size():
-		_spawn_player_squad(peer_ids[i], i)
+		_spawn_player_base(peer_ids[i], i)
 
-func _spawn_player_squad(peer_id: int, index: int) -> void:
+func _spawn_player_base(peer_id: int, index: int) -> void:
 	var base_pos: Vector3 = SPAWN_POINTS[index % SPAWN_POINTS.size()]
 	var tint: Color = TEAM_COLORS[index % TEAM_COLORS.size()]
+	team_index_by_peer[peer_id] = index
+
 	for i in 2:
 		unit_spawner.spawn({
 			"peer_id": peer_id,
@@ -73,12 +82,47 @@ func _spawn_player_squad(peer_id: int, index: int) -> void:
 			"position": base_pos + Vector3(i * 1.5, 0.0, 0.0),
 		})
 
+	var town_center: ProductionBuilding = building_spawner.spawn({
+		"scene_path": TOWN_CENTER_SCENE_PATH,
+		"peer_id": peer_id,
+		"position": base_pos + Vector3(-4.0, 0.0, 4.0),
+	})
+	town_centers[peer_id] = town_center
+
 func _spawn_unit_from_data(data: Dictionary) -> Node:
 	var unit: Unit = UNIT_SCENE.instantiate()
 	unit.owner_peer_id = data.peer_id
 	unit.team_tint = data.tint
 	unit.position = data.position
 	return unit
+
+func _spawn_building_from_data(data: Dictionary) -> Node:
+	var scene: PackedScene = load(data.scene_path)
+	var building: ProductionBuilding = scene.instantiate()
+	building.owner_peer_id = data.peer_id
+	building.position = data.position
+	building.item_completed.connect(_on_building_item_completed.bind(building))
+	return building
+
+func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
+	if not multiplayer.is_server():
+		return
+	if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
+		return
+	var spawn_point: Node3D = building.get_node_or_null(building.spawn_point_path)
+	var spawn_pos: Vector3 = spawn_point.global_position if spawn_point else building.global_position
+	var team_index: int = team_index_by_peer.get(building.owner_peer_id, 0)
+	unit_spawner.spawn({
+		"peer_id": building.owner_peer_id,
+		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+		"position": spawn_pos,
+	})
+
+func _get_dropoff_for(peer_id: int) -> Node3D:
+	var town_center: ProductionBuilding = town_centers.get(peer_id)
+	if town_center == null:
+		return null
+	return town_center.get_node_or_null("DropoffPoint")
 
 func _process(_delta: float) -> void:
 	if selected_building:
@@ -129,7 +173,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 			collider.selected = true
 			selected_units.append(collider)
 			_select_building(null)
-		elif collider is ProductionBuilding:
+		elif collider is ProductionBuilding and collider.owner_peer_id == _my_peer_id():
 			_select_building(collider)
 		else:
 			_select_building(null)
@@ -184,13 +228,13 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		if unit == null or unit.owner_peer_id != sender_id:
 			continue
 		if target_node is Gatherable:
-			unit.command_gather(target_node, dropoff_point)
+			unit.command_gather(target_node, _get_dropoff_for(sender_id))
 		else:
 			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
 			unit.command_move(world_pos + offset)
 
-func _on_stockpile_changed(resource_type: ResourceType, amount: int) -> void:
-	resource_label.text = "%s: %d" % [resource_type.display_name, amount]
+func _on_stockpile_changed(resource_name: String, amount: int) -> void:
+	resource_label.text = "%s: %d" % [resource_name, amount]
 
 func _select_building(building: ProductionBuilding) -> void:
 	selected_building = building
@@ -209,10 +253,11 @@ func _select_building(building: ProductionBuilding) -> void:
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
 		return
 
-	for item in building.producibles:
+	for i in building.producibles.size():
+		var item: ProducibleItem = building.producibles[i]
 		var button := Button.new()
 		button.text = "%s (%s)" % [item.item_name, _format_costs(item.costs)]
-		button.pressed.connect(_on_producible_button_pressed.bind(building, item, button))
+		button.pressed.connect(_on_producible_button_pressed.bind(building, i))
 		build_panel_vbox.add_child(button)
 
 	_update_queue_label()
@@ -221,21 +266,34 @@ func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if selected_building == building:
 		_select_building(building)
 
-func _on_producible_button_pressed(building: ProductionBuilding, item: ProducibleItem, button: Button) -> void:
-	if not building.enqueue(item):
-		button.text = "%s (%s) - not enough resources" % [item.item_name, _format_costs(item.costs)]
+func _on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
+	_rpc_enqueue.rpc_id(1, building.get_path(), item_index)
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var building := get_node_or_null(building_path) as ProductionBuilding
+	if building == null or building.owner_peer_id != sender_id:
+		return
+	if item_index < 0 or item_index >= building.producibles.size():
+		return
+	building.enqueue(building.producibles[item_index])
 
 func _update_queue_label() -> void:
 	if selected_building.is_under_construction:
 		build_panel_queue_label.text = "Constructing... %d%%" % int(selected_building.construction_progress * 100)
 		return
-	if selected_building.queue.is_empty():
+	if selected_building.synced_queue_size <= 0:
 		build_panel_queue_label.text = "Queue: empty"
 		return
-	var first: ProducibleItem = selected_building.queue[0]
-	var extra: int = selected_building.queue.size() - 1
+	var extra: int = selected_building.synced_queue_size - 1
 	build_panel_queue_label.text = "Building %s (%.1fs)%s" % [
-		first.item_name, selected_building.time_remaining(),
+		selected_building.synced_current_item_name, selected_building.synced_time_remaining,
 		" + %d queued" % extra if extra > 0 else ""
 	]
 
@@ -302,17 +360,36 @@ func _handle_placement_input(event: InputEvent) -> void:
 		_cancel_placement()
 
 func _confirm_placement() -> void:
-	if not placement_valid or not ResourceStockpile.can_afford(placing_type.costs):
+	if not placement_valid:
+		_cancel_placement()
 		return
-	ResourceStockpile.spend(placing_type.costs)
-
-	var building: ProductionBuilding = placing_type.scene.instantiate()
-	building.units_container_path = ^"../Units"
-	add_child(building)
-	building.global_position = placement_ghost.global_position
-	building.begin_construction(placing_type.construction_time)
-
+	var type_index: int = available_building_types.find(placing_type)
+	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position)
 	_cancel_placement()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_build(type_index: int, world_pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	if type_index < 0 or type_index >= available_building_types.size():
+		return
+	var building_type: BuildingType = available_building_types[type_index]
+	if not ResourceStockpile.can_afford(sender_id, building_type.costs):
+		return
+	if not _is_placement_valid(world_pos, building_type.footprint_radius):
+		return
+	ResourceStockpile.spend(sender_id, building_type.costs)
+
+	var building: ProductionBuilding = building_spawner.spawn({
+		"scene_path": building_type.scene.resource_path,
+		"peer_id": sender_id,
+		"position": world_pos,
+	})
+	building.begin_construction(building_type.construction_time)
 
 func _cancel_placement() -> void:
 	if placement_ghost:
