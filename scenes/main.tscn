@@ -12,6 +12,11 @@
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="11_fog_script"]
 [ext_resource type="Shader" uid="uid://bt4kly6vxq7p5" path="res://shaders/fog_of_war.gdshader" id="12_fog_shader"]
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="13_minimap_script"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/house_building.tscn" id="14_house"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/farm_building.tscn" id="15_farm"]
+[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="16_food"]
+[ext_resource type="PackedScene" path="res://scenes/resource_nodes/berry_bush.tscn" id="17_berry_bush"]
+[ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_mine.tscn" id="18_gold_mine"]
 
 [sub_resource type="Resource" id="ResourceCost_towncenter"]
 script = ExtResource("2_cost_script")
@@ -38,6 +43,32 @@ scene = ExtResource("9_barracks")
 costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_barracks")])
 footprint_radius = 2.4
 construction_time = 7.0
+
+[sub_resource type="Resource" id="ResourceCost_house"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("10_wood")
+amount = 30
+
+[sub_resource type="Resource" id="BuildingType_house"]
+script = ExtResource("3_building_type_script")
+building_name = "House"
+scene = ExtResource("14_house")
+costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_house")])
+footprint_radius = 1.6
+construction_time = 5.0
+
+[sub_resource type="Resource" id="ResourceCost_farm"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("10_wood")
+amount = 60
+
+[sub_resource type="Resource" id="BuildingType_farm"]
+script = ExtResource("3_building_type_script")
+building_name = "Farm"
+scene = ExtResource("15_farm")
+costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_farm")])
+footprint_radius = 1.8
+construction_time = 5.0
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -79,7 +110,7 @@ shader_parameter/map_size = Vector2(0, 0)
 
 [node name="Main" type="Node3D" unique_id=2055692591]
 script = ExtResource("1_script")
-available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks")])
+available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm")])
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
 environment = SubResource("Environment_1")
@@ -116,6 +147,8 @@ shape = SubResource("BoxShape3D_ground")
 script = ExtResource("11_fog_script")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="FogOfWar" unique_id=1633417530]
+cast_shadow = 0
+gi_mode = 0
 mesh = SubResource("PlaneMesh_fog")
 surface_material_override/0 = SubResource("ShaderMaterial_fog")
 
@@ -141,6 +174,15 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0, -10)
 [node name="Tree5" parent="ResourceNodes" unique_id=1937938722 instance=ExtResource("8_tree")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
 
+[node name="BerryBush1" parent="ResourceNodes" instance=ExtResource("17_berry_bush")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -21)
+
+[node name="BerryBush2" parent="ResourceNodes" instance=ExtResource("17_berry_bush")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -18)
+
+[node name="GoldMine1" parent="ResourceNodes" instance=ExtResource("18_gold_mine")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -20)
+
 [node name="Units" type="Node3D" parent="." unique_id=2068655962]
 
 [node name="UnitSpawner" type="MultiplayerSpawner" parent="." unique_id=1345839027]
@@ -156,7 +198,7 @@ color = Color(0.3, 0.8, 1, 0.25)
 [node name="ResourceLabel" type="Label" parent="UI" unique_id=233185810]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 260.0
+offset_right = 620.0
 offset_bottom = 44.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)

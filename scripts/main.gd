@@ -60,12 +60,23 @@ var defeated_peers: Dictionary = {}
 var game_over: bool = false
 
 const MAX_CHAT_LINES: int = 8
-## Extend this when new resource types (Stone, Gold, ...) are added.
-const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [preload("res://resources/wood_resource_type.tres")]
+## Extend this when new resource types (Stone, ...) are added.
+const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
+	preload("res://resources/wood_resource_type.tres"),
+	preload("res://resources/food_resource_type.tres"),
+	preload("res://resources/gold_resource_type.tres"),
+]
 var chat_lines: Array[String] = []
+
+## resource_label shows every resource total plus population on one line;
+## rebuilt in full on any single change since there are only a handful of values.
+var _resource_totals: Dictionary = {}
+var _population_used: int = 0
+var _population_cap: int = 0
 
 func _ready() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
+	Population.changed.connect(_on_population_changed)
 	for building_type in available_building_types:
 		var button := Button.new()
 		button.text = "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
@@ -99,12 +110,17 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 	var tint: Color = TEAM_COLORS[index % TEAM_COLORS.size()]
 	team_index_by_peer[peer_id] = index
 
+	## Free starting villagers never went through ProductionBuilding.enqueue()
+	## (which is where population is normally reserved), so it has to be
+	## reserved for them here instead or they'd stand outside the population
+	## count entirely.
 	for i in 2:
-		unit_spawner.spawn({
+		var starting_unit: Unit = unit_spawner.spawn({
 			"peer_id": peer_id,
 			"tint": tint,
 			"position": base_pos + Vector3(i * 1.5, 0.0, 0.0),
 		})
+		Population.reserve(peer_id, starting_unit.population_cost)
 
 	var town_center: ProductionBuilding = building_spawner.spawn({
 		"scene_path": TOWN_CENTER_SCENE_PATH,
@@ -113,6 +129,14 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 		"tint": tint,
 	})
 	town_centers[peer_id] = town_center
+	## The starting Town Center is placed pre-built (begin_construction() is
+	## never called for it), so its population capacity is granted immediately
+	## rather than waiting on a construction_finished signal that will never fire.
+	if town_center.population_capacity > 0:
+		Population.add_cap(peer_id, town_center.population_capacity)
+		town_center.destroyed.connect(
+			func(): Population.add_cap(peer_id, -town_center.population_capacity), CONNECT_ONE_SHOT
+		)
 
 func _spawn_unit_from_data(data: Dictionary) -> Node:
 	var scene: PackedScene = load(data.scene_path) if data.has("scene_path") else UNIT_SCENE
@@ -120,6 +144,8 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.owner_peer_id = data.peer_id
 	unit.team_tint = data.tint
 	unit.position = data.position
+	if data.has("population_cost"):
+		unit.population_cost = data.population_cost
 	unit.animation_changed.connect(_on_unit_animation_changed.bind(unit))
 	return unit
 
@@ -138,17 +164,29 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 	if unit:
 		unit.sprite.play(anim_name)
 
+## Most buildable structures are ProductionBuildings (Town Center, Barracks,
+## House), but Farm is a buildable Gatherable (no construction/production
+## queue, just gathered from directly) — so this has to handle both instead
+## of assuming ProductionBuilding.
 func _spawn_building_from_data(data: Dictionary) -> Node:
 	var scene: PackedScene = load(data.scene_path)
-	var building: ProductionBuilding = scene.instantiate()
-	building.owner_peer_id = data.peer_id
-	building.position = data.position
-	building.team_tint = data.get("tint", Color.WHITE)
-	building.item_completed.connect(_on_building_item_completed.bind(building))
-	building.destroyed.connect(_on_building_destroyed.bind(building))
-	if multiplayer.is_server() and building.is_main_base:
-		main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
-	return building
+	var node: Node = scene.instantiate()
+	node.position = data.position
+
+	if node is ProductionBuilding:
+		var building: ProductionBuilding = node
+		building.owner_peer_id = data.peer_id
+		building.team_tint = data.get("tint", Color.WHITE)
+		building.item_completed.connect(_on_building_item_completed.bind(building))
+		building.destroyed.connect(_on_building_destroyed.bind(building))
+		if multiplayer.is_server() and building.is_main_base:
+			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
+	elif node is Gatherable:
+		## Unlike natural resources (trees, berry bushes, gold mines — always
+		## owner_peer_id 0), a player-built Farm is locked to whoever built it.
+		node.owner_peer_id = data.peer_id
+
+	return node
 
 ## --- Win condition (host only) ---
 
@@ -209,6 +247,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"peer_id": building.owner_peer_id,
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 		"position": spawn_pos,
+		"population_cost": item.population_cost,
 	})
 	if building.can_rally and building.has_rally_point:
 		unit.command_move(building.rally_point)
@@ -351,7 +390,11 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		var unit := get_node_or_null(unit_paths[i]) as Unit
 		if unit == null or unit.owner_peer_id != sender_id:
 			continue
-		if target_node is Gatherable:
+		## Natural resources (owner_peer_id 0) are gatherable by anyone; a
+		## player-built Farm is locked to whoever built it — this is the
+		## authoritative check, since the client only proposes a target and
+		## the host decides what actually happens.
+		if target_node is Gatherable and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id):
 			unit.command_gather(target_node, _get_dropoff_for(sender_id))
 		elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
 			unit.command_attack(target_node)
@@ -360,7 +403,20 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			unit.command_move(world_pos + offset)
 
 func _on_stockpile_changed(resource_name: String, amount: int) -> void:
-	resource_label.text = "%s: %d" % [resource_name, amount]
+	_resource_totals[resource_name] = amount
+	_update_resource_label()
+
+func _on_population_changed(used: int, cap: int) -> void:
+	_population_used = used
+	_population_cap = cap
+	_update_resource_label()
+
+func _update_resource_label() -> void:
+	var parts: Array[String] = []
+	for resource_type in DEBUG_RESOURCE_TYPES:
+		parts.append("%s: %d" % [resource_type.display_name, _resource_totals.get(resource_type.display_name, 0)])
+	parts.append("Population: %d/%d" % [_population_used, _population_cap])
+	resource_label.text = "   ".join(parts)
 
 func _select_building(building: ProductionBuilding) -> void:
 	selected_building = building
@@ -383,7 +439,7 @@ func _select_building(building: ProductionBuilding) -> void:
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
 		var button := Button.new()
-		button.text = "%s (%s)" % [item.item_name, _format_costs(item.costs)]
+		button.text = "%s (%s)" % [item.item_name, _format_item_costs(item)]
 		button.pressed.connect(_on_producible_button_pressed.bind(building, i))
 		build_panel_vbox.add_child(button)
 
@@ -496,6 +552,12 @@ func _format_costs(costs: Array[ResourceCost]) -> String:
 		parts.append("%d %s" % [cost.amount, cost.resource_type.display_name])
 	return ", ".join(parts)
 
+func _format_item_costs(item: ProducibleItem) -> String:
+	var text := _format_costs(item.costs)
+	if item.kind == ProducibleItem.Kind.UNIT:
+		text += ", %d Pop" % item.population_cost
+	return text
+
 ## --- Building placement ---
 
 func _start_placement(building_type: BuildingType) -> void:
@@ -578,13 +640,24 @@ func _rpc_request_build(type_index: int, world_pos: Vector3) -> void:
 	ResourceStockpile.spend(sender_id, building_type.costs)
 
 	var team_index: int = team_index_by_peer.get(sender_id, 0)
-	var building: ProductionBuilding = building_spawner.spawn({
+	var spawned: Node = building_spawner.spawn({
 		"scene_path": building_type.scene.resource_path,
 		"peer_id": sender_id,
 		"position": world_pos,
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 	})
-	building.begin_construction(building_type.construction_time)
+	## Farm (a buildable Gatherable, not a ProductionBuilding) has no
+	## construction phase — it just appears complete.
+	if spawned is ProductionBuilding:
+		var building: ProductionBuilding = spawned
+		building.begin_construction(building_type.construction_time)
+		if building.population_capacity > 0:
+			building.construction_finished.connect(func():
+				Population.add_cap(sender_id, building.population_capacity)
+				building.destroyed.connect(
+					func(): Population.add_cap(sender_id, -building.population_capacity), CONNECT_ONE_SHOT
+				)
+			, CONNECT_ONE_SHOT)
 
 func _cancel_placement() -> void:
 	if placement_ghost:

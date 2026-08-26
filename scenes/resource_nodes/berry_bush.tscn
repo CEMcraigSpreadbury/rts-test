@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/gatherable.gd" id="1_script"]
+[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="2_food"]
+[ext_resource type="PackedScene" path="res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/bush_2.glb" id="3_model"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_bush"]
+radius = 0.5
+height = 1.0
+
+[node name="Gatherable" type="StaticBody3D" groups=["gatherables"]]
+script = ExtResource("1_script")
+resource_type = ExtResource("2_food")
+amount_remaining = 250
+gather_range = 1.6
+
+[node name="Model" parent="." instance=ExtResource("3_model")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("CylinderShape3D_bush")
+
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+radius = 0.5
+height = 1.5
+avoidance_enabled = true

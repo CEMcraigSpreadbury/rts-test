@@ -27,6 +27,11 @@ const DESTROY_SINK_DURATION: float = 1.5
 @export var can_rally: bool = true
 ## How far this building reveals fog of war around itself.
 @export var vision_range: float = 10.0
+## Added to the owner's population cap once construction finishes (or
+## immediately for buildings placed pre-built, e.g. the starting Town
+## Center), and removed again if this building is destroyed. 0 for buildings
+## that don't grant population room (Barracks, Farm).
+@export var population_capacity: int = 0
 ## Set alongside owner_peer_id at spawn time; used only for the minimap dot
 ## color (buildings have no sprite to modulate the way units do).
 @export var team_tint: Color = Color.WHITE
@@ -93,7 +98,14 @@ func begin_construction(duration: float) -> void:
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.costs):
 		return false
+	## Population is reserved as soon as an item enters the queue (not when it
+	## actually spawns) so a player can't queue past the cap; Unit.release()s
+	## the same amount when the resulting unit later dies.
+	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(owner_peer_id, item.population_cost):
+		return false
 	ResourceStockpile.spend(owner_peer_id, item.costs)
+	if item.kind == ProducibleItem.Kind.UNIT:
+		Population.reserve(owner_peer_id, item.population_cost)
 	queue.append(item)
 	queue_changed.emit()
 	return true

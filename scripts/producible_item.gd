@@ -11,5 +11,7 @@ enum Kind { UNIT, UPGRADE }
 @export var kind: Kind = Kind.UNIT
 @export var build_time: float = 5.0
 @export var costs: Array[ResourceCost] = []
+## Only meaningful when kind == UNIT; ignored for upgrades.
+@export var population_cost: int = 1
 ## Used when kind == UNIT; the scene instanced into the world on completion.
 @export var unit_scene: PackedScene

@@ -27,6 +27,7 @@ item_name = "Villager"
 kind = 0
 build_time = 5.0
 costs = Array[Resource]([SubResource("ResourceCost_villager")])
+population_cost = 1
 unit_scene = ExtResource("5_unit_scene")
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
@@ -56,6 +57,7 @@ properties/6/replication_mode = 1
 script = ExtResource("1_building_script")
 building_name = "Town Center"
 producibles = Array[Resource]([SubResource("ProducibleItem_villager")])
+population_capacity = 10
 is_main_base = true
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]

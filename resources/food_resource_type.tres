@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="ResourceType" format=3]
+
+[ext_resource type="Script" uid="uid://hwhfoh2ijaqq" path="res://scripts/resource_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "Food"
+display_color = Color(0.85, 0.65, 0.2, 1)

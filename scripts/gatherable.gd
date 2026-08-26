@@ -10,6 +10,10 @@ signal depleted
 @export var amount_remaining: int = 500
 ## How close a gatherer needs to be before it starts harvesting.
 @export var gather_range: float = 1.75
+## 0 = neutral/natural resource (trees, berry bushes, gold mines) that anyone
+## can gather from. Player-built resources (Farm) are set to their owner's
+## peer_id at spawn time so other players' villagers can't collect from them.
+@export var owner_peer_id: int = 0
 
 ## Returns the amount actually taken (may be less than requested near depletion).
 func gather(amount: int) -> int:

@@ -33,6 +33,10 @@ signal animation_changed(anim_name: String)
 @export var owner_peer_id: int = 1
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 8.0
+## Set at spawn time from the ProducibleItem that produced this unit (see
+## main.gd's _on_building_item_completed); released back to the owner's
+## Population pool when this unit dies.
+@export var population_cost: int = 1
 
 @export_group("Sprite Sheet")
 @export var sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png")
@@ -458,6 +462,9 @@ func _die() -> void:
 	status_command = Command.NONE
 	attack_target = null
 	target_resource = null
+	## take_damage() (the only caller of _die()) already gates on
+	## is_multiplayer_authority(), so this only ever runs once, on the host.
+	Population.release(owner_peer_id, population_cost)
 
 	if sprite.sprite_frames and sprite.sprite_frames.has_animation("death"):
 		_set_animation("death")
