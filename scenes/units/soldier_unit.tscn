@@ -6,5 +6,14 @@
 [node name="Soldier" instance=ExtResource("1_unit")]
 sprite_sheet = ExtResource("2_swordman")
 walk_frame_count = 6
+attack_row = 3
+attack_frame_count = 6
+death_row = 5
+death_frame_count = 4
 team_tint = Color(0.35, 0.6, 1, 1)
 can_gather = false
+max_health = 30
+attack_damage = 6
+attack_range = 1.3
+attack_cooldown = 0.9
+aggro_range = 7.0

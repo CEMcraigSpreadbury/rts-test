@@ -4,7 +4,6 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="2_cost_script"]
 [ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="3_building_type_script"]
 [ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="3_camera"]
-[ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="5_swordman"]
 [ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="6_light_follow"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/production_building.tscn" id="7_town_center"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
@@ -101,9 +100,9 @@ shape = SubResource("BoxShape3D_ground")
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
 
-[node name="Buildings" type="Node3D" parent="."]
+[node name="Buildings" type="Node3D" parent="." unique_id=1722222]
 
-[node name="BuildingSpawner" type="MultiplayerSpawner" parent="."]
+[node name="BuildingSpawner" type="MultiplayerSpawner" parent="." unique_id=1019600693]
 spawn_path = NodePath("../Buildings")
 
 [node name="ResourceNodes" type="Node3D" parent="." unique_id=1084375618]
@@ -125,7 +124,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
 
 [node name="Units" type="Node3D" parent="." unique_id=2068655962]
 
-[node name="UnitSpawner" type="MultiplayerSpawner" parent="."]
+[node name="UnitSpawner" type="MultiplayerSpawner" parent="." unique_id=1345839027]
 spawn_path = NodePath("../Units")
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=221909256]
@@ -175,10 +174,10 @@ autowrap_mode = 2
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -220.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = 140.0
+offset_left = -217.0
+offset_top = 509.0
+offset_right = -13.0
+offset_bottom = 633.0
 grow_horizontal = 0
 
 [node name="VBox" type="VBoxContainer" parent="UI/ConstructionPanel" unique_id=1616315363]
@@ -188,3 +187,35 @@ layout_mode = 2
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Construct"
+
+[node name="ChatLog" type="RichTextLabel" parent="UI" unique_id=742747127]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -555.0
+offset_top = -339.0
+offset_right = -143.0
+offset_bottom = -215.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/normal_font_size = 15
+scroll_following = true
+
+[node name="ChatInput" type="LineEdit" parent="UI" unique_id=1666054379]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -564.0
+offset_top = -207.0
+offset_right = -84.0
+offset_bottom = -176.0
+grow_horizontal = 2
+grow_vertical = 0
+placeholder_text = "Enter to send — try: cmd add wood 10"

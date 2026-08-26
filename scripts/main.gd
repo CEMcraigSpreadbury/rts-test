@@ -27,6 +27,9 @@ const TEAM_COLORS: Array[Color] = [
 
 @onready var construction_panel_vbox: VBoxContainer = $UI/ConstructionPanel/VBox
 
+@onready var chat_log: RichTextLabel = $UI/ChatLog
+@onready var chat_input: LineEdit = $UI/ChatInput
+
 var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
 var drag_start: Vector2 = Vector2.ZERO
@@ -45,6 +48,11 @@ var placement_valid: bool = false
 var team_index_by_peer: Dictionary = {}
 var town_centers: Dictionary = {}
 
+const MAX_CHAT_LINES: int = 8
+## Extend this when new resource types (Stone, Gold, ...) are added.
+const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [preload("res://resources/wood_resource_type.tres")]
+var chat_lines: Array[String] = []
+
 func _ready() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	for building_type in available_building_types:
@@ -57,6 +65,8 @@ func _ready() -> void:
 	building_spawner.spawn_function = _spawn_building_from_data
 	if multiplayer.is_server():
 		_spawn_all_players()
+
+	chat_input.text_submitted.connect(_on_chat_submitted)
 
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
@@ -90,11 +100,28 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 	town_centers[peer_id] = town_center
 
 func _spawn_unit_from_data(data: Dictionary) -> Node:
-	var unit: Unit = UNIT_SCENE.instantiate()
+	var scene: PackedScene = load(data.scene_path) if data.has("scene_path") else UNIT_SCENE
+	var unit: Unit = scene.instantiate()
 	unit.owner_peer_id = data.peer_id
 	unit.team_tint = data.tint
 	unit.position = data.position
+	unit.animation_changed.connect(_on_unit_animation_changed.bind(unit))
 	return unit
+
+## RPCs declared directly on dynamically-spawned Unit nodes weren't reaching
+## clients, so units relay animation changes here and this (statically present,
+## proven-reliable) node broadcasts them instead. Sprite flip is NOT relayed
+## this way — it's inherently viewer-dependent, so each peer computes it locally
+## from the unit's synced rotation and that peer's own camera (see Unit._process()).
+func _on_unit_animation_changed(anim_name: String, unit: Unit) -> void:
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_unit_animation.rpc(unit.get_path(), anim_name)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		unit.sprite.play(anim_name)
 
 func _spawn_building_from_data(data: Dictionary) -> Node:
 	var scene: PackedScene = load(data.scene_path)
@@ -113,6 +140,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	var spawn_pos: Vector3 = spawn_point.global_position if spawn_point else building.global_position
 	var team_index: int = team_index_by_peer.get(building.owner_peer_id, 0)
 	unit_spawner.spawn({
+		"scene_path": item.unit_scene.resource_path,
 		"peer_id": building.owner_peer_id,
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 		"position": spawn_pos,
@@ -131,6 +159,18 @@ func _process(_delta: float) -> void:
 		_update_placement_ghost()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if chat_input.visible and event.keycode == KEY_ESCAPE:
+			_close_chat_input()
+			get_viewport().set_input_as_handled()
+			return
+		if not chat_input.visible and event.keycode == KEY_ENTER:
+			_open_chat_input()
+			get_viewport().set_input_as_handled()
+			return
+	if chat_input.visible:
+		return
+
 	if placing_type:
 		_handle_placement_input(event)
 		return
@@ -210,6 +250,8 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 	var target_path := NodePath()
 	if result.collider is Gatherable:
 		target_path = result.collider.get_path()
+	elif result.collider is Unit and result.collider.owner_peer_id != _my_peer_id():
+		target_path = result.collider.get_path()
 
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position)
 
@@ -229,6 +271,8 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			continue
 		if target_node is Gatherable:
 			unit.command_gather(target_node, _get_dropoff_for(sender_id))
+		elif target_node is Unit and target_node.owner_peer_id != unit.owner_peer_id:
+			unit.command_attack(target_node)
 		else:
 			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
 			unit.command_move(world_pos + offset)
@@ -396,3 +440,73 @@ func _cancel_placement() -> void:
 		placement_ghost.queue_free()
 		placement_ghost = null
 	placing_type = null
+
+## --- Chat / debug console ---
+## Type a normal message to broadcast it to everyone, or "cmd ..." for a
+## debug command (currently: "cmd add <resource> <amount>" grants yourself
+## that resource without playing, e.g. "cmd add wood 10").
+
+func _open_chat_input() -> void:
+	chat_input.visible = true
+	chat_input.text = ""
+	chat_input.grab_focus()
+
+func _close_chat_input() -> void:
+	chat_input.visible = false
+	chat_input.text = ""
+	chat_input.release_focus()
+
+func _on_chat_submitted(text: String) -> void:
+	_close_chat_input()
+	var trimmed := text.strip_edges()
+	if trimmed.is_empty():
+		return
+	_rpc_submit_chat.rpc_id(1, trimmed)
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_submit_chat(text: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	if text.begins_with("cmd "):
+		_execute_debug_command(sender_id, text.substr(4))
+	else:
+		_rpc_display_chat.rpc("Player %d: %s" % [sender_id, text])
+
+func _execute_debug_command(sender_id: int, args_string: String) -> void:
+	var parts: PackedStringArray = args_string.strip_edges().split(" ", false)
+	if parts.is_empty():
+		return
+
+	match parts[0].to_lower():
+		"add":
+			if parts.size() < 3:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] usage: cmd add <resource> <amount>")
+				return
+			var resource_type: ResourceType = _find_resource_type_by_name(parts[1])
+			if resource_type == null:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] unknown resource '%s'" % parts[1])
+				return
+			var amount: int = int(parts[2])
+			ResourceStockpile.add(sender_id, resource_type, amount)
+			_rpc_display_chat.rpc_id(sender_id, "[debug] +%d %s" % [amount, resource_type.display_name])
+		"help":
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>")
+		_:
+			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
+
+func _find_resource_type_by_name(resource_name: String) -> ResourceType:
+	for resource_type in DEBUG_RESOURCE_TYPES:
+		if resource_type.display_name.to_lower() == resource_name.to_lower():
+			return resource_type
+	return null
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_display_chat(line: String) -> void:
+	chat_lines.append(line)
+	if chat_lines.size() > MAX_CHAT_LINES:
+		chat_lines.pop_front()
+	chat_log.text = "\n".join(chat_lines)

@@ -45,6 +45,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		pitch.rotation_degrees.x = -current_pitch
 
 func _process(delta: float) -> void:
+	## Input.is_key_pressed() polls raw OS key state and ignores whatever has UI
+	## focus, so without this a focused text field (e.g. chat) wouldn't stop WASD/Q/E.
+	if get_viewport().gui_get_focus_owner() != null:
+		return
+
 	var input_dir := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W):
 		input_dir.y -= 1
