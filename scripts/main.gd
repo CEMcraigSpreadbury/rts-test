@@ -110,6 +110,7 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 		"scene_path": TOWN_CENTER_SCENE_PATH,
 		"peer_id": peer_id,
 		"position": base_pos + Vector3(-4.0, 0.0, 4.0),
+		"tint": tint,
 	})
 	town_centers[peer_id] = town_center
 
@@ -142,6 +143,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 	var building: ProductionBuilding = scene.instantiate()
 	building.owner_peer_id = data.peer_id
 	building.position = data.position
+	building.team_tint = data.get("tint", Color.WHITE)
 	building.item_completed.connect(_on_building_item_completed.bind(building))
 	building.destroyed.connect(_on_building_destroyed.bind(building))
 	if multiplayer.is_server() and building.is_main_base:
@@ -575,10 +577,12 @@ func _rpc_request_build(type_index: int, world_pos: Vector3) -> void:
 		return
 	ResourceStockpile.spend(sender_id, building_type.costs)
 
+	var team_index: int = team_index_by_peer.get(sender_id, 0)
 	var building: ProductionBuilding = building_spawner.spawn({
 		"scene_path": building_type.scene.resource_path,
 		"peer_id": sender_id,
 		"position": world_pos,
+		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 	})
 	building.begin_construction(building_type.construction_time)
 

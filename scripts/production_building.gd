@@ -25,6 +25,11 @@ const DESTROY_SINK_DURATION: float = 1.5
 ## Whether this building type supports a rally point at all (Town Center,
 ## Barracks, etc). When off, right-clicking it while selected does nothing.
 @export var can_rally: bool = true
+## How far this building reveals fog of war around itself.
+@export var vision_range: float = 10.0
+## Set alongside owner_peer_id at spawn time; used only for the minimap dot
+## color (buildings have no sprite to modulate the way units do).
+@export var team_tint: Color = Color.WHITE
 ## How far the model sinks below its resting position at the start of construction.
 @export var construction_sink_depth: float = 3.0
 

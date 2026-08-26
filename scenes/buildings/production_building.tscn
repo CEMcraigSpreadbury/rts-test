@@ -52,7 +52,7 @@ properties/6/path = NodePath(".:health_fraction")
 properties/6/spawn = true
 properties/6/replication_mode = 1
 
-[node name="ProductionBuilding" type="StaticBody3D" groups=["dropoff_points"]]
+[node name="ProductionBuilding" type="StaticBody3D" groups=["dropoff_points", "buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Town Center"
 producibles = Array[Resource]([SubResource("ProducibleItem_villager")])

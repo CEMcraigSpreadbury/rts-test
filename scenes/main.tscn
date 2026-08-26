@@ -8,7 +8,10 @@
 [ext_resource type="PackedScene" path="res://scenes/buildings/production_building.tscn" id="7_town_center"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/barracks_building.tscn" id="9_barracks"]
-[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="10_wood"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="10_wood"]
+[ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="11_fog_script"]
+[ext_resource type="Shader" uid="uid://bt4kly6vxq7p5" path="res://shaders/fog_of_war.gdshader" id="12_fog_shader"]
+[ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="13_minimap_script"]
 
 [sub_resource type="Resource" id="ResourceCost_towncenter"]
 script = ExtResource("2_cost_script")
@@ -65,6 +68,15 @@ albedo_color = Color(0.28, 0.42, 0.24, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
 size = Vector3(60, 0.2, 60)
 
+[sub_resource type="PlaneMesh" id="PlaneMesh_fog"]
+size = Vector2(60, 60)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_fog"]
+render_priority = 0
+shader = ExtResource("12_fog_shader")
+shader_parameter/map_origin = Vector2(0, 0)
+shader_parameter/map_size = Vector2(0, 0)
+
 [node name="Main" type="Node3D" unique_id=2055692591]
 script = ExtResource("1_script")
 available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks")])
@@ -99,6 +111,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 shape = SubResource("BoxShape3D_ground")
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
+
+[node name="FogOfWar" type="Node3D" parent="." unique_id=1933763603]
+script = ExtResource("11_fog_script")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="FogOfWar" unique_id=1633417530]
+mesh = SubResource("PlaneMesh_fog")
+surface_material_override/0 = SubResource("ShaderMaterial_fog")
 
 [node name="Buildings" type="Node3D" parent="." unique_id=1722222]
 
@@ -220,7 +239,20 @@ grow_horizontal = 2
 grow_vertical = 0
 placeholder_text = "Enter to send — try: cmd add wood 10"
 
-[node name="GameOverPanel" type="PanelContainer" parent="UI"]
+[node name="Minimap" type="Control" parent="UI" unique_id=2013936325]
+clip_contents = true
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -216.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 216.0
+grow_horizontal = 0
+script = ExtResource("13_minimap_script")
+
+[node name="GameOverPanel" type="PanelContainer" parent="UI" unique_id=830488843]
 visible = false
 anchors_preset = 8
 anchor_left = 0.5
@@ -234,16 +266,16 @@ offset_bottom = 70.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel"]
+[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel" unique_id=2129327243]
 layout_mode = 2
 alignment = 1
 
-[node name="ResultLabel" type="Label" parent="UI/GameOverPanel/VBox"]
+[node name="ResultLabel" type="Label" parent="UI/GameOverPanel/VBox" unique_id=1328889564]
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
-horizontal_alignment = 1
 text = "Game Over"
+horizontal_alignment = 1
 
-[node name="ReturnButton" type="Button" parent="UI/GameOverPanel/VBox"]
+[node name="ReturnButton" type="Button" parent="UI/GameOverPanel/VBox" unique_id=304735568]
 layout_mode = 2
 text = "Return to Lobby"
