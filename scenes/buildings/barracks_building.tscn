@@ -1,0 +1,51 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="2_cost_script"]
+[ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="5_soldier_scene"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(3, 2, 3)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
+albedo_color = Color(0.45, 0.35, 0.35, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(3, 2, 3)
+
+[sub_resource type="Resource" id="ResourceCost_soldier"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 40
+
+[sub_resource type="Resource" id="ProducibleItem_soldier"]
+script = ExtResource("3_item_script")
+item_name = "Soldier"
+kind = 0
+build_time = 6.0
+costs = Array[Resource]([SubResource("ResourceCost_soldier")])
+unit_scene = ExtResource("5_soldier_scene")
+
+[node name="ProductionBuilding" type="StaticBody3D"]
+script = ExtResource("1_building_script")
+building_name = "Barracks"
+producibles = Array[Resource]([SubResource("ProducibleItem_soldier")])
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("BoxMesh_body")
+surface_material_override/0 = SubResource("StandardMaterial3D_body")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+radius = 2.2
+height = 2.0
+avoidance_enabled = true
+
+[node name="SpawnPoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, 2.5)

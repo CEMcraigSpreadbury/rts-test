@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="2_swordman"]
+
+[node name="Soldier" instance=ExtResource("1_unit")]
+sprite_sheet = ExtResource("2_swordman")
+walk_frame_count = 6
+team_tint = Color(0.35, 0.6, 1, 1)
+can_gather = false

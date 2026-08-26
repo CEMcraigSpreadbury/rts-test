@@ -1,24 +1,42 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene format=3 uid="uid://n2ny6nebsu1v"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_script"]
-[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="2_unit"]
+[ext_resource type="Script" uid="uid://k0dgxjac4h20" path="res://scripts/main.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="2_cost_script"]
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="2_unit"]
+[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="3_building_type_script"]
 [ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="3_camera"]
-[ext_resource type="Texture2D" path="res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png" id="4_gatherer"]
-[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="5_swordman"]
-[ext_resource type="Script" path="res://scripts/light_follow_camera_yaw.gd" id="6_light_follow"]
+[ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="5_swordman"]
+[ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="6_light_follow"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/production_building.tscn" id="7_town_center"]
+[ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/barracks_building.tscn" id="9_barracks"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="10_wood"]
 
-[sub_resource type="NavigationMesh" id="NavigationMesh_1"]
-vertices = PackedVector3Array(-30, 0, -30, 30, 0, -30, 30, 0, 30, -30, 0, 30)
-polygons = [PackedInt32Array(0, 1, 2, 3)]
+[sub_resource type="Resource" id="ResourceCost_towncenter"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("10_wood")
+amount = 100
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
-size = Vector2(60, 60)
+[sub_resource type="Resource" id="BuildingType_towncenter"]
+script = ExtResource("3_building_type_script")
+building_name = "Town Center"
+scene = ExtResource("7_town_center")
+costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_towncenter")])
+footprint_radius = 2.4
+construction_time = 10.0
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
-albedo_color = Color(0.28, 0.42, 0.24, 1)
+[sub_resource type="Resource" id="ResourceCost_barracks"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("10_wood")
+amount = 75
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
-size = Vector3(60, 0.2, 60)
+[sub_resource type="Resource" id="BuildingType_barracks"]
+script = ExtResource("3_building_type_script")
+building_name = "Barracks"
+scene = ExtResource("9_barracks")
+costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_barracks")])
+footprint_radius = 2.4
+construction_time = 7.0
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -36,69 +54,155 @@ ambient_light_source = 3
 ambient_light_energy = 0.7
 tonemap_mode = 2
 
-[node name="Main" type="Node3D"]
-script = ExtResource("1_script")
+[sub_resource type="NavigationMesh" id="NavigationMesh_1"]
+vertices = PackedVector3Array(-30, 0, -30, 30, 0, -30, 30, 0, 30, -30, 0, 30)
+polygons = [PackedInt32Array(0, 1, 2, 3)]
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(60, 60)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
+albedo_color = Color(0.28, 0.42, 0.24, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
+size = Vector3(60, 0.2, 60)
+
+[node name="Main" type="Node3D" unique_id=2055692591]
+script = ExtResource("1_script")
+available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks")])
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
 environment = SubResource("Environment_1")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-script = ExtResource("6_light_follow")
-position = Vector3(0, 12, 0)
-rotation_degrees = Vector3(-50, 35, 0)
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=620721382]
+transform = Transform3D(0.81915206, -0.43938506, 0.36868784, 0, 0.64278764, 0.76604444, -0.57357645, -0.62750685, 0.5265408, 0, 12, 0)
 light_color = Color(1, 0.96, 0.87, 1)
 light_energy = 1.2
 shadow_enabled = true
+script = ExtResource("6_light_follow")
 camera_yaw_path = NodePath("../CameraRig/Yaw")
 
-[node name="FillLight" type="DirectionalLight3D" parent="."]
-position = Vector3(0, 8, 0)
-rotation_degrees = Vector3(-40, 135, 0)
+[node name="FillLight" type="DirectionalLight3D" parent="." unique_id=1505165951]
+transform = Transform3D(-0.70710677, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.70710677, 0.45451945, -0.5416752, 0, 8, 0)
 light_color = Color(0.6, 0.7, 1, 1)
 light_energy = 0.25
-shadow_enabled = false
 
-[node name="NavigationRegion3D" type="NavigationRegion3D" parent="."]
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1365774680]
 navigation_mesh = SubResource("NavigationMesh_1")
 
-[node name="Ground" type="StaticBody3D" parent="NavigationRegion3D"]
+[node name="Ground" type="StaticBody3D" parent="NavigationRegion3D" unique_id=1669556763]
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Ground"]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="NavigationRegion3D/Ground" unique_id=1869103632]
 mesh = SubResource("PlaneMesh_ground")
 surface_material_override/0 = SubResource("StandardMaterial3D_ground")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Ground"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Ground" unique_id=818479452]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 shape = SubResource("BoxShape3D_ground")
 
-[node name="CameraRig" parent="." instance=ExtResource("3_camera")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+[node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
 
-[node name="Units" type="Node3D" parent="."]
+[node name="TownCenter" parent="." unique_id=540041903 instance=ExtResource("7_town_center")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 6)
+units_container_path = NodePath("../Units")
 
-[node name="Unit1" parent="Units" instance=ExtResource("2_unit")]
+[node name="ResourceNodes" type="Node3D" parent="." unique_id=1084375618]
+
+[node name="Tree1" parent="ResourceNodes" unique_id=932968213 instance=ExtResource("8_tree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0, -14)
+
+[node name="Tree2" parent="ResourceNodes" unique_id=1243022168 instance=ExtResource("8_tree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0, -10)
+
+[node name="Tree3" parent="ResourceNodes" unique_id=928748662 instance=ExtResource("8_tree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 0, -14)
+
+[node name="Tree4" parent="ResourceNodes" unique_id=744175782 instance=ExtResource("8_tree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0, -10)
+
+[node name="Tree5" parent="ResourceNodes" unique_id=1937938722 instance=ExtResource("8_tree")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
+
+[node name="Units" type="Node3D" parent="." unique_id=2068655962]
+
+[node name="Unit1" parent="Units" unique_id=1948396737 instance=ExtResource("2_unit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -3)
-sprite_sheet = ExtResource("4_gatherer")
+gather_level = 5
+carry_capacity = 20
 
-[node name="Unit2" parent="Units" instance=ExtResource("2_unit")]
+[node name="Unit2" parent="Units" unique_id=1885750060 instance=ExtResource("2_unit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -3)
-sprite_sheet = ExtResource("4_gatherer")
+gather_level = 5
 
-[node name="Unit3" parent="Units" instance=ExtResource("2_unit")]
+[node name="Unit3" parent="Units" unique_id=2056241420 instance=ExtResource("2_unit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, -3)
+team_tint = Color(0.35, 0.6, 1, 1)
 sprite_sheet = ExtResource("5_swordman")
 walk_frame_count = 6
-team_tint = Color(0.35, 0.6, 1, 1)
 
-[node name="Unit4" parent="Units" instance=ExtResource("2_unit")]
+[node name="Unit4" parent="Units" unique_id=1922430063 instance=ExtResource("2_unit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, -3)
+team_tint = Color(0.35, 0.6, 1, 1)
 sprite_sheet = ExtResource("5_swordman")
 walk_frame_count = 6
-team_tint = Color(0.35, 0.6, 1, 1)
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UI" type="CanvasLayer" parent="." unique_id=221909256]
 
-[node name="SelectionBox" type="ColorRect" parent="UI"]
+[node name="SelectionBox" type="ColorRect" parent="UI" unique_id=1631016065]
 visible = false
 mouse_filter = 2
 color = Color(0.3, 0.8, 1, 0.25)
+
+[node name="ResourceLabel" type="Label" parent="UI" unique_id=233185810]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 260.0
+offset_bottom = 44.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_font_sizes/font_size = 22
+text = "Wood: 0"
+
+[node name="BuildPanel" type="PanelContainer" parent="UI" unique_id=2075588479]
+visible = false
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -160.0
+offset_right = 260.0
+offset_bottom = -16.0
+grow_vertical = 0
+
+[node name="VBox" type="VBoxContainer" parent="UI/BuildPanel" unique_id=537852054]
+layout_mode = 2
+
+[node name="BuildingNameLabel" type="Label" parent="UI/BuildPanel/VBox" unique_id=729618171]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Building"
+
+[node name="QueueLabel" type="Label" parent="UI/BuildPanel/VBox" unique_id=990616368]
+layout_mode = 2
+text = "Queue: empty"
+autowrap_mode = 2
+
+[node name="ConstructionPanel" type="PanelContainer" parent="UI" unique_id=2090387592]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -220.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 140.0
+grow_horizontal = 0
+
+[node name="VBox" type="VBoxContainer" parent="UI/ConstructionPanel" unique_id=1616315363]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="UI/ConstructionPanel/VBox" unique_id=1879175841]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "Construct"
