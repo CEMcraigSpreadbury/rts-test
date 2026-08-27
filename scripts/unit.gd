@@ -324,7 +324,11 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 			if attack_target == null:
 				attack_target = attacker
 				_head_to_target()
-		elif status_command != Command.ATTACK:
+		## A plain Command.MOVE is a deliberate player order (e.g. retreating a
+		## unit out of a losing fight) — auto-retaliating here would silently
+		## override that order the moment the attacker lands one more hit
+		## before the unit escapes range, undoing the retreat entirely.
+		elif status_command != Command.ATTACK and status_command != Command.MOVE:
 			command_attack(attacker)
 		CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
 
@@ -397,6 +401,17 @@ func _physics_process(delta: float) -> void:
 					## _find_new_target_or_idle() resumes the loop after.
 					attack_target = enemy
 					_head_to_target()
+	## Standing guard: a unit with nothing else to do still watches for enemies
+	## wandering into range, instead of only ever reacting once it's actually
+	## hit. Without this, an idle unit (e.g. a ranged Archer) just stands there
+	## while an enemy walks right up to and past it.
+	elif status_activity == Activity.IDLE and can_fight and status_command == Command.NONE:
+		_enemy_scan_timer -= delta
+		if _enemy_scan_timer <= 0.0:
+			_enemy_scan_timer = ENEMY_SCAN_INTERVAL
+			var enemy := _find_nearest_enemy_in_range(aggro_range)
+			if enemy:
+				command_attack(enemy)
 
 	var direction := Vector3.ZERO
 	if not nav_agent.is_navigation_finished():
@@ -441,7 +456,15 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## ever got a chance to run, causing it to circle the enemy instead of fighting.
 	if status_activity == Activity.MOVING and nav_agent.is_navigation_finished():
 		if status_command == Command.MOVE or status_command == Command.ATTACK_MOVE:
+			## Reset status_command too, not just status_activity — otherwise
+			## a unit that has ever finished a move order (including every
+			## unit that walks to a rally point right after spawning) stays
+			## "stuck" in Command.MOVE forever, which now also permanently
+			## blocks auto-retaliation and idle standing-guard scanning (both
+			## deliberately treat Command.MOVE as "still following a player
+			## order, don't interrupt it").
 			status_activity = Activity.IDLE
+			status_command = Command.NONE
 		elif status_command == Command.PATROL:
 			_advance_patrol()
 
