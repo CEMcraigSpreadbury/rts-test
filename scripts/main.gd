@@ -10,6 +10,17 @@ const TEAM_COLORS: Array[Color] = [
 	Color(0.25, 0.55, 1.0), Color(1.0, 0.35, 0.3), Color(0.35, 1.0, 0.45), Color(1.0, 0.85, 0.3)
 ]
 
+## Command-card hotkeys. The camera reads W/A/S/D/Q/E via raw Input.is_key_pressed()
+## polling every frame (see rts_camera.gd), completely bypassing _unhandled_input,
+## so none of these can safely use those letters — set_input_as_handled() would
+## not stop the camera from also reacting to them.
+const UNIT_MOVE_KEY: Key = KEY_M
+const UNIT_STOP_KEY: Key = KEY_H
+const UNIT_ATTACK_KEY: Key = KEY_F
+const UNIT_PATROL_KEY: Key = KEY_P
+const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
+const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B]
+
 @export var available_building_types: Array[BuildingType] = []
 
 @onready var camera: Camera3D = $CameraRig/Yaw/Pitch/Camera3D
@@ -21,12 +32,12 @@ const TEAM_COLORS: Array[Color] = [
 @onready var buildings_root: Node3D = $Buildings
 @onready var building_spawner: MultiplayerSpawner = $BuildingSpawner
 
-@onready var build_panel: PanelContainer = $UI/BuildPanel
-@onready var build_panel_vbox: VBoxContainer = $UI/BuildPanel/VBox
-@onready var build_panel_name_label: Label = $UI/BuildPanel/VBox/BuildingNameLabel
-@onready var build_panel_queue_label: Label = $UI/BuildPanel/VBox/QueueLabel
+@onready var command_panel: PanelContainer = $UI/CommandPanel
+@onready var command_panel_name_label: Label = $UI/CommandPanel/VBox/BuildingNameLabel
+@onready var command_panel_queue_label: Label = $UI/CommandPanel/VBox/QueueLabel
+@onready var command_panel_grid: GridContainer = $UI/CommandPanel/VBox/Grid
 
-@onready var construction_panel_vbox: VBoxContainer = $UI/ConstructionPanel/VBox
+@onready var construction_panel_grid: GridContainer = $UI/ConstructionPanel/VBox/Grid
 
 @onready var chat_log: RichTextLabel = $UI/ChatLog
 @onready var chat_input: LineEdit = $UI/ChatInput
@@ -38,6 +49,16 @@ var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
 var drag_start: Vector2 = Vector2.ZERO
 var dragging: bool = false
+
+## "" | "move" | "attack" | "patrol" — armed by a command-card button/hotkey,
+## consumed by the next left-click (see _handle_pending_order_input).
+var pending_order_mode: String = ""
+## True once the first click of the current patrol-targeting session has been
+## sent, so later shift-clicks append a waypoint instead of starting a new patrol.
+var _patrol_started_this_session: bool = false
+## Which unit selection the command panel's buttons were last built for, so
+## _process() only rebuilds them when the selection actually changed.
+var _last_command_panel_units: Array[Unit] = []
 
 ## Purely local UI state: which units/buildings belong to each numbered
 ## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
@@ -105,11 +126,12 @@ var _population_cap: int = 0
 func _ready() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	Population.changed.connect(_on_population_changed)
-	for building_type in available_building_types:
-		var button := Button.new()
-		button.text = "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
-		button.pressed.connect(_start_placement.bind(building_type))
-		construction_panel_vbox.add_child(button)
+	for i in available_building_types.size():
+		var building_type: BuildingType = available_building_types[i]
+		var hotkey: String = OS.get_keycode_string(BUILDING_HOTKEYS[i]) if i < BUILDING_HOTKEYS.size() else "?"
+		var tooltip := "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
+		var button := _make_command_button(hotkey, tooltip, building_type.icon, _start_placement.bind(building_type))
+		construction_panel_grid.add_child(button)
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
 	building_spawner.spawn_function = _spawn_building_from_data
@@ -294,6 +316,14 @@ func _get_dropoff_for(peer_id: int) -> Node3D:
 func _process(_delta: float) -> void:
 	if selected_building:
 		_update_queue_label()
+	elif not selected_units.is_empty():
+		## Catches every way selected_units can change (drag-select, control
+		## groups, a selected unit dying mid-fight) without needing a refresh
+		## call at each individual mutation site; only rebuilds the panel's
+		## buttons when the selection actually changed since last frame.
+		_prune_selected_units()
+		if selected_units != _last_command_panel_units:
+			_refresh_command_panel()
 	if placing_type:
 		_update_placement_ghost()
 	_update_hover_ring()
@@ -318,6 +348,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_placement_input(event)
 		return
 
+	if pending_order_mode != "":
+		_handle_pending_order_input(event)
+		return
+
 	if event is InputEventKey and event.pressed and not event.echo \
 			and event.keycode >= KEY_1 and event.keycode <= KEY_9:
 		var group_number: int = event.keycode - KEY_1 + 1
@@ -327,6 +361,32 @@ func _unhandled_input(event: InputEvent) -> void:
 			_activate_control_group(group_number)
 		get_viewport().set_input_as_handled()
 		return
+
+	if event is InputEventKey and event.pressed and not event.echo:
+		var building_index: int = BUILDING_HOTKEYS.find(event.keycode)
+		if building_index != -1 and building_index < available_building_types.size():
+			_start_placement(available_building_types[building_index])
+			get_viewport().set_input_as_handled()
+			return
+
+	if event is InputEventKey and event.pressed and not event.echo and not selected_units.is_empty():
+		if event.keycode == UNIT_MOVE_KEY:
+			pending_order_mode = "move"
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_STOP_KEY:
+			_issue_stop_order()
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_ATTACK_KEY:
+			pending_order_mode = "attack"
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_PATROL_KEY:
+			pending_order_mode = "patrol"
+			_patrol_started_this_session = false
+			get_viewport().set_input_as_handled()
+			return
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -474,6 +534,23 @@ func _raycast(screen_pos: Vector2) -> Dictionary:
 	var query := PhysicsRayQueryParameters3D.create(from, to)
 	return space_state.intersect_ray(query)
 
+## Gatherable / enemy Unit / enemy-or-under-construction-or-deposit-linked
+## ProductionBuilding -> its path, else an empty path meaning "plain ground".
+func _resolve_order_target_path(result: Dictionary) -> NodePath:
+	if result.collider is Gatherable:
+		return result.collider.get_path()
+	elif result.collider is Unit and result.collider.owner_peer_id != _my_peer_id():
+		return result.collider.get_path()
+	## A friendly building under construction is also a valid target (to send
+	## builders to it), and so is a friendly building with a linked_deposit
+	## (e.g. a Mine — right-clicking the mine itself should still gather from
+	## the deposit it sits on), alongside the existing enemy-building-attack case.
+	elif result.collider is ProductionBuilding and \
+			(result.collider.owner_peer_id != _my_peer_id() or result.collider.is_under_construction \
+				or result.collider.linked_deposit != null):
+		return result.collider.get_path()
+	return NodePath()
+
 ## Selection is local, but actually moving/gathering only ever happens on the
 ## host, so the command is sent there and executed on its authoritative units.
 func _issue_move_order(screen_pos: Vector2) -> void:
@@ -488,24 +565,37 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 	for unit in selected_units:
 		unit_paths.append(unit.get_path())
 
-	var target_path := NodePath()
-	if result.collider is Gatherable:
-		target_path = result.collider.get_path()
-	elif result.collider is Unit and result.collider.owner_peer_id != _my_peer_id():
-		target_path = result.collider.get_path()
-	## A friendly building under construction is also a valid target (to send
-	## builders to it), and so is a friendly building with a linked_deposit
-	## (e.g. a Mine — right-clicking the mine itself should still gather from
-	## the deposit it sits on), alongside the existing enemy-building-attack case.
-	elif result.collider is ProductionBuilding and \
-			(result.collider.owner_peer_id != _my_peer_id() or result.collider.is_under_construction \
-				or result.collider.linked_deposit != null):
-		target_path = result.collider.get_path()
+	var target_path := _resolve_order_target_path(result)
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false)
 
-	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position)
+## Same target inference as a plain move order, except empty ground issues an
+## attack-move instead of a plain move — see _rpc_issue_command's attack_move_fallback.
+func _issue_attack_order(screen_pos: Vector2) -> void:
+	_prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var result := _raycast(screen_pos)
+	if result.is_empty():
+		return
+
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+
+	var target_path := _resolve_order_target_path(result)
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true)
+
+func _issue_stop_order() -> void:
+	_prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+	_rpc_issue_stop.rpc_id(1, unit_paths)
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3) -> void:
+func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -542,7 +632,83 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			unit.command_build(target_node)
 		else:
 			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
-			unit.command_move(world_pos + offset)
+			if attack_move_fallback:
+				unit.command_attack_move(world_pos + offset)
+			else:
+				unit.command_move(world_pos + offset)
+
+## append: true once the current patrol-targeting session's first click has
+## already gone out, so further shift-clicks extend the loop instead of
+## restarting it (see _handle_pending_order_input).
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_issue_patrol(unit_paths: Array[NodePath], world_pos: Vector3, append: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit == null or unit.owner_peer_id != sender_id:
+			continue
+		if append and unit.status_command == Unit.Command.PATROL:
+			unit.command_patrol_add_waypoint(world_pos)
+		else:
+			unit.command_patrol([unit.global_position, world_pos])
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit == null or unit.owner_peer_id != sender_id:
+			continue
+		unit.command_stop()
+
+## Mirrors _handle_placement_input's pattern: Escape/right-click cancels,
+## left-click dispatches based on which order is currently armed. Move/Attack
+## are single-shot; Patrol stays armed while Shift is held so multiple clicks
+## chain into one patrol loop.
+func _handle_pending_order_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		pending_order_mode = ""
+		return
+	if not (event is InputEventMouseButton and event.pressed):
+		return
+	if event.button_index == MOUSE_BUTTON_RIGHT:
+		pending_order_mode = ""
+		return
+	if event.button_index != MOUSE_BUTTON_LEFT:
+		return
+
+	match pending_order_mode:
+		"move":
+			_issue_move_order(event.position)
+			pending_order_mode = ""
+		"attack":
+			_issue_attack_order(event.position)
+			pending_order_mode = ""
+		"patrol":
+			var result := _raycast(event.position)
+			if result.is_empty():
+				return
+			_prune_selected_units()
+			if selected_units.is_empty():
+				pending_order_mode = ""
+				return
+			var unit_paths: Array[NodePath] = []
+			for unit in selected_units:
+				unit_paths.append(unit.get_path())
+			_rpc_issue_patrol.rpc_id(1, unit_paths, result.position, _patrol_started_this_session)
+			_patrol_started_this_session = true
+			if not event.shift_pressed:
+				pending_order_mode = ""
 
 func _on_stockpile_changed(resource_name: String, amount: int) -> void:
 	_resource_totals[resource_name] = amount
@@ -562,30 +728,66 @@ func _update_resource_label() -> void:
 
 func _select_building(building: ProductionBuilding) -> void:
 	selected_building = building
-	build_panel.visible = building != null
 	_update_rally_marker()
 	if building == null:
+		_refresh_command_panel()
 		return
 
-	build_panel_name_label.text = building.building_name
-	for child in build_panel_vbox.get_children():
-		if child != build_panel_name_label and child != build_panel_queue_label:
-			child.queue_free()
+	command_panel.visible = true
+	command_panel_name_label.text = building.building_name
+	command_panel_queue_label.visible = true
+	for child in command_panel_grid.get_children():
+		child.queue_free()
 
 	if building.is_under_construction:
-		build_panel_queue_label.text = _format_construction_status(building)
+		command_panel_queue_label.text = _format_construction_status(building)
 		if not building.construction_finished.is_connected(_on_selected_building_constructed):
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
 		return
 
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
-		var button := Button.new()
-		button.text = "%s (%s)" % [item.item_name, _format_item_costs(item)]
-		button.pressed.connect(_on_producible_button_pressed.bind(building, i))
-		build_panel_vbox.add_child(button)
+		var hotkey: String = OS.get_keycode_string(PRODUCIBLE_HOTKEYS[i]) if i < PRODUCIBLE_HOTKEYS.size() else "?"
+		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item)]
+		var button := _make_command_button(hotkey, tooltip, item.icon, _on_producible_button_pressed.bind(building, i))
+		command_panel_grid.add_child(button)
 
 	_update_queue_label()
+
+## Rebuilds the command panel for the current selection when no building is
+## selected: the four unit-command buttons if units are selected, or hidden
+## if nothing is. (Building content is built directly in _select_building.)
+func _refresh_command_panel() -> void:
+	if selected_building != null:
+		return
+	for child in command_panel_grid.get_children():
+		child.queue_free()
+	_last_command_panel_units = selected_units.duplicate()
+
+	if selected_units.is_empty():
+		command_panel.visible = false
+		return
+
+	command_panel.visible = true
+	command_panel_name_label.text = "%d unit%s selected" % [selected_units.size(), "" if selected_units.size() == 1 else "s"]
+	command_panel_queue_label.visible = false
+	_populate_unit_command_buttons()
+
+func _populate_unit_command_buttons() -> void:
+	command_panel_grid.add_child(_make_command_button(
+		OS.get_keycode_string(UNIT_MOVE_KEY), "Move", null, func(): pending_order_mode = "move"
+	))
+	command_panel_grid.add_child(_make_command_button(
+		OS.get_keycode_string(UNIT_STOP_KEY), "Stop", null, _issue_stop_order
+	))
+	command_panel_grid.add_child(_make_command_button(
+		OS.get_keycode_string(UNIT_ATTACK_KEY), "Attack", null, func(): pending_order_mode = "attack"
+	))
+	command_panel_grid.add_child(_make_command_button(
+		OS.get_keycode_string(UNIT_PATROL_KEY), "Patrol", null, func():
+			pending_order_mode = "patrol"
+			_patrol_started_this_session = false
+	))
 
 func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if selected_building == building:
@@ -746,16 +948,29 @@ func _format_construction_status(building: ProductionBuilding) -> String:
 
 func _update_queue_label() -> void:
 	if selected_building.is_under_construction:
-		build_panel_queue_label.text = _format_construction_status(selected_building)
+		command_panel_queue_label.text = _format_construction_status(selected_building)
 		return
 	if selected_building.synced_queue_size <= 0:
-		build_panel_queue_label.text = "Queue: empty"
+		command_panel_queue_label.text = "Queue: empty"
 		return
 	var extra: int = selected_building.synced_queue_size - 1
-	build_panel_queue_label.text = "Building %s (%.1fs)%s" % [
+	command_panel_queue_label.text = "Building %s (%.1fs)%s" % [
 		selected_building.synced_current_item_name, selected_building.synced_time_remaining,
 		" + %d queued" % extra if extra > 0 else ""
 	]
+
+## Shared by the construction menu, a building's production menu, and the new
+## unit-command panel: a square button showing only its hotkey letter (icon
+## stays null everywhere today — no icon art exists yet, but the field is
+## wired so real art can be dropped in later without touching this code).
+func _make_command_button(hotkey_label: String, tooltip: String, icon: Texture2D, callback: Callable) -> Button:
+	var button := Button.new()
+	button.custom_minimum_size = Vector2(56, 56)
+	button.text = hotkey_label
+	button.tooltip_text = tooltip
+	button.icon = icon
+	button.pressed.connect(callback)
+	return button
 
 func _format_costs(costs: Array[ResourceCost]) -> String:
 	var parts: Array[String] = []

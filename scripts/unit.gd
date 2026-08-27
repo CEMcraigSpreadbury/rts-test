@@ -16,11 +16,13 @@ const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
 const ATTACK_LEASH_SLACK: float = 1.2
 ## Building footprints push agents back via avoidance same as for melee attacks.
 const BUILD_ARRIVAL_DISTANCE: float = 1.0
+## How often an attack-moving/patrolling unit checks for nearby enemies to engage.
+const ENEMY_SCAN_INTERVAL: float = 0.25
 
 ## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
 ## hold (resource->dropoff->resource / target->next target / stay building
 ## until done) until interrupted or exhausted.
-enum Command { NONE, MOVE, GATHER, ATTACK, BUILD }
+enum Command { NONE, MOVE, GATHER, ATTACK, BUILD, ATTACK_MOVE, PATROL }
 ## The current step within a command, e.g. Gather cycles TO_RESOURCE -> GATHERING -> TO_DROPOFF.
 enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD }
 
@@ -107,6 +109,11 @@ var attack_target: Node3D = null
 var attack_timer: float = 0.0
 var build_target: ProductionBuilding = null
 var _dying: bool = false
+var patrol_points: Array[Vector3] = []
+var patrol_index: int = 0
+## Counts down while attack-moving/patrolling; scanning for enemies every frame
+## would be an unthrottled O(units x units) group scan, so this paces it instead.
+var _enemy_scan_timer: float = 0.0
 
 func _ready() -> void:
 	status_current_health = max_health
@@ -171,6 +178,54 @@ func command_attack(target: Node3D) -> void:
 	attack_target = target
 	_head_to_target()
 
+## One-shot: moves toward target_position, engaging (and fully converting to
+## Command.ATTACK — see the scan in _physics_process) the first enemy found
+## along the way. Once it engages, this order is gone for good; it does not
+## resume toward target_position afterward.
+func command_attack_move(target_position: Vector3) -> void:
+	if status_activity == Activity.DEAD or not can_fight:
+		return
+	_leave_build_site()
+	status_command = Command.ATTACK_MOVE
+	target_resource = null
+	attack_target = null
+	status_activity = Activity.MOVING
+	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
+	move_to(target_position)
+
+## Loops through points, engaging anything encountered along the way and
+## resuming the loop once each fight ends (see _find_new_target_or_idle).
+func command_patrol(points: Array[Vector3]) -> void:
+	if status_activity == Activity.DEAD or not can_fight or points.is_empty():
+		return
+	_leave_build_site()
+	status_command = Command.PATROL
+	target_resource = null
+	attack_target = null
+	patrol_points = points
+	patrol_index = 0
+	status_activity = Activity.MOVING
+	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
+	move_to(patrol_points[0])
+
+## Extends an already-active patrol loop with another waypoint (e.g. a
+## shift-click while patrol-targeting). No-ops if the order changed before
+## this arrived.
+func command_patrol_add_waypoint(point: Vector3) -> void:
+	if status_command == Command.PATROL:
+		patrol_points.append(point)
+
+func command_stop() -> void:
+	if status_activity == Activity.DEAD:
+		return
+	_leave_build_site()
+	status_command = Command.NONE
+	status_activity = Activity.IDLE
+	target_resource = null
+	attack_target = null
+	patrol_points.clear()
+	nav_agent.target_position = global_position
+
 ## --- Building ---
 
 func command_build(building: ProductionBuilding) -> void:
@@ -228,7 +283,15 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		return
 
 	if can_fight and attacker != null and is_instance_valid(attacker):
-		if status_command != Command.ATTACK:
+		## Patrol deliberately stays Command.PATROL through a fight (see
+		## _physics_process) so it can resume afterward, so status_command
+		## can't be used as the "already engaged" check the way it is for
+		## every other command below — attack_target is the reliable signal.
+		if status_command == Command.PATROL:
+			if attack_target == null:
+				attack_target = attacker
+				_head_to_target()
+		elif status_command != Command.ATTACK:
 			command_attack(attacker)
 		CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
 
@@ -282,6 +345,21 @@ func _physics_process(delta: float) -> void:
 		_start_attacking()
 	elif status_activity == Activity.TO_BUILD_SITE and nav_agent.is_navigation_finished():
 		_start_building()
+	elif status_activity == Activity.MOVING and (status_command == Command.ATTACK_MOVE or status_command == Command.PATROL):
+		_enemy_scan_timer -= delta
+		if _enemy_scan_timer <= 0.0:
+			_enemy_scan_timer = ENEMY_SCAN_INTERVAL
+			var enemy := _find_nearest_enemy_in_range(aggro_range)
+			if enemy:
+				if status_command == Command.ATTACK_MOVE:
+					## "Engage and stop": fully hands off to the normal ATTACK
+					## flow, so the original destination is gone for good.
+					command_attack(enemy)
+				else:
+					## Patrol stays Command.PATROL through the fight so
+					## _find_new_target_or_idle() resumes the loop after.
+					attack_target = enemy
+					_head_to_target()
 
 	var direction := Vector3.ZERO
 	if not nav_agent.is_navigation_finished():
@@ -317,8 +395,18 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 
 	move_and_slide()
 
-	if status_command == Command.MOVE and nav_agent.is_navigation_finished():
-		status_activity = Activity.IDLE
+	## Gated on Activity.MOVING specifically (not just nav-finished) because
+	## PATROL stays Command.PATROL while chasing/fighting (Activity.TO_TARGET/
+	## ATTACKING) too — this callback fires every physics frame regardless of
+	## activity, and without this gate, a patrolling unit closing to within
+	## attack range of its target would look "finished navigating" while still
+	## mid-chase and get yanked into _advance_patrol() before _start_attacking()
+	## ever got a chance to run, causing it to circle the enemy instead of fighting.
+	if status_activity == Activity.MOVING and nav_agent.is_navigation_finished():
+		if status_command == Command.MOVE or status_command == Command.ATTACK_MOVE:
+			status_activity = Activity.IDLE
+		elif status_command == Command.PATROL:
+			_advance_patrol()
 
 ## Sprite flip is inherently viewer-dependent: whether a unit facing world
 ## direction X should mirror left/right on screen depends on which side of
@@ -500,16 +588,36 @@ func _is_target_alive(target) -> bool:
 	return false
 
 func _find_new_target_or_idle() -> void:
-	if status_command != Command.ATTACK:
-		return
-	var nearest: Unit = _find_nearest_enemy_in_range(aggro_range)
-	if nearest:
-		attack_target = nearest
-		_head_to_target()
-	else:
-		attack_target = null
+	if status_command == Command.ATTACK:
+		var nearest: Unit = _find_nearest_enemy_in_range(aggro_range)
+		if nearest:
+			attack_target = nearest
+			_head_to_target()
+		else:
+			attack_target = null
+			status_command = Command.NONE
+			status_activity = Activity.IDLE
+	elif status_command == Command.PATROL:
+		var nearest: Unit = _find_nearest_enemy_in_range(aggro_range)
+		if nearest:
+			attack_target = nearest
+			_head_to_target()
+		else:
+			attack_target = null
+			_advance_patrol()
+
+## Advances to the next patrol waypoint, looping back to the start. Waypoints
+## can be appended mid-loop (command_patrol_add_waypoint), which this picks up
+## naturally since patrol_points.size() is read fresh each call.
+func _advance_patrol() -> void:
+	if patrol_points.is_empty():
 		status_command = Command.NONE
 		status_activity = Activity.IDLE
+		return
+	patrol_index = (patrol_index + 1) % patrol_points.size()
+	status_activity = Activity.MOVING
+	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
+	move_to(patrol_points[patrol_index])
 
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 	var nearest: Unit = null

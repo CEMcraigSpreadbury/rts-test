@@ -12,6 +12,8 @@ extends Node3D
 @export var min_zoom: float = 8.0
 @export var max_zoom: float = 22.0
 @export var pitch_degrees: float = 30.0
+@export var near_blur: float = 3.5
+@export var far_blur: float = 6.0
 
 @onready var yaw: Node3D = $Yaw
 @onready var pitch: Node3D = $Yaw/Pitch
@@ -99,5 +101,5 @@ func _update_zoom() -> void:
 	## sit) as the player zooms, for a tilt-shift/diorama look at any zoom level.
 	var attributes := camera.attributes as CameraAttributesPractical
 	if attributes:
-		attributes.dof_blur_near_distance = zoom_distance - 8.0
-		attributes.dof_blur_far_distance = zoom_distance + 12.0
+		attributes.dof_blur_near_distance = zoom_distance - near_blur
+		attributes.dof_blur_far_distance = zoom_distance + far_blur

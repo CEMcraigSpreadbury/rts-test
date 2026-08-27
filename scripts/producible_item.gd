@@ -8,6 +8,9 @@ extends Resource
 enum Kind { UNIT, UPGRADE }
 
 @export var item_name: String = "Villager"
+## Shown on its command-card button; left null until real icon art exists,
+## in which case the button falls back to showing just its hotkey letter.
+@export var icon: Texture2D
 @export var kind: Kind = Kind.UNIT
 @export var build_time: float = 5.0
 @export var costs: Array[ResourceCost] = []

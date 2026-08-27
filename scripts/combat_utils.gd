@@ -13,7 +13,11 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 		var ally: Unit = node
 		if ally.owner_peer_id != defender_peer_id or not ally.can_fight:
 			continue
-		if ally.status_command == Unit.Command.ATTACK:
+		## attack_target is only ever non-null while actively engaged, regardless
+		## of which command owns the fight — unlike status_command == ATTACK,
+		## this also correctly covers a mid-fight Command.PATROL unit (which
+		## deliberately stays PATROL through combat so it can resume its loop).
+		if ally.attack_target != null:
 			continue
 		if ally.global_position.distance_to(from_position) <= ally.aggro_range:
 			ally.command_attack(attacker)

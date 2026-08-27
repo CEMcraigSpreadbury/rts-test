@@ -26,6 +26,10 @@ Network="*res://scripts/network_manager.gd"
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[gui]
+
+timers/tooltip_delay_sec=0.15
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

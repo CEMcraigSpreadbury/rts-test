@@ -4,6 +4,9 @@ extends Resource
 ## footprint used for the placement ghost / overlap check.
 
 @export var building_name: String = "Building"
+## Shown on its command-card button; left null until real icon art exists,
+## in which case the button falls back to showing just its hotkey letter.
+@export var icon: Texture2D
 @export var scene: PackedScene
 @export var costs: Array[ResourceCost] = []
 @export var footprint_radius: float = 2.2
