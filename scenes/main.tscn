@@ -119,6 +119,9 @@ polygons = [PackedInt32Array(0, 1, 2, 3)]
 shading_mode = 0
 transparency = 1
 albedo_color = Color(1, 0.95, 0.8, 0.35)
+emission_enabled = true
+emission = Color(1, 0.85, 0.55, 1)
+emission_energy_multiplier = 2.5
 
 [sub_resource type="SphereMesh" id="SphereMesh_dust"]
 material = SubResource("StandardMaterial3D_dust")
