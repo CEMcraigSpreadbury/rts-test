@@ -337,7 +337,9 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"population_cost": item.population_cost,
 	})
 	if building.can_rally and building.has_rally_point:
-		unit.command_move(building.rally_point)
+		var rally_target: Node = get_node_or_null(building.rally_target_path) \
+				if building.rally_target_path != NodePath() else null
+		_dispatch_smart_command(unit, rally_target, building.rally_point, false)
 
 func _get_dropoff_for(peer_id: int) -> Node3D:
 	var town_center: ProductionBuilding = town_centers.get(peer_id)
@@ -679,34 +681,40 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		var unit := get_node_or_null(unit_paths[i]) as Unit
 		if unit == null or unit.owner_peer_id != sender_id:
 			continue
-		## Natural resources (owner_peer_id 0) are gatherable by anyone; a
-		## player-built Farm is locked to whoever built it. A resource that
-		## requires_building_on_top (e.g. a Gold Deposit) also isn't gatherable
-		## until that building has actually finished — this is the
-		## authoritative check, since the client only proposes a target and
-		## the host decides what actually happens.
-		if target_node is Gatherable and target_node.can_be_gathered() \
-				and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id):
-			unit.command_gather(target_node, _get_dropoff_for(sender_id))
-		## Right-clicking a finished building built on a deposit (e.g. a Mine)
-		## should gather from what it sits on, same as clicking the deposit
-		## directly — checked before the attack/build branches since a
-		## same-owner building would never match attack anyway, and this only
-		## applies once construction is done (still-building falls through to
-		## the command_build branch below).
-		elif target_node is ProductionBuilding and target_node.linked_deposit != null \
-				and not target_node.is_under_construction and target_node.linked_deposit.can_be_gathered():
-			unit.command_gather(target_node.linked_deposit, _get_dropoff_for(sender_id))
-		elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
-			unit.command_attack(target_node)
-		elif target_node is ProductionBuilding and target_node.is_under_construction:
-			unit.command_build(target_node)
-		else:
-			var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
-			if attack_move_fallback:
-				unit.command_attack_move(world_pos + offset)
-			else:
-				unit.command_move(world_pos + offset)
+		var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
+		_dispatch_smart_command(unit, target_node, world_pos + offset, attack_move_fallback)
+
+## Shared by right-click/attack-order dispatch and a rally point resolving
+## onto a resource/enemy/under-construction building: gather/attack/build the
+## target if it makes sense for one, otherwise fall back to a plain move (or
+## attack-move, when armed). world_pos is only used by that fallback branch.
+func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, attack_move_fallback: bool) -> void:
+	## Natural resources (owner_peer_id 0) are gatherable by anyone; a
+	## player-built Farm is locked to whoever built it. A resource that
+	## requires_building_on_top (e.g. a Gold Deposit) also isn't gatherable
+	## until that building has actually finished — this is the
+	## authoritative check, since the caller only proposes a target and
+	## the host decides what actually happens.
+	if target_node is Gatherable and target_node.can_be_gathered() \
+			and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id):
+		unit.command_gather(target_node, _get_dropoff_for(unit.owner_peer_id))
+	## Right-clicking a finished building built on a deposit (e.g. a Mine)
+	## should gather from what it sits on, same as clicking the deposit
+	## directly — checked before the attack/build branches since a
+	## same-owner building would never match attack anyway, and this only
+	## applies once construction is done (still-building falls through to
+	## the command_build branch below).
+	elif target_node is ProductionBuilding and target_node.linked_deposit != null \
+			and not target_node.is_under_construction and target_node.linked_deposit.can_be_gathered():
+		unit.command_gather(target_node.linked_deposit, _get_dropoff_for(unit.owner_peer_id))
+	elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
+		unit.command_attack(target_node)
+	elif target_node is ProductionBuilding and target_node.is_under_construction:
+		unit.command_build(target_node)
+	elif attack_move_fallback:
+		unit.command_attack_move(world_pos)
+	else:
+		unit.command_move(world_pos)
 
 ## append: true once the current patrol-targeting session's first click has
 ## already gone out, so further shift-clicks extend the loop instead of
@@ -1113,13 +1121,15 @@ func _set_rally_point(screen_pos: Vector2) -> void:
 	var result := _raycast(screen_pos)
 	if result.is_empty():
 		return
+	var target_path := _resolve_order_target_path(result)
 	selected_building.rally_point = result.position
+	selected_building.rally_target_path = target_path
 	selected_building.has_rally_point = true
 	_update_rally_marker()
-	_rpc_set_rally_point.rpc_id(1, selected_building.get_path(), result.position)
+	_rpc_set_rally_point.rpc_id(1, selected_building.get_path(), result.position, target_path)
 
 @rpc("any_peer", "call_remote", "reliable")
-func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3) -> void:
+func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3, target_path: NodePath) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -1130,6 +1140,7 @@ func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3) -> void:
 	if building == null or building.owner_peer_id != sender_id or not building.can_rally:
 		return
 	building.rally_point = world_pos
+	building.rally_target_path = target_path
 	building.has_rally_point = true
 
 func _update_rally_marker() -> void:

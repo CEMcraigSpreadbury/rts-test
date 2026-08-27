@@ -85,6 +85,10 @@ var _original_materials: Dictionary = {}
 ## directly at the same time as sending the RPC that updates the host's copy.
 var rally_point: Vector3 = Vector3.ZERO
 var has_rally_point: bool = false
+## Set alongside rally_point when the rally click landed on a Gatherable/enemy/
+## under-construction-building target, so newly spawned units can be given the
+## matching smart command (gather/attack/build) instead of just moving there.
+var rally_target_path: NodePath = NodePath()
 
 var current_health: int = 1
 var is_destroyed: bool = false
