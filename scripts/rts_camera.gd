@@ -1,5 +1,5 @@
 extends Node3D
-## RTS camera rig: WASD/edge pan, middle-mouse-drag or Q/E rotate, scroll-wheel zoom.
+## RTS camera rig: WASD/edge pan, middle-mouse-drag pan, Q/E rotate, scroll-wheel zoom.
 
 @export var pan_speed: float = 24.0
 @export var edge_pan_margin: int = 14
@@ -7,26 +7,21 @@ extends Node3D
 ## the mouse sitting near a window's edge would otherwise pan that camera unintentionally.
 @export var edge_pan_enabled: bool = false
 @export var rotate_speed: float = 2.0
-@export var mouse_rotate_sensitivity: float = 0.005
+@export var mouse_pan_sensitivity: float = 0.05
 @export var zoom_speed: float = 2.0
 @export var min_zoom: float = 8.0
 @export var max_zoom: float = 22.0
-@export var pitch_degrees: float = 55.0
-@export var min_pitch_degrees: float = 20.0
-@export var max_pitch_degrees: float = 85.0
-@export var mouse_pitch_sensitivity: float = 0.15
+@export var pitch_degrees: float = 30.0
 
 @onready var yaw: Node3D = $Yaw
 @onready var pitch: Node3D = $Yaw/Pitch
 @onready var camera: Camera3D = $Yaw/Pitch/Camera3D
 
 var zoom_distance: float = 18.0
-var rotating: bool = false
-var current_pitch: float = 55.0
+var panning: bool = false
 
 func _ready() -> void:
-	current_pitch = pitch_degrees
-	pitch.rotation_degrees.x = -current_pitch
+	pitch.rotation_degrees.x = -pitch_degrees
 	_update_zoom()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -38,11 +33,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			zoom_distance = clamp(zoom_distance + zoom_speed, min_zoom, max_zoom)
 			_update_zoom()
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
-			rotating = event.pressed
-	elif event is InputEventMouseMotion and rotating:
-		yaw.rotation.y -= event.relative.x * mouse_rotate_sensitivity
-		current_pitch = clamp(current_pitch + event.relative.y * mouse_pitch_sensitivity, min_pitch_degrees, max_pitch_degrees)
-		pitch.rotation_degrees.x = -current_pitch
+			panning = event.pressed
+	elif event is InputEventMouseMotion and panning:
+		## Scaled by zoom_distance so a drag covers roughly the same amount of
+		## visible ground per pixel whether zoomed in or fully out.
+		var forward := -yaw.transform.basis.z
+		var right := yaw.transform.basis.x
+		forward.y = 0.0
+		right.y = 0.0
+		forward = forward.normalized()
+		right = right.normalized()
+		var pan_amount := mouse_pan_sensitivity * zoom_distance
+		global_position += (right * event.relative.x - forward * event.relative.y) * pan_amount
 
 func _process(delta: float) -> void:
 	## Input.is_key_pressed() polls raw OS key state and ignores whatever has UI

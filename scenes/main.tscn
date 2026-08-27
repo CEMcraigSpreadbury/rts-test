@@ -98,6 +98,18 @@ sky = SubResource("Sky_1")
 ambient_light_source = 3
 ambient_light_energy = 0.7
 tonemap_mode = 2
+tonemap_exposure = 0.8
+ssao_enabled = true
+ssao_intensity = 0.4
+glow_enabled = true
+glow_intensity = 0.6
+glow_bloom = 0.15
+glow_hdr_threshold = 1.1
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.005
+volumetric_fog_albedo = Color(1, 0.97, 0.85, 1)
+volumetric_fog_gi_inject = 0.8
+volumetric_fog_ambient_inject = 0.1
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_1"]
 vertices = PackedVector3Array(-30, 0, -30, 30, 0, -30, 30, 0, 30, -30, 0, 30)
@@ -132,7 +144,7 @@ available_building_types = Array[ExtResource("3_building_type_script")]([SubReso
 environment = SubResource("Environment_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=620721382]
-transform = Transform3D(0.81915206, -0.43938506, 0.36868784, 0, 0.64278764, 0.76604444, -0.57357645, -0.62750685, 0.5265408, 0, 12, 0)
+transform = Transform3D(0.6333349, 0.5928248, -0.4974391, -1.709391e-08, 0.6427877, 0.76604456, 0.77387786, -0.48516265, 0.40709987, 0, 12, 0)
 light_color = Color(1, 0.96, 0.87, 1)
 light_energy = 1.2
 shadow_enabled = true
