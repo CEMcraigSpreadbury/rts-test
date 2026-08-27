@@ -18,6 +18,9 @@ const ATTACK_LEASH_SLACK: float = 1.2
 const BUILD_ARRIVAL_DISTANCE: float = 1.0
 ## How often an attack-moving/patrolling unit checks for nearby enemies to engage.
 const ENEMY_SCAN_INTERVAL: float = 0.25
+## Multiplier applied when an attacker's damage_type matches its target's
+## weak_to — see take_damage().
+const WEAKNESS_DAMAGE_MULTIPLIER: float = 1.5
 
 ## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
 ## hold (resource->dropoff->resource / target->next target / stay building
@@ -25,6 +28,9 @@ const ENEMY_SCAN_INTERVAL: float = 0.25
 enum Command { NONE, MOVE, GATHER, ATTACK, BUILD, ATTACK_MOVE, PATROL }
 ## The current step within a command, e.g. Gather cycles TO_RESOURCE -> GATHERING -> TO_DROPOFF.
 enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD }
+## Rock-paper-scissors combat: NONE means "no special type" (deals no bonus,
+## takes no bonus). MAGIC has no attacker yet — reserved for future spellcasters.
+enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC }
 
 ## main.gd (which owns a proven-reliable broadcast RPC channel) relays this to
 ## other peers; RPCs declared directly on this dynamically-spawned node were
@@ -83,6 +89,12 @@ signal projectile_fired(target: Node3D)
 @export var attack_cooldown: float = 1.0
 ## After a target dies, how far to look for another enemy before giving up and going idle.
 @export var aggro_range: float = 6.0
+## What kind of damage this unit's attacks count as, for the weak_to rock-
+## paper-scissors check below. NONE if this unit has no special damage type.
+@export var damage_type: DamageType = DamageType.NONE
+## Attacks whose damage_type matches this deal WEAKNESS_DAMAGE_MULTIPLIER
+## bonus damage to this unit. NONE means immune to the whole system.
+@export var weak_to: DamageType = DamageType.NONE
 ## Null = melee (instant damage on cooldown, like today). Set = ranged: each
 ## cooldown tick fires a projectile that travels at projectile_speed and only
 ## applies damage once it actually arrives (see _tick_pending_projectiles) —
@@ -310,6 +322,12 @@ func end_build_command() -> void:
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
+	## Rock-paper-scissors bonus: an attacker whose damage_type matches what
+	## this unit is weak_to hits harder. NONE never matches NONE, so units
+	## with no assigned weakness (or attackers with no assigned type, e.g.
+	## Villager) are simply never affected by this either way.
+	if weak_to != DamageType.NONE and attacker is Unit and attacker.damage_type == weak_to:
+		amount = int(amount * WEAKNESS_DAMAGE_MULTIPLIER)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die()

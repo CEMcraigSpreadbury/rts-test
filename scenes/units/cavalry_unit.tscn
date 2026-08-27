@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniCavalierMan.png" id="2_cavalry"]
+
+[node name="Cavalry" instance=ExtResource("1_unit")]
+display_name = "Cavalry"
+team_tint = Color(0.35, 0.6, 1, 1)
+sprite_sheet = ExtResource("2_cavalry")
+move_speed = 8.0
+walk_row = 1
+death_row = 5
+can_gather = false
+can_build = false
+max_health = 34
+attack_damage = 7
+attack_range = 1.3
+attack_cooldown = 1.0
+aggro_range = 7.0
+damage_type = 2
+weak_to = 1

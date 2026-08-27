@@ -17,6 +17,7 @@
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/berry_bush.tscn" id="17_berry_bush"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="18_gold_deposit"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/mine_building.tscn" id="19_mine"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/stables_building.tscn" id="20_stables"]
 
 [sub_resource type="Resource" id="ResourceCost_towncenter"]
 script = ExtResource("2_cost_script")
@@ -82,6 +83,19 @@ footprint_radius = 1.4
 construction_time = 6.0
 requires_deposit = true
 deposit_scene = ExtResource("18_gold_deposit")
+
+[sub_resource type="Resource" id="ResourceCost_stables"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("10_wood")
+amount = 90
+
+[sub_resource type="Resource" id="BuildingType_stables"]
+script = ExtResource("3_building_type_script")
+building_name = "Stables"
+scene = ExtResource("20_stables")
+costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_stables")])
+footprint_radius = 2.4
+construction_time = 8.0
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -169,7 +183,7 @@ shader_parameter/vision_count = 0
 
 [node name="Main" type="Node3D" unique_id=2055692591]
 script = ExtResource("1_script")
-available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine")])
+available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables")])
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
 environment = SubResource("Environment_1")

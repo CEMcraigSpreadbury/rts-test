@@ -19,3 +19,5 @@ attack_cooldown = 1.3
 aggro_range = 8.0
 projectile_scene = ExtResource("3_projectile")
 projectile_speed = 16.0
+damage_type = 3
+weak_to = 2

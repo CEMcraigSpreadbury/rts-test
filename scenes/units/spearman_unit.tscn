@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://dgkib7dffccxc"]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" uid="uid://dvjohfrhtk0k6" path="res://assets/art/MinifolksHumans/Outline/MiniSpearMan.png" id="2_spearman"]
+
+[node name="Spearman" unique_id=421896768 instance=ExtResource("1_unit")]
+display_name = "Spearman"
+move_speed = 3.0
+team_tint = Color(0.35, 0.6, 1, 1)
+sprite_sheet = ExtResource("2_spearman")
+walk_row = 1
+death_row = 5
+can_gather = false
+can_build = false
+max_health = 22
+attack_damage = 5
+attack_range = 1.4
+aggro_range = 7.0
+damage_type = 1
+weak_to = 3
