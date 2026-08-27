@@ -229,6 +229,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	if data.has("population_cost"):
 		unit.population_cost = data.population_cost
 	unit.animation_changed.connect(_on_unit_animation_changed.bind(unit))
+	unit.projectile_fired.connect(_on_unit_projectile_fired.bind(unit))
 	return unit
 
 ## RPCs declared directly on dynamically-spawned Unit nodes weren't reaching
@@ -245,6 +246,47 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 	var unit := get_node_or_null(unit_path) as Unit
 	if unit:
 		unit.sprite.play(anim_name)
+
+## projectile_fired only ever fires on the host's own copy (only the host runs
+## combat logic — see Unit._physics_process), so the host spawns its own local
+## visual immediately here and relays to every other peer to do the same. Real
+## damage timing is decided entirely by the host's own Unit._pending_projectile_hits;
+## this is purely cosmetic and never affects gameplay outcome.
+func _on_unit_projectile_fired(target: Node3D, unit: Unit) -> void:
+	if not is_instance_valid(target):
+		return
+	_spawn_projectile_visual(unit, target)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_spawn_projectile_visual.rpc(unit.get_path(), target.get_path())
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_spawn_projectile_visual(shooter_path: NodePath, target_path: NodePath) -> void:
+	var shooter := get_node_or_null(shooter_path) as Unit
+	var target := get_node_or_null(target_path) as Node3D
+	if shooter == null or target == null or not is_instance_valid(target):
+		return
+	_spawn_projectile_visual(shooter, target)
+
+## Flies a purely local, non-networked projectile mesh from the shooter to
+## wherever the target currently is, over the same travel time the host is
+## using for its authoritative delayed-damage timer, then frees itself.
+func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
+	if shooter.projectile_scene == null or not is_instance_valid(target):
+		return
+	var projectile: Node3D = shooter.projectile_scene.instantiate()
+	add_child(projectile)
+	var start_pos: Vector3 = shooter.global_position + Vector3(0, 1.2, 0)
+	var end_pos: Vector3 = target.global_position + Vector3(0, 0.8, 0)
+	var dist: float = start_pos.distance_to(end_pos)
+	var duration: float = maxf(dist / maxf(shooter.projectile_speed, 0.01), 0.05)
+	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
+	projectile.global_position = start_pos
+	var tween := create_tween()
+	tween.tween_method(
+		func(t: float): projectile.global_position = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0),
+		0.0, 1.0, duration
+	)
+	tween.tween_callback(projectile.queue_free)
 
 ## Most buildable structures are ProductionBuildings (Town Center, Barracks,
 ## House), but Farm is a buildable Gatherable (no construction/production

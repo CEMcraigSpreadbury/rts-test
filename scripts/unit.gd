@@ -30,6 +30,10 @@ enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATT
 ## other peers; RPCs declared directly on this dynamically-spawned node were
 ## not reaching clients. Sprite flip is NOT networked this way — see _process().
 signal animation_changed(anim_name: String)
+## Relayed the same way (see main.gd), so every peer can spawn its own purely
+## cosmetic projectile visual flying toward the target. Real damage timing is
+## tracked independently on the host via _pending_projectile_hits, not this.
+signal projectile_fired(target: Node3D)
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -79,6 +83,14 @@ signal animation_changed(anim_name: String)
 @export var attack_cooldown: float = 1.0
 ## After a target dies, how far to look for another enemy before giving up and going idle.
 @export var aggro_range: float = 6.0
+## Null = melee (instant damage on cooldown, like today). Set = ranged: each
+## cooldown tick fires a projectile that travels at projectile_speed and only
+## applies damage once it actually arrives (see _tick_pending_projectiles) —
+## the target can die or leave range before it lands. The scene is spawned as
+## a purely local visual by main.gd (see projectile_fired below); this array
+## just tracks the real, authoritative delayed-damage timers on the host.
+@export var projectile_scene: PackedScene = null
+@export var projectile_speed: float = 14.0
 
 @export_group("Status", "status_")
 ## Read/write here for debugging; normally driven by command_move / command_gather / command_attack.
@@ -118,6 +130,9 @@ var patrol_index: int = 0
 ## Counts down while attack-moving/patrolling; scanning for enemies every frame
 ## would be an unthrottled O(units x units) group scan, so this paces it instead.
 var _enemy_scan_timer: float = 0.0
+## Ranged units only: {"time_remaining": float, "target": Node3D, "damage": int}
+## per shot currently in flight — see _tick_attacking's projectile_scene branch.
+var _pending_projectile_hits: Array[Dictionary] = []
 
 func _ready() -> void:
 	status_current_health = max_health
@@ -318,6 +333,10 @@ func _physics_process(delta: float) -> void:
 	## the position/animation replicated by this unit's MultiplayerSynchronizer.
 	if not is_multiplayer_authority():
 		return
+
+	## Runs even if this unit just died — an arrow already in the air should
+	## still land rather than vanish because its shooter is gone.
+	_tick_pending_projectiles(delta)
 
 	if status_activity == Activity.DEAD:
 		velocity = Vector3.ZERO
@@ -588,8 +607,42 @@ func _tick_attacking(delta: float) -> void:
 	if attack_timer >= attack_cooldown:
 		attack_timer = 0.0
 		_play_attack_swing()
-		attack_target.take_damage(attack_damage, self)
-		if not _is_target_alive(attack_target):
+		if projectile_scene != null:
+			## Damage lands later, when the shot actually arrives (see
+			## _tick_pending_projectiles) — the shooter can keep re-nocking on
+			## its own cooldown in the meantime rather than waiting for it.
+			_fire_projectile(attack_target)
+		else:
+			attack_target.take_damage(attack_damage, self)
+			if not _is_target_alive(attack_target):
+				_find_new_target_or_idle()
+
+func _fire_projectile(target: Node3D) -> void:
+	var dist := global_position.distance_to(target.global_position)
+	var travel_time := dist / maxf(projectile_speed, 0.01)
+	_pending_projectile_hits.append({
+		"time_remaining": travel_time,
+		"target": target,
+		"damage": attack_damage,
+	})
+	projectile_fired.emit(target)
+
+## Real, authoritative delayed damage for ranged attacks — the projectile_fired
+## signal/visual is purely cosmetic and never applies damage itself. Keeps
+## ticking (see _physics_process) even after this unit dies, so a shot already
+## in the air still lands.
+func _tick_pending_projectiles(delta: float) -> void:
+	for i in range(_pending_projectile_hits.size() - 1, -1, -1):
+		var hit: Dictionary = _pending_projectile_hits[i]
+		hit["time_remaining"] -= delta
+		if hit["time_remaining"] > 0.0:
+			continue
+		_pending_projectile_hits.remove_at(i)
+		var target = hit["target"]
+		if not _is_target_alive(target):
+			continue
+		target.take_damage(hit["damage"], self)
+		if attack_target == target and not _is_target_alive(target):
 			_find_new_target_or_idle()
 
 ## Untyped parameter is deliberate: a statically-typed Node3D parameter makes

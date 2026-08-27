@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="5_soldier_scene"]
 [ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="7_gold"]
+[ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="8_archer_scene"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(3, 2, 3)
@@ -35,6 +36,25 @@ build_time = 6.0
 costs = Array[Resource]([SubResource("ResourceCost_soldier"), SubResource("ResourceCost_soldier_gold")])
 population_cost = 1
 unit_scene = ExtResource("5_soldier_scene")
+
+[sub_resource type="Resource" id="ResourceCost_archer"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 25
+
+[sub_resource type="Resource" id="ResourceCost_archer_gold"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("7_gold")
+amount = 15
+
+[sub_resource type="Resource" id="ProducibleItem_archer"]
+script = ExtResource("3_item_script")
+item_name = "Archer"
+kind = 0
+build_time = 7.0
+costs = Array[Resource]([SubResource("ResourceCost_archer"), SubResource("ResourceCost_archer_gold")])
+population_cost = 1
+unit_scene = ExtResource("8_archer_scene")
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
 properties/0/path = NodePath(".:position")
@@ -65,7 +85,7 @@ properties/7/replication_mode = 2
 [node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Barracks"
-producibles = Array[Resource]([SubResource("ProducibleItem_soldier")])
+producibles = Array[Resource]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_archer")])
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
