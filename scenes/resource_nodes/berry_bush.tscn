@@ -10,6 +10,7 @@ height = 1.0
 
 [node name="Gatherable" type="StaticBody3D" groups=["gatherables"]]
 script = ExtResource("1_script")
+display_name = "Berry Bush"
 resource_type = ExtResource("2_food")
 amount_remaining = 250
 gather_range = 1.6

@@ -10,6 +10,7 @@ height = 3.0
 
 [node name="Gatherable" type="StaticBody3D" groups=["gatherables"]]
 script = ExtResource("1_script")
+display_name = "Tree"
 resource_type = ExtResource("2_wood")
 amount_remaining = 400
 

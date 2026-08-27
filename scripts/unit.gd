@@ -31,6 +31,10 @@ enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATT
 ## not reaching clients. Sprite flip is NOT networked this way — see _process().
 signal animation_changed(anim_name: String)
 
+## What this unit type is called in UI (info panel title, etc.) — unlike the
+## scene node's own .name, this can't get an auto-incremented suffix (e.g.
+## "Unit2") when several of the same unit are siblings under Units.
+@export var display_name: String = "Villager"
 @export var move_speed: float = 5.0
 @export var rotation_speed: float = 10.0
 @export var team_tint: Color = Color.WHITE
@@ -152,9 +156,9 @@ func command_move(target_position: Vector3) -> void:
 	if status_activity == Activity.DEAD:
 		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.MOVE
 	status_activity = Activity.MOVING
-	target_resource = null
 	attack_target = null
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
@@ -162,19 +166,25 @@ func command_move(target_position: Vector3) -> void:
 func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_gather or resource_node == null:
 		return
+	## Skip the capacity check when re-issued at a resource this unit is
+	## already assigned to — otherwise it would be blocked by its own reservation.
+	if resource_node != target_resource and not resource_node.can_accept_gatherer():
+		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.GATHER
 	attack_target = null
 	target_resource = resource_node
 	dropoff_point = dropoff
+	resource_node.add_gatherer(self)
 	_head_to_resource()
 
 func command_attack(target: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
 		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.ATTACK
-	target_resource = null
 	attack_target = target
 	_head_to_target()
 
@@ -186,8 +196,8 @@ func command_attack_move(target_position: Vector3) -> void:
 	if status_activity == Activity.DEAD or not can_fight:
 		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.ATTACK_MOVE
-	target_resource = null
 	attack_target = null
 	status_activity = Activity.MOVING
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
@@ -199,8 +209,8 @@ func command_patrol(points: Array[Vector3]) -> void:
 	if status_activity == Activity.DEAD or not can_fight or points.is_empty():
 		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.PATROL
-	target_resource = null
 	attack_target = null
 	patrol_points = points
 	patrol_index = 0
@@ -219,9 +229,9 @@ func command_stop() -> void:
 	if status_activity == Activity.DEAD:
 		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
-	target_resource = null
 	attack_target = null
 	patrol_points.clear()
 	nav_agent.target_position = global_position
@@ -234,8 +244,8 @@ func command_build(building: ProductionBuilding) -> void:
 	if not is_instance_valid(building) or not building.is_under_construction:
 		return
 	_leave_build_site()
+	_leave_gather_site()
 	status_command = Command.BUILD
-	target_resource = null
 	attack_target = null
 	build_target = building
 	_head_to_build_site()
@@ -266,6 +276,14 @@ func _leave_build_site() -> void:
 	if build_target != null and is_instance_valid(build_target):
 		build_target.remove_builder(self)
 	build_target = null
+
+## Releases this unit's gatherer-cap reservation on whatever resource it was
+## assigned to, if any — mirrors _leave_build_site(), called at the top of
+## every command_* function plus wherever gathering naturally ends.
+func _leave_gather_site() -> void:
+	if target_resource != null and is_instance_valid(target_resource):
+		target_resource.remove_gatherer(self)
+	target_resource = null
 
 ## Public: ProductionBuilding calls this directly on each of its builders
 ## when construction finishes, to send them back to idle.
@@ -516,7 +534,7 @@ func _deposit_and_continue() -> void:
 		_end_gather_command()
 
 func _end_gather_command() -> void:
-	target_resource = null
+	_leave_gather_site()
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
 
@@ -641,8 +659,8 @@ func _die() -> void:
 	status_activity = Activity.DEAD
 	status_command = Command.NONE
 	attack_target = null
-	target_resource = null
 	_leave_build_site()
+	_leave_gather_site()
 	## take_damage() (the only caller of _die()) already gates on
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
 	Population.release(owner_peer_id, population_cost)

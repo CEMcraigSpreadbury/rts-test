@@ -26,6 +26,7 @@ height = 1.3
 
 [node name="Gatherable" type="StaticBody3D" groups=["gatherables"]]
 script = ExtResource("1_script")
+display_name = "Gold Deposit"
 resource_type = ExtResource("2_gold")
 amount_remaining = 800
 gather_range = 2.3

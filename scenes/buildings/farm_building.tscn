@@ -14,9 +14,13 @@ size = Vector3(3, 0.15, 3)
 
 [node name="Gatherable" type="StaticBody3D" groups=["gatherables"]]
 script = ExtResource("1_script")
+display_name = "Farm"
+collision_layer = 2
+collision_mask = 0
 resource_type = ExtResource("2_food")
 amount_remaining = 300
-gather_range = 2.2
+gather_range = 1.2
+max_gatherers = 2
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
@@ -28,6 +32,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
 shape = SubResource("BoxShape3D_field")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
-radius = 1.8
+radius = 1.5
 height = 0.5
-avoidance_enabled = true
+avoidance_enabled = false

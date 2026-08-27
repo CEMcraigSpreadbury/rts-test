@@ -59,6 +59,11 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 
 var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
+## Left-click-selected resource node (tree/berry bush/gold deposit/farm),
+## shown read-only in the info panel with its remaining amount — mutually
+## exclusive with selected_building/selected_units, same as those are with
+## each other.
+var selected_resource: Gatherable = null
 var drag_start: Vector2 = Vector2.ZERO
 var dragging: bool = false
 
@@ -90,6 +95,7 @@ var _info_last_queue_size: int = -1
 var _info_stats_label: Label = null
 ## Parallel to selected_units when more than one is selected.
 var _info_unit_portrait_bars: Array[ProgressBar] = []
+var _info_resource_label: Label = null
 
 ## Purely local UI state: which units/buildings belong to each numbered
 ## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
@@ -354,6 +360,13 @@ func _process(_delta: float) -> void:
 			_refresh_command_panel()
 		else:
 			_refresh_unit_info_values()
+	elif selected_resource != null:
+		## A gathered-out resource node frees itself (Gatherable.gather()),
+		## so this also has to notice when it's no longer valid.
+		if not is_instance_valid(selected_resource):
+			_select_resource(null)
+		else:
+			_refresh_resource_info()
 	if placing_type:
 		_update_placement_ghost()
 	_update_hover_ring()
@@ -498,6 +511,7 @@ func _activate_control_group(number: int) -> void:
 		u.selected = false
 	selected_units.clear()
 	_select_building(null)
+	_select_resource(null)
 
 	## A mixed group (units + a building) selects the units, same as
 	## drag-select already does — only a building-only group opens its panel.
@@ -549,21 +563,33 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 			collider.selected = true
 			selected_units.append(collider)
 			_select_building(null)
+			_select_resource(null)
 			clicked_ring_target = collider
 		elif collider is ProductionBuilding and collider.owner_peer_id == _my_peer_id():
 			_select_building(collider)
+			_select_resource(null)
 			clicked_ring_target = collider
-		elif collider is Unit or collider is ProductionBuilding or collider is Gatherable:
-			## Not "selectable" (enemy unit/building, or a resource node) but
-			## still a valid thing to click-highlight.
+		elif collider is Gatherable:
+			## Any resource node (own or not — trees/berries/gold deposits have
+			## no owner) shows its remaining amount in the info panel; unlike
+			## a unit/building this isn't "yours to command", just informational.
 			_select_building(null)
+			_select_resource(collider)
+			clicked_ring_target = collider
+		elif collider is Unit or collider is ProductionBuilding:
+			## Not "selectable" (enemy unit/building) but still a valid thing
+			## to click-highlight.
+			_select_building(null)
+			_select_resource(null)
 			clicked_ring_target = collider
 		else:
 			_select_building(null)
+			_select_resource(null)
 			clicked_ring_target = null
 		return
 
 	_select_building(null)
+	_select_resource(null)
 	clicked_ring_target = null
 	for child in units_root.get_children():
 		if child is Unit and child.owner_peer_id == _my_peer_id() and not camera.is_position_behind(child.global_position):
@@ -777,6 +803,7 @@ func _select_building(building: ProductionBuilding) -> void:
 	if building == null:
 		_refresh_command_panel()
 		return
+	selected_resource = null
 
 	info_panel.visible = true
 	info_panel_name_label.text = building.building_name
@@ -801,8 +828,9 @@ func _select_building(building: ProductionBuilding) -> void:
 
 ## The action panel is always visible; this only rebuilds its grid/title and
 ## the info panel for the current selection when no building is selected:
-## the four unit-command buttons if units are selected, otherwise the
-## construction menu. (Building content is built directly in _select_building.)
+## the four unit-command buttons if units are selected, a resource node's
+## remaining amount if one is selected, otherwise the construction menu.
+## (Building content is built directly in _select_building.)
 func _refresh_command_panel() -> void:
 	if selected_building != null:
 		return
@@ -812,19 +840,45 @@ func _refresh_command_panel() -> void:
 		child.queue_free()
 	_info_stats_label = null
 	_info_unit_portrait_bars.clear()
+	_info_resource_label = null
 	_last_command_panel_units = selected_units.duplicate()
 	_showing_build_submenu = false
 
-	if selected_units.is_empty():
-		info_panel.visible = false
-		action_panel_title.text = "Construct"
-		_populate_construction_buttons()
+	if not selected_units.is_empty():
+		info_panel.visible = true
+		_populate_unit_command_buttons()
+		_build_unit_info()
+		_refresh_unit_info_values()
 		return
 
-	info_panel.visible = true
-	_populate_unit_command_buttons()
-	_build_unit_info()
-	_refresh_unit_info_values()
+	action_panel_title.text = "Construct"
+	_populate_construction_buttons()
+
+	if selected_resource != null and is_instance_valid(selected_resource):
+		info_panel.visible = true
+		info_panel_name_label.text = selected_resource.display_name
+		_info_resource_label = Label.new()
+		info_panel_content.add_child(_info_resource_label)
+		_refresh_resource_info()
+		return
+
+	info_panel.visible = false
+
+## Left-click select/deselect a resource node (see selected_resource);
+## null clears it back to whatever the rest of the selection implies.
+func _select_resource(resource: Gatherable) -> void:
+	selected_resource = resource
+	if resource != null:
+		for u in selected_units:
+			if is_instance_valid(u):
+				u.selected = false
+		selected_units.clear()
+		selected_building = null
+	_refresh_command_panel()
+
+func _refresh_resource_info() -> void:
+	if _info_resource_label and is_instance_valid(selected_resource):
+		_info_resource_label.text = "%d remaining" % selected_resource.amount_remaining
 
 func _populate_construction_buttons() -> void:
 	var buttons: Array[Control] = []
@@ -966,7 +1020,7 @@ func _refresh_building_info() -> void:
 func _build_unit_info() -> void:
 	if selected_units.size() == 1:
 		var unit := selected_units[0]
-		info_panel_name_label.text = unit.name
+		info_panel_name_label.text = unit.display_name
 		_info_stats_label = Label.new()
 		_info_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		info_panel_content.add_child(_info_stats_label)
