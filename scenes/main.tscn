@@ -1,63 +1,17 @@
 [gd_scene format=3 uid="uid://n2ny6nebsu1v"]
 
 [ext_resource type="Script" uid="uid://k0dgxjac4h20" path="res://scripts/main.gd" id="1_script"]
-[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="3_building_type_script"]
 [ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="3_camera"]
 [ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="6_light_follow"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/production_building.tscn" id="7_town_center"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/barracks_building.tscn" id="9_barracks"]
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="11_fog_script"]
 [ext_resource type="Shader" uid="uid://bt4kly6vxq7p5" path="res://shaders/fog_of_war.gdshader" id="12_fog_shader"]
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="13_minimap_script"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/house_building.tscn" id="14_house"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/farm_building.tscn" id="15_farm"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/berry_bush.tscn" id="17_berry_bush"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="18_gold_deposit"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/mine_building.tscn" id="19_mine"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/stables_building.tscn" id="20_stables"]
-
-[sub_resource type="Resource" id="BuildingType_towncenter"]
-script = ExtResource("3_building_type_script")
-building_name = "Town Center"
-scene = ExtResource("7_town_center")
-footprint_radius = 2.4
-construction_time = 10.0
-
-[sub_resource type="Resource" id="BuildingType_barracks"]
-script = ExtResource("3_building_type_script")
-building_name = "Barracks"
-scene = ExtResource("9_barracks")
-footprint_radius = 2.4
-construction_time = 7.0
-
-[sub_resource type="Resource" id="BuildingType_house"]
-script = ExtResource("3_building_type_script")
-building_name = "House"
-scene = ExtResource("14_house")
-footprint_radius = 1.6
-
-[sub_resource type="Resource" id="BuildingType_farm"]
-script = ExtResource("3_building_type_script")
-building_name = "Farm"
-scene = ExtResource("15_farm")
-footprint_radius = 1.8
-
-[sub_resource type="Resource" id="BuildingType_mine"]
-script = ExtResource("3_building_type_script")
-building_name = "Mine"
-scene = ExtResource("19_mine")
-footprint_radius = 1.4
-construction_time = 6.0
-requires_deposit = true
-deposit_scene = ExtResource("18_gold_deposit")
-
-[sub_resource type="Resource" id="BuildingType_stables"]
-script = ExtResource("3_building_type_script")
-building_name = "Stables"
-scene = ExtResource("20_stables")
-footprint_radius = 2.4
-construction_time = 8.0
+[ext_resource type="Script" path="res://scripts/faction.gd" id="20_faction_script"]
+[ext_resource type="Resource" path="res://resources/factions/faction_one.tres" id="21_faction_one"]
+[ext_resource type="Resource" path="res://resources/factions/faction_two.tres" id="22_faction_two"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -145,7 +99,7 @@ shader_parameter/vision_count = 0
 
 [node name="Main" type="Node3D" unique_id=2055692591]
 script = ExtResource("1_script")
-available_building_types = Array[ExtResource("3_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables")])
+available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_faction_one"), ExtResource("22_faction_two")])
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
 environment = SubResource("Environment_1")

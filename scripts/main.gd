@@ -1,8 +1,5 @@
 extends Node3D
 
-const UNIT_SCENE: PackedScene = preload("res://scenes/units/unit.tscn")
-const TOWN_CENTER_SCENE_PATH: String = "res://scenes/buildings/production_building.tscn"
-
 const SPAWN_POINTS: Array[Vector3] = [
 	Vector3(-3, 0, -3), Vector3(23, 0, -3), Vector3(-3, 0, 23), Vector3(23, 0, 23)
 ]
@@ -29,7 +26,9 @@ const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N]
 ## rows), padded with blank placeholders, so its size never changes with context.
 const ACTION_PANEL_SLOT_COUNT: int = 12
 
-@export var available_building_types: Array[BuildingType] = []
+## Same list (and order) as lobby.tscn's Lobby.available_factions — that
+## shared order is what a "faction_index" in Network.players refers to.
+@export var available_factions: Array[Faction] = []
 
 @onready var camera: Camera3D = $CameraRig/Yaw/Pitch/Camera3D
 @onready var camera_rig: Node3D = $CameraRig
@@ -137,6 +136,10 @@ var hover_ring: MeshInstance3D = null
 ## until a different single-click or a click on empty space replaces/clears it.
 var clicked_ring_target: Node3D = null
 
+## Which faction each peer picked in the lobby, resolved once in _spawn_player_base
+## and read by every peer thereafter (both for their own UI and, on the host,
+## for validating build requests against the sender's actual roster).
+var faction_by_peer: Dictionary = {}
 ## Host-only bookkeeping: which team index / Town Center belongs to each peer.
 var team_index_by_peer: Dictionary = {}
 var town_centers: Dictionary = {}
@@ -178,6 +181,16 @@ func _ready() -> void:
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
+## Resolves (and caches) the local player's own faction on demand, rather than
+## relying on a one-time _ready() population — _my_peer_id() can't be trusted
+## to be stable/meaningful before a peer is ever assigned (e.g. running
+## main.tscn directly without going through the lobby).
+func _my_faction() -> Faction:
+	var id: int = _my_peer_id()
+	if not faction_by_peer.has(id):
+		faction_by_peer[id] = _faction_for_peer(id)
+	return faction_by_peer[id]
+
 ## --- Player / unit / building spawning (host only) ---
 
 func _spawn_all_players() -> void:
@@ -187,10 +200,19 @@ func _spawn_all_players() -> void:
 	for i in peer_ids.size():
 		_spawn_player_base(peer_ids[i], i)
 
+## index < 0 (or unset) defaults everyone to available_factions[0] — the safe
+## fallback for the established direct-run-main.tscn-in-editor workflow, which
+## bypasses the lobby (and thus Network.players) entirely.
+func _faction_for_peer(peer_id: int) -> Faction:
+	var faction_index: int = Network.players.get(peer_id, {}).get("faction_index", 0)
+	return available_factions[faction_index] if faction_index < available_factions.size() else available_factions[0]
+
 func _spawn_player_base(peer_id: int, index: int) -> void:
 	var base_pos: Vector3 = SPAWN_POINTS[index % SPAWN_POINTS.size()]
 	var tint: Color = TEAM_COLORS[index % TEAM_COLORS.size()]
 	team_index_by_peer[peer_id] = index
+	var faction: Faction = _faction_for_peer(peer_id)
+	faction_by_peer[peer_id] = faction
 
 	## Free starting villagers never went through ProductionBuilding.enqueue()
 	## (which is where population is normally reserved), so it has to be
@@ -198,6 +220,7 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 	## count entirely.
 	for i in 2:
 		var starting_unit: Unit = unit_spawner.spawn({
+			"scene_path": faction.starting_unit_scene.resource_path,
 			"peer_id": peer_id,
 			"tint": tint,
 			"position": base_pos + Vector3(i * 1.5, 0.0, 0.0),
@@ -205,7 +228,7 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 		Population.reserve(peer_id, starting_unit.population_cost)
 
 	var town_center: ProductionBuilding = building_spawner.spawn({
-		"scene_path": TOWN_CENTER_SCENE_PATH,
+		"scene_path": faction.starting_building_scene.resource_path,
 		"peer_id": peer_id,
 		"position": base_pos + Vector3(-4.0, 0.0, 4.0),
 		"tint": tint,
@@ -221,7 +244,7 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 		)
 
 func _spawn_unit_from_data(data: Dictionary) -> Node:
-	var scene: PackedScene = load(data.scene_path) if data.has("scene_path") else UNIT_SCENE
+	var scene: PackedScene = load(data.scene_path)
 	var unit: Unit = scene.instantiate()
 	unit.owner_peer_id = data.peer_id
 	unit.team_tint = data.tint
@@ -460,8 +483,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo \
 			and ((selected_building == null and selected_units.is_empty()) or _showing_build_submenu):
 		var building_index: int = BUILDING_HOTKEYS.find(event.keycode)
-		if building_index != -1 and building_index < available_building_types.size():
-			_on_construction_button_pressed(available_building_types[building_index])
+		var my_building_types: Array[BuildingType] = _my_faction().building_types
+		if building_index != -1 and building_index < my_building_types.size():
+			_on_construction_button_pressed(my_building_types[building_index])
 			get_viewport().set_input_as_handled()
 			return
 
@@ -930,9 +954,10 @@ func _refresh_resource_info() -> void:
 		_info_resource_label.text = "%d remaining" % selected_resource.amount_remaining
 
 func _populate_construction_buttons() -> void:
+	var my_building_types: Array[BuildingType] = _my_faction().building_types
 	var buttons: Array[Control] = []
-	for i in available_building_types.size():
-		var building_type: BuildingType = available_building_types[i]
+	for i in my_building_types.size():
+		var building_type: BuildingType = my_building_types[i]
 		var hotkey: String = OS.get_keycode_string(BUILDING_HOTKEYS[i]) if i < BUILDING_HOTKEYS.size() else "?"
 		var tooltip := "%s (%s)" % [building_type.building_name, _format_costs(building_type.get_costs())]
 		buttons.append(_make_command_button(hotkey, tooltip, building_type.icon, _on_construction_button_pressed.bind(building_type)))
@@ -1451,7 +1476,8 @@ func _confirm_placement() -> void:
 	if not placement_valid:
 		_cancel_placement()
 		return
-	var type_index: int = available_building_types.find(placing_type)
+	var my_building_types: Array[BuildingType] = _my_faction().building_types
+	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _placement_target.get_path() if _placement_target else NodePath()
 	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths)
 	_cancel_placement()
@@ -1467,9 +1493,16 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 	if sender_id == 0:
 		sender_id = _my_peer_id()
 
-	if type_index < 0 or type_index >= available_building_types.size():
+	## Resolved against the SENDER's own faction, never a shared/global list —
+	## the same type_index means a different building depending on faction,
+	## so trusting anything else here would let a client reference another
+	## faction's roster.
+	if not faction_by_peer.has(sender_id):
 		return
-	var building_type: BuildingType = available_building_types[type_index]
+	var sender_building_types: Array[BuildingType] = faction_by_peer[sender_id].building_types
+	if type_index < 0 or type_index >= sender_building_types.size():
+		return
+	var building_type: BuildingType = sender_building_types[type_index]
 	var costs := building_type.get_costs()
 	if not ResourceStockpile.can_afford(sender_id, costs):
 		return

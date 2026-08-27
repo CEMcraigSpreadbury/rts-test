@@ -4,6 +4,9 @@ extends Node
 
 signal player_connected(peer_id: int)
 signal player_disconnected(peer_id: int)
+## Fired when a player's own entry in `players` changes in place (currently
+## just faction_index) — lets the lobby refresh one row instead of the whole list.
+signal player_updated(peer_id: int)
 signal connection_failed
 signal connected_to_server
 signal server_disconnected
@@ -11,7 +14,7 @@ signal server_disconnected
 const DEFAULT_PORT: int = 7777
 const MAX_PLAYERS: int = 4
 
-## peer_id -> { "name": String, "color": Color }
+## peer_id -> { "name": String, "color": Color, "faction_index": int }
 var players: Dictionary = {}
 
 func _ready() -> void:
@@ -28,7 +31,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	players.clear()
-	players[1] = {"name": "Host", "color": Color.WHITE}
+	players[1] = {"name": "Host", "color": Color.WHITE, "faction_index": 0}
 	return OK
 
 func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
@@ -53,7 +56,7 @@ func my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
 func _on_peer_connected(id: int) -> void:
-	players[id] = {"name": "Player %d" % id, "color": Color.WHITE}
+	players[id] = {"name": "Player %d" % id, "color": Color.WHITE, "faction_index": 0}
 	if is_host():
 		_sync_player_list.rpc_id(id, players)
 	player_connected.emit(id)
@@ -63,7 +66,7 @@ func _on_peer_disconnected(id: int) -> void:
 	player_disconnected.emit(id)
 
 func _on_connected_ok() -> void:
-	players[my_peer_id()] = {"name": "Me", "color": Color.WHITE}
+	players[my_peer_id()] = {"name": "Me", "color": Color.WHITE, "faction_index": 0}
 	connected_to_server.emit()
 
 func _on_connected_fail() -> void:
@@ -79,3 +82,35 @@ func _on_server_disconnected() -> void:
 func _sync_player_list(current_players: Dictionary) -> void:
 	for id in current_players:
 		players[id] = current_players[id]
+
+## --- Faction selection (lobby only) ---
+
+## Godot's high-level multiplayer here is star-topology (every RPC actually
+## routes through the host — a client can't reach other clients directly,
+## the same constraint main.gd's unit-animation relay works around). So a
+## client proposes its choice to the host, which applies it and re-broadcasts;
+## the host applies its own choice directly.
+func set_my_faction(index: int) -> void:
+	if is_host():
+		_apply_faction_change(my_peer_id(), index)
+	else:
+		_rpc_request_faction.rpc_id(1, index)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_faction(index: int) -> void:
+	if is_host():
+		_apply_faction_change(multiplayer.get_remote_sender_id(), index)
+
+func _apply_faction_change(peer_id: int, index: int) -> void:
+	if not players.has(peer_id):
+		return
+	players[peer_id]["faction_index"] = index
+	player_updated.emit(peer_id)
+	if is_host():
+		_rpc_faction_changed.rpc(peer_id, index)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_faction_changed(peer_id: int, index: int) -> void:
+	if players.has(peer_id):
+		players[peer_id]["faction_index"] = index
+	player_updated.emit(peer_id)

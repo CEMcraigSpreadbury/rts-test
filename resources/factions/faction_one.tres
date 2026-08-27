@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="Faction" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://scripts/faction.gd" id="1_faction_script"]
+[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/production_building.tscn" id="3_town_center"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/barracks_building.tscn" id="4_barracks"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/house_building.tscn" id="5_house"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/farm_building.tscn" id="6_farm"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/mine_building.tscn" id="7_mine"]
+[ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="8_gold_deposit"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/stables_building.tscn" id="9_stables"]
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="10_unit"]
+
+[sub_resource type="Resource" id="BuildingType_towncenter"]
+script = ExtResource("2_building_type_script")
+building_name = "Town Center"
+scene = ExtResource("3_town_center")
+footprint_radius = 2.4
+construction_time = 10.0
+
+[sub_resource type="Resource" id="BuildingType_barracks"]
+script = ExtResource("2_building_type_script")
+building_name = "Barracks"
+scene = ExtResource("4_barracks")
+footprint_radius = 2.4
+construction_time = 7.0
+
+[sub_resource type="Resource" id="BuildingType_house"]
+script = ExtResource("2_building_type_script")
+building_name = "House"
+scene = ExtResource("5_house")
+footprint_radius = 1.6
+
+[sub_resource type="Resource" id="BuildingType_farm"]
+script = ExtResource("2_building_type_script")
+building_name = "Farm"
+scene = ExtResource("6_farm")
+footprint_radius = 1.8
+
+[sub_resource type="Resource" id="BuildingType_mine"]
+script = ExtResource("2_building_type_script")
+building_name = "Mine"
+scene = ExtResource("7_mine")
+footprint_radius = 1.4
+construction_time = 6.0
+requires_deposit = true
+deposit_scene = ExtResource("8_gold_deposit")
+
+[sub_resource type="Resource" id="BuildingType_stables"]
+script = ExtResource("2_building_type_script")
+building_name = "Stables"
+scene = ExtResource("9_stables")
+footprint_radius = 2.4
+construction_time = 8.0
+
+[resource]
+script = ExtResource("1_faction_script")
+faction_name = "Faction One"
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables")])
+starting_building_scene = ExtResource("3_town_center")
+starting_unit_scene = ExtResource("10_unit")

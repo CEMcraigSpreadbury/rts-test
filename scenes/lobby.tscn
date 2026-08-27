@@ -1,6 +1,9 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/lobby.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/faction.gd" id="2_faction_script"]
+[ext_resource type="Resource" path="res://resources/factions/faction_one.tres" id="3_faction_one"]
+[ext_resource type="Resource" path="res://resources/factions/faction_two.tres" id="4_faction_two"]
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -8,6 +11,7 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1_script")
+available_factions = Array[ExtResource("2_faction_script")]([ExtResource("3_faction_one"), ExtResource("4_faction_two")])
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 1
