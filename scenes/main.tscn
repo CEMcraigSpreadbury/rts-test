@@ -115,6 +115,34 @@ volumetric_fog_ambient_inject = 0.1
 vertices = PackedVector3Array(-30, 0, -30, 30, 0, -30, 30, 0, 30, -30, 0, 30)
 polygons = [PackedInt32Array(0, 1, 2, 3)]
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+shading_mode = 0
+transparency = 1
+albedo_color = Color(1, 0.95, 0.8, 0.35)
+
+[sub_resource type="SphereMesh" id="SphereMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+radius = 0.04
+height = 0.08
+radial_segments = 6
+rings = 3
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
+emission_shape = 3
+emission_box_extents = Vector3(30, 4, 30)
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 0.05
+initial_velocity_max = 0.2
+gravity = Vector3(0, 0, 0)
+angular_velocity_min = -20.0
+angular_velocity_max = 20.0
+orbit_velocity_min = 0.02
+orbit_velocity_max = 0.08
+scale_min = 0.4
+scale_max = 1.0
+color = Color(1, 0.95, 0.8, 0.35)
+
 [sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
 size = Vector2(60, 60)
 
@@ -170,6 +198,14 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 shape = SubResource("BoxShape3D_ground")
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
+
+[node name="ForestDust" type="GPUParticles3D" parent="." unique_id=1933763604]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+amount = 140
+lifetime = 8.0
+visibility_aabb = AABB(-34, -6, -34, 68, 12, 68)
+process_material = SubResource("ParticleProcessMaterial_dust")
+draw_pass_1 = SubResource("SphereMesh_dust")
 
 [node name="FogOfWar" type="Node3D" parent="." unique_id=1933763603]
 script = ExtResource("11_fog_script")
