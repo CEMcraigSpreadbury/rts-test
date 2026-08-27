@@ -25,9 +25,9 @@ const UNIT_PATROL_KEY: Key = KEY_P
 const UNIT_BUILD_KEY: Key = KEY_B
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
 const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B]
-## The action panel's grid always has exactly this many slots (4 columns x 2
+## The action panel's grid always has exactly this many slots (4 columns x 3
 ## rows), padded with blank placeholders, so its size never changes with context.
-const ACTION_PANEL_SLOT_COUNT: int = 8
+const ACTION_PANEL_SLOT_COUNT: int = 12
 
 @export var available_building_types: Array[BuildingType] = []
 
