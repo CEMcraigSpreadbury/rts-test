@@ -10,6 +10,9 @@ signal depleted
 ## resource_type.display_name, which names what it produces (e.g. a Berry
 ## Bush and a Farm both produce "Food" but shouldn't both be labeled "Food").
 @export var display_name: String = "Resource"
+## Only meaningful for a player-placed resource (Farm) — see BuildingType.get_costs().
+## Natural resources (Tree, Berry Bush, Gold Deposit) just leave this empty.
+@export var costs: Array[ResourceCost] = []
 @export var resource_type: ResourceType
 @export var amount_remaining: int = 500
 ## How close a gatherer needs to be before it starts harvesting.

@@ -52,9 +52,13 @@ signal projectile_fired(target: Node3D)
 @export var owner_peer_id: int = 1
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 8.0
-## Set at spawn time from the ProducibleItem that produced this unit (see
-## main.gd's _on_building_item_completed); released back to the owner's
-## Population pool when this unit dies.
+
+@export_group("Cost")
+## The single source of truth for what this unit costs to produce — edit it
+## right here rather than on the building's ProducibleItem, which just reads
+## these back via get_costs()/get_population_cost() at enqueue time.
+@export var costs: Array[ResourceCost] = []
+## Released back to the owner's Population pool when this unit dies.
 @export var population_cost: int = 1
 
 @export_group("Sprite Sheet")

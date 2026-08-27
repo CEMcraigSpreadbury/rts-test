@@ -3,9 +3,23 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniArcherMan.png" id="2_archer"]
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_arrow.tscn" id="3_projectile"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="4_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="5_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="6_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_archer_wood"]
+script = ExtResource("4_cost_script")
+resource_type = ExtResource("5_wood")
+amount = 25
+
+[sub_resource type="Resource" id="ResourceCost_archer_gold"]
+script = ExtResource("4_cost_script")
+resource_type = ExtResource("6_gold")
+amount = 15
 
 [node name="Archer" instance=ExtResource("1_unit")]
 display_name = "Archer"
+costs = Array[Resource]([SubResource("ResourceCost_archer_wood"), SubResource("ResourceCost_archer_gold")])
 team_tint = Color(0.35, 0.6, 1, 1)
 sprite_sheet = ExtResource("2_archer")
 walk_row = 1

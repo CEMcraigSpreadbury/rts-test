@@ -226,8 +226,6 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.owner_peer_id = data.peer_id
 	unit.team_tint = data.tint
 	unit.position = data.position
-	if data.has("population_cost"):
-		unit.population_cost = data.population_cost
 	unit.animation_changed.connect(_on_unit_animation_changed.bind(unit))
 	unit.projectile_fired.connect(_on_unit_projectile_fired.bind(unit))
 	return unit
@@ -371,12 +369,13 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	## from ever landing exactly on top of each other.
 	spawn_pos += Vector3(randf_range(-0.6, 0.6), 0.0, randf_range(-0.6, 0.6))
 	var team_index: int = team_index_by_peer.get(building.owner_peer_id, 0)
+	## population_cost isn't passed here — the spawned scene's own Unit.population_cost
+	## (set right on the unit for balancing, see get_population_cost()) is already authoritative.
 	var unit: Unit = unit_spawner.spawn({
 		"scene_path": item.unit_scene.resource_path,
 		"peer_id": building.owner_peer_id,
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 		"position": spawn_pos,
-		"population_cost": item.population_cost,
 	})
 	if building.can_rally and building.has_rally_point:
 		var rally_target: Node = get_node_or_null(building.rally_target_path) \
@@ -935,7 +934,7 @@ func _populate_construction_buttons() -> void:
 	for i in available_building_types.size():
 		var building_type: BuildingType = available_building_types[i]
 		var hotkey: String = OS.get_keycode_string(BUILDING_HOTKEYS[i]) if i < BUILDING_HOTKEYS.size() else "?"
-		var tooltip := "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
+		var tooltip := "%s (%s)" % [building_type.building_name, _format_costs(building_type.get_costs())]
 		buttons.append(_make_command_button(hotkey, tooltip, building_type.icon, _on_construction_button_pressed.bind(building_type)))
 	_fill_action_panel_grid(buttons)
 
@@ -1312,9 +1311,9 @@ func _format_costs(costs: Array[ResourceCost]) -> String:
 	return ", ".join(parts)
 
 func _format_item_costs(item: ProducibleItem) -> String:
-	var text := _format_costs(item.costs)
+	var text := _format_costs(item.get_costs())
 	if item.kind == ProducibleItem.Kind.UNIT:
-		text += ", %d Pop" % item.population_cost
+		text += ", %d Pop" % item.get_population_cost()
 	return text
 
 ## --- Building placement ---
@@ -1471,7 +1470,8 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 	if type_index < 0 or type_index >= available_building_types.size():
 		return
 	var building_type: BuildingType = available_building_types[type_index]
-	if not ResourceStockpile.can_afford(sender_id, building_type.costs):
+	var costs := building_type.get_costs()
+	if not ResourceStockpile.can_afford(sender_id, costs):
 		return
 
 	## Deposit-snapped buildings ignore the client's proposed position — the
@@ -1487,7 +1487,7 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 	elif not _is_placement_valid(world_pos, building_type.footprint_radius):
 		return
 
-	ResourceStockpile.spend(sender_id, building_type.costs)
+	ResourceStockpile.spend(sender_id, costs)
 	if deposit:
 		deposit.is_claimed = true
 

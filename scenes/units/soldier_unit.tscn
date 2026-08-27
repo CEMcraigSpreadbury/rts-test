@@ -2,9 +2,23 @@
 
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="2_swordman"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_soldier_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 20
+
+[sub_resource type="Resource" id="ResourceCost_soldier_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("5_gold")
+amount = 20
 
 [node name="Soldier" unique_id=93520634 instance=ExtResource("1_unit")]
 display_name = "Soldier"
+costs = Array[Resource]([SubResource("ResourceCost_soldier_wood"), SubResource("ResourceCost_soldier_gold")])
 team_tint = Color(0.35, 0.6, 1, 1)
 sprite_sheet = ExtResource("2_swordman")
 walk_row = 1

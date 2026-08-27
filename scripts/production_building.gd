@@ -17,6 +17,10 @@ signal destroyed
 const DESTROY_SINK_DURATION: float = 1.5
 
 @export var building_name: String = "Production Building"
+## The single source of truth for what this building costs to construct —
+## edit it right here rather than on BuildingType, which just reads it back
+## via BuildingType.get_costs() when placement is requested.
+@export var costs: Array[ResourceCost] = []
 @export var producibles: Array[ProducibleItem] = []
 ## Which player owns this building; only they may queue production on it.
 @export var owner_peer_id: int = 1
@@ -134,16 +138,16 @@ func remove_builder(unit: Unit) -> void:
 	synced_builder_count = builders.size()
 
 func enqueue(item: ProducibleItem) -> bool:
-	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.costs):
+	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.get_costs()):
 		return false
 	## Population is reserved as soon as an item enters the queue (not when it
 	## actually spawns) so a player can't queue past the cap; Unit.release()s
 	## the same amount when the resulting unit later dies.
-	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(owner_peer_id, item.population_cost):
+	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(owner_peer_id, item.get_population_cost()):
 		return false
-	ResourceStockpile.spend(owner_peer_id, item.costs)
+	ResourceStockpile.spend(owner_peer_id, item.get_costs())
 	if item.kind == ProducibleItem.Kind.UNIT:
-		Population.reserve(owner_peer_id, item.population_cost)
+		Population.reserve(owner_peer_id, item.get_population_cost())
 	queue.append(item)
 	queue_changed.emit()
 	return true

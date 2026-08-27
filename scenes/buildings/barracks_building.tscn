@@ -1,14 +1,18 @@
 [gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="2_cost_script"]
 [ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
-[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="5_soldier_scene"]
 [ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
-[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="7_gold"]
 [ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="8_archer_scene"]
 [ext_resource type="PackedScene" path="res://scenes/units/spearman_unit.tscn" id="9_spearman_scene"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="10_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
+
+[sub_resource type="Resource" id="ResourceCost_barracks_building"]
+script = ExtResource("10_cost_script")
+resource_type = ExtResource("11_wood")
+amount = 75
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(3, 2, 3)
@@ -19,61 +23,25 @@ albedo_color = Color(0.45, 0.35, 0.35, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3, 2, 3)
 
-[sub_resource type="Resource" id="ResourceCost_soldier"]
-script = ExtResource("2_cost_script")
-resource_type = ExtResource("4_wood")
-amount = 20
-
-[sub_resource type="Resource" id="ResourceCost_soldier_gold"]
-script = ExtResource("2_cost_script")
-resource_type = ExtResource("7_gold")
-amount = 20
-
 [sub_resource type="Resource" id="ProducibleItem_soldier"]
 script = ExtResource("3_item_script")
 item_name = "Soldier"
 kind = 0
 build_time = 6.0
-costs = Array[Resource]([SubResource("ResourceCost_soldier"), SubResource("ResourceCost_soldier_gold")])
-population_cost = 1
 unit_scene = ExtResource("5_soldier_scene")
-
-[sub_resource type="Resource" id="ResourceCost_archer"]
-script = ExtResource("2_cost_script")
-resource_type = ExtResource("4_wood")
-amount = 25
-
-[sub_resource type="Resource" id="ResourceCost_archer_gold"]
-script = ExtResource("2_cost_script")
-resource_type = ExtResource("7_gold")
-amount = 15
 
 [sub_resource type="Resource" id="ProducibleItem_archer"]
 script = ExtResource("3_item_script")
 item_name = "Archer"
 kind = 0
 build_time = 7.0
-costs = Array[Resource]([SubResource("ResourceCost_archer"), SubResource("ResourceCost_archer_gold")])
-population_cost = 1
 unit_scene = ExtResource("8_archer_scene")
-
-[sub_resource type="Resource" id="ResourceCost_spearman"]
-script = ExtResource("2_cost_script")
-resource_type = ExtResource("4_wood")
-amount = 15
-
-[sub_resource type="Resource" id="ResourceCost_spearman_gold"]
-script = ExtResource("2_cost_script")
-resource_type = ExtResource("7_gold")
-amount = 10
 
 [sub_resource type="Resource" id="ProducibleItem_spearman"]
 script = ExtResource("3_item_script")
 item_name = "Spearman"
 kind = 0
 build_time = 5.5
-costs = Array[Resource]([SubResource("ResourceCost_spearman"), SubResource("ResourceCost_spearman_gold")])
-population_cost = 1
 unit_scene = ExtResource("9_spearman_scene")
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
@@ -105,6 +73,7 @@ properties/7/replication_mode = 2
 [node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Barracks"
+costs = Array[Resource]([SubResource("ResourceCost_barracks_building")])
 producibles = Array[Resource]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_archer"), SubResource("ProducibleItem_spearman")])
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]

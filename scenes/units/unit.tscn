@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" uid="uid://btq158nw3psko" path="res://scripts/unit.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -14,6 +16,11 @@ outer_radius = 0.7
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ring"]
 shading_mode = 0
 albedo_color = Color(0.2, 1, 0.3, 1)
+
+[sub_resource type="Resource" id="ResourceCost_villager"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 50
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath(".:position")
@@ -28,6 +35,7 @@ properties/2/replication_mode = 1
 
 [node name="Unit" type="CharacterBody3D" unique_id=1622850852 groups=["units"]]
 script = ExtResource("1_script")
+costs = Array[Resource]([SubResource("ResourceCost_villager")])
 walk_row = 3
 walk_frame_count = 6
 

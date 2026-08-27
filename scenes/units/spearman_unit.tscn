@@ -2,9 +2,23 @@
 
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://dvjohfrhtk0k6" path="res://assets/art/MinifolksHumans/Outline/MiniSpearMan.png" id="2_spearman"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_spearman_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 15
+
+[sub_resource type="Resource" id="ResourceCost_spearman_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("5_gold")
+amount = 10
 
 [node name="Spearman" unique_id=421896768 instance=ExtResource("1_unit")]
 display_name = "Spearman"
+costs = Array[Resource]([SubResource("ResourceCost_spearman_wood"), SubResource("ResourceCost_spearman_gold")])
 move_speed = 3.0
 team_tint = Color(0.35, 0.6, 1, 1)
 sprite_sheet = ExtResource("2_spearman")

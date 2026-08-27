@@ -2,6 +2,13 @@
 
 [ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+
+[sub_resource type="Resource" id="ResourceCost_mine"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 80
 
 [sub_resource type="BoxMesh" id="BoxMesh_shed"]
 size = Vector3(1.4, 1.6, 1.4)
@@ -41,6 +48,7 @@ properties/7/replication_mode = 2
 [node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Mine"
+costs = Array[Resource]([SubResource("ResourceCost_mine")])
 can_rally = false
 max_health = 80
 
