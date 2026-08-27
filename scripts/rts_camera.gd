@@ -10,7 +10,7 @@ extends Node3D
 @export var mouse_rotate_sensitivity: float = 0.005
 @export var zoom_speed: float = 2.0
 @export var min_zoom: float = 8.0
-@export var max_zoom: float = 32.0
+@export var max_zoom: float = 22.0
 @export var pitch_degrees: float = 55.0
 @export var min_pitch_degrees: float = 20.0
 @export var max_pitch_degrees: float = 85.0
@@ -93,3 +93,9 @@ func _process(delta: float) -> void:
 
 func _update_zoom() -> void:
 	camera.position.z = zoom_distance
+	## Keeps the depth-of-field focus band centered on the pivot (where units
+	## sit) as the player zooms, for a tilt-shift/diorama look at any zoom level.
+	var attributes := camera.attributes as CameraAttributesPractical
+	if attributes:
+		attributes.dof_blur_near_distance = zoom_distance - 8.0
+		attributes.dof_blur_far_distance = zoom_distance + 12.0
