@@ -249,16 +249,25 @@ offset_bottom = -16.0
 grow_horizontal = 2
 grow_vertical = 0
 
-[node name="VBox" type="VBoxContainer" parent="UI/InfoPanel" unique_id=537852054]
+[node name="Margin" type="MarginContainer" parent="UI/InfoPanel" unique_id=537852055]
 layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="BuildingNameLabel" type="Label" parent="UI/InfoPanel/VBox" unique_id=729618171]
+[node name="VBox" type="VBoxContainer" parent="UI/InfoPanel/Margin" unique_id=537852054]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BuildingNameLabel" type="Label" parent="UI/InfoPanel/Margin/VBox" unique_id=729618171]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Building"
 
-[node name="InfoContainer" type="VBoxContainer" parent="UI/InfoPanel/VBox" unique_id=990616368]
+[node name="InfoContainer" type="VBoxContainer" parent="UI/InfoPanel/Margin/VBox" unique_id=990616368]
 layout_mode = 2
+theme_override_constants/separation = 6
 
 [node name="ActionPanel" type="PanelContainer" parent="UI" unique_id=2090387592]
 anchors_preset = 1
@@ -270,16 +279,26 @@ offset_right = -13.0
 offset_bottom = 630.0
 grow_horizontal = 0
 
-[node name="VBox" type="VBoxContainer" parent="UI/ActionPanel" unique_id=1616315363]
+[node name="Margin" type="MarginContainer" parent="UI/ActionPanel" unique_id=1616315365]
 layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="Title" type="Label" parent="UI/ActionPanel/VBox" unique_id=1879175841]
+[node name="VBox" type="VBoxContainer" parent="UI/ActionPanel/Margin" unique_id=1616315363]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="UI/ActionPanel/Margin/VBox" unique_id=1879175841]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Construct"
 
-[node name="Grid" type="GridContainer" parent="UI/ActionPanel/VBox" unique_id=1616315364]
+[node name="Grid" type="GridContainer" parent="UI/ActionPanel/Margin/VBox" unique_id=1616315364]
 layout_mode = 2
+theme_override_constants/h_separation = 6
+theme_override_constants/v_separation = 6
 columns = 4
 
 [node name="ChatLog" type="RichTextLabel" parent="UI" unique_id=742747127]
@@ -341,16 +360,24 @@ offset_bottom = 70.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel" unique_id=2129327243]
+[node name="Margin" type="MarginContainer" parent="UI/GameOverPanel" unique_id=2129327244]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel/Margin" unique_id=2129327243]
 layout_mode = 2
 alignment = 1
+theme_override_constants/separation = 8
 
-[node name="ResultLabel" type="Label" parent="UI/GameOverPanel/VBox" unique_id=1328889564]
+[node name="ResultLabel" type="Label" parent="UI/GameOverPanel/Margin/VBox" unique_id=1328889564]
 layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "Game Over"
 horizontal_alignment = 1
 
-[node name="ReturnButton" type="Button" parent="UI/GameOverPanel/VBox" unique_id=304735568]
+[node name="ReturnButton" type="Button" parent="UI/GameOverPanel/Margin/VBox" unique_id=304735568]
 layout_mode = 2
 text = "Return to Lobby"

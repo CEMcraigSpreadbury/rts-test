@@ -41,21 +41,21 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @onready var building_spawner: MultiplayerSpawner = $BuildingSpawner
 
 @onready var info_panel: PanelContainer = $UI/InfoPanel
-@onready var info_panel_name_label: Label = $UI/InfoPanel/VBox/BuildingNameLabel
-@onready var info_panel_content: VBoxContainer = $UI/InfoPanel/VBox/InfoContainer
+@onready var info_panel_name_label: Label = $UI/InfoPanel/Margin/VBox/BuildingNameLabel
+@onready var info_panel_content: VBoxContainer = $UI/InfoPanel/Margin/VBox/InfoContainer
 
 ## Single contextual action panel — always visible, its grid's contents and
 ## title change with the selection: nothing selected shows the construction
 ## menu, a selected building shows its producibles, selected units show the
 ## Move/Stop/Attack/Patrol commands.
-@onready var action_panel_title: Label = $UI/ActionPanel/VBox/Title
-@onready var action_panel_grid: GridContainer = $UI/ActionPanel/VBox/Grid
+@onready var action_panel_title: Label = $UI/ActionPanel/Margin/VBox/Title
+@onready var action_panel_grid: GridContainer = $UI/ActionPanel/Margin/VBox/Grid
 
 @onready var chat_log: RichTextLabel = $UI/ChatLog
 @onready var chat_input: LineEdit = $UI/ChatInput
 
 @onready var game_over_panel: PanelContainer = $UI/GameOverPanel
-@onready var game_over_label: Label = $UI/GameOverPanel/VBox/ResultLabel
+@onready var game_over_label: Label = $UI/GameOverPanel/Margin/VBox/ResultLabel
 
 var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
@@ -167,7 +167,7 @@ func _ready() -> void:
 	chat_input.text_submitted.connect(_on_chat_submitted)
 
 	game_over_panel.visible = false
-	$UI/GameOverPanel/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
+	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
 
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
@@ -919,6 +919,7 @@ func _build_building_info(building: ProductionBuilding) -> void:
 	_info_empty_label.text = "Queue: empty"
 	info_panel_content.add_child(_info_empty_label)
 	_info_slot_row = HBoxContainer.new()
+	_info_slot_row.add_theme_constant_override("separation", 6)
 	info_panel_content.add_child(_info_slot_row)
 
 func _refresh_building_info() -> void:
@@ -974,8 +975,11 @@ func _build_unit_info() -> void:
 	info_panel_name_label.text = "%d units selected" % selected_units.size()
 	var portrait_grid := GridContainer.new()
 	portrait_grid.columns = 4
+	portrait_grid.add_theme_constant_override("h_separation", 6)
+	portrait_grid.add_theme_constant_override("v_separation", 6)
 	for unit in selected_units:
 		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 3)
 		var portrait := ColorRect.new()
 		portrait.custom_minimum_size = Vector2(36, 36)
 		portrait.color = unit.team_tint
