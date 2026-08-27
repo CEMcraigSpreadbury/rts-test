@@ -235,35 +235,32 @@ theme_override_constants/shadow_offset_y = 1
 theme_override_font_sizes/font_size = 22
 text = "Wood: 0"
 
-[node name="CommandPanel" type="PanelContainer" parent="UI" unique_id=2075588479]
+[node name="InfoPanel" type="PanelContainer" parent="UI" unique_id=2075588479]
 visible = false
-anchors_preset = 2
+anchors_preset = 8
+anchor_left = 0.5
 anchor_top = 1.0
+anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -220.0
-offset_right = 260.0
+offset_left = -160.0
+offset_top = -196.0
+offset_right = 160.0
 offset_bottom = -16.0
+grow_horizontal = 2
 grow_vertical = 0
 
-[node name="VBox" type="VBoxContainer" parent="UI/CommandPanel" unique_id=537852054]
+[node name="VBox" type="VBoxContainer" parent="UI/InfoPanel" unique_id=537852054]
 layout_mode = 2
 
-[node name="BuildingNameLabel" type="Label" parent="UI/CommandPanel/VBox" unique_id=729618171]
+[node name="BuildingNameLabel" type="Label" parent="UI/InfoPanel/VBox" unique_id=729618171]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Building"
 
-[node name="QueueLabel" type="Label" parent="UI/CommandPanel/VBox" unique_id=990616368]
+[node name="InfoContainer" type="VBoxContainer" parent="UI/InfoPanel/VBox" unique_id=990616368]
 layout_mode = 2
-text = "Queue: empty"
-autowrap_mode = 2
 
-[node name="Grid" type="GridContainer" parent="UI/CommandPanel/VBox" unique_id=2075588480]
-layout_mode = 2
-columns = 4
-
-[node name="ConstructionPanel" type="PanelContainer" parent="UI" unique_id=2090387592]
+[node name="ActionPanel" type="PanelContainer" parent="UI" unique_id=2090387592]
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
@@ -273,17 +270,17 @@ offset_right = -13.0
 offset_bottom = 630.0
 grow_horizontal = 0
 
-[node name="VBox" type="VBoxContainer" parent="UI/ConstructionPanel" unique_id=1616315363]
+[node name="VBox" type="VBoxContainer" parent="UI/ActionPanel" unique_id=1616315363]
 layout_mode = 2
 
-[node name="Title" type="Label" parent="UI/ConstructionPanel/VBox" unique_id=1879175841]
+[node name="Title" type="Label" parent="UI/ActionPanel/VBox" unique_id=1879175841]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "Construct"
 
-[node name="Grid" type="GridContainer" parent="UI/ConstructionPanel/VBox" unique_id=1616315364]
+[node name="Grid" type="GridContainer" parent="UI/ActionPanel/VBox" unique_id=1616315364]
 layout_mode = 2
-columns = 3
+columns = 4
 
 [node name="ChatLog" type="RichTextLabel" parent="UI" unique_id=742747127]
 anchors_preset = 7

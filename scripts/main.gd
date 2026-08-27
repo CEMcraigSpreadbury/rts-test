@@ -18,8 +18,16 @@ const UNIT_MOVE_KEY: Key = KEY_M
 const UNIT_STOP_KEY: Key = KEY_H
 const UNIT_ATTACK_KEY: Key = KEY_F
 const UNIT_PATROL_KEY: Key = KEY_P
+## Only shown/live when at least one selected unit has can_build; opens the
+## same construction menu the idle action panel shows, reusing BUILDING_HOTKEYS
+## for the actual building choice — safe since only one of the two menus is
+## ever live for a given selection state.
+const UNIT_BUILD_KEY: Key = KEY_B
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
 const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B]
+## The action panel's grid always has exactly this many slots (4 columns x 2
+## rows), padded with blank placeholders, so its size never changes with context.
+const ACTION_PANEL_SLOT_COUNT: int = 8
 
 @export var available_building_types: Array[BuildingType] = []
 
@@ -32,12 +40,16 @@ const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B]
 @onready var buildings_root: Node3D = $Buildings
 @onready var building_spawner: MultiplayerSpawner = $BuildingSpawner
 
-@onready var command_panel: PanelContainer = $UI/CommandPanel
-@onready var command_panel_name_label: Label = $UI/CommandPanel/VBox/BuildingNameLabel
-@onready var command_panel_queue_label: Label = $UI/CommandPanel/VBox/QueueLabel
-@onready var command_panel_grid: GridContainer = $UI/CommandPanel/VBox/Grid
+@onready var info_panel: PanelContainer = $UI/InfoPanel
+@onready var info_panel_name_label: Label = $UI/InfoPanel/VBox/BuildingNameLabel
+@onready var info_panel_content: VBoxContainer = $UI/InfoPanel/VBox/InfoContainer
 
-@onready var construction_panel_grid: GridContainer = $UI/ConstructionPanel/VBox/Grid
+## Single contextual action panel — always visible, its grid's contents and
+## title change with the selection: nothing selected shows the construction
+## menu, a selected building shows its producibles, selected units show the
+## Move/Stop/Attack/Patrol commands.
+@onready var action_panel_title: Label = $UI/ActionPanel/VBox/Title
+@onready var action_panel_grid: GridContainer = $UI/ActionPanel/VBox/Grid
 
 @onready var chat_log: RichTextLabel = $UI/ChatLog
 @onready var chat_input: LineEdit = $UI/ChatInput
@@ -59,6 +71,25 @@ var _patrol_started_this_session: bool = false
 ## Which unit selection the command panel's buttons were last built for, so
 ## _process() only rebuilds them when the selection actually changed.
 var _last_command_panel_units: Array[Unit] = []
+
+## True while the action panel is showing the construction menu on behalf of
+## a selected unit's Build button (as opposed to the always-available idle
+## construction menu when nothing is selected).
+var _showing_build_submenu: bool = false
+## Captured when a construction button is pressed while _showing_build_submenu
+## is true, so the host can send these units to build what gets placed.
+var _pending_builder_paths: Array[NodePath] = []
+
+## Command panel info section — built once per selection change, then only
+## had their values (not structure) updated every frame, to avoid rebuilding
+## Control nodes 60 times a second for something that just needs a number to move.
+var _info_progress_bar: ProgressBar = null
+var _info_empty_label: Label = null
+var _info_slot_row: HBoxContainer = null
+var _info_last_queue_size: int = -1
+var _info_stats_label: Label = null
+## Parallel to selected_units when more than one is selected.
+var _info_unit_portrait_bars: Array[ProgressBar] = []
 
 ## Purely local UI state: which units/buildings belong to each numbered
 ## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
@@ -126,12 +157,7 @@ var _population_cap: int = 0
 func _ready() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	Population.changed.connect(_on_population_changed)
-	for i in available_building_types.size():
-		var building_type: BuildingType = available_building_types[i]
-		var hotkey: String = OS.get_keycode_string(BUILDING_HOTKEYS[i]) if i < BUILDING_HOTKEYS.size() else "?"
-		var tooltip := "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
-		var button := _make_command_button(hotkey, tooltip, building_type.icon, _start_placement.bind(building_type))
-		construction_panel_grid.add_child(button)
+	_populate_construction_buttons()
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
 	building_spawner.spawn_function = _spawn_building_from_data
@@ -315,15 +341,19 @@ func _get_dropoff_for(peer_id: int) -> Node3D:
 
 func _process(_delta: float) -> void:
 	if selected_building:
-		_update_queue_label()
+		_refresh_building_info()
 	elif not selected_units.is_empty():
 		## Catches every way selected_units can change (drag-select, control
 		## groups, a selected unit dying mid-fight) without needing a refresh
 		## call at each individual mutation site; only rebuilds the panel's
-		## buttons when the selection actually changed since last frame.
+		## buttons/info structure when the selection actually changed since
+		## last frame — otherwise just updates the already-built info values
+		## (health, etc.) in place.
 		_prune_selected_units()
 		if selected_units != _last_command_panel_units:
 			_refresh_command_panel()
+		else:
+			_refresh_unit_info_values()
 	if placing_type:
 		_update_placement_ghost()
 	_update_hover_ring()
@@ -348,6 +378,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_placement_input(event)
 		return
 
+	if _showing_build_submenu and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_close_build_submenu()
+		get_viewport().set_input_as_handled()
+		return
+
 	if pending_order_mode != "":
 		_handle_pending_order_input(event)
 		return
@@ -362,14 +397,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventKey and event.pressed and not event.echo:
+	## Gated on nothing being selected (the idle construction menu) or the
+	## build submenu being open (a unit's Build button) — the only two times
+	## the action panel actually shows these buttons, matching what's on
+	## screen instead of secretly still working while it shows something else.
+	if event is InputEventKey and event.pressed and not event.echo \
+			and ((selected_building == null and selected_units.is_empty()) or _showing_build_submenu):
 		var building_index: int = BUILDING_HOTKEYS.find(event.keycode)
 		if building_index != -1 and building_index < available_building_types.size():
-			_start_placement(available_building_types[building_index])
+			_on_construction_button_pressed(available_building_types[building_index])
 			get_viewport().set_input_as_handled()
 			return
 
-	if event is InputEventKey and event.pressed and not event.echo and not selected_units.is_empty():
+	if event is InputEventKey and event.pressed and not event.echo and not selected_units.is_empty() \
+			and not _showing_build_submenu:
 		if event.keycode == UNIT_MOVE_KEY:
 			pending_order_mode = "move"
 			get_viewport().set_input_as_handled()
@@ -385,6 +426,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == UNIT_PATROL_KEY:
 			pending_order_mode = "patrol"
 			_patrol_started_this_session = false
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_BUILD_KEY and _any_selected_can_build():
+			_open_build_submenu()
 			get_viewport().set_input_as_handled()
 			return
 
@@ -733,61 +778,251 @@ func _select_building(building: ProductionBuilding) -> void:
 		_refresh_command_panel()
 		return
 
-	command_panel.visible = true
-	command_panel_name_label.text = building.building_name
-	command_panel_queue_label.visible = true
-	for child in command_panel_grid.get_children():
+	info_panel.visible = true
+	info_panel_name_label.text = building.building_name
+	action_panel_title.text = building.building_name
+	for child in action_panel_grid.get_children():
 		child.queue_free()
+	_build_building_info(building)
 
 	if building.is_under_construction:
-		command_panel_queue_label.text = _format_construction_status(building)
 		if not building.construction_finished.is_connected(_on_selected_building_constructed):
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
+		_fill_action_panel_grid([])
 		return
 
+	var buttons: Array[Control] = []
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
 		var hotkey: String = OS.get_keycode_string(PRODUCIBLE_HOTKEYS[i]) if i < PRODUCIBLE_HOTKEYS.size() else "?"
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item)]
-		var button := _make_command_button(hotkey, tooltip, item.icon, _on_producible_button_pressed.bind(building, i))
-		command_panel_grid.add_child(button)
+		buttons.append(_make_command_button(hotkey, tooltip, item.icon, _on_producible_button_pressed.bind(building, i)))
+	_fill_action_panel_grid(buttons)
 
-	_update_queue_label()
-
-## Rebuilds the command panel for the current selection when no building is
-## selected: the four unit-command buttons if units are selected, or hidden
-## if nothing is. (Building content is built directly in _select_building.)
+## The action panel is always visible; this only rebuilds its grid/title and
+## the info panel for the current selection when no building is selected:
+## the four unit-command buttons if units are selected, otherwise the
+## construction menu. (Building content is built directly in _select_building.)
 func _refresh_command_panel() -> void:
 	if selected_building != null:
 		return
-	for child in command_panel_grid.get_children():
+	for child in action_panel_grid.get_children():
 		child.queue_free()
+	for child in info_panel_content.get_children():
+		child.queue_free()
+	_info_stats_label = null
+	_info_unit_portrait_bars.clear()
 	_last_command_panel_units = selected_units.duplicate()
+	_showing_build_submenu = false
 
 	if selected_units.is_empty():
-		command_panel.visible = false
+		info_panel.visible = false
+		action_panel_title.text = "Construct"
+		_populate_construction_buttons()
 		return
 
-	command_panel.visible = true
-	command_panel_name_label.text = "%d unit%s selected" % [selected_units.size(), "" if selected_units.size() == 1 else "s"]
-	command_panel_queue_label.visible = false
+	info_panel.visible = true
+	_populate_unit_command_buttons()
+	_build_unit_info()
+	_refresh_unit_info_values()
+
+func _populate_construction_buttons() -> void:
+	var buttons: Array[Control] = []
+	for i in available_building_types.size():
+		var building_type: BuildingType = available_building_types[i]
+		var hotkey: String = OS.get_keycode_string(BUILDING_HOTKEYS[i]) if i < BUILDING_HOTKEYS.size() else "?"
+		var tooltip := "%s (%s)" % [building_type.building_name, _format_costs(building_type.costs)]
+		buttons.append(_make_command_button(hotkey, tooltip, building_type.icon, _on_construction_button_pressed.bind(building_type)))
+	_fill_action_panel_grid(buttons)
+
+## The action panel's grid is a fixed-size 4-column layout (see
+## ACTION_PANEL_SLOT_COUNT) regardless of how many real buttons a given
+## context has, so its on-screen size/shape never changes with selection —
+## needed so a frame image can be overlaid on top of it consistently. Unused
+## slots are filled with an invisible, non-interactive placeholder of the
+## same size instead of just leaving the grid short.
+func _fill_action_panel_grid(buttons: Array[Control]) -> void:
+	for button in buttons:
+		action_panel_grid.add_child(button)
+	for i in range(buttons.size(), ACTION_PANEL_SLOT_COUNT):
+		action_panel_grid.add_child(_make_empty_action_slot())
+
+func _make_empty_action_slot() -> Control:
+	var slot := Control.new()
+	slot.custom_minimum_size = Vector2(56, 56)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return slot
+
+## Idle construction menu and a unit's Build submenu both funnel through here:
+## while the submenu is open this also captures which selected units (that
+## can build) should be sent to build whatever gets placed.
+func _on_construction_button_pressed(building_type: BuildingType) -> void:
+	_pending_builder_paths.clear()
+	if _showing_build_submenu:
+		for unit in selected_units:
+			if is_instance_valid(unit) and unit.can_build:
+				_pending_builder_paths.append(unit.get_path())
+	_start_placement(building_type)
+
+func _any_selected_can_build() -> bool:
+	for unit in selected_units:
+		if is_instance_valid(unit) and unit.can_build:
+			return true
+	return false
+
+func _open_build_submenu() -> void:
+	_showing_build_submenu = true
+	action_panel_title.text = "Build"
+	for child in action_panel_grid.get_children():
+		child.queue_free()
+	_populate_construction_buttons()
+
+func _close_build_submenu() -> void:
+	_showing_build_submenu = false
+	for child in action_panel_grid.get_children():
+		child.queue_free()
 	_populate_unit_command_buttons()
 
+## --- Command panel info section ---
+
+func _make_progress_bar_with_overlay() -> ProgressBar:
+	var bar := ProgressBar.new()
+	bar.custom_minimum_size = Vector2(0, 20)
+	bar.max_value = 1.0
+	bar.show_percentage = false
+	var overlay := Label.new()
+	overlay.name = "Overlay"
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	overlay.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	overlay.add_theme_font_size_override("font_size", 12)
+	bar.add_child(overlay)
+	return bar
+
+## Builds the (structural) queue/construction display once per selection
+## change; _refresh_building_info() then just updates values every frame.
+func _build_building_info(building: ProductionBuilding) -> void:
+	for child in info_panel_content.get_children():
+		child.queue_free()
+	_info_progress_bar = null
+	_info_empty_label = null
+	_info_slot_row = null
+	_info_last_queue_size = -1
+
+	_info_progress_bar = _make_progress_bar_with_overlay()
+	info_panel_content.add_child(_info_progress_bar)
+
+	if building.is_under_construction:
+		return
+
+	_info_empty_label = Label.new()
+	_info_empty_label.text = "Queue: empty"
+	info_panel_content.add_child(_info_empty_label)
+	_info_slot_row = HBoxContainer.new()
+	info_panel_content.add_child(_info_slot_row)
+
+func _refresh_building_info() -> void:
+	var building := selected_building
+	if _info_progress_bar == null:
+		_build_building_info(building)
+
+	if building.is_under_construction:
+		_info_progress_bar.value = building.construction_progress
+		(_info_progress_bar.get_node("Overlay") as Label).text = _format_construction_status(building)
+		return
+
+	if building.synced_queue_size <= 0:
+		_info_progress_bar.visible = false
+		_info_empty_label.visible = true
+		_info_slot_row.visible = false
+		return
+
+	_info_progress_bar.visible = true
+	_info_empty_label.visible = false
+	_info_slot_row.visible = true
+	_info_progress_bar.value = building.synced_current_item_progress
+	(_info_progress_bar.get_node("Overlay") as Label).text = "%s (%.1fs)" % [
+		building.synced_current_item_name, building.synced_time_remaining
+	]
+
+	## Items queued behind the current one (synced_queue_size includes it),
+	## shown as blank slots rather than icons since there's no per-item icon
+	## art yet — just enough to see how deep the queue is at a glance.
+	var queued_behind: int = building.synced_queue_size - 1
+	if queued_behind != _info_last_queue_size:
+		_info_last_queue_size = queued_behind
+		for child in _info_slot_row.get_children():
+			child.queue_free()
+		for i in queued_behind:
+			var slot := ColorRect.new()
+			slot.custom_minimum_size = Vector2(20, 20)
+			slot.color = Color(1, 1, 1, 0.2)
+			_info_slot_row.add_child(slot)
+
+## Builds either a single unit's stat readout or a grid of portrait+health
+## widgets for a multi-unit selection — structural, called once per selection
+## change; _refresh_unit_info_values() updates values every frame after.
+func _build_unit_info() -> void:
+	if selected_units.size() == 1:
+		var unit := selected_units[0]
+		info_panel_name_label.text = unit.name
+		_info_stats_label = Label.new()
+		_info_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		info_panel_content.add_child(_info_stats_label)
+		return
+
+	info_panel_name_label.text = "%d units selected" % selected_units.size()
+	var portrait_grid := GridContainer.new()
+	portrait_grid.columns = 4
+	for unit in selected_units:
+		var cell := VBoxContainer.new()
+		var portrait := ColorRect.new()
+		portrait.custom_minimum_size = Vector2(36, 36)
+		portrait.color = unit.team_tint
+		cell.add_child(portrait)
+		var health_bar := ProgressBar.new()
+		health_bar.custom_minimum_size = Vector2(36, 6)
+		health_bar.max_value = 1.0
+		health_bar.show_percentage = false
+		cell.add_child(health_bar)
+		portrait_grid.add_child(cell)
+		_info_unit_portrait_bars.append(health_bar)
+	info_panel_content.add_child(portrait_grid)
+
+func _refresh_unit_info_values() -> void:
+	if selected_units.size() == 1:
+		if _info_stats_label:
+			_info_stats_label.text = _format_unit_stats(selected_units[0])
+		return
+	for i in _info_unit_portrait_bars.size():
+		if i < selected_units.size() and is_instance_valid(selected_units[i]):
+			var unit := selected_units[i]
+			_info_unit_portrait_bars[i].value = float(unit.status_current_health) / float(maxi(unit.max_health, 1))
+
+func _format_unit_stats(unit: Unit) -> String:
+	var lines: Array[String] = ["HP: %d / %d" % [unit.status_current_health, unit.max_health]]
+	if unit.can_fight:
+		lines.append("Attack: %d dmg every %.1fs (range %.1f)" % [unit.attack_damage, unit.attack_cooldown, unit.attack_range])
+	if unit.can_gather:
+		lines.append("Gather level %d (carries %d)" % [unit.gather_level, unit.carry_capacity])
+	lines.append("Move speed: %.1f" % unit.move_speed)
+	return "\n".join(lines)
+
 func _populate_unit_command_buttons() -> void:
-	command_panel_grid.add_child(_make_command_button(
-		OS.get_keycode_string(UNIT_MOVE_KEY), "Move", null, func(): pending_order_mode = "move"
-	))
-	command_panel_grid.add_child(_make_command_button(
-		OS.get_keycode_string(UNIT_STOP_KEY), "Stop", null, _issue_stop_order
-	))
-	command_panel_grid.add_child(_make_command_button(
-		OS.get_keycode_string(UNIT_ATTACK_KEY), "Attack", null, func(): pending_order_mode = "attack"
-	))
-	command_panel_grid.add_child(_make_command_button(
-		OS.get_keycode_string(UNIT_PATROL_KEY), "Patrol", null, func():
-			pending_order_mode = "patrol"
-			_patrol_started_this_session = false
-	))
+	action_panel_title.text = "Commands"
+	var buttons: Array[Control] = [
+		_make_command_button(OS.get_keycode_string(UNIT_MOVE_KEY), "Move", null, func(): pending_order_mode = "move"),
+		_make_command_button(OS.get_keycode_string(UNIT_STOP_KEY), "Stop", null, _issue_stop_order),
+		_make_command_button(OS.get_keycode_string(UNIT_ATTACK_KEY), "Attack", null, func(): pending_order_mode = "attack"),
+		_make_command_button(OS.get_keycode_string(UNIT_PATROL_KEY), "Patrol", null, _arm_patrol_mode),
+	]
+	if _any_selected_can_build():
+		buttons.append(_make_command_button(OS.get_keycode_string(UNIT_BUILD_KEY), "Build", null, _open_build_submenu))
+	_fill_action_panel_grid(buttons)
+
+func _arm_patrol_mode() -> void:
+	pending_order_mode = "patrol"
+	_patrol_started_this_session = false
 
 func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if selected_building == building:
@@ -946,19 +1181,6 @@ func _format_construction_status(building: ProductionBuilding) -> String:
 		return "Constructing... %d%% (needs a builder)" % percent
 	return "Constructing... %d%% (%d building)" % [percent, building.synced_builder_count]
 
-func _update_queue_label() -> void:
-	if selected_building.is_under_construction:
-		command_panel_queue_label.text = _format_construction_status(selected_building)
-		return
-	if selected_building.synced_queue_size <= 0:
-		command_panel_queue_label.text = "Queue: empty"
-		return
-	var extra: int = selected_building.synced_queue_size - 1
-	command_panel_queue_label.text = "Building %s (%.1fs)%s" % [
-		selected_building.synced_current_item_name, selected_building.synced_time_remaining,
-		" + %d queued" % extra if extra > 0 else ""
-	]
-
 ## Shared by the construction menu, a building's production menu, and the new
 ## unit-command panel: a square button showing only its hotkey letter (icon
 ## stays null everywhere today — no icon art exists yet, but the field is
@@ -989,7 +1211,12 @@ func _format_item_costs(item: ProducibleItem) -> String:
 func _start_placement(building_type: BuildingType) -> void:
 	_cancel_placement()
 	placing_type = building_type
-	_select_building(null)
+	## Only needed to close an open building panel — skipped when a unit's
+	## Build submenu started this placement, since _select_building(null)
+	## would otherwise refresh the action panel back out of that submenu
+	## (via _refresh_command_panel()) while the ghost is still following the mouse.
+	if selected_building != null:
+		_select_building(null)
 	placement_ghost = _build_ghost(building_type.scene)
 	add_child(placement_ghost)
 
@@ -1116,11 +1343,14 @@ func _confirm_placement() -> void:
 		return
 	var type_index: int = available_building_types.find(placing_type)
 	var target_path := _placement_target.get_path() if _placement_target else NodePath()
-	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path)
+	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths)
 	_cancel_placement()
+	_pending_builder_paths.clear()
+	if _showing_build_submenu:
+		_close_build_submenu()
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath) -> void:
+func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath]) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -1180,6 +1410,13 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 				deposit.has_required_building = false
 				deposit.is_claimed = false
 			, CONNECT_ONE_SHOT)
+
+		## Sends whichever villager(s) opened the build menu to go build what
+		## they just placed, instead of leaving them standing idle next to it.
+		for path in builder_paths:
+			var builder := get_node_or_null(path) as Unit
+			if builder != null and builder.owner_peer_id == sender_id:
+				builder.command_build(building)
 
 func _cancel_placement() -> void:
 	if placement_ghost:

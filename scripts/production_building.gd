@@ -55,6 +55,9 @@ var linked_deposit: Gatherable = null
 @export var synced_queue_size: int = 0
 @export var synced_time_remaining: float = 0.0
 @export var synced_current_item_name: String = ""
+## 0-1 fraction of synced_current_item_name's build_time elapsed, for the
+## command panel's queue progress bar.
+@export var synced_current_item_progress: float = 0.0
 @export var health_fraction: float = 1.0
 ## Mirrored purely for the "N building" UI display.
 @export var synced_builder_count: int = 0
@@ -222,6 +225,8 @@ func _process(delta: float) -> void:
 	synced_queue_size = queue.size()
 	synced_time_remaining = time_remaining()
 	synced_current_item_name = queue[0].item_name if not queue.is_empty() else ""
+	synced_current_item_progress = clampf(1.0 - synced_time_remaining / maxf(queue[0].build_time, 0.01), 0.0, 1.0) \
+			if not queue.is_empty() else 0.0
 
 func _update_health_bar_visual() -> void:
 	if not health_bar:
