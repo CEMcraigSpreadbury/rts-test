@@ -58,5 +58,5 @@ construction_time = 8.0
 script = ExtResource("1_faction_script")
 faction_name = "Faction One"
 building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables")])
-starting_building_scene = ExtResource("3_town_center")
-starting_unit_scene = ExtResource("10_unit")
+starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
+starting_units = Array[PackedScene]([ExtResource("10_unit")])

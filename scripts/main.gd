@@ -1,8 +1,5 @@
 extends Node3D
 
-const SPAWN_POINTS: Array[Vector3] = [
-	Vector3(-3, 0, -3), Vector3(23, 0, -3), Vector3(-3, 0, 23), Vector3(23, 0, 23)
-]
 const TEAM_COLORS: Array[Color] = [
 	Color(0.25, 0.55, 1.0), Color(1.0, 0.35, 0.3), Color(0.35, 1.0, 0.45), Color(1.0, 0.85, 0.3)
 ]
@@ -42,6 +39,7 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @onready var unit_spawner: MultiplayerSpawner = $UnitSpawner
 @onready var buildings_root: Node3D = $Buildings
 @onready var building_spawner: MultiplayerSpawner = $BuildingSpawner
+@onready var player_spawn_points: Node3D = $PlayerSpawnPoints
 
 @onready var info_panel: PanelContainer = $UI/InfoPanel
 @onready var info_panel_name_label: Label = $UI/InfoPanel/Margin/VBox/BuildingNameLabel
@@ -257,7 +255,7 @@ func _faction_for_peer(peer_id: int) -> Faction:
 	return available_factions[faction_index] if faction_index < available_factions.size() else available_factions[0]
 
 func _spawn_player_base(peer_id: int, index: int) -> void:
-	var base_pos: Vector3 = SPAWN_POINTS[index % SPAWN_POINTS.size()]
+	var spawn_point: PlayerSpawnPoint = player_spawn_points.get_child(index % player_spawn_points.get_child_count())
 	var tint: Color = TEAM_COLORS[index % TEAM_COLORS.size()]
 	team_index_by_peer[peer_id] = index
 	var faction: Faction = _faction_for_peer(peer_id)
@@ -267,30 +265,39 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 	## (which is where population is normally reserved), so it has to be
 	## reserved for them here instead or they'd stand outside the population
 	## count entirely.
-	for i in 2:
+	var unit_positions: Array[Vector3] = spawn_point.get_unit_positions()
+	for i in mini(faction.starting_units.size(), unit_positions.size()):
 		var starting_unit: Unit = unit_spawner.spawn({
-			"scene_path": faction.starting_unit_scene.resource_path,
+			"scene_path": faction.starting_units[i].resource_path,
 			"peer_id": peer_id,
 			"tint": tint,
-			"position": base_pos + Vector3(i * 1.5, 0.0, 0.0),
+			"position": unit_positions[i],
 		})
 		Population.reserve(peer_id, starting_unit.population_cost)
 
-	var town_center: ProductionBuilding = building_spawner.spawn({
-		"scene_path": faction.starting_building_scene.resource_path,
-		"peer_id": peer_id,
-		"position": base_pos + Vector3(-4.0, 0.0, 4.0),
-		"tint": tint,
-	})
-	town_centers[peer_id] = town_center
-	## The starting Town Center is placed pre-built (begin_construction() is
-	## never called for it), so its population capacity is granted immediately
-	## rather than waiting on a construction_finished signal that will never fire.
-	if town_center.population_capacity > 0:
-		Population.add_cap(peer_id, town_center.population_capacity)
-		town_center.destroyed.connect(
-			func(): Population.add_cap(peer_id, -town_center.population_capacity), CONNECT_ONE_SHOT
-		)
+	## A map/faction pairing can start a player with more than one building
+	## (extra BuildingSpawns markers + a matching extra Faction.starting_buildings
+	## entry) — town_centers[peer_id] is whichever one is flagged as the real
+	## main base, not just whichever spawned first.
+	var building_positions: Array[Vector3] = spawn_point.get_building_positions()
+	for i in mini(faction.starting_buildings.size(), building_positions.size()):
+		var building: ProductionBuilding = building_spawner.spawn({
+			"scene_path": faction.starting_buildings[i].resource_path,
+			"peer_id": peer_id,
+			"position": building_positions[i],
+			"tint": tint,
+		})
+		if building.is_main_base or not town_centers.has(peer_id):
+			town_centers[peer_id] = building
+		## Each starting building is placed pre-built (begin_construction() is
+		## never called for it), so its population capacity is granted
+		## immediately rather than waiting on a construction_finished signal
+		## that will never fire.
+		if building.population_capacity > 0:
+			Population.add_cap(peer_id, building.population_capacity)
+			building.destroyed.connect(
+				func(): Population.add_cap(peer_id, -building.population_capacity), CONNECT_ONE_SHOT
+			)
 
 func _spawn_unit_from_data(data: Dictionary) -> Node:
 	var scene: PackedScene = load(data.scene_path)

@@ -7,7 +7,11 @@ extends Resource
 
 @export var faction_name: String = "Faction"
 @export var building_types: Array[BuildingType] = []
-## Placed pre-built at each starting position (Town Center equivalent).
-@export var starting_building_scene: PackedScene
-## Spawned x2 at match start (Villager equivalent).
-@export var starting_unit_scene: PackedScene
+## Placed pre-built at each of a map's PlayerSpawnPoint building markers, in
+## order (index 0 -> the first BuildingSpawns marker, etc). Usually just one
+## entry (Town Center equivalent) — more only matters for a map whose spawn
+## points define extra building slots.
+@export var starting_buildings: Array[PackedScene] = []
+## Spawned at each of a map's PlayerSpawnPoint unit markers, in order.
+## Usually two entries (Villager equivalent).
+@export var starting_units: Array[PackedScene] = []
