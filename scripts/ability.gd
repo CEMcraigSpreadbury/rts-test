@@ -9,6 +9,9 @@ extends Resource
 enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT }
 
 @export var ability_name: String = "Ability"
+## Shown in the command-card tooltip alongside ability_name; the button
+## itself just shows a hotkey letter (see MONARCH_ABILITY_HOTKEYS in main.gd).
+@export_multiline var description: String = ""
 @export var icon: Texture2D
 @export var kind: Kind = Kind.PASSIVE_AURA
 

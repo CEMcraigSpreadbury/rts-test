@@ -20,6 +20,10 @@ const UNIT_PATROL_KEY: Key = KEY_P
 ## for the actual building choice — safe since only one of the two menus is
 ## ever live for a given selection state.
 const UNIT_BUILD_KEY: Key = KEY_B
+## Assigned by position in a Monarch's monarch_abilities, same convention as
+## PRODUCIBLE_HOTKEYS/BUILDING_HOTKEYS below — a passive ability still claims
+## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
+const MONARCH_ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
 const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N]
 ## The action panel's grid always has exactly this many slots (4 columns x 3
@@ -524,6 +528,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			_open_build_submenu()
 			get_viewport().set_input_as_handled()
 			return
+		elif selected_units.size() == 1 and selected_units[0].is_monarch:
+			var ability_index: int = MONARCH_ABILITY_HOTKEYS.find(event.keycode)
+			var unit := selected_units[0]
+			if ability_index != -1 and ability_index < unit.monarch_abilities.size() \
+					and unit.monarch_abilities[ability_index].kind == Ability.Kind.ACTIVATED_TARGET_POINT:
+				_arm_monarch_ability(unit, ability_index)
+				get_viewport().set_input_as_handled()
+				return
 
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -1182,8 +1194,17 @@ func _populate_unit_command_buttons() -> void:
 		if unit.is_monarch:
 			for i in unit.monarch_abilities.size():
 				var ability: Ability = unit.monarch_abilities[i]
-				if ability.kind == Ability.Kind.ACTIVATED_TARGET_POINT:
-					buttons.append(_make_command_button(ability.ability_name, ability.ability_name, ability.icon, _arm_monarch_ability.bind(unit, i)))
+				var hotkey_label: String = OS.get_keycode_string(MONARCH_ABILITY_HOTKEYS[i]) if i < MONARCH_ABILITY_HOTKEYS.size() else "?"
+				var tooltip: String = "%s\n%s" % [ability.ability_name, ability.description] if ability.description != "" else ability.ability_name
+				if ability.kind == Ability.Kind.PASSIVE_AURA:
+					## Shown for visibility (so a player can see what their
+					## Monarch grants) but never actionable — it just works
+					## continuously, there's nothing to click.
+					var button := _make_command_button(hotkey_label, tooltip, ability.icon, func(): pass)
+					button.disabled = true
+					buttons.append(button)
+				else:
+					buttons.append(_make_command_button(hotkey_label, tooltip, ability.icon, _arm_monarch_ability.bind(unit, i)))
 		elif unit.can_fight and not unit.monarch_abilities.is_empty() and _player_has_monarch_unlocked(unit.owner_peer_id):
 			buttons.append(_make_command_button("Promote", "Promote to Monarch", null, _issue_promote_order.bind(unit)))
 	_fill_action_panel_grid(buttons)
