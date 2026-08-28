@@ -128,7 +128,7 @@ yaw_offset_degrees = 55.0
 
 [node name="FillLight" type="DirectionalLight3D" parent="." unique_id=1505165951]
 transform = Transform3D(-0.70710677, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.70710677, 0.45451945, -0.5416752, 0, 8, 0)
-light_color = Color(0.8376063, 0.67137104, 0.6199618, 1)
+light_color = Color(0.7500579, 0.7319233, 0.39355958, 1)
 light_energy = 0.25
 light_volumetric_fog_energy = 1.5
 
@@ -146,7 +146,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 shape = SubResource("BoxShape3D_ground")
 
 [node name="CloudShadowLayer" type="MeshInstance3D" parent="." unique_id=1401837760]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13986206, 15.195158, 0.079452515)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13986206, 16.543703, 0.079452515)
 cast_shadow = 2
 gi_mode = 0
 mesh = SubResource("PlaneMesh_cloud_shadows")

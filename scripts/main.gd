@@ -584,6 +584,13 @@ func _assign_control_group(number: int) -> void:
 	## specifically — next press of it should reselect, not recenter.
 	_active_group_number = -1
 
+## One representative sound for the whole selection, not one per unit —
+## matches convention (Warcraft 3/AoE) rather than every newly-selected unit
+## firing its own voice line simultaneously.
+func _play_random_select_sound(units: Array[Unit]) -> void:
+	if not units.is_empty():
+		units[randi() % units.size()].play_select_sound()
+
 func _activate_control_group(number: int) -> void:
 	var members: Array = control_groups.get(number, [])
 	for i in range(members.size() - 1, -1, -1):
@@ -618,8 +625,10 @@ func _activate_control_group(number: int) -> void:
 		for unit in units_in_group:
 			unit.selected = true
 			selected_units.append(unit)
+		_play_random_select_sound(units_in_group)
 	elif building_in_group != null:
 		_select_building(building_in_group)
+		building_in_group.play_select_sound()
 
 	_active_group_number = number
 
@@ -653,11 +662,13 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 		if collider is Unit and collider.owner_peer_id == _my_peer_id():
 			collider.selected = true
 			selected_units.append(collider)
+			collider.play_select_sound()
 			_select_building(null)
 			_select_resource(null)
 			clicked_ring_target = collider
 		elif collider is ProductionBuilding and collider.owner_peer_id == _my_peer_id():
 			_select_building(collider)
+			collider.play_select_sound()
 			_select_resource(null)
 			clicked_ring_target = collider
 		elif collider is Gatherable:
@@ -666,6 +677,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 			## a unit/building this isn't "yours to command", just informational.
 			_select_building(null)
 			_select_resource(collider)
+			collider.play_select_sound()
 			clicked_ring_target = collider
 		elif collider is Unit or collider is ProductionBuilding:
 			## Not "selectable" (enemy unit/building) but still a valid thing
@@ -688,6 +700,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 			if rect.has_point(screen_pos):
 				child.selected = true
 				selected_units.append(child)
+	_play_random_select_sound(selected_units)
 
 func _raycast(screen_pos: Vector2) -> Dictionary:
 	var space_state := get_world_3d().direct_space_state

@@ -52,6 +52,10 @@ signal projectile_fired(target: Node3D)
 @export var owner_peer_id: int = 1
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 8.0
+## One is picked at random and played through select_audio_player whenever
+## this unit becomes newly selected (see main.gd's selection code — never
+## replayed for a selection refresh, only an actual new selection action).
+@export var on_select_sound_effects: Array[AudioStream] = []
 
 @export_group("Cost")
 ## The single source of truth for what this unit costs to produce — edit it
@@ -132,6 +136,10 @@ signal projectile_fired(target: Node3D)
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
 @onready var crown_icon: Sprite3D = $CrownIcon
+@onready var select_audio_player: AudioStreamPlayer3D = $SelectAudioPlayer
+
+func play_select_sound() -> void:
+	SelectAudio.play_random(select_audio_player, on_select_sound_effects)
 
 var selected: bool = false:
 	set(value):

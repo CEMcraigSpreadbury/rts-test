@@ -1,16 +1,24 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene format=3 uid="uid://cn64mdp666snd"]
 
-[ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
-[ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
 [ext_resource type="PackedScene" path="res://scenes/units/cavalry_unit.tscn" id="6_cavalry_scene"]
-[ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="8_cost_script"]
+[ext_resource type="AudioStream" uid="uid://bwtwoe3ethss1" path="res://assets/sfx/Facilities/Stable_1.wav" id="6_mfbxo"]
+[ext_resource type="AudioStream" uid="uid://7h4k0d2hco31" path="res://assets/sfx/Facilities/Stable_2.wav" id="7_0g1is"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 
 [sub_resource type="Resource" id="ResourceCost_stables_building"]
 script = ExtResource("8_cost_script")
 resource_type = ExtResource("9_wood")
 amount = 90
+
+[sub_resource type="Resource" id="ProducibleItem_cavalry"]
+script = ExtResource("3_item_script")
+item_name = "Cavalry"
+build_time = 8.0
+unit_scene = ExtResource("6_cavalry_scene")
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(3.5, 2, 3)
@@ -20,13 +28,6 @@ albedo_color = Color(0.4, 0.32, 0.22, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3.5, 2, 3)
-
-[sub_resource type="Resource" id="ProducibleItem_cavalry"]
-script = ExtResource("3_item_script")
-item_name = "Cavalry"
-kind = 0
-build_time = 8.0
-unit_scene = ExtResource("6_cavalry_scene")
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
 properties/0/path = NodePath(".:position")
@@ -54,54 +55,54 @@ properties/7/path = NodePath(".:synced_builder_count")
 properties/7/spawn = true
 properties/7/replication_mode = 2
 
-[node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
+[node name="ProductionBuilding" type="StaticBody3D" unique_id=1033921672 groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Stables"
-costs = Array[Resource]([SubResource("ResourceCost_stables_building")])
-producibles = Array[Resource]([SubResource("ProducibleItem_cavalry")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_stables_building")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_cavalry")])
+on_select_sound_effects = Array[AudioStream]([ExtResource("6_mfbxo"), ExtResource("7_0g1is")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=2085560716]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("BoxMesh_body")
 surface_material_override/0 = SubResource("StandardMaterial3D_body")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1888016272]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_body")
 
-[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=836147926]
 radius = 2.3
 height = 2.0
-avoidance_enabled = true
 
-[node name="SpawnPoint" type="Marker3D" parent="."]
+[node name="SpawnPoint" type="Marker3D" parent="." unique_id=1847325840]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 0, 2.6)
 
-[node name="HealthBar" type="Node3D" parent="."]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1422816316]
+unit_size = 20.0
+max_distance = 40.0
+
+[node name="HealthBar" type="Node3D" parent="." unique_id=991411606]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
 visible = false
 
-[node name="Background" type="Sprite3D" parent="HealthBar"]
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=250093905]
 transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
-billboard = 1
 cast_shadow = 0
-shaded = false
-double_sided = true
-texture_filter = 0
-pixel_size = 0.2
 modulate = Color(0.1, 0.1, 0.1, 0.85)
-texture = ExtResource("7_bar_tex")
-
-[node name="Fill" type="Sprite3D" parent="HealthBar"]
-transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
-billboard = 1
-cast_shadow = 0
-shaded = false
-double_sided = true
-texture_filter = 0
 pixel_size = 0.2
-modulate = Color(0.25, 0.9, 0.3, 1)
+billboard = 1
+texture_filter = 0
 texture = ExtResource("7_bar_tex")
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=1140049072]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+cast_shadow = 0
+modulate = Color(0.25, 0.9, 0.3, 1)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("7_bar_tex")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1687057690]
 replication_config = SubResource("SceneReplicationConfig_building")

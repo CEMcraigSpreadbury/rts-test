@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cs80e8qdti4ih"
+path="res://.godot/imported/01_book_open_2_slow.wav-1a77d70a3ec094bb66171b14a501372a.sample"
+
+[deps]
+
+source_file="res://assets/sfx/UI SFX/01_book_open_2_slow.wav"
+dest_files=["res://.godot/imported/01_book_open_2_slow.wav-1a77d70a3ec094bb66171b14a501372a.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

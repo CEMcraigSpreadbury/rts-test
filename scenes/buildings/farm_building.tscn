@@ -1,9 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3 uid="uid://c0egasx03ggka"]
 
-[ext_resource type="Script" path="res://scripts/gatherable.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://djbmh5h5rvf1k" path="res://scripts/gatherable.gd" id="1_script"]
 [ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="2_food"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="AudioStream" uid="uid://b0ilrwmk4qfm8" path="res://assets/sfx/Facilities/Farm_1.wav" id="5_xui32"]
+[ext_resource type="AudioStream" uid="uid://c5k6a2557e3gb" path="res://assets/sfx/Facilities/Farm_2.wav" id="6_8i2vn"]
 
 [sub_resource type="Resource" id="ResourceCost_farm_building"]
 script = ExtResource("3_cost_script")
@@ -19,27 +21,32 @@ albedo_color = Color(0.45, 0.32, 0.18, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_field"]
 size = Vector3(3, 0.15, 3)
 
-[node name="Gatherable" type="StaticBody3D" groups=["gatherables"]]
-script = ExtResource("1_script")
-display_name = "Farm"
-costs = Array[Resource]([SubResource("ResourceCost_farm_building")])
+[node name="Gatherable" type="StaticBody3D" unique_id=402421458 groups=["gatherables"]]
 collision_layer = 2
 collision_mask = 0
+script = ExtResource("1_script")
+display_name = "Farm"
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_farm_building")])
 resource_type = ExtResource("2_food")
 amount_remaining = 300
 gather_range = 1.2
 max_gatherers = 2
+on_select_sound_effects = Array[AudioStream]([ExtResource("5_xui32"), ExtResource("6_8i2vn")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=646170069]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
 mesh = SubResource("BoxMesh_field")
 surface_material_override/0 = SubResource("StandardMaterial3D_field")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=836235060]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
 shape = SubResource("BoxShape3D_field")
 
-[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=2125933528]
 radius = 1.5
 height = 0.5
 avoidance_enabled = false
+
+[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1608162492]
+unit_size = 20.0
+max_distance = 40.0

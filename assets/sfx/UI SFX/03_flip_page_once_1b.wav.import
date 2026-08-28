@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://shhj58ymtf2v"
+path="res://.godot/imported/03_flip_page_once_1b.wav-ff0e76cc33749c62e1be24ec0d6370e7.sample"
+
+[deps]
+
+source_file="res://assets/sfx/UI SFX/03_flip_page_once_1b.wav"
+dest_files=["res://.godot/imported/03_flip_page_once_1b.wav-ff0e76cc33749c62e1be24ec0d6370e7.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

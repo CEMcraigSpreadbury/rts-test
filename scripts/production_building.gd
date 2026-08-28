@@ -31,6 +31,9 @@ const DESTROY_SINK_DURATION: float = 1.5
 @export var can_rally: bool = true
 ## How far this building reveals fog of war around itself.
 @export var vision_range: float = 10.0
+## One is picked at random and played through select_audio_player whenever
+## this building becomes newly selected (see main.gd's selection code).
+@export var on_select_sound_effects: Array[AudioStream] = []
 ## Added to the owner's population cap once construction finishes (or
 ## immediately for buildings placed pre-built, e.g. the starting Town
 ## Center), and removed again if this building is destroyed. 0 for buildings
@@ -109,6 +112,10 @@ var _destroy_start_y: float = 0.0
 
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
+@onready var select_audio_player: AudioStreamPlayer3D = $SelectAudioPlayer
+
+func play_select_sound() -> void:
+	SelectAudio.play_random(select_audio_player, on_select_sound_effects)
 
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.

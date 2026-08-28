@@ -37,6 +37,16 @@ var is_claimed: bool = false
 @export var max_gatherers: int = -1
 var gatherers: Array[Unit] = []
 
+## One is picked at random and played through select_audio_player whenever
+## this node becomes newly selected (see main.gd's selection code). Shared by
+## every Gatherable (trees/berry bushes/gold deposits too), but only Farm
+## currently has a SelectAudioPlayer node in its scene — safe no-op elsewhere.
+@export var on_select_sound_effects: Array[AudioStream] = []
+@onready var select_audio_player: AudioStreamPlayer3D = get_node_or_null("SelectAudioPlayer")
+
+func play_select_sound() -> void:
+	SelectAudio.play_random(select_audio_player, on_select_sound_effects)
+
 func can_be_gathered() -> bool:
 	return not requires_building_on_top or has_required_building
 

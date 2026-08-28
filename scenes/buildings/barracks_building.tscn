@@ -1,18 +1,38 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene format=3 uid="uid://csfhind83uvc1"]
 
-[ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
-[ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
-[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="5_soldier_scene"]
-[ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
+[ext_resource type="PackedScene" uid="uid://c6lf7yot5o577" path="res://scenes/units/soldier_unit.tscn" id="5_soldier_scene"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
+[ext_resource type="AudioStream" uid="uid://b8hfdcngfe20q" path="res://assets/sfx/Facilities/Barracks_1.wav" id="8_1ng4x"]
 [ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="8_archer_scene"]
-[ext_resource type="PackedScene" path="res://scenes/units/spearman_unit.tscn" id="9_spearman_scene"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="10_cost_script"]
+[ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_jxfkj"]
+[ext_resource type="PackedScene" uid="uid://dgkib7dffccxc" path="res://scenes/units/spearman_unit.tscn" id="9_spearman_scene"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
 
 [sub_resource type="Resource" id="ResourceCost_barracks_building"]
 script = ExtResource("10_cost_script")
 resource_type = ExtResource("11_wood")
 amount = 75
+
+[sub_resource type="Resource" id="ProducibleItem_soldier"]
+script = ExtResource("3_item_script")
+item_name = "Soldier"
+build_time = 6.0
+unit_scene = ExtResource("5_soldier_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_archer"]
+script = ExtResource("3_item_script")
+item_name = "Archer"
+build_time = 7.0
+unit_scene = ExtResource("8_archer_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_spearman"]
+script = ExtResource("3_item_script")
+item_name = "Spearman"
+build_time = 5.5
+unit_scene = ExtResource("9_spearman_scene")
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(3, 2, 3)
@@ -22,27 +42,6 @@ albedo_color = Color(0.45, 0.35, 0.35, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3, 2, 3)
-
-[sub_resource type="Resource" id="ProducibleItem_soldier"]
-script = ExtResource("3_item_script")
-item_name = "Soldier"
-kind = 0
-build_time = 6.0
-unit_scene = ExtResource("5_soldier_scene")
-
-[sub_resource type="Resource" id="ProducibleItem_archer"]
-script = ExtResource("3_item_script")
-item_name = "Archer"
-kind = 0
-build_time = 7.0
-unit_scene = ExtResource("8_archer_scene")
-
-[sub_resource type="Resource" id="ProducibleItem_spearman"]
-script = ExtResource("3_item_script")
-item_name = "Spearman"
-kind = 0
-build_time = 5.5
-unit_scene = ExtResource("9_spearman_scene")
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
 properties/0/path = NodePath(".:position")
@@ -70,54 +69,54 @@ properties/7/path = NodePath(".:synced_builder_count")
 properties/7/spawn = true
 properties/7/replication_mode = 2
 
-[node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
+[node name="ProductionBuilding" type="StaticBody3D" unique_id=1614311513 groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Barracks"
-costs = Array[Resource]([SubResource("ResourceCost_barracks_building")])
-producibles = Array[Resource]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_archer"), SubResource("ProducibleItem_spearman")])
+costs = Array[ExtResource("10_cost_script")]([SubResource("ResourceCost_barracks_building")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_archer"), SubResource("ProducibleItem_spearman")])
+on_select_sound_effects = Array[AudioStream]([ExtResource("8_1ng4x"), ExtResource("9_jxfkj")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=771700101]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("BoxMesh_body")
 surface_material_override/0 = SubResource("StandardMaterial3D_body")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=838743970]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_body")
 
-[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=890556865]
 radius = 2.2
 height = 2.0
-avoidance_enabled = true
 
-[node name="SpawnPoint" type="Marker3D" parent="."]
+[node name="SpawnPoint" type="Marker3D" parent="." unique_id=1657432524]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, 2.5)
 
-[node name="HealthBar" type="Node3D" parent="."]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=97035508]
+unit_size = 20.0
+max_distance = 40.0
+
+[node name="HealthBar" type="Node3D" parent="." unique_id=2140115230]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
 visible = false
 
-[node name="Background" type="Sprite3D" parent="HealthBar"]
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=1845921125]
 transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
-billboard = 1
 cast_shadow = 0
-shaded = false
-double_sided = true
-texture_filter = 0
-pixel_size = 0.2
 modulate = Color(0.1, 0.1, 0.1, 0.85)
-texture = ExtResource("6_bar_tex")
-
-[node name="Fill" type="Sprite3D" parent="HealthBar"]
-transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
-billboard = 1
-cast_shadow = 0
-shaded = false
-double_sided = true
-texture_filter = 0
 pixel_size = 0.2
-modulate = Color(0.25, 0.9, 0.3, 1)
+billboard = 1
+texture_filter = 0
 texture = ExtResource("6_bar_tex")
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=1126691683]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+cast_shadow = 0
+modulate = Color(0.25, 0.9, 0.3, 1)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("6_bar_tex")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=872243082]
 replication_config = SubResource("SceneReplicationConfig_building")

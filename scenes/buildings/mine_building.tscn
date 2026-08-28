@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3 uid="uid://bbmqgxak6tphl"]
 
-[ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
-[ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="AudioStream" uid="uid://bkivvdcfpepv6" path="res://assets/sfx/Facilities/Blacksmith_1.wav" id="4_hfgmk"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 
 [sub_resource type="Resource" id="ResourceCost_mine"]
@@ -45,52 +46,52 @@ properties/7/path = NodePath(".:synced_builder_count")
 properties/7/spawn = true
 properties/7/replication_mode = 2
 
-[node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
+[node name="ProductionBuilding2" type="StaticBody3D" unique_id=2128142673 groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Mine"
-costs = Array[Resource]([SubResource("ResourceCost_mine")])
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_mine")])
 can_rally = false
+on_select_sound_effects = Array[AudioStream]([ExtResource("4_hfgmk")])
 max_health = 80
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1673682854]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.8, 0)
 mesh = SubResource("BoxMesh_shed")
 surface_material_override/0 = SubResource("StandardMaterial3D_shed")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1584076599]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.8, 0)
 shape = SubResource("BoxShape3D_shed")
 
-[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=460344320]
 radius = 1.6
 height = 1.6
-avoidance_enabled = true
 
-[node name="HealthBar" type="Node3D" parent="."]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=52370756]
+unit_size = 20.0
+max_distance = 40.0
+
+[node name="HealthBar" type="Node3D" parent="." unique_id=993395724]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 2.1, 0)
 visible = false
 
-[node name="Background" type="Sprite3D" parent="HealthBar"]
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=785611163]
 transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
-billboard = 1
 cast_shadow = 0
-shaded = false
-double_sided = true
-texture_filter = 0
-pixel_size = 0.2
 modulate = Color(0.1, 0.1, 0.1, 0.85)
-texture = ExtResource("2_bar_tex")
-
-[node name="Fill" type="Sprite3D" parent="HealthBar"]
-transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
-billboard = 1
-cast_shadow = 0
-shaded = false
-double_sided = true
-texture_filter = 0
 pixel_size = 0.2
-modulate = Color(0.25, 0.9, 0.3, 1)
+billboard = 1
+texture_filter = 0
 texture = ExtResource("2_bar_tex")
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=13090460]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+cast_shadow = 0
+modulate = Color(0.25, 0.9, 0.3, 1)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("2_bar_tex")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=924214040]
 replication_config = SubResource("SceneReplicationConfig_building")
