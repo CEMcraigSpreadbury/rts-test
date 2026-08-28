@@ -74,6 +74,14 @@ func _play_command_sound() -> void:
 @onready var game_over_panel: PanelContainer = $UI/GameOverPanel
 @onready var game_over_label: Label = $UI/GameOverPanel/Margin/VBox/ResultLabel
 
+## Local-only overlay (see Settings autoload) — does not pause the match for
+## anyone else, just gates this peer's own input and shows volume sliders.
+@onready var pause_menu: PanelContainer = $UI/PauseMenu
+@onready var master_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/MasterRow/Slider
+@onready var music_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/MusicRow/Slider
+@onready var ambience_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/AmbienceRow/Slider
+@onready var sfx_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/SfxRow/Slider
+
 var selected_units: Array[Unit] = []
 var selected_building: ProductionBuilding = null
 ## Left-click-selected resource node (tree/berry bush/gold deposit/farm),
@@ -200,6 +208,24 @@ func _ready() -> void:
 
 	game_over_panel.visible = false
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
+
+	pause_menu.visible = false
+	master_volume_slider.value = Settings.volumes["Master"] * 100.0
+	music_volume_slider.value = Settings.volumes["Music"] * 100.0
+	ambience_volume_slider.value = Settings.volumes["Ambience"] * 100.0
+	sfx_volume_slider.value = Settings.volumes["SFX"] * 100.0
+	master_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("Master", v / 100.0))
+	music_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("Music", v / 100.0))
+	ambience_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("Ambience", v / 100.0))
+	sfx_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("SFX", v / 100.0))
+	$UI/PauseMenu/Margin/VBox/ResumeButton.pressed.connect(_close_pause_menu)
+	$UI/PauseMenu/Margin/VBox/LeaveButton.pressed.connect(_on_return_to_lobby_pressed)
+
+func _open_pause_menu() -> void:
+	pause_menu.visible = true
+
+func _close_pause_menu() -> void:
+	pause_menu.visible = false
 
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
@@ -486,6 +512,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if game_over:
 		return
 
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE and pause_menu.visible:
+		_close_pause_menu()
+		get_viewport().set_input_as_handled()
+		return
+	if pause_menu.visible:
+		return
+
 	if event is InputEventKey and event.pressed and not event.echo:
 		if chat_input.visible and event.keycode == KEY_ESCAPE:
 			_close_chat_input()
@@ -509,6 +542,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if pending_order_mode != "":
 		_handle_pending_order_input(event)
+		return
+
+	## Fallback: nothing above claimed this Escape (not chatting, not
+	## placing, no build submenu, no pending order), so it opens the pause
+	## menu instead.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_open_pause_menu()
+		get_viewport().set_input_as_handled()
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo \

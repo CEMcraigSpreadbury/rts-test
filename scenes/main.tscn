@@ -126,12 +126,14 @@ available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_fa
 on_command_sound_effects = Array[AudioStream]([ExtResource("5_a8y0u")])
 
 [node name="MusicPlayer" type="AudioStreamPlayer" parent="." unique_id=1401837780]
+bus = "Music"
 script = ExtResource("26_music_player_script")
 early_game_music = Array[AudioStream]([ExtResource("7_yc10j"), ExtResource("8_jscy8")])
 mid_game_music = Array[AudioStream]([ExtResource("9_pm3ni"), ExtResource("10_y6deb")])
 end_game_music = Array[AudioStream]([ExtResource("11_og1vs"), ExtResource("12_2wyq8")])
 
 [node name="AmbiencePlayer" type="AudioStreamPlayer" parent="." unique_id=1401837790]
+bus = "Ambience"
 script = ExtResource("27_ambience_player_script")
 ambience_sounds = Array[AudioStream]([ExtResource("14_pm3ni")])
 
@@ -231,6 +233,7 @@ spawn_path = NodePath("../Units")
 [node name="UI" type="CanvasLayer" parent="." unique_id=221909256]
 
 [node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="UI" unique_id=1401837770]
+bus = "SFX"
 
 [node name="SelectionBox" type="ColorRect" parent="UI" unique_id=1631016065]
 visible = false
@@ -395,3 +398,103 @@ horizontal_alignment = 1
 [node name="ReturnButton" type="Button" parent="UI/GameOverPanel/Margin/VBox" unique_id=304735568]
 layout_mode = 2
 text = "Return to Lobby"
+
+[node name="PauseMenu" type="PanelContainer" parent="UI" unique_id=1401837800]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -140.0
+offset_right = 160.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/PauseMenu" unique_id=1401837801]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="UI/PauseMenu/Margin" unique_id=1401837802]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="Title" type="Label" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837803]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Paused"
+horizontal_alignment = 1
+
+[node name="MasterRow" type="HBoxContainer" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837804]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="UI/PauseMenu/Margin/VBox/MasterRow" unique_id=1401837805]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "Master"
+
+[node name="Slider" type="HSlider" parent="UI/PauseMenu/Margin/VBox/MasterRow" unique_id=1401837806]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+step = 1.0
+value = 100.0
+
+[node name="MusicRow" type="HBoxContainer" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837807]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="UI/PauseMenu/Margin/VBox/MusicRow" unique_id=1401837808]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "Music"
+
+[node name="Slider" type="HSlider" parent="UI/PauseMenu/Margin/VBox/MusicRow" unique_id=1401837809]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+step = 1.0
+value = 100.0
+
+[node name="AmbienceRow" type="HBoxContainer" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837810]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="UI/PauseMenu/Margin/VBox/AmbienceRow" unique_id=1401837811]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "Ambience"
+
+[node name="Slider" type="HSlider" parent="UI/PauseMenu/Margin/VBox/AmbienceRow" unique_id=1401837812]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+step = 1.0
+value = 100.0
+
+[node name="SfxRow" type="HBoxContainer" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837813]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="UI/PauseMenu/Margin/VBox/SfxRow" unique_id=1401837814]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 0)
+text = "SFX"
+
+[node name="Slider" type="HSlider" parent="UI/PauseMenu/Margin/VBox/SfxRow" unique_id=1401837815]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 100.0
+step = 1.0
+value = 100.0
+
+[node name="ResumeButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837816]
+layout_mode = 2
+text = "Resume"
+
+[node name="LeaveButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837817]
+layout_mode = 2
+text = "Leave Match"
