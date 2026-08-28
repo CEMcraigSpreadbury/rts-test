@@ -291,6 +291,21 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 	if unit:
 		unit.sprite.play(anim_name)
 
+## Order-dispatch functions below only ever run on the host (inside its
+## RPC handlers), so — same reasoning as animation_changed above — playing
+## the sound directly there would only ever be heard on the host's own
+## machine. This plays it locally right away, then relays to every other peer.
+func _play_unit_order_sound(unit: Unit, kind: Unit.OrderSoundKind) -> void:
+	unit.play_order_sound(kind)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_unit_order_sound.rpc(unit.get_path(), kind)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_unit_order_sound(unit_path: NodePath, kind: Unit.OrderSoundKind) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		unit.play_order_sound(kind)
+
 ## projectile_fired only ever fires on the host's own copy (only the host runs
 ## combat logic — see Unit._physics_process), so the host spawns its own local
 ## visual immediately here and relays to every other peer to do the same. Real
@@ -816,6 +831,7 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 	if target_node is Gatherable and target_node.can_be_gathered() \
 			and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id):
 		unit.command_gather(target_node, _get_dropoff_for(unit.owner_peer_id))
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.GATHER)
 	## Right-clicking a finished building built on a deposit (e.g. a Mine)
 	## should gather from what it sits on, same as clicking the deposit
 	## directly — checked before the attack/build branches since a
@@ -825,14 +841,19 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 	elif target_node is ProductionBuilding and target_node.linked_deposit != null \
 			and not target_node.is_under_construction and target_node.linked_deposit.can_be_gathered():
 		unit.command_gather(target_node.linked_deposit, _get_dropoff_for(unit.owner_peer_id))
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.GATHER)
 	elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
 		unit.command_attack(target_node)
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	elif target_node is ProductionBuilding and target_node.is_under_construction:
 		unit.command_build(target_node)
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.BUILD)
 	elif attack_move_fallback:
 		unit.command_attack_move(world_pos)
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	else:
 		unit.command_move(world_pos)
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.MOVE)
 
 ## append: true once the current patrol-targeting session's first click has
 ## already gone out, so further shift-clicks extend the loop instead of
@@ -853,6 +874,7 @@ func _rpc_issue_patrol(unit_paths: Array[NodePath], world_pos: Vector3, append: 
 			unit.command_patrol_add_waypoint(world_pos)
 		else:
 			unit.command_patrol([unit.global_position, world_pos])
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.PATROL)
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
@@ -867,6 +889,7 @@ func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
 		if unit == null or unit.owner_peer_id != sender_id:
 			continue
 		unit.command_stop()
+		_play_unit_order_sound(unit, Unit.OrderSoundKind.STOP)
 
 ## Mirrors _handle_placement_input's pattern: Escape/right-click cancels,
 ## left-click dispatches based on which order is currently armed. Move/Attack

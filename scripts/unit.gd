@@ -31,6 +31,11 @@ enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATT
 ## Rock-paper-scissors combat: NONE means "no special type" (deals no bonus,
 ## takes no bonus). MAGIC has no attacker yet — reserved for future spellcasters.
 enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC }
+## Distinct from Command above — this exists purely to pick which On ***
+## Sound Effects array to play from (see play_order_sound()), and needs its
+## own STOP entry since command_stop() results in Command.NONE, which
+## wouldn't otherwise distinguish "stopped" from "never given an order".
+enum OrderSoundKind { MOVE, ATTACK, PATROL, BUILD, STOP, GATHER }
 
 ## main.gd (which owns a proven-reliable broadcast RPC channel) relays this to
 ## other peers; RPCs declared directly on this dynamically-spawned node were
@@ -112,6 +117,20 @@ signal projectile_fired(target: Node3D)
 @export var projectile_scene: PackedScene = null
 @export var projectile_speed: float = 14.0
 
+@export_group("Order Sounds")
+## One is picked at random and played through unit_audio_player whenever this
+## unit is actually given the matching player order (see main.gd's
+## _play_unit_order_sound) — not for automatic behavior like auto-retaliation
+## or idle standing-guard engaging an enemy on its own, only real orders.
+@export var on_move_sound_effects: Array[AudioStream] = []
+## Shared by a plain Attack order and an Attack-Move that engages a target —
+## same voice line either way.
+@export var on_attack_sound_effects: Array[AudioStream] = []
+@export var on_patrol_sound_effects: Array[AudioStream] = []
+@export var on_build_sound_effects: Array[AudioStream] = []
+@export var on_stop_sound_effects: Array[AudioStream] = []
+@export var on_gather_sound_effects: Array[AudioStream] = []
+
 @export_group("Monarch")
 ## Empty means this unit type can never be promoted. Non-empty defines what a
 ## promoted unit of this type can do — set directly on the unit scene, same
@@ -136,10 +155,28 @@ signal projectile_fired(target: Node3D)
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
 @onready var crown_icon: Sprite3D = $CrownIcon
-@onready var select_audio_player: AudioStreamPlayer3D = $SelectAudioPlayer
+## Shared by selection and order-acknowledgment sounds — both are short,
+## non-overlapping-in-practice one-shots, so a second dedicated player isn't
+## worth another node per unit scene.
+@onready var unit_audio_player: AudioStreamPlayer3D = $UnitAudioPlayer
 
 func play_select_sound() -> void:
-	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
+	AudioUtils.play_random(unit_audio_player, on_select_sound_effects)
+
+func play_order_sound(kind: OrderSoundKind) -> void:
+	match kind:
+		OrderSoundKind.MOVE:
+			AudioUtils.play_random(unit_audio_player, on_move_sound_effects)
+		OrderSoundKind.ATTACK:
+			AudioUtils.play_random(unit_audio_player, on_attack_sound_effects)
+		OrderSoundKind.PATROL:
+			AudioUtils.play_random(unit_audio_player, on_patrol_sound_effects)
+		OrderSoundKind.BUILD:
+			AudioUtils.play_random(unit_audio_player, on_build_sound_effects)
+		OrderSoundKind.STOP:
+			AudioUtils.play_random(unit_audio_player, on_stop_sound_effects)
+		OrderSoundKind.GATHER:
+			AudioUtils.play_random(unit_audio_player, on_gather_sound_effects)
 
 var selected: bool = false:
 	set(value):

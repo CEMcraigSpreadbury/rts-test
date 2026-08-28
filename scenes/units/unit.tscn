@@ -64,7 +64,7 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ring")
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=2051781566]
 radius = 0.45
 
-[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1233211235]
+[node name="UnitAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1233211235]
 unit_size = 20.0
 max_distance = 40.0
 
