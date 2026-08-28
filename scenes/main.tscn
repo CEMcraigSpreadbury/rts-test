@@ -9,9 +9,10 @@
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="13_minimap_script"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/berry_bush.tscn" id="17_berry_bush"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="18_gold_deposit"]
-[ext_resource type="Script" path="res://scripts/faction.gd" id="20_faction_script"]
-[ext_resource type="Resource" path="res://resources/factions/faction_one.tres" id="21_faction_one"]
-[ext_resource type="Resource" path="res://resources/factions/faction_two.tres" id="22_faction_two"]
+[ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="20_faction_script"]
+[ext_resource type="Resource" uid="uid://div8xt53m6s3p" path="res://resources/factions/faction_one.tres" id="21_faction_one"]
+[ext_resource type="Resource" uid="uid://ud7gnw1ql02i" path="res://resources/factions/faction_two.tres" id="22_faction_two"]
+[ext_resource type="Shader" uid="uid://bjd8hje8sk71w" path="res://shaders/cloud_shadows.gdshader" id="25_cloud_shadows_shader"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -24,57 +25,28 @@ sky_material = SubResource("ProceduralSkyMaterial_1")
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
+background_energy_multiplier = 2.0
 sky = SubResource("Sky_1")
 ambient_light_source = 3
-ambient_light_energy = 0.7
-tonemap_mode = 2
+ambient_light_energy = 0.5
+tonemap_mode = 3
 tonemap_exposure = 0.8
 ssao_enabled = true
-ssao_intensity = 0.4
+ssao_intensity = 8.0
 glow_enabled = true
-glow_intensity = 0.6
-glow_bloom = 0.15
+glow_bloom = 0.02
 glow_hdr_threshold = 1.1
 volumetric_fog_enabled = true
-volumetric_fog_density = 0.005
-volumetric_fog_albedo = Color(1, 0.97, 0.85, 1)
-volumetric_fog_gi_inject = 0.8
-volumetric_fog_ambient_inject = 0.1
+volumetric_fog_density = 0.08
+volumetric_fog_albedo = Color(1, 1, 0.8392157, 1)
+volumetric_fog_anisotropy = 0.4
+volumetric_fog_length = 6.0
+volumetric_fog_ambient_inject = 0.05
+volumetric_fog_sky_affect = 0.0
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_1"]
 vertices = PackedVector3Array(-30, 0, -30, 30, 0, -30, 30, 0, 30, -30, 0, 30)
 polygons = [PackedInt32Array(0, 1, 2, 3)]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
-shading_mode = 0
-transparency = 1
-albedo_color = Color(1, 0.95, 0.8, 0.35)
-emission_enabled = true
-emission = Color(1, 0.85, 0.55, 1)
-emission_energy_multiplier = 2.5
-
-[sub_resource type="SphereMesh" id="SphereMesh_dust"]
-material = SubResource("StandardMaterial3D_dust")
-radius = 0.04
-height = 0.08
-radial_segments = 6
-rings = 3
-
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
-emission_shape = 3
-emission_box_extents = Vector3(30, 4, 30)
-direction = Vector3(0, 1, 0)
-spread = 180.0
-initial_velocity_min = 0.05
-initial_velocity_max = 0.2
-gravity = Vector3(0, 0, 0)
-angular_velocity_min = -20.0
-angular_velocity_max = 20.0
-orbit_velocity_min = 0.02
-orbit_velocity_max = 0.08
-scale_min = 0.4
-scale_max = 1.0
-color = Color(1, 0.95, 0.8, 0.35)
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
 size = Vector2(60, 60)
@@ -84,6 +56,47 @@ albedo_color = Color(0.28, 0.42, 0.24, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
 size = Vector3(60, 0.2, 60)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_cloud_shadows"]
+size = Vector2(140, 140)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cloud_shadows"]
+render_priority = 0
+shader = ExtResource("25_cloud_shadows_shader")
+shader_parameter/noise_scale = 0.015
+shader_parameter/detail_scale = 0.1
+shader_parameter/detail_strength = 0.35
+shader_parameter/scroll_speed = Vector2(0.06, -0.01)
+shader_parameter/coverage = 0.50000002375
+shader_parameter/cloud_color = Color(0.9090845, 0.9276538, 0.95256203, 1)
+shader_parameter/visible_opacity = 0.79600003781
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
+emission_shape = 3
+emission_box_extents = Vector3(30, 4, 30)
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 0.05
+initial_velocity_max = 0.2
+angular_velocity_min = -20.0
+angular_velocity_max = 20.0
+orbit_velocity_min = 0.02
+orbit_velocity_max = 0.08
+gravity = Vector3(0, 0, 0)
+scale_min = 0.4
+color = Color(1, 0.95, 0.8, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.95, 0.8, 0.35)
+
+[sub_resource type="SphereMesh" id="SphereMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+radius = 0.04
+height = 0.08
+radial_segments = 6
+rings = 3
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_fog"]
 size = Vector2(60, 60)
@@ -105,17 +118,19 @@ available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_fa
 environment = SubResource("Environment_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=620721382]
-transform = Transform3D(0.6333349, 0.5928248, -0.4974391, -1.709391e-08, 0.6427877, 0.76604456, 0.77387786, -0.48516265, 0.40709987, 0, 12, 0)
+transform = Transform3D(-0.60680544, -0.6088908, 0.51092005, -4.031998e-09, 0.6427878, 0.76604426, -0.7948505, 0.4648399, -0.39004737, 0, 12, 0)
 light_color = Color(1, 0.96, 0.87, 1)
 light_energy = 1.2
 shadow_enabled = true
 script = ExtResource("6_light_follow")
 camera_yaw_path = NodePath("../CameraRig/Yaw")
+yaw_offset_degrees = 55.0
 
 [node name="FillLight" type="DirectionalLight3D" parent="." unique_id=1505165951]
 transform = Transform3D(-0.70710677, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.70710677, 0.45451945, -0.5416752, 0, 8, 0)
-light_color = Color(0.6, 0.7, 1, 1)
+light_color = Color(0.8376063, 0.67137104, 0.6199618, 1)
 light_energy = 0.25
+light_volumetric_fog_energy = 1.5
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1365774680]
 navigation_mesh = SubResource("NavigationMesh_1")
@@ -129,6 +144,13 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ground")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="NavigationRegion3D/Ground" unique_id=818479452]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
 shape = SubResource("BoxShape3D_ground")
+
+[node name="CloudShadowLayer" type="MeshInstance3D" parent="." unique_id=1401837760]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13986206, 15.195158, 0.079452515)
+cast_shadow = 2
+gi_mode = 0
+mesh = SubResource("PlaneMesh_cloud_shadows")
+surface_material_override/0 = SubResource("ShaderMaterial_cloud_shadows")
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
 
@@ -206,7 +228,7 @@ text = "Wood: 0"
 
 [node name="InfoPanel" type="PanelContainer" parent="UI" unique_id=2075588479]
 visible = false
-anchors_preset = 8
+anchors_preset = 7
 anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
@@ -338,8 +360,8 @@ theme_override_constants/margin_bottom = 12
 
 [node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel/Margin" unique_id=2129327243]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 8
+alignment = 1
 
 [node name="ResultLabel" type="Label" parent="UI/GameOverPanel/Margin/VBox" unique_id=1328889564]
 layout_mode = 2
