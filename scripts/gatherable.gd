@@ -45,7 +45,7 @@ var gatherers: Array[Unit] = []
 @onready var select_audio_player: AudioStreamPlayer3D = get_node_or_null("SelectAudioPlayer")
 
 func play_select_sound() -> void:
-	SelectAudio.play_random(select_audio_player, on_select_sound_effects)
+	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
 
 func can_be_gathered() -> bool:
 	return not requires_building_on_top or has_required_building

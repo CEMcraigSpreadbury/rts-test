@@ -57,6 +57,20 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @onready var chat_log: RichTextLabel = $UI/ChatLog
 @onready var chat_input: LineEdit = $UI/ChatInput
 
+## Non-positional (unlike Unit/ProductionBuilding's OnSelectSoundEffect) since
+## this is feedback for the local player's own click/hotkey, not something
+## happening at a world location — it should always be clearly audible
+## regardless of camera position.
+@onready var command_audio_player: AudioStreamPlayer = $UI/CommandAudioPlayer
+## One played at random whenever a command is actually issued — by button
+## click or hotkey, both funnel through the same dispatch functions below —
+## covering unit orders (move/attack/stop/patrol/build/promote/abilities),
+## confirmed building placement, and queuing production/upgrades.
+@export var on_command_sound_effects: Array[AudioStream] = []
+
+func _play_command_sound() -> void:
+	AudioUtils.play_random(command_audio_player, on_command_sound_effects)
+
 @onready var game_over_panel: PanelContainer = $UI/GameOverPanel
 @onready var game_over_label: Label = $UI/GameOverPanel/Margin/VBox/ResultLabel
 
@@ -508,7 +522,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and not selected_units.is_empty() \
 			and not _showing_build_submenu:
 		if event.keycode == UNIT_MOVE_KEY:
-			pending_order_mode = "move"
+			_arm_move_mode()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_STOP_KEY:
@@ -516,12 +530,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_ATTACK_KEY:
-			pending_order_mode = "attack"
+			_arm_attack_mode()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_PATROL_KEY:
-			pending_order_mode = "patrol"
-			_patrol_started_this_session = false
+			_arm_patrol_mode()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_BUILD_KEY and _any_selected_can_build():
@@ -742,6 +755,7 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 
 	var target_path := _resolve_order_target_path(result)
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false)
+	_play_command_sound()
 
 ## Same target inference as a plain move order, except empty ground issues an
 ## attack-move instead of a plain move — see _rpc_issue_command's attack_move_fallback.
@@ -759,6 +773,7 @@ func _issue_attack_order(screen_pos: Vector2) -> void:
 
 	var target_path := _resolve_order_target_path(result)
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true)
+	_play_command_sound()
 
 func _issue_stop_order() -> void:
 	_prune_selected_units()
@@ -768,6 +783,7 @@ func _issue_stop_order() -> void:
 	for unit in selected_units:
 		unit_paths.append(unit.get_path())
 	_rpc_issue_stop.rpc_id(1, unit_paths)
+	_play_command_sound()
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool) -> void:
@@ -880,6 +896,7 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 			var unit: Unit = _armed_monarch_ability["unit"]
 			if is_instance_valid(unit):
 				_rpc_request_monarch_ability.rpc_id(1, unit.get_path(), _armed_monarch_ability["ability_index"], result.position)
+				_play_command_sound()
 			_armed_monarch_ability = {}
 		"move":
 			_issue_move_order(event.position)
@@ -899,6 +916,7 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 			for unit in selected_units:
 				unit_paths.append(unit.get_path())
 			_rpc_issue_patrol.rpc_id(1, unit_paths, result.position, _patrol_started_this_session)
+			_play_command_sound()
 			_patrol_started_this_session = true
 			if not event.shift_pressed:
 				pending_order_mode = ""
@@ -1040,6 +1058,7 @@ func _on_construction_button_pressed(building_type: BuildingType) -> void:
 			if is_instance_valid(unit) and unit.can_build:
 				_pending_builder_paths.append(unit.get_path())
 	_start_placement(building_type)
+	_play_command_sound()
 
 func _any_selected_can_build() -> bool:
 	for unit in selected_units:
@@ -1053,6 +1072,7 @@ func _open_build_submenu() -> void:
 	for child in action_panel_grid.get_children():
 		child.queue_free()
 	_populate_construction_buttons()
+	_play_command_sound()
 
 func _close_build_submenu() -> void:
 	_showing_build_submenu = false
@@ -1192,9 +1212,9 @@ func _format_unit_stats(unit: Unit) -> String:
 func _populate_unit_command_buttons() -> void:
 	action_panel_title.text = "Commands"
 	var buttons: Array[Control] = [
-		_make_command_button(OS.get_keycode_string(UNIT_MOVE_KEY), "Move", null, func(): pending_order_mode = "move"),
+		_make_command_button(OS.get_keycode_string(UNIT_MOVE_KEY), "Move", null, _arm_move_mode),
 		_make_command_button(OS.get_keycode_string(UNIT_STOP_KEY), "Stop", null, _issue_stop_order),
-		_make_command_button(OS.get_keycode_string(UNIT_ATTACK_KEY), "Attack", null, func(): pending_order_mode = "attack"),
+		_make_command_button(OS.get_keycode_string(UNIT_ATTACK_KEY), "Attack", null, _arm_attack_mode),
 		_make_command_button(OS.get_keycode_string(UNIT_PATROL_KEY), "Patrol", null, _arm_patrol_mode),
 	]
 	if _any_selected_can_build():
@@ -1222,9 +1242,18 @@ func _populate_unit_command_buttons() -> void:
 			buttons.append(_make_command_button("Promote", "Promote to Monarch", null, _issue_promote_order.bind(unit)))
 	_fill_action_panel_grid(buttons)
 
+func _arm_move_mode() -> void:
+	pending_order_mode = "move"
+	_play_command_sound()
+
+func _arm_attack_mode() -> void:
+	pending_order_mode = "attack"
+	_play_command_sound()
+
 func _arm_patrol_mode() -> void:
 	pending_order_mode = "patrol"
 	_patrol_started_this_session = false
+	_play_command_sound()
 
 func _player_has_monarch_unlocked(peer_id: int) -> bool:
 	for node in get_tree().get_nodes_in_group("buildings"):
@@ -1234,10 +1263,12 @@ func _player_has_monarch_unlocked(peer_id: int) -> bool:
 
 func _issue_promote_order(unit: Unit) -> void:
 	_rpc_request_promote_monarch.rpc_id(1, unit.get_path())
+	_play_command_sound()
 
 func _arm_monarch_ability(unit: Unit, ability_index: int) -> void:
 	_armed_monarch_ability = {"unit": unit, "ability_index": ability_index}
 	pending_order_mode = "monarch_ability"
+	_play_command_sound()
 
 func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if selected_building == building:
@@ -1245,6 +1276,7 @@ func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 
 func _on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
 	_rpc_enqueue.rpc_id(1, building.get_path(), item_index)
+	_play_command_sound()
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
@@ -1612,6 +1644,7 @@ func _confirm_placement() -> void:
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _placement_target.get_path() if _placement_target else NodePath()
 	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths)
+	_play_command_sound()
 	_cancel_placement()
 	_pending_builder_paths.clear()
 	if _showing_build_submenu:

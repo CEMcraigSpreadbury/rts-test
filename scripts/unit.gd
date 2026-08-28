@@ -139,7 +139,7 @@ signal projectile_fired(target: Node3D)
 @onready var select_audio_player: AudioStreamPlayer3D = $SelectAudioPlayer
 
 func play_select_sound() -> void:
-	SelectAudio.play_random(select_audio_player, on_select_sound_effects)
+	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
 
 var selected: bool = false:
 	set(value):

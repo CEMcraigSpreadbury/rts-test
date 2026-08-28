@@ -115,7 +115,7 @@ var _destroy_start_y: float = 0.0
 @onready var select_audio_player: AudioStreamPlayer3D = $SelectAudioPlayer
 
 func play_select_sound() -> void:
-	SelectAudio.play_random(select_audio_player, on_select_sound_effects)
+	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
 
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.

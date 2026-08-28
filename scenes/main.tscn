@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://k0dgxjac4h20" path="res://scripts/main.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="3_camera"]
+[ext_resource type="AudioStream" uid="uid://b5bdp2dructhi" path="res://assets/sfx/UI SFX/05_hover.wav" id="5_a8y0u"]
 [ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="6_light_follow"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="11_fog_script"]
@@ -113,6 +114,7 @@ shader_parameter/vision_count = 0
 [node name="Main" type="Node3D" unique_id=2055692591]
 script = ExtResource("1_script")
 available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_faction_one"), ExtResource("22_faction_two")])
+on_command_sound_effects = Array[AudioStream]([ExtResource("5_a8y0u")])
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
 environment = SubResource("Environment_1")
@@ -208,6 +210,8 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -20)
 spawn_path = NodePath("../Units")
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=221909256]
+
+[node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="UI" unique_id=1401837770]
 
 [node name="SelectionBox" type="ColorRect" parent="UI" unique_id=1631016065]
 visible = false
