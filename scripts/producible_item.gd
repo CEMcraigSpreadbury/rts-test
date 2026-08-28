@@ -21,6 +21,12 @@ enum Kind { UNIT, UPGRADE }
 ## Used when kind == UNIT; the scene instanced into the world on completion.
 @export var unit_scene: PackedScene
 
+## Used when kind == UPGRADE: whether completing this unlocks Monarch
+## promotion on the owner's units (see ProductionBuilding.can_promote_monarch).
+## The extension point for future upgrade effects — a new one is another
+## optional field here plus a matching check in main.gd's completion handler.
+@export var unlocks_monarch_promotion: bool = false
+
 ## Peeks at unit_scene's exported defaults without adding it to the tree (so
 ## _ready() — sprite sheet building, etc. — never runs) for UNIT items;
 ## falls back to this resource's own costs for UPGRADE items, which have no unit.

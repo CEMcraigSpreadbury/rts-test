@@ -39,6 +39,11 @@ const DESTROY_SINK_DURATION: float = 1.5
 ## Set alongside owner_peer_id at spawn time; used only for the minimap dot
 ## color (buildings have no sprite to modulate the way units do).
 @export var team_tint: Color = Color.WHITE
+## Set once a ProducibleItem with kind == UPGRADE and unlocks_monarch_promotion
+## completes on this building (see main.gd:_on_building_item_completed).
+## Mirrored to non-authoritative peers so their own command panel can tell
+## whether promotion is available.
+@export var can_promote_monarch: bool = false
 ## How far the model sinks into the ground as it's destroyed.
 @export var construction_sink_depth: float = 3.0
 ## Set (via spawn data, resolved per-peer from a NodePath since Gatherables
@@ -68,6 +73,9 @@ var linked_deposit: Gatherable = null
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
+## Host-only: UPGRADE items already bought, so a one-time upgrade can't be
+## queued twice — see the guard in enqueue().
+var _purchased_upgrades: Array[ProducibleItem] = []
 
 ## How long a SINGLE builder takes to finish this from 0%; each additional
 ## villager assigned via add_builder() scales progress proportionally, so N
@@ -139,6 +147,8 @@ func remove_builder(unit: Unit) -> void:
 
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.get_costs()):
+		return false
+	if item.kind == ProducibleItem.Kind.UPGRADE and (_purchased_upgrades.has(item) or queue.has(item)):
 		return false
 	## Population is reserved as soon as an item enters the queue (not when it
 	## actually spawns) so a player can't queue past the cap; Unit.release()s

@@ -40,11 +40,11 @@ Double-click `faction_three.tres` to open it in the Inspector.
    - Expand it, set **Scene** to your new building's `.tscn`.
    - Set **Building Name**, **Footprint Radius**, **Construction Time** to match.
    - Leave **Costs** empty — actual costs live on the building scene itself
-     (see step 3), this array field is only a fallback.
+	 (see step 3), this array field is only a fallback.
    - For a Mine-equivalent, keep **Requires Deposit** checked and **Deposit
-     Scene** pointed at the correct deposit scene.
+	 Scene** pointed at the correct deposit scene.
    - To add/remove a building slot entirely, resize the **Building Types**
-     array itself, then fill the new slot.
+	 array itself, then fill the new slot.
 3. **Starting Building Scene** → your new Town-Center-equivalent scene.
 4. **Starting Unit Scene** → your new Villager-equivalent scene.
 

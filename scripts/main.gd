@@ -72,6 +72,11 @@ var pending_order_mode: String = ""
 ## True once the first click of the current patrol-targeting session has been
 ## sent, so later shift-clicks append a waypoint instead of starting a new patrol.
 var _patrol_started_this_session: bool = false
+## Armed by pressing a Monarch's activated-ability button; consumed by the
+## next left-click, same as pending_order_mode == "move"/"attack", but needs
+## its own state since the ability only ever targets its own Monarch unit,
+## not the whole current selection. {"unit": Unit, "ability_index": int} or {}.
+var _armed_monarch_ability: Dictionary = {}
 ## Which unit selection the command panel's buttons were last built for, so
 ## _process() only rebuilds them when the selection actually changed.
 var _last_command_panel_units: Array[Unit] = []
@@ -379,6 +384,13 @@ func _on_return_to_lobby_pressed() -> void:
 
 func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
+		return
+	if item.kind == ProducibleItem.Kind.UPGRADE:
+		building._purchased_upgrades.append(item)
+		## Extension point: a future upgrade effect is another optional flag
+		## on ProducibleItem plus a matching `if` here.
+		if item.unlocks_monarch_promotion:
+			building.can_promote_monarch = true
 		return
 	if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
 		return
@@ -822,16 +834,28 @@ func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
 func _handle_pending_order_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		pending_order_mode = ""
+		_armed_monarch_ability = {}
 		return
 	if not (event is InputEventMouseButton and event.pressed):
 		return
 	if event.button_index == MOUSE_BUTTON_RIGHT:
 		pending_order_mode = ""
+		_armed_monarch_ability = {}
 		return
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
 
 	match pending_order_mode:
+		"monarch_ability":
+			var result := _raycast(event.position)
+			pending_order_mode = ""
+			if result.is_empty() or _armed_monarch_ability.is_empty():
+				_armed_monarch_ability = {}
+				return
+			var unit: Unit = _armed_monarch_ability["unit"]
+			if is_instance_valid(unit):
+				_rpc_request_monarch_ability.rpc_id(1, unit.get_path(), _armed_monarch_ability["ability_index"], result.position)
+			_armed_monarch_ability = {}
 		"move":
 			_issue_move_order(event.position)
 			pending_order_mode = ""
@@ -1150,11 +1174,36 @@ func _populate_unit_command_buttons() -> void:
 	]
 	if _any_selected_can_build():
 		buttons.append(_make_command_button(OS.get_keycode_string(UNIT_BUILD_KEY), "Build", null, _open_build_submenu))
+
+	## Promotion and Monarch abilities only make sense for a single selected
+	## unit — a group promote/activate has no sensible target.
+	if selected_units.size() == 1:
+		var unit := selected_units[0]
+		if unit.is_monarch:
+			for i in unit.monarch_abilities.size():
+				var ability: Ability = unit.monarch_abilities[i]
+				if ability.kind == Ability.Kind.ACTIVATED_TARGET_POINT:
+					buttons.append(_make_command_button(ability.ability_name, ability.ability_name, ability.icon, _arm_monarch_ability.bind(unit, i)))
+		elif unit.can_fight and not unit.monarch_abilities.is_empty() and _player_has_monarch_unlocked(unit.owner_peer_id):
+			buttons.append(_make_command_button("Promote", "Promote to Monarch", null, _issue_promote_order.bind(unit)))
 	_fill_action_panel_grid(buttons)
 
 func _arm_patrol_mode() -> void:
 	pending_order_mode = "patrol"
 	_patrol_started_this_session = false
+
+func _player_has_monarch_unlocked(peer_id: int) -> bool:
+	for node in get_tree().get_nodes_in_group("buildings"):
+		if node is ProductionBuilding and node.owner_peer_id == peer_id and node.can_promote_monarch:
+			return true
+	return false
+
+func _issue_promote_order(unit: Unit) -> void:
+	_rpc_request_promote_monarch.rpc_id(1, unit.get_path())
+
+func _arm_monarch_ability(unit: Unit, ability_index: int) -> void:
+	_armed_monarch_ability = {"unit": unit, "ability_index": ability_index}
+	pending_order_mode = "monarch_ability"
 
 func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if selected_building == building:
@@ -1177,6 +1226,55 @@ func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
 	if item_index < 0 or item_index >= building.producibles.size():
 		return
 	building.enqueue(building.producibles[item_index])
+
+## --- Monarch promotion / abilities ---
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_promote_monarch(unit_path: NodePath) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit == null or unit.owner_peer_id != sender_id:
+		return
+	if not unit.can_fight or unit.is_monarch or unit.monarch_abilities.is_empty():
+		return
+	if not _player_has_monarch_unlocked(sender_id):
+		return
+	if not ResourceStockpile.can_afford(sender_id, unit.monarch_promotion_costs):
+		return
+	ResourceStockpile.spend(sender_id, unit.monarch_promotion_costs)
+	unit.promote_to_monarch()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_monarch_ability(unit_path: NodePath, ability_index: int, target_pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit == null or unit.owner_peer_id != sender_id or not unit.is_monarch:
+		return
+	if ability_index < 0 or ability_index >= unit.monarch_abilities.size():
+		return
+	var ability: Ability = unit.monarch_abilities[ability_index]
+	if ability.kind != Ability.Kind.ACTIVATED_TARGET_POINT:
+		return
+	var ready_at: int = unit._ability_ready_at_ms.get(ability_index, 0)
+	if Time.get_ticks_msec() < ready_at:
+		return
+	if unit.global_position.distance_to(target_pos) > ability.activation_range:
+		return
+	if not ResourceStockpile.can_afford(sender_id, ability.costs):
+		return
+	ResourceStockpile.spend(sender_id, ability.costs)
+	unit._ability_ready_at_ms[ability_index] = Time.get_ticks_msec() + int(ability.cooldown * 1000.0)
+	unit.execute_teleport_ability(ability, target_pos)
 
 ## --- Rally points ---
 

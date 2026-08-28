@@ -2,8 +2,14 @@
 
 [ext_resource type="Script" uid="uid://btq158nw3psko" path="res://scripts/unit.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="Texture2D" uid="uid://bgxdtljq6ix1t" path="res://assets/art/crown.png" id="5_crown"]
+
+[sub_resource type="Resource" id="ResourceCost_villager"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 50
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -17,11 +23,6 @@ outer_radius = 0.7
 shading_mode = 0
 albedo_color = Color(0.2, 1, 0.3, 1)
 
-[sub_resource type="Resource" id="ResourceCost_villager"]
-script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_wood")
-amount = 50
-
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
@@ -32,10 +33,13 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:status_current_health")
 properties/2/spawn = true
 properties/2/replication_mode = 1
+properties/3/path = NodePath(".:is_monarch")
+properties/3/spawn = true
+properties/3/replication_mode = 1
 
 [node name="Unit" type="CharacterBody3D" unique_id=1622850852 groups=["units"]]
 script = ExtResource("1_script")
-costs = Array[Resource]([SubResource("ResourceCost_villager")])
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_villager")])
 walk_row = 3
 walk_frame_count = 6
 
@@ -59,6 +63,14 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ring")
 
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=2051781566]
 radius = 0.45
+
+[node name="CrownIcon" type="Sprite3D" parent="." unique_id=1233211234]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8366616, 0)
+visible = false
+pixel_size = 0.0006
+billboard = 1
+texture_filter = 0
+texture = ExtResource("5_crown")
 
 [node name="HealthBar" type="Node3D" parent="." unique_id=1766485738]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)

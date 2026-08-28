@@ -25,3 +25,28 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 			continue
 		if ally.global_position.distance_to(from_position) <= ally.aggro_range:
 			ally.command_attack(attacker)
+
+## First matching nearby Monarch's PASSIVE_AURA attack-speed bonus for this
+## unit, or 0.0 if none in range. Multiple Monarchs don't stack — a
+## deliberate simplification, first match wins.
+static func nearby_aura_attack_speed_bonus(tree: SceneTree, unit: Unit) -> float:
+	var ability := _find_nearby_aura(tree, unit)
+	return ability.aura_attack_speed_bonus if ability else 0.0
+
+## Same as above, for flat armor (damage reduction).
+static func nearby_aura_armor_bonus(tree: SceneTree, unit: Unit) -> int:
+	var ability := _find_nearby_aura(tree, unit)
+	return ability.aura_armor_bonus if ability else 0
+
+static func _find_nearby_aura(tree: SceneTree, unit: Unit) -> Ability:
+	for node in tree.get_nodes_in_group("units"):
+		if not (node is Unit) or node == unit:
+			continue
+		var monarch: Unit = node
+		if not monarch.is_monarch or monarch.owner_peer_id != unit.owner_peer_id:
+			continue
+		for ability in monarch.monarch_abilities:
+			if ability.kind == Ability.Kind.PASSIVE_AURA \
+					and monarch.global_position.distance_to(unit.global_position) <= ability.aura_radius:
+				return ability
+	return null

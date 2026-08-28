@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="Faction" load_steps=9 format=3]
+[gd_resource type="Resource" script_class="Faction" format=3 uid="uid://ud7gnw1ql02i"]
 
-[ext_resource type="Script" path="res://scripts/faction.gd" id="1_faction_script"]
+[ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="1_faction_script"]
 [ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="2_soh2d"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/production_building.tscn" id="3_town_center"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/barracks_building.tscn" id="4_barracks"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/house_building.tscn" id="5_house"]

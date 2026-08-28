@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="Script" path="res://scripts/ability.gd" id="6_ability_script"]
 
 [sub_resource type="Resource" id="ResourceCost_soldier_wood"]
 script = ExtResource("3_cost_script")
@@ -15,6 +16,32 @@ amount = 20
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("5_gold")
 amount = 20
+
+[sub_resource type="Resource" id="ResourceCost_monarch_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
+
+[sub_resource type="Resource" id="ResourceCost_monarch_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("5_gold")
+amount = 250
+
+[sub_resource type="Resource" id="Ability_royal_aura"]
+script = ExtResource("6_ability_script")
+ability_name = "Royal Aura"
+kind = 0
+aura_radius = 6.0
+aura_attack_speed_bonus = 0.2
+aura_armor_bonus = 1
+
+[sub_resource type="Resource" id="Ability_royal_teleport"]
+script = ExtResource("6_ability_script")
+ability_name = "Royal Teleport"
+kind = 1
+activation_range = 12.0
+affected_ally_radius = 4.0
+cooldown = 20.0
 
 [node name="Soldier" unique_id=93520634 instance=ExtResource("1_unit")]
 display_name = "Soldier"
@@ -31,3 +58,5 @@ attack_range = 1.3
 attack_cooldown = 0.9
 aggro_range = 7.0
 weak_to = 4
+monarch_abilities = Array[Resource]([SubResource("Ability_royal_aura"), SubResource("Ability_royal_teleport")])
+monarch_promotion_costs = Array[Resource]([SubResource("ResourceCost_monarch_wood"), SubResource("ResourceCost_monarch_gold")])

@@ -108,6 +108,14 @@ signal projectile_fired(target: Node3D)
 @export var projectile_scene: PackedScene = null
 @export var projectile_speed: float = 14.0
 
+@export_group("Monarch")
+## Empty means this unit type can never be promoted. Non-empty defines what a
+## promoted unit of this type can do — set directly on the unit scene, same
+## convention as costs/population_cost, so "skills depend on which unit was
+## promoted" needs no separate lookup table.
+@export var monarch_abilities: Array[Ability] = []
+@export var monarch_promotion_costs: Array[ResourceCost] = []
+
 @export_group("Status", "status_")
 ## Read/write here for debugging; normally driven by command_move / command_gather / command_attack.
 @export var status_command: Command = Command.NONE
@@ -123,11 +131,21 @@ signal projectile_fired(target: Node3D)
 @onready var selection_ring: MeshInstance3D = $SelectionRing
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
+@onready var crown_icon: Sprite3D = $CrownIcon
 
 var selected: bool = false:
 	set(value):
 		selected = value
 		selection_ring.visible = value
+
+## Setter (not just a plain bool) so the crown reacts immediately whether set
+## locally (host, on promotion) or received over the wire on other peers via
+## replication — same reasoning as the `selected` setter above.
+var is_monarch: bool = false:
+	set(value):
+		is_monarch = value
+		if crown_icon:
+			crown_icon.visible = value
 
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
@@ -149,6 +167,10 @@ var _enemy_scan_timer: float = 0.0
 ## Ranged units only: {"time_remaining": float, "target": Node3D, "damage": int}
 ## per shot currently in flight — see _tick_attacking's projectile_scene branch.
 var _pending_projectile_hits: Array[Dictionary] = []
+## Host-only: ability index (within monarch_abilities) -> Time.get_ticks_msec()
+## when it's usable again. Not synced — only the host ever checks cooldowns,
+## in the RPC handler that validates an activation request.
+var _ability_ready_at_ms: Dictionary = {}
 
 func _ready() -> void:
 	status_current_health = max_health
@@ -323,6 +345,34 @@ func end_build_command() -> void:
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
 
+## --- Monarch ---
+
+## Called only from main.gd's validated promotion RPC handler. No sprite/scene
+## change — this unit keeps its existing model/animations; the crown icon is
+## the only visual difference (see is_monarch's setter above).
+func promote_to_monarch() -> void:
+	is_monarch = true
+
+## Called only from main.gd's validated ability-activation RPC handler.
+## Teleports self to target_pos, then applies the same offset to every ally
+## (same owner, self excluded) that was within ability.affected_ally_radius
+## of this unit's position *before* the jump, so relative formation is kept.
+func execute_teleport_ability(ability: Ability, target_pos: Vector3) -> void:
+	var old_position := global_position
+	var delta := target_pos - old_position
+	for node in get_tree().get_nodes_in_group("units"):
+		if not (node is Unit):
+			continue
+		var ally: Unit = node
+		if ally != self and (ally.owner_peer_id != owner_peer_id \
+				or ally.global_position.distance_to(old_position) > ability.affected_ally_radius):
+			continue
+		ally.global_position += delta
+		## Clears any in-flight path the same way command_stop() does, so a
+		## teleported unit doesn't immediately try to walk back to where it
+		## was heading from its old position.
+		ally.nav_agent.target_position = ally.global_position
+
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
@@ -332,6 +382,9 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	## Villager) are simply never affected by this either way.
 	if weak_to != DamageType.NONE and attacker is Unit and attacker.damage_type == weak_to:
 		amount = int(amount * WEAKNESS_DAMAGE_MULTIPLIER)
+	## A nearby allied Monarch's passive aura can reduce this further; never
+	## reduces below 1 so an aura can't make a unit fully immune.
+	amount = maxi(amount - CombatUtils.nearby_aura_armor_bonus(get_tree(), self), 1)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die()
@@ -649,7 +702,10 @@ func _tick_attacking(delta: float) -> void:
 		return
 
 	attack_timer += delta
-	if attack_timer >= attack_cooldown:
+	## A nearby allied Monarch's passive aura can shrink the effective cooldown
+	## (not the exported stat itself — this is computed live each tick).
+	var effective_cooldown := attack_cooldown * (1.0 - CombatUtils.nearby_aura_attack_speed_bonus(get_tree(), self))
+	if attack_timer >= effective_cooldown:
 		attack_timer = 0.0
 		_play_attack_swing()
 		if projectile_scene != null:

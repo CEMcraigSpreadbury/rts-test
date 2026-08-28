@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="7_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="8_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="9_gold"]
 
 [sub_resource type="Resource" id="ResourceCost_towncenter"]
 script = ExtResource("7_cost_script")
@@ -27,6 +28,19 @@ item_name = "Villager"
 kind = 0
 build_time = 5.0
 unit_scene = ExtResource("5_unit_scene")
+
+[sub_resource type="Resource" id="ResourceCost_monarch_upgrade"]
+script = ExtResource("7_cost_script")
+resource_type = ExtResource("9_gold")
+amount = 300
+
+[sub_resource type="Resource" id="ProducibleItem_monarch_upgrade"]
+script = ExtResource("3_item_script")
+item_name = "Monarchy"
+kind = 1
+build_time = 30.0
+costs = Array[Resource]([SubResource("ResourceCost_monarch_upgrade")])
+unlocks_monarch_promotion = true
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
 properties/0/path = NodePath(".:position")
@@ -56,12 +70,15 @@ properties/7/replication_mode = 2
 properties/8/path = NodePath(".:synced_current_item_progress")
 properties/8/spawn = true
 properties/8/replication_mode = 1
+properties/9/path = NodePath(".:can_promote_monarch")
+properties/9/spawn = true
+properties/9/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" groups=["dropoff_points", "buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Town Center"
 costs = Array[Resource]([SubResource("ResourceCost_towncenter")])
-producibles = Array[Resource]([SubResource("ProducibleItem_villager")])
+producibles = Array[Resource]([SubResource("ProducibleItem_villager"), SubResource("ProducibleItem_monarch_upgrade")])
 population_capacity = 10
 is_main_base = true
 
