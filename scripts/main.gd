@@ -138,6 +138,18 @@ const CLICK_DRAG_THRESHOLD: float = 6.0
 
 const VALID_GHOST_COLOR: Color = Color(0.3, 1.0, 0.3, 0.45)
 const INVALID_GHOST_COLOR: Color = Color(1.0, 0.3, 0.3, 0.45)
+## Minimum surface-normal Y component a placement point must have to count as
+## "flat enough to build on" — roughly cos(41°). Below this the raycast hit a
+## slope/cliff face (e.g. TileMapLayer3D terrain) rather than open ground.
+const MAX_BUILD_SLOPE_NORMAL_Y: float = 0.75
+## How many points around a footprint's edge (in addition to its center) get
+## checked for flatness — catches a building whose center sits on flat ground
+## but whose edge would overhang a nearby cliff.
+const FOOTPRINT_SAMPLE_COUNT: int = 8
+## Max height difference tolerated between the footprint's center and any
+## edge sample — rejects straddling a level change even where both sides are
+## individually flat (e.g. half on a raised terrace, half on the ground below).
+const MAX_FOOTPRINT_HEIGHT_VARIANCE: float = 0.3
 
 var placing_type: BuildingType = null
 ## Root of a stripped-down, translucent copy of the real building model (not
@@ -1652,8 +1664,36 @@ func _update_placement_ghost() -> void:
 	placement_ghost.visible = true
 	placement_ghost.global_position = result.position
 
-	placement_valid = _is_placement_valid(result.position, placing_type.footprint_radius)
+	## _is_placement_valid's overlap check alone only ever compared against
+	## other buildings/resources, never terrain, so a ghost could sit embedded
+	## in a slope/cliff (e.g. TileMapLayer3D terrain) and still read as valid.
+	var on_flat_ground: bool = _footprint_is_flat(result.position, placing_type.footprint_radius)
+	placement_valid = on_flat_ground and _is_placement_valid(result.position, placing_type.footprint_radius)
 	_set_ghost_valid(placement_valid)
+
+## Samples the footprint's center plus FOOTPRINT_SAMPLE_COUNT points around
+## its edge (straight-down raycasts, not just the single cursor ray) so a
+## building can't have a flat center while an edge overhangs a nearby
+## slope/cliff or straddles a level change undetected.
+func _footprint_is_flat(center: Vector3, radius: float) -> bool:
+	var space_state := get_world_3d().direct_space_state
+	for i in FOOTPRINT_SAMPLE_COUNT + 1:
+		var offset := Vector3.ZERO
+		if i > 0:
+			var angle := TAU * (i - 1) / float(FOOTPRINT_SAMPLE_COUNT)
+			offset = Vector3(cos(angle), 0.0, sin(angle)) * radius
+		var sample_xz := center + offset
+		var query := PhysicsRayQueryParameters3D.create(
+			sample_xz + Vector3(0.0, 5.0, 0.0), sample_xz - Vector3(0.0, 5.0, 0.0)
+		)
+		var result := space_state.intersect_ray(query)
+		if result.is_empty():
+			return false
+		if result.normal.y < MAX_BUILD_SLOPE_NORMAL_Y:
+			return false
+		if absf(result.position.y - center.y) > MAX_FOOTPRINT_HEIGHT_VARIANCE:
+			return false
+	return true
 
 ## Snap-to-target variant: the ghost only ever shows at an existing,
 ## unclaimed instance of placing_type.deposit_scene under the mouse, never
@@ -1753,7 +1793,8 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 		if deposit == null or deposit.is_claimed or not _matches_scene(deposit, building_type.deposit_scene):
 			return
 		build_pos = deposit.global_position
-	elif not _is_placement_valid(world_pos, building_type.footprint_radius):
+	elif not _footprint_is_flat(world_pos, building_type.footprint_radius) \
+			or not _is_placement_valid(world_pos, building_type.footprint_radius):
 		return
 
 	ResourceStockpile.spend(sender_id, costs)
