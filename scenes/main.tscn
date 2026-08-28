@@ -4,16 +4,25 @@
 [ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="3_camera"]
 [ext_resource type="AudioStream" uid="uid://b5bdp2dructhi" path="res://assets/sfx/UI SFX/05_hover.wav" id="5_a8y0u"]
 [ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="6_light_follow"]
+[ext_resource type="AudioStream" uid="uid://csdot2d6k8m88" path="res://assets/sfx/Music/Early/Castle Courtyard Bloom.mp3" id="7_yc10j"]
+[ext_resource type="AudioStream" uid="uid://pdoobln6beg6" path="res://assets/sfx/Music/Early/Spring Begins.mp3" id="8_jscy8"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
+[ext_resource type="AudioStream" uid="uid://dkwm6fjby2pgh" path="res://assets/sfx/Music/Mid/A Battle Cometh.mp3" id="9_pm3ni"]
+[ext_resource type="AudioStream" uid="uid://dy6v4vdfb6hbq" path="res://assets/sfx/Music/Mid/Bastion at Dawn.mp3" id="10_y6deb"]
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="11_fog_script"]
+[ext_resource type="AudioStream" uid="uid://cqdwxl7rn3mbb" path="res://assets/sfx/Music/End/Iron Banner.mp3" id="11_og1vs"]
+[ext_resource type="AudioStream" uid="uid://bbbqruyuvt1mg" path="res://assets/sfx/Music/End/Triumphant March.mp3" id="12_2wyq8"]
 [ext_resource type="Shader" uid="uid://bt4kly6vxq7p5" path="res://shaders/fog_of_war.gdshader" id="12_fog_shader"]
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="13_minimap_script"]
+[ext_resource type="AudioStream" uid="uid://dl6usc5kn2487" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="14_pm3ni"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/berry_bush.tscn" id="17_berry_bush"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="18_gold_deposit"]
 [ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="20_faction_script"]
 [ext_resource type="Resource" uid="uid://div8xt53m6s3p" path="res://resources/factions/faction_one.tres" id="21_faction_one"]
 [ext_resource type="Resource" uid="uid://ud7gnw1ql02i" path="res://resources/factions/faction_two.tres" id="22_faction_two"]
 [ext_resource type="Shader" uid="uid://bjd8hje8sk71w" path="res://shaders/cloud_shadows.gdshader" id="25_cloud_shadows_shader"]
+[ext_resource type="Script" uid="uid://t74fnmnykn6s" path="res://scripts/music_player.gd" id="26_music_player_script"]
+[ext_resource type="Script" uid="uid://fwe5mgixubk0" path="res://scripts/ambience_player.gd" id="27_ambience_player_script"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -115,6 +124,16 @@ shader_parameter/vision_count = 0
 script = ExtResource("1_script")
 available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_faction_one"), ExtResource("22_faction_two")])
 on_command_sound_effects = Array[AudioStream]([ExtResource("5_a8y0u")])
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="." unique_id=1401837780]
+script = ExtResource("26_music_player_script")
+early_game_music = Array[AudioStream]([ExtResource("7_yc10j"), ExtResource("8_jscy8")])
+mid_game_music = Array[AudioStream]([ExtResource("9_pm3ni"), ExtResource("10_y6deb")])
+end_game_music = Array[AudioStream]([ExtResource("11_og1vs"), ExtResource("12_2wyq8")])
+
+[node name="AmbiencePlayer" type="AudioStreamPlayer" parent="." unique_id=1401837790]
+script = ExtResource("27_ambience_player_script")
+ambience_sounds = Array[AudioStream]([ExtResource("14_pm3ni")])
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
 environment = SubResource("Environment_1")

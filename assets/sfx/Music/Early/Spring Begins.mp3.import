@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://pdoobln6beg6"
+path="res://.godot/imported/Spring Begins.mp3-bf2fb62dd15e1fab48f3883de12eae2b.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Early/Spring Begins.mp3"
+dest_files=["res://.godot/imported/Spring Begins.mp3-bf2fb62dd15e1fab48f3883de12eae2b.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

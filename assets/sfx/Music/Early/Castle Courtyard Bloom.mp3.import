@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://csdot2d6k8m88"
+path="res://.godot/imported/Castle Courtyard Bloom.mp3-0d20d1040a632e2c6e98b236d076cc3c.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Early/Castle Courtyard Bloom.mp3"
+dest_files=["res://.godot/imported/Castle Courtyard Bloom.mp3-0d20d1040a632e2c6e98b236d076cc3c.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
