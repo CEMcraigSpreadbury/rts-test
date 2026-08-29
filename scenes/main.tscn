@@ -12662,13 +12662,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -6)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18)
 
 [node name="BerryBush1" parent="ResourceNodes" unique_id=918181438 instance=ExtResource("17_berry_bush")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -21)
+transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, 8, 1, -2)
 
 [node name="BerryBush2" parent="ResourceNodes" unique_id=665326967 instance=ExtResource("17_berry_bush")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -18)
 
 [node name="GoldDeposit1" parent="ResourceNodes" unique_id=2001545481 instance=ExtResource("18_gold_deposit")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -20)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0, 6)
 
 [node name="Units" type="Node3D" parent="." unique_id=2068655962]
 
