@@ -870,12 +870,99 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 
 	var target_node: Node = get_node_or_null(target_path) if target_path != NodePath() else null
 
-	for i in unit_paths.size():
-		var unit := get_node_or_null(unit_paths[i]) as Unit
-		if unit == null or unit.owner_peer_id != sender_id:
+	var units: Array[Unit] = []
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit != null and unit.owner_peer_id == sender_id:
+			units.append(unit)
+
+	var formation_positions := _formation_positions(units, world_pos)
+	for i in units.size():
+		_dispatch_smart_command(units[i], target_node, formation_positions[i], attack_move_fallback)
+
+const FORMATION_COLUMNS: int = 4
+## Wider than it looks like it needs to be on paper: each unit's
+## NavigationAgent3D avoidance radius is 0.45 (unit.gd), so at the old 1.2
+## spacing adjacent slots left almost no slack for avoidance to negotiate,
+## and a group would jostle into whatever gap opened up instead of settling
+## into its exact assigned slot — looking like a scrambled cluster instead
+## of a grid even though the math was correct.
+const FORMATION_SPACING: float = 2.0
+
+## Arranges units into a grid oriented to face the direction of travel —
+## front rank arrives exactly at target_pos, further ranks trail behind it —
+## instead of the old fixed screen-space block that never rotated with the
+## order. Only matters for the plain-move/attack-move fallback in
+## _dispatch_smart_command; a gather/attack/build target ignores its
+## assigned position entirely and paths to the target node itself.
+##
+## Returned positions are aligned to `units` by index (result[i] is where
+## units[i] should go), but which unit gets which grid slot is decided by
+## nearest-available-slot assignment (see _assign_slots_to_units), not by
+## raw selection order — assigning slot i to units[i] directly would send
+## units to whichever slot their index happened to land on regardless of
+## where they actually are, causing them to needlessly cross paths to swap
+## places with each other.
+func _formation_positions(units: Array[Unit], target_pos: Vector3) -> Array[Vector3]:
+	if units.is_empty():
+		return []
+	if units.size() == 1:
+		return [target_pos]
+
+	var centroid := Vector3.ZERO
+	for unit in units:
+		centroid += unit.global_position
+	centroid /= units.size()
+
+	var to_target := target_pos - centroid
+	to_target.y = 0.0
+	## Degenerate case (target basically on top of the group's own centroid)
+	## still needs a facing to build `right` from — arbitrary is fine, it
+	## only affects which way a near-zero-distance formation fans out.
+	var forward: Vector3 = to_target.normalized() if to_target.length_squared() > 0.0001 else Vector3.FORWARD
+	var right := Vector3(forward.z, 0.0, -forward.x)
+
+	var slots: Array[Vector3] = []
+	for i in units.size():
+		var col: int = i % FORMATION_COLUMNS
+		var row: int = i / FORMATION_COLUMNS
+		var col_offset: float = (col - (FORMATION_COLUMNS - 1) / 2.0) * FORMATION_SPACING
+		var row_offset: float = row * FORMATION_SPACING
+		slots.append(target_pos + right * col_offset - forward * row_offset)
+
+	return _assign_slots_to_units(units, slots)
+
+## Greedy nearest-pair assignment: repeatedly claims the closest remaining
+## (unit, slot) pair until every unit has one. Not globally optimal (that's
+## the Hungarian algorithm), but for RTS-sized selections this is more than
+## good enough and avoids the crossing-paths problem a fixed index mapping has.
+func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3]) -> Array[Vector3]:
+	var pairs: Array = []
+	for ui in units.size():
+		for si in slots.size():
+			pairs.append([units[ui].global_position.distance_squared_to(slots[si]), ui, si])
+	pairs.sort_custom(func(a, b): return a[0] < b[0])
+
+	var result: Array[Vector3] = []
+	result.resize(units.size())
+	var unit_taken: Array[bool] = []
+	unit_taken.resize(units.size())
+	var slot_taken: Array[bool] = []
+	slot_taken.resize(slots.size())
+
+	var assigned := 0
+	for pair in pairs:
+		if assigned >= units.size():
+			break
+		var ui: int = pair[1]
+		var si: int = pair[2]
+		if unit_taken[ui] or slot_taken[si]:
 			continue
-		var offset := Vector3((i % 4) * 1.2 - 1.8, 0.0, floor(i / 4.0) * 1.2)
-		_dispatch_smart_command(unit, target_node, world_pos + offset, attack_move_fallback)
+		unit_taken[ui] = true
+		slot_taken[si] = true
+		result[ui] = slots[si]
+		assigned += 1
+	return result
 
 ## Shared by right-click/attack-order dispatch and a rally point resolving
 ## onto a resource/enemy/under-construction building: gather/attack/build the
