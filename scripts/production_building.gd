@@ -155,8 +155,11 @@ func remove_builder(unit: Unit) -> void:
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.get_costs()):
 		return false
-	if item.kind == ProducibleItem.Kind.UPGRADE and (_purchased_upgrades.has(item) or queue.has(item)):
-		return false
+	if item.kind == ProducibleItem.Kind.UPGRADE:
+		if _purchased_upgrades.has(item) or queue.has(item):
+			return false
+		if item.requires_upgrade != null and not _purchased_upgrades.has(item.requires_upgrade):
+			return false
 	## Population is reserved as soon as an item enters the queue (not when it
 	## actually spawns) so a player can't queue past the cap; Unit.release()s
 	## the same amount when the resulting unit later dies.

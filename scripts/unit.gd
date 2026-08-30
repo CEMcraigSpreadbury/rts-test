@@ -36,6 +36,11 @@ enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC }
 ## own STOP entry since command_stop() results in Command.NONE, which
 ## wouldn't otherwise distinguish "stopped" from "never given an order".
 enum OrderSoundKind { MOVE, ATTACK, PATROL, BUILD, STOP, GATHER }
+## Which Blacksmith upgrade line affects this unit (see UnitUpgrades
+## autoload). Independent of DamageType above — that's the rock-paper-
+## scissors bonus system, this is "what category of unit is this for
+## upgrade purposes" — NONE for non-combat units like the Villager.
+enum UnitCategory { NONE, INFANTRY, ARCHER, CAVALRY }
 
 ## main.gd (which owns a proven-reliable broadcast RPC channel) relays this to
 ## other peers; RPCs declared directly on this dynamically-spawned node were
@@ -108,6 +113,8 @@ signal projectile_fired(target: Node3D)
 ## Attacks whose damage_type matches this deal WEAKNESS_DAMAGE_MULTIPLIER
 ## bonus damage to this unit. NONE means immune to the whole system.
 @export var weak_to: DamageType = DamageType.NONE
+## Which Blacksmith weapon/armor upgrade line applies to this unit.
+@export var unit_category: UnitCategory = UnitCategory.NONE
 ## Null = melee (instant damage on cooldown, like today). Set = ranged: each
 ## cooldown tick fires a projectile that travels at projectile_speed and only
 ## applies damage once it actually arrives (see _tick_pending_projectiles) —
@@ -427,9 +434,12 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	## Villager) are simply never affected by this either way.
 	if weak_to != DamageType.NONE and attacker is Unit and attacker.damage_type == weak_to:
 		amount = int(amount * WEAKNESS_DAMAGE_MULTIPLIER)
-	## A nearby allied Monarch's passive aura can reduce this further; never
-	## reduces below 1 so an aura can't make a unit fully immune.
-	amount = maxi(amount - CombatUtils.nearby_aura_armor_bonus(get_tree(), self), 1)
+	## A nearby allied Monarch's passive aura and this player's Blacksmith
+	## armor upgrades both reduce this further; never reduces below 1 so
+	## neither can make a unit fully immune.
+	var armor: int = CombatUtils.nearby_aura_armor_bonus(get_tree(), self) \
+			+ UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category)
+	amount = maxi(amount - armor, 1)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die()
@@ -711,6 +721,12 @@ func _effective_attack_range() -> float:
 		return attack_range + attack_target.get_footprint_radius()
 	return attack_range
 
+## Live Blacksmith weapon-upgrade bonus on top of the exported stat, same
+## "computed live, not baked into the field itself" approach as the Monarch
+## aura attack-speed bonus.
+func _effective_attack_damage() -> int:
+	return attack_damage + UnitUpgrades.get_weapon_bonus(owner_peer_id, unit_category)
+
 func _head_to_target() -> void:
 	if not _is_target_alive(attack_target):
 		_find_new_target_or_idle()
@@ -759,7 +775,7 @@ func _tick_attacking(delta: float) -> void:
 			## its own cooldown in the meantime rather than waiting for it.
 			_fire_projectile(attack_target)
 		else:
-			attack_target.take_damage(attack_damage, self)
+			attack_target.take_damage(_effective_attack_damage(), self)
 			if not _is_target_alive(attack_target):
 				_find_new_target_or_idle()
 
@@ -769,7 +785,7 @@ func _fire_projectile(target: Node3D) -> void:
 	_pending_projectile_hits.append({
 		"time_remaining": travel_time,
 		"target": target,
-		"damage": attack_damage,
+		"damage": _effective_attack_damage(),
 	})
 	projectile_fired.emit(target)
 

@@ -27,6 +27,17 @@ enum Kind { UNIT, UPGRADE }
 ## optional field here plus a matching check in main.gd's completion handler.
 @export var unlocks_monarch_promotion: bool = false
 
+## Used when kind == UPGRADE, for a Blacksmith-style weapon/armor upgrade
+## (see UnitUpgrades autoload). upgrade_bonus == 0 means this item doesn't
+## grant one (e.g. it's the Monarch-unlock item above instead).
+@export var upgrade_category: Unit.UnitCategory = Unit.UnitCategory.NONE
+@export var upgrade_stat: UnitUpgrades.Stat = UnitUpgrades.Stat.WEAPON
+@export var upgrade_bonus: int = 0
+## Tier prerequisite — null means this is the first tier in its line.
+## Enforced in ProductionBuilding.enqueue(), same place the existing
+## one-time-purchase guard lives.
+@export var requires_upgrade: ProducibleItem = null
+
 ## Peeks at unit_scene's exported defaults without adding it to the tree (so
 ## _ready() — sprite sheet building, etc. — never runs) for UNIT items;
 ## falls back to this resource's own costs for UPGRADE items, which have no unit.

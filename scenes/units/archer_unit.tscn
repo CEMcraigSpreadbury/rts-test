@@ -35,3 +35,4 @@ projectile_scene = ExtResource("3_projectile")
 projectile_speed = 16.0
 damage_type = 3
 weak_to = 2
+unit_category = 2

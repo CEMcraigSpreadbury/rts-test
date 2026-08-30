@@ -25,6 +25,7 @@ ResourceStockpile="*res://scripts/resource_stockpile.gd"
 Population="*res://scripts/population.gd"
 Network="*res://scripts/network_manager.gd"
 Settings="*res://scripts/settings.gd"
+UnitUpgrades="*res://scripts/unit_upgrades.gd"
 
 [display]
 

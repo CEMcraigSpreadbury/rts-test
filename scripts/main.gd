@@ -22,7 +22,7 @@ const UNIT_BUILD_KEY: Key = KEY_B
 ## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
 const MONARCH_ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
-const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N]
+const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_G]
 ## The action panel's grid always has exactly this many slots (4 columns x 3
 ## rows), padded with blank placeholders, so its size never changes with context.
 const ACTION_PANEL_SLOT_COUNT: int = 12
@@ -469,6 +469,8 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		## on ProducibleItem plus a matching `if` here.
 		if item.unlocks_monarch_promotion:
 			building.can_promote_monarch = true
+		if item.upgrade_bonus != 0:
+			UnitUpgrades.add_bonus(building.owner_peer_id, item.upgrade_category, item.upgrade_stat, item.upgrade_bonus)
 		return
 	if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
 		return
@@ -1128,13 +1130,39 @@ func _select_building(building: ProductionBuilding) -> void:
 		_fill_action_panel_grid([])
 		return
 
+	## Rebuilds the menu whenever this building's queue changes — mainly so a
+	## just-purchased Blacksmith upgrade's button disappears (and the next
+	## tier's appears) immediately rather than only on next reselection.
+	## Not CONNECT_ONE_SHOT since more items can complete later; guarded so
+	## reselecting the same building doesn't stack duplicate connections.
+	if not building.item_completed.is_connected(_on_selected_building_item_completed):
+		building.item_completed.connect(_on_selected_building_item_completed.bind(building))
+
 	var buttons: Array[Control] = []
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
-		var hotkey: String = OS.get_keycode_string(PRODUCIBLE_HOTKEYS[i]) if i < PRODUCIBLE_HOTKEYS.size() else "?"
+		if not _producible_is_visible(building, item):
+			continue
+		## Hotkeys map to on-screen position, not the item's true index into
+		## producibles — otherwise the visible buttons would jump to
+		## whatever hotkey their hidden neighbors happened to occupy.
+		var slot: int = buttons.size()
+		var hotkey: String = OS.get_keycode_string(PRODUCIBLE_HOTKEYS[slot]) if slot < PRODUCIBLE_HOTKEYS.size() else "?"
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item)]
 		buttons.append(_make_command_button(hotkey, tooltip, item.icon, _on_producible_button_pressed.bind(building, i)))
 	_fill_action_panel_grid(buttons)
+
+## A trainable UNIT is always offered. An UPGRADE is hidden once already
+## purchased, and hidden until its prerequisite tier (if any) is purchased —
+## only the next actually-buyable tier in a line should ever show, not the
+## whole line at once (ProductionBuilding.enqueue() already refuses both
+## cases server-side; this just keeps the menu matching what's legal).
+func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) -> bool:
+	if item.kind != ProducibleItem.Kind.UPGRADE:
+		return true
+	if building._purchased_upgrades.has(item):
+		return false
+	return item.requires_upgrade == null or building._purchased_upgrades.has(item.requires_upgrade)
 
 ## The action panel is always visible; this only rebuilds its grid/title and
 ## the info panel for the current selection when no building is selected:
@@ -1441,6 +1469,10 @@ func _arm_monarch_ability(unit: Unit, ability_index: int) -> void:
 	_play_command_sound()
 
 func _on_selected_building_constructed(building: ProductionBuilding) -> void:
+	if selected_building == building:
+		_select_building(building)
+
+func _on_selected_building_item_completed(_item: ProducibleItem, building: ProductionBuilding) -> void:
 	if selected_building == building:
 		_select_building(building)
 
