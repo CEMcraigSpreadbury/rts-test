@@ -8,6 +8,10 @@
 
 config_version=5
 
+[audio]
+
+buses/default_bus_layout="res://default_bus_layout.tres"
+
 [application]
 
 config/name="RTS Test"
@@ -42,3 +46,46 @@ timers/tooltip_delay_sec=0.15
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+
+[shader_globals]
+
+cloud_noise={
+"type": "sampler2D",
+"value": "res://resources/grass/cloud_noise.tres"
+}
+cloud_scale={
+"type": "float",
+"value": 40.0
+}
+cloud_world_y={
+"type": "float",
+"value": 50.0
+}
+cloud_speed={
+"type": "float",
+"value": -0.01
+}
+cloud_contrast={
+"type": "float",
+"value": 3.845
+}
+cloud_threshold={
+"type": "float",
+"value": 0.27
+}
+cloud_direction={
+"type": "vec2",
+"value": Vector2(0, -1)
+}
+light_direction={
+"type": "vec3",
+"value": Vector3(0, -1, 0)
+}
+cloud_shadow_min={
+"type": "float",
+"value": 0.2
+}
+cloud_diverge_angle={
+"type": "float",
+"value": 20.0
+}
