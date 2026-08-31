@@ -66,7 +66,15 @@ signal projectile_fired(target: Node3D)
 		if sprite:
 			sprite.modulate = value
 ## Which player controls this unit. The host is always peer 1.
-@export var owner_peer_id: int = 1
+## Setter keeps NavigationAgent3D avoidance layers in sync with ownership (see
+## _update_avoidance_team below) so a captured Objective guard immediately
+## stops being avoidance-blocked by its old enemies and starts being ignored
+## by its new allies, instead of only applying once in _ready().
+@export var owner_peer_id: int = 1:
+	set(value):
+		owner_peer_id = value
+		if nav_agent:
+			_update_avoidance_team()
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 8.0
 ## One is picked at random and played through select_audio_player whenever
@@ -255,6 +263,7 @@ func _ready() -> void:
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	nav_agent.radius = 0.45
 	nav_agent.max_speed = move_speed
+	_update_avoidance_team()
 
 	## Puppets (non-authority peers) never call set_velocity(), but avoidance
 	## keeps emitting velocity_computed on its own once enabled regardless of
@@ -264,6 +273,21 @@ func _ready() -> void:
 	if is_multiplayer_authority():
 		nav_agent.avoidance_enabled = true
 		nav_agent.velocity_computed.connect(_on_velocity_computed)
+
+## Same-team units broadcast on (and only avoid) their own owner_peer_id's
+## avoidance layer, so allies can freely overlap/squeeze past each other in a
+## tight chokepoint (e.g. a narrow ramp) instead of RVO treating every nearby
+## unit, ally or not, as something to steer around and deadlocking. Enemies
+## still avoid each other normally since they're never on the same layer.
+func _update_avoidance_team() -> void:
+	## +1 so peer 0 (neutral units, e.g. Objective guards) doesn't land on bit
+	## 1 — the default avoidance layer every building's NavigationObstacle3D
+	## uses (never explicitly set). Clearing only this unit's own bit from its
+	## mask leaves that shared obstacle layer untouched for every team, so
+	## units of any owner still avoid buildings/terrain normally.
+	var team_bit: int = 1 << (owner_peer_id + 1)
+	nav_agent.avoidance_layers = team_bit
+	nav_agent.avoidance_mask = ~team_bit
 
 ## Raw navigation command; prefer command_move / command_gather / command_attack which also manage status.
 func move_to(target_position: Vector3) -> void:
