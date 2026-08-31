@@ -71,6 +71,12 @@ properties/8/replication_mode = 1
 properties/9/path = NodePath(".:can_promote_monarch")
 properties/9/spawn = true
 properties/9/replication_mode = 2
+properties/10/path = NodePath(".:owner_peer_id")
+properties/10/spawn = true
+properties/10/replication_mode = 2
+properties/11/path = NodePath(".:team_tint")
+properties/11/spawn = true
+properties/11/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" unique_id=1849336778 groups=["buildings", "dropoff_points"]]
 script = ExtResource("1_building_script")

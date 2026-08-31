@@ -259,6 +259,13 @@ func _spawn_all_players() -> void:
 	for i in peer_ids.size():
 		_spawn_player_base(peer_ids[i], i)
 
+## Public lookup so scripts outside main.gd (e.g. objective.gd, reached via
+## get_tree().current_scene) can re-tint a unit/building on a post-spawn
+## ownership change without duplicating TEAM_COLORS/team_index_by_peer.
+func get_team_tint(peer_id: int) -> Color:
+	var team_index: int = team_index_by_peer.get(peer_id, 0)
+	return TEAM_COLORS[team_index % TEAM_COLORS.size()]
+
 ## index < 0 (or unset) defaults everyone to available_factions[0] — the safe
 ## fallback for the established direct-run-main.tscn-in-editor workflow, which
 ## bypasses the lobby (and thus Network.players) entirely.
@@ -391,6 +398,14 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 		0.0, 1.0, duration
 	)
 	tween.tween_callback(projectile.queue_free)
+
+## Hand-placed buildings (currently just Objective guards' buildings) never
+## go through _spawn_building_from_data below, so without this their
+## item_completed/destroyed signals have no listener and producing a unit
+## silently does nothing. Called by objective.gd once per building at _ready.
+func register_objective_building(building: ProductionBuilding) -> void:
+	building.item_completed.connect(_on_building_item_completed.bind(building))
+	building.destroyed.connect(_on_building_destroyed.bind(building))
 
 ## Most buildable structures are ProductionBuildings (Town Center, Barracks,
 ## House), but Farm is a buildable Gatherable (no construction/production

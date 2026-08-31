@@ -1,0 +1,53 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/objective.gd" id="1_objective_script"]
+[ext_resource type="PackedScene" uid="uid://c6lf7yot5o577" path="res://scenes/units/soldier_unit.tscn" id="2_soldier"]
+[ext_resource type="PackedScene" uid="uid://csfhind83uvc1" path="res://scenes/buildings/barracks_building.tscn" id="3_barracks"]
+[ext_resource type="Shader" path="res://shaders/capture_progress.gdshader" id="4_capture_shader"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_zone"]
+radius = 5.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_disc"]
+size = Vector2(10, 10)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_disc"]
+shader = ExtResource("4_capture_shader")
+shader_parameter/fill = 0.0
+shader_parameter/fill_color = Color(0.3, 0.85, 0.35, 0.85)
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_objective"]
+properties/0/path = NodePath(".:owner_peer_id")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+properties/1/path = NodePath(".:capture_progress")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+
+[node name="Objective" type="Node3D"]
+script = ExtResource("1_objective_script")
+
+[node name="Guards" type="Node3D" parent="."]
+
+[node name="Soldier" parent="Guards" instance=ExtResource("2_soldier")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0)
+
+[node name="Soldier2" parent="Guards" instance=ExtResource("2_soldier")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 0)
+
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="Barracks" parent="Buildings" instance=ExtResource("3_barracks")]
+
+[node name="CaptureZone" type="Area3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CaptureZone"]
+shape = SubResource("SphereShape3D_zone")
+
+[node name="ProgressDisc" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("PlaneMesh_disc")
+surface_material_override/0 = SubResource("ShaderMaterial_disc")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_objective")

@@ -24,7 +24,6 @@
 [ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="20_faction_script"]
 [ext_resource type="Script" uid="uid://u13x28cxf2ol" path="res://addons/TileMapLayer3D/core/resource_definition/tilemap_layer_data.gd" id="20_qkpxi"]
 [ext_resource type="Resource" uid="uid://div8xt53m6s3p" path="res://resources/factions/faction_one.tres" id="21_faction_one"]
-[ext_resource type="Resource" uid="uid://ud7gnw1ql02i" path="res://resources/factions/faction_two.tres" id="22_faction_two"]
 [ext_resource type="Shader" uid="uid://bjd8hje8sk71w" path="res://shaders/cloud_shadows.gdshader" id="25_cloud_shadows_shader"]
 [ext_resource type="Script" uid="uid://t74fnmnykn6s" path="res://scripts/music_player.gd" id="26_music_player_script"]
 [ext_resource type="Script" uid="uid://fwe5mgixubk0" path="res://scripts/ambience_player.gd" id="27_ambience_player_script"]
@@ -32,6 +31,7 @@
 [ext_resource type="Script" uid="uid://dgrit47t75v63" path="res://addons/TileMapLayer3D/nodes/region_collision_shape.gd" id="30_5he1u"]
 [ext_resource type="Shape3D" uid="uid://cnmm6sbsqjv1v" path="res://scenes/main_SavedData/main_TileMapLayer3D_collision_0_-1_0.res" id="37_vc5cj"]
 [ext_resource type="PackedScene" path="res://scenes/player_spawn_point.tscn" id="40_player_spawn_point"]
+[ext_resource type="PackedScene" path="res://scenes/objective.tscn" id="41_objective"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -12515,18 +12515,18 @@ shader_parameter/vision_count = 0
 
 [node name="Main" type="Node3D" unique_id=2055692591]
 script = ExtResource("1_script")
-available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_faction_one"), ExtResource("22_faction_two")])
+available_factions = Array[ExtResource("20_faction_script")]([ExtResource("21_faction_one")])
 on_command_sound_effects = Array[AudioStream]([ExtResource("5_a8y0u")])
 
 [node name="MusicPlayer" type="AudioStreamPlayer" parent="." unique_id=1401837780]
-bus = "Music"
+bus = &"Music"
 script = ExtResource("26_music_player_script")
 early_game_music = Array[AudioStream]([ExtResource("7_yc10j"), ExtResource("8_jscy8")])
 mid_game_music = Array[AudioStream]([ExtResource("9_pm3ni"), ExtResource("10_y6deb")])
 end_game_music = Array[AudioStream]([ExtResource("11_og1vs"), ExtResource("12_2wyq8")])
 
 [node name="AmbiencePlayer" type="AudioStreamPlayer" parent="." unique_id=1401837790]
-bus = "Ambience"
+bus = &"Ambience"
 script = ExtResource("27_ambience_player_script")
 ambience_sounds = Array[AudioStream]([ExtResource("14_pm3ni")])
 
@@ -12624,7 +12624,6 @@ process_material = SubResource("ParticleProcessMaterial_dust")
 draw_pass_1 = SubResource("SphereMesh_dust")
 
 [node name="FogOfWar" type="Node3D" parent="." unique_id=1933763603]
-visible = false
 script = ExtResource("11_fog_script")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="FogOfWar" unique_id=1633417530]
@@ -12640,6 +12639,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9652376, 0.9265361, -7.036
 
 [node name="PlayerSpawnPoint2" parent="PlayerSpawnPoints" unique_id=576231332 instance=ExtResource("40_player_spawn_point")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.132886, 0, 2.9388704)
+
+[node name="Objective1" parent="." unique_id=243873150 instance=ExtResource("41_objective")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11, 0, 4)
 
 [node name="Buildings" type="Node3D" parent="." unique_id=1722222]
 
@@ -12680,7 +12682,7 @@ spawn_path = NodePath("../Units")
 [node name="UI" type="CanvasLayer" parent="." unique_id=221909256]
 
 [node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="UI" unique_id=1401837770]
-bus = "SFX"
+bus = &"SFX"
 
 [node name="SelectionBox" type="ColorRect" parent="UI" unique_id=1631016065]
 visible = false

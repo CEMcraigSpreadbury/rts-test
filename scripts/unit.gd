@@ -57,7 +57,14 @@ signal projectile_fired(target: Node3D)
 @export var display_name: String = "Villager"
 @export var move_speed: float = 5.0
 @export var rotation_speed: float = 10.0
-@export var team_tint: Color = Color.WHITE
+## Setter (guarded — sprite isn't ready yet the first time Godot applies this
+## from the scene file during instantiation) so an Objective capture can
+## re-tint a unit immediately instead of only ever applying once in _ready().
+@export var team_tint: Color = Color.WHITE:
+	set(value):
+		team_tint = value
+		if sprite:
+			sprite.modulate = value
 ## Which player controls this unit. The host is always peer 1.
 @export var owner_peer_id: int = 1
 ## How far this unit reveals fog of war around itself.
@@ -213,6 +220,11 @@ var build_target: ProductionBuilding = null
 var _dying: bool = false
 var patrol_points: Array[Vector3] = []
 var patrol_index: int = 0
+## Set directly by Objective for its guards; 0.0 = no leash (every normal
+## player unit) — a leashed unit breaks off a chase and resumes patrol
+## instead of following a fleeing/kiting target indefinitely.
+var leash_origin: Node3D = null
+var leash_radius: float = 0.0
 ## Counts down while attack-moving/patrolling; scanning for enemies every frame
 ## would be an unthrottled O(units x units) group scan, so this paces it instead.
 var _enemy_scan_timer: float = 0.0
@@ -757,6 +769,11 @@ func _tick_attacking(delta: float) -> void:
 		_find_new_target_or_idle()
 		return
 
+	if leash_radius > 0.0 and global_position.distance_to(leash_origin.global_position) > leash_radius:
+		attack_target = null
+		_advance_patrol()
+		return
+
 	var dist := global_position.distance_to(attack_target.global_position)
 	if dist > _effective_attack_range() * ATTACK_LEASH_SLACK:
 		_head_to_target()
@@ -861,6 +878,8 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 		var other: Unit = node
 		if other.owner_peer_id == owner_peer_id or not _is_target_alive(other):
 			continue
+		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
+			continue
 		var dist := global_position.distance_to(other.global_position)
 		if dist <= nearest_dist:
 			nearest = other
@@ -880,6 +899,16 @@ func _die() -> void:
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
 	Population.release(owner_peer_id, population_cost)
 
+	## A unit spawned at runtime through UnitSpawner is auto-despawned on
+	## every client the moment the host frees it — but a hand-placed unit
+	## (e.g. an Objective's guards, present in the scene file itself rather
+	## than spawned) has no spawner tracking it, so nothing ever tells
+	## clients to remove it. This RPC covers both cases identically: it plays
+	## the death animation and frees the node on every peer, not just here.
+	_play_death_and_remove.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func _play_death_and_remove() -> void:
 	if sprite.sprite_frames and sprite.sprite_frames.has_animation("death"):
 		_set_animation("death")
 		var frame_count: int = sprite.sprite_frames.get_frame_count("death")

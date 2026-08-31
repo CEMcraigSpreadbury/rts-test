@@ -59,7 +59,6 @@ construction_time = 8.0
 script = ExtResource("2_building_type_script")
 building_name = "Blacksmith"
 scene = ExtResource("11_blacksmith")
-footprint_radius = 2.2
 construction_time = 8.0
 
 [resource]

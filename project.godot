@@ -8,10 +8,6 @@
 
 config_version=5
 
-[audio]
-
-buses/default_bus_layout="res://default_bus_layout.tres"
-
 [application]
 
 config/name="RTS Test"

@@ -59,12 +59,11 @@ construction_time = 8.0
 script = ExtResource("2_building_type_script")
 building_name = "Blacksmith"
 scene = ExtResource("11_blacksmith")
-footprint_radius = 2.2
 construction_time = 8.0
 
 [resource]
 script = ExtResource("1_faction_script")
-faction_name = "Faction One"
+faction_name = "Human"
 building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit")])
