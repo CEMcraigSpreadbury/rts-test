@@ -12,6 +12,7 @@ extends Node3D
 @export var min_zoom: float = 8.0
 @export var max_zoom: float = 22.0
 @export var pitch_degrees: float = 30.0
+@export var field_of_view: float = 45.0
 ## near_blur/far_blur must each stay larger than the matching transition width
 ## baked into Camera3D's CameraAttributesPractical resource (dof_blur_near_transition/
 ## dof_blur_far_transition) — otherwise the transition ramp overshoots past the
@@ -30,6 +31,7 @@ var panning: bool = false
 
 func _ready() -> void:
 	pitch.rotation_degrees.x = -pitch_degrees
+	camera.fov = field_of_view
 	_update_zoom()
 
 func _unhandled_input(event: InputEvent) -> void:

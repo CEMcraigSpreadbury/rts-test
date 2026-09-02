@@ -12,7 +12,6 @@
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="11_fog_script"]
 [ext_resource type="AudioStream" uid="uid://cqdwxl7rn3mbb" path="res://assets/sfx/Music/End/Iron Banner.mp3" id="11_og1vs"]
 [ext_resource type="AudioStream" uid="uid://bbbqruyuvt1mg" path="res://assets/sfx/Music/End/Triumphant March.mp3" id="12_2wyq8"]
-[ext_resource type="Shader" uid="uid://bt4kly6vxq7p5" path="res://shaders/fog_of_war.gdshader" id="12_fog_shader"]
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="13_minimap_script"]
 [ext_resource type="AudioStream" uid="uid://dl6usc5kn2487" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="14_pm3ni"]
 [ext_resource type="Script" uid="uid://4kv8f8ejgwqn" path="res://addons/TileMapLayer3D/nodes/tilemap_layer_3d.gd" id="16_2f3dj"]
@@ -70,16 +69,18 @@ sky_material = SubResource("ProceduralSkyMaterial_1")
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
-background_energy_multiplier = 2.0
+background_energy_multiplier = 2.2
 sky = SubResource("Sky_1")
 ambient_light_source = 3
 ambient_light_energy = 0.5
 tonemap_mode = 3
 tonemap_exposure = 0.8
 ssao_enabled = true
+ssao_radius = 2.0
 ssao_intensity = 8.0
 glow_enabled = true
-glow_bloom = 0.02
+glow_strength = 0.5
+glow_bloom = 0.25
 glow_hdr_threshold = 1.1
 volumetric_fog_enabled = true
 volumetric_fog_density = 0.08
@@ -88,6 +89,9 @@ volumetric_fog_anisotropy = 0.4
 volumetric_fog_length = 6.0
 volumetric_fog_ambient_inject = 0.05
 volumetric_fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_brightness = 1.1
+adjustment_saturation = 1.25
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_1"]
 vertices = PackedVector3Array(-11.75, 0.42127842, 0.77062607, -8, 0.42127842, -2.979374, -8, 0.42127842, -46.229374, -59.5, 0.42127842, -46.229374, -59.5, 0.42127842, 2.020626, -11.75, 0.42127842, 2.270626, 1.5, 0.42127842, -3.479374, 2.25, 0.42127842, -2.479374, 3.5, 0.42127842, -3.479374, 10, 0.42127842, -46.229374, 9.5, 0.42127842, -3.479374, 10, 0.42127842, -2.979374, -7.5, 0.42127842, -3.479374, 11.75, 0.42127842, -1.2293739, 59.5, 0.42127842, 0.020626068, 59.5, 0.42127842, -46.229374, 11.75, 0.42127842, 0.27062607, -5, 1.0412784, 8.270626, -4, 1.0412784, 8.270626, -3.75, 1.4212785, 7.020626, -5.25, 1.4212785, 7.020626, -8.75, 1.4212785, 5.020626, -0.25, 1.4212785, 6.020626, 2, 1.4212785, -1.4793739, 1, 1.4212785, -2.479374, -7, 1.4212785, -2.479374, -10.75, 1.4212785, 4.270626, -10, 1.4212785, 5.020626, -10.75, 1.4212785, 1.2706261, -1, 1.4212785, 7.020626, -7, 1.4212785, 7.020626, 2, 1.4212785, 5.770626, 10.75, 1.4212785, 2.270626, 10.75, 1.4212785, -0.72937393, 9, 1.4212785, -2.479374, 4, 1.4212785, -2.479374, 3.25, 1.4212785, -1.4793739, 2.75, 1.4212785, 5.020626, 8, 1.4212785, 5.020626, 11.75, 0.42127842, 1.2706261, 59.5, 0.42127842, 1.5206261, -5, 0.6712784, 9.020626, -4, 0.6712784, 9.020626, -13.25, 0.42127842, 36.770626, -15.5, 0.42127842, 39.020626, -16.75, 0.42127842, 72.77063, -0.5, 0.42127842, 8.020626, -2.75, 0.42127842, 8.020626, -3, 0.42127842, 9.020626, 2.5, 0.42127842, 7.020626, 0.25, 0.42127842, 7.020626, -13.25, 0.42127842, 29.020626, 8.5, 0.42127842, 6.020626, 3.25, 0.42127842, 6.020626, 11.75, 0.42127842, 2.770626, -5.75, 0.42127842, 9.020626, -5.549999, 0.42127842, 10.353962, -4.6166687, 0.42127842, 10.353962, 59.5, 0.42127842, 72.77063, -17, 0.42127842, 39.020626, -40.25, 0.42127842, 32.520626, -36.75, 0.42127842, 32.520626, -36.75, 0.42127842, 28.770626, -40.75, 0.42127842, 33.020626, -59.5, 0.42127842, 34.270626, -40.75, 0.42127842, 34.520626, -34.5, 0.42127842, 26.520626, -15.75, 0.42127842, 26.520626, -11.75, 0.42127842, 4.520626, -6, 0.42127842, 8.020626, -7.5, 0.42127842, 8.020626, -9.25, 0.42127842, 6.020626, -10.5, 0.42127842, 6.020626, -32.25, 1.4212785, 38.520626, -33.25, 1.4212785, 38.520626, -33.25, 1.4212785, 39.020626, -29.25, 1.4212785, 39.020626, -29, 1.0412784, 40.270626, -28.5, 1.0412784, 40.270626, -27.75, 1.4212785, 39.020626, -28, 1.0412784, 40.270626, -32.25, 1.4212785, 35.020626, -32.25, 1.6712785, 36.020626, -31.25, 1.4212785, 37.020626, -33, 2.0412784, 36.020626, -33, 2.0412784, 37.520626, -32.25, 1.6712785, 37.520626, -34, 1.4212785, 27.520626, -35.75, 1.4212785, 29.270626, -33.25, 1.4212785, 33.020626, -25.25, 1.4212785, 38.020626, -23.25, 1.4212785, 38.020626, -23.25, 1.4212785, 27.520626, -33.25, 1.4212785, 35.020626, -26, 1.4212785, 39.020626, -33.75, 1.4212785, 32.520626, -31.25, 1.4212785, 38.020626, -35.75, 1.4212785, 32.520626, -16, 1.4212785, 38.020626, -14.25, 1.4212785, 36.270626, -14.25, 1.4212785, 29.270626, -16, 1.4212785, 27.520626, -34.25, 2.4212785, 35.770626, -34.25, 2.4212785, 37.770626, -36.75, 2.4212785, 38.020626, -34.25, 2.4212785, 33.520626, -39.75, 2.4212785, 33.520626, -39.75, 2.4212785, 38.020626, -36, 2.4212785, 39.020626, -34.25, 2.4212785, 39.020626, -36.5, 0.42127842, 37.770626, -35.75, 0.42127842, 38.770626, -34.5, 0.42127842, 38.770626, -34.5, 0.42127842, 33.770626, -39.5, 0.42127842, 33.770626, -39.5, 0.42127842, 37.770626, -59.5, 0.42127842, 37.270626, -40.75, 0.42127842, 37.020626, -40.75, 0.42127842, 38.520626, -40.25, 0.42127842, 39.020626, -59.5, 0.42127842, 72.77063, -39, 0.42127842, 72.77063, -38.75, 0.42127842, 39.020626, -36.5, 0.42127842, 40.020626, -37.25, 0.42127842, 39.020626, -35.25, 0.42127842, 72.77063, -35, 0.42127842, 40.020626, -28, 0.6712784, 41.020626, -28.5, 0.42127842, 72.77063, -28.022728, 0.42127842, 42.46381, -28.5, 0.42127842, 41.7479, -25.5, 0.42127842, 40.020626, -27, 0.42127842, 40.020626, -27, 0.42127842, 41.020626, -24.75, 0.42127842, 39.020626, -29, 0.6712784, 41.020626, -28.977272, 0.42127842, 42.46381, -30, 0.42127842, 41.020626, -30, 0.42127842, 40.020626)
@@ -12482,12 +12486,12 @@ size = Vector2(140, 140)
 render_priority = 0
 shader = ExtResource("25_cloud_shadows_shader")
 shader_parameter/noise_scale = 0.015
-shader_parameter/detail_scale = 0.1
-shader_parameter/detail_strength = 0.35
+shader_parameter/detail_scale = 0.15
+shader_parameter/detail_strength = 1.0
 shader_parameter/scroll_speed = Vector2(0.06, -0.01)
-shader_parameter/coverage = 0.50000002375
-shader_parameter/cloud_color = Color(0.9090845, 0.9276538, 0.95256203, 1)
-shader_parameter/visible_opacity = 0.79600003781
+shader_parameter/coverage = 0.6000000285
+shader_parameter/cloud_color = Color(0.95686275, 0.92941177, 0.9098039, 1)
+shader_parameter/visible_opacity = 0.1210000057475
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
 emission_shape = 3
@@ -12712,10 +12716,14 @@ mesh = SubResource("PlaneMesh_cloud_shadows")
 surface_material_override/0 = SubResource("ShaderMaterial_cloud_shadows")
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("3_camera")]
+pitch_degrees = 35.0
+field_of_view = 50.0
+near_blur = 3.0
+far_blur = 11.0
 
 [node name="ForestDust" type="GPUParticles3D" parent="." unique_id=1933763604]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
-amount = 140
+amount = 200
 lifetime = 8.0
 visibility_aabb = AABB(-34, -6, -34, 68, 12, 68)
 process_material = SubResource("ParticleProcessMaterial_dust")
