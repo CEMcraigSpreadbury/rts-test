@@ -41,8 +41,10 @@ var gatherers: Array[Unit] = []
 ## this node becomes newly selected (see main.gd's selection code). Shared by
 ## every Gatherable (trees/berry bushes/gold deposits too), but only Farm
 ## currently has a SelectAudioPlayer node in its scene — safe no-op elsewhere.
+## Farm is a player-built structure, so unlike natural resources its select
+## sound is a plain (non-positional) AudioStreamPlayer, not a 3D one.
 @export var on_select_sound_effects: Array[AudioStream] = []
-@onready var select_audio_player: AudioStreamPlayer3D = get_node_or_null("SelectAudioPlayer")
+@onready var select_audio_player: AudioStreamPlayer = get_node_or_null("SelectAudioPlayer")
 
 func play_select_sound() -> void:
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)

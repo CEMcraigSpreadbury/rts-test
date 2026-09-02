@@ -115,7 +115,7 @@ var _destroy_start_y: float = 0.0
 
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
-@onready var select_audio_player: AudioStreamPlayer3D = $SelectAudioPlayer
+@onready var select_audio_player: AudioStreamPlayer = $SelectAudioPlayer
 
 func play_select_sound() -> void:
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)

@@ -47,7 +47,5 @@ radius = 1.5
 height = 0.5
 avoidance_enabled = false
 
-[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1608162492]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1608162492]
 bus = "SFX"
-unit_size = 20.0
-max_distance = 40.0

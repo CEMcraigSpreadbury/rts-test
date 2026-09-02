@@ -173,10 +173,8 @@ shape = SubResource("BoxShape3D_body")
 radius = 2.2
 height = 2.0
 
-[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="."]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="."]
 bus = "SFX"
-unit_size = 20.0
-max_distance = 40.0
 
 [node name="HealthBar" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)

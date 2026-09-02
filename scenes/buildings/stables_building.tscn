@@ -90,10 +90,8 @@ height = 2.0
 [node name="SpawnPoint" type="Marker3D" parent="." unique_id=1847325840]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 0, 2.6)
 
-[node name="SelectAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1422816316]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1422816316]
 bus = "SFX"
-unit_size = 20.0
-max_distance = 40.0
 
 [node name="HealthBar" type="Node3D" parent="." unique_id=991411606]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
