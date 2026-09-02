@@ -74,9 +74,22 @@ var _vision_positions: PackedVector2Array = PackedVector2Array()
 var _vision_radii: PackedFloat32Array = PackedFloat32Array()
 var _vision_count: int = 0
 
-## The terrain's own base material (StandardMaterial3D_b6ruc) with the fog
-## ShaderMaterial chained onto it via next_pass — see terrain_mesh_path above.
-@onready var _material: ShaderMaterial = get_node(terrain_mesh_path).get_active_material(0).next_pass
+## Deliberately created here at runtime rather than saved as a next_pass in
+## the .tscn — a next_pass baked into the scene file renders in the EDITOR'S
+## own 3D viewport too (with garbage default uniforms, since nothing drives
+## them outside of Play), making the terrain unusable to look at while
+## building maps. Chaining it here instead means the terrain's saved material
+## never has a next_pass on disk at all; it only exists in memory while the
+## game is actually running, so the editor view stays permanently clean with
+## nothing to remember to toggle.
+@onready var _material: ShaderMaterial = _setup_terrain_fog_material()
+
+func _setup_terrain_fog_material() -> ShaderMaterial:
+	var terrain_material: Material = get_node(terrain_mesh_path).get_active_material(0)
+	var fog_material := ShaderMaterial.new()
+	fog_material.shader = preload("res://shaders/fog_of_war.gdshader")
+	terrain_material.next_pass = fog_material
+	return fog_material
 
 func _ready() -> void:
 	var cell_count := grid_resolution * grid_resolution
