@@ -69,6 +69,32 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 func _play_command_sound() -> void:
 	AudioUtils.play_random(command_audio_player, on_command_sound_effects)
 
+## Purely local (like the sound above and the rally marker) — a quick
+## expanding, fading ring at the clicked ground point, so a right-click order
+## has an immediate visual confirmation beyond just the sound. White for a
+## plain move, red for an attack/attack-move order.
+func _play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.35
+	torus.outer_radius = 0.55
+	ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.3, 0.25, 0.9) if is_attack else Color(1.0, 1.0, 1.0, 0.9)
+	ring.material_override = mat
+	add_child(ring)
+	ring.global_position = world_pos + Vector3(0, 0.1, 0)
+	ring.scale = Vector3.ONE * 0.3
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3.ONE * 1.6, 0.35) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.35)
+	tween.set_parallel(false)
+	tween.tween_callback(ring.queue_free)
+
 @onready var game_over_panel: PanelContainer = $UI/GameOverPanel
 @onready var game_over_label: Label = $UI/GameOverPanel/Margin/VBox/ResultLabel
 
@@ -406,7 +432,7 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 ## same reasoning as animation/projectile relaying above — the host spawns its
 ## own local popup immediately and relays to every other peer to do the same.
 func _relay_damage_number(amount: int, node: Node3D) -> void:
-	_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+	_show_damage_feedback(node, amount)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_rpc_damage_number.rpc(node.get_path(), amount)
 
@@ -414,7 +440,14 @@ func _relay_damage_number(amount: int, node: Node3D) -> void:
 func _rpc_damage_number(node_path: NodePath, amount: int) -> void:
 	var node := get_node_or_null(node_path) as Node3D
 	if node:
-		_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+		_show_damage_feedback(node, amount)
+
+## Floating number for anything damageable; the hit flash only applies to
+## Unit (buildings have no sprite to flash).
+func _show_damage_feedback(node: Node3D, amount: int) -> void:
+	_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+	if node is Unit:
+		node.play_hit_flash()
 
 func _on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
 	_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
@@ -899,6 +932,7 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 	var target_path := _resolve_order_target_path(result)
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false)
 	_play_command_sound()
+	_play_command_feedback(result.position, false)
 
 ## Same target inference as a plain move order, except empty ground issues an
 ## attack-move instead of a plain move — see _rpc_issue_command's attack_move_fallback.
@@ -917,6 +951,7 @@ func _issue_attack_order(screen_pos: Vector2) -> void:
 	var target_path := _resolve_order_target_path(result)
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true)
 	_play_command_sound()
+	_play_command_feedback(result.position, true)
 
 func _issue_stop_order() -> void:
 	_prune_selected_units()

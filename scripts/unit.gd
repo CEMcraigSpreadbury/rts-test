@@ -237,6 +237,20 @@ var is_monarch: bool = false:
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
 var _fill_base_scale_x: float = 1.0
 
+var _flash_tween: Tween
+
+## Called by main.gd when relaying the damaged signal (see there — take_damage
+## only ever runs on the host, so this needs relaying to show on every peer,
+## same as the floating damage number it's paired with). Flashes to white and
+## eases back to team_tint rather than just snapping back, so a rapid flurry
+## of hits doesn't cut the flash short mid-fade.
+func play_hit_flash() -> void:
+	if _flash_tween and _flash_tween.is_valid():
+		_flash_tween.kill()
+	sprite.modulate = Color.WHITE
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(sprite, "modulate", team_tint, 0.15)
+
 ## -1 = no override, move at this unit's own move_speed. Set only by a
 ## multi-unit formation move (main.gd:_rpc_issue_command/_slowest_move_speed)
 ## so the whole group travels at its slowest member's pace instead of faster
