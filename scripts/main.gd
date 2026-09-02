@@ -558,6 +558,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.item_completed.connect(_on_building_item_completed.bind(building))
 		building.destroyed.connect(_on_building_destroyed.bind(building))
 		building.damaged.connect(_relay_damage_number.bind(building))
+		building.construction_finished.connect(_on_building_construction_finished.bind(building))
 		if multiplayer.is_server() and building.is_main_base:
 			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
 		if data.has("deposit_path"):
@@ -622,6 +623,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 			building.can_promote_monarch = true
 		if item.upgrade_bonus != 0:
 			UnitUpgrades.add_bonus(building.owner_peer_id, item.upgrade_category, item.upgrade_stat, item.upgrade_bonus)
+		_rpc_display_chat.rpc_id(building.owner_peer_id, "Upgrade complete: %s" % item.item_name)
 		return
 	if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
 		return
@@ -647,6 +649,15 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		var rally_target: Node = get_node_or_null(building.rally_target_path) \
 				if building.rally_target_path != NodePath() else null
 		_dispatch_smart_command(unit, rally_target, building.rally_point, false)
+
+## Only ever fires host-side (construction progress is host-authoritative),
+## so the chat line is sent explicitly to whichever peer owns the building
+## rather than shown locally — same reasoning as the debug command replies
+## above, just the message differs.
+func _on_building_construction_finished(building: ProductionBuilding) -> void:
+	if not multiplayer.is_server():
+		return
+	_rpc_display_chat.rpc_id(building.owner_peer_id, "Construction complete: %s" % building.building_name)
 
 func _get_dropoff_for(peer_id: int) -> Node3D:
 	var town_center: ProductionBuilding = town_centers.get(peer_id)
