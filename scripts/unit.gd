@@ -218,6 +218,15 @@ var is_monarch: bool = false:
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
 var _fill_base_scale_x: float = 1.0
 
+## -1 = no override, move at this unit's own move_speed. Set only by a
+## multi-unit formation move (main.gd:_rpc_issue_command/_slowest_move_speed)
+## so the whole group travels at its slowest member's pace instead of faster
+## units outrunning slower ones and scrambling the formation shape mid-transit
+## — the arrival slots were already correct, only the pacing during the move
+## wasn't. Cleared back to -1 by every other command (see each command_*
+## below) so a stale slowdown never outlives the move it was set for.
+var formation_speed: float = -1.0
+
 var target_resource: Gatherable = null
 var dropoff_point: Node3D = null
 var gather_timer: float = 0.0
@@ -293,7 +302,7 @@ func _update_avoidance_team() -> void:
 func move_to(target_position: Vector3) -> void:
 	nav_agent.target_position = target_position
 
-func command_move(target_position: Vector3) -> void:
+func command_move(target_position: Vector3, speed_override: float = -1.0) -> void:
 	if status_activity == Activity.DEAD:
 		return
 	_leave_build_site()
@@ -301,6 +310,7 @@ func command_move(target_position: Vector3) -> void:
 	status_command = Command.MOVE
 	status_activity = Activity.MOVING
 	attack_target = null
+	formation_speed = speed_override
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
 
@@ -315,6 +325,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	_leave_gather_site()
 	status_command = Command.GATHER
 	attack_target = null
+	formation_speed = -1.0
 	target_resource = resource_node
 	dropoff_point = dropoff
 	resource_node.add_gatherer(self)
@@ -327,19 +338,21 @@ func command_attack(target: Node3D) -> void:
 	_leave_gather_site()
 	status_command = Command.ATTACK
 	attack_target = target
+	formation_speed = -1.0
 	_head_to_target()
 
 ## One-shot: moves toward target_position, engaging (and fully converting to
 ## Command.ATTACK — see the scan in _physics_process) the first enemy found
 ## along the way. Once it engages, this order is gone for good; it does not
 ## resume toward target_position afterward.
-func command_attack_move(target_position: Vector3) -> void:
+func command_attack_move(target_position: Vector3, speed_override: float = -1.0) -> void:
 	if status_activity == Activity.DEAD or not can_fight:
 		return
 	_leave_build_site()
 	_leave_gather_site()
 	status_command = Command.ATTACK_MOVE
 	attack_target = null
+	formation_speed = speed_override
 	status_activity = Activity.MOVING
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
@@ -353,6 +366,7 @@ func command_patrol(points: Array[Vector3]) -> void:
 	_leave_gather_site()
 	status_command = Command.PATROL
 	attack_target = null
+	formation_speed = -1.0
 	patrol_points = points
 	patrol_index = 0
 	status_activity = Activity.MOVING
@@ -374,6 +388,7 @@ func command_stop() -> void:
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
 	attack_target = null
+	formation_speed = -1.0
 	patrol_points.clear()
 	nav_agent.target_position = global_position
 
@@ -388,6 +403,7 @@ func command_build(building: ProductionBuilding) -> void:
 	_leave_gather_site()
 	status_command = Command.BUILD
 	attack_target = null
+	formation_speed = -1.0
 	build_target = building
 	_head_to_build_site()
 
@@ -587,7 +603,11 @@ func _physics_process(delta: float) -> void:
 		if direction.length_squared() > 0.0001:
 			direction = direction.normalized()
 
-	var desired_velocity := Vector3(direction.x * move_speed, 0.0, direction.z * move_speed)
+	## formation_speed (see its declaration) caps a formation move to the
+	## group's slowest member — minf guards against it ever exceeding this
+	## unit's own move_speed even if it somehow got set wrong.
+	var effective_speed: float = minf(formation_speed, move_speed) if formation_speed > 0.0 else move_speed
+	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	nav_agent.set_velocity(desired_velocity)
 
 func _on_velocity_computed(safe_velocity: Vector3) -> void:

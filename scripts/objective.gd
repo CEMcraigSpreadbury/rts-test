@@ -20,6 +20,16 @@ const LEASH_MULTIPLIER: float = 2.5
 var owner_peer_id: int = 0
 var capture_progress: float = 0.0
 
+## owner_peer_id/team_tint are set here AND baked directly into every Guard/
+## Building instance in the .tscn itself (not just here) — Godot readies a
+## scene bottom-up in sibling declaration order, so if FogOfWar happens to be
+## declared before this Objective under Main, FogOfWar._ready() computes its
+## one-time initial "explored" stamp before this function ever runs, seeing
+## each guard's still-uncorrected scene-file default (owner_peer_id 1, same
+## as the real host) and permanently marking the objective as explored on
+## sight. Setting it here alone only fixes every frame AFTER that first one —
+## the .tscn defaults are what actually prevent the bad stamp from ever
+## happening. Keep both in sync if this ever changes.
 func _ready() -> void:
 	progress_disc.visible = false
 	var main := get_tree().current_scene

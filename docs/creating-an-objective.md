@@ -23,9 +23,19 @@ Archer, or a brand-new one via `docs/creating-a-unit.md`). Position them
 around the origin; exact placement doesn't matter much since
 `Objective._ready()` immediately puts each one on a patrol loop.
 
-Leave their **Owner Peer Id**/**Team Tint** at whatever's in the scene file —
-`Objective._ready()` overwrites both to neutral (peer `0`, gray tint) on
-`_ready()` regardless, so nothing needs setting here manually.
+On **each** guard instance, explicitly set **Owner Peer Id** to `0` and
+**Team Tint** to a neutral gray (e.g. `Color(0.5, 0.5, 0.5)`) in the
+Inspector — do this even though `Objective._ready()` sets both again at
+runtime. Godot readies a scene bottom-up in sibling declaration order, so if
+some other node (fog of war, in particular) happens to be declared before
+this Objective under the map's root, that node's own `_ready()` can run
+*before* `Objective._ready()` gets a chance to correct a guard's ownership —
+seeing its uncorrected scene-file default (`owner_peer_id` normally defaults
+to `1`, the same id as the real host) for that one frame is enough to
+permanently mark the objective as "explored"/visible on sight, since fog of
+war's explored memory only ever accumulates, never un-stamps. Baking the
+neutral values directly into the scene file is what actually prevents that —
+the runtime correction alone only fixes every frame *after* the first.
 
 ## 2. Populate Buildings
 
@@ -36,9 +46,21 @@ Variation D for what's specific to an Objective building (short version:
 nothing — just place it here, `Objective._ready()` calls
 `main.gd:register_objective_building()` on every child automatically).
 
+Same as step 1: explicitly set **Owner Peer Id** to `0` on each building
+instance too, for the same fog-of-war-ready-order reason.
+
 Different objectives are meant to have completely different rosters (an "Orc
 Camp" vs. an "Elven Hollow") — that's the whole point of Guards/Buildings
 being plain hand-placed children instead of a shared `Faction` resource.
+
+## Purely decorative scenery
+
+Any imported model or prop placed near an objective purely for looks (no
+`Unit`/`ProductionBuilding` script attached — a watchtower, ruins, rocks)
+is invisible to fog of war by default; it isn't a unit, building, or
+gatherable, so nothing ever hides it. Add **`fog_static_props`** to the
+node's **Groups** (Node dock → Groups tab) to have it hidden until explored,
+same "remembered once seen" rule buildings use.
 
 ## 3. Size the capture zone and progress disc
 

@@ -31,13 +31,19 @@ script = ExtResource("1_objective_script")
 
 [node name="Soldier" parent="Guards" instance=ExtResource("2_soldier")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0)
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
 
 [node name="Soldier2" parent="Guards" instance=ExtResource("2_soldier")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 0)
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
 
 [node name="Buildings" type="Node3D" parent="."]
 
 [node name="Barracks" parent="Buildings" instance=ExtResource("3_barracks")]
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
 
 [node name="CaptureZone" type="Area3D" parent="."]
 

@@ -14,9 +14,24 @@ extends Node3D
 
 signal fog_updated
 
-## World-space rectangle the explored-memory grid covers; should match the ground plane.
+## World-space rectangle the explored-memory grid covers; should match the terrain.
 @export var map_origin: Vector2 = Vector2(-30, -30)
 @export var map_size: Vector2 = Vector2(60, 60)
+## The terrain's own MeshInstance3D — its fragment shader material must chain
+## a ShaderMaterial using fog_of_war.gdshader via `next_pass` (see
+## StandardMaterial3D_b6ruc/ShaderMaterial_terrain_fog in main.tscn). Fog used
+## to be a separate floating overlay plane instead, but a flat plane can only
+## ever hide things shorter than itself (raised terrain, tall props poked
+## through) and can't be raised much before it clears the camera's own
+## downward-only view rays entirely (see rts_camera.gd; min eye height is
+## zoom_distance * sin(pitch_degrees), just 4.0 at min_zoom). Running the
+## identical shader as a second pass directly on the terrain's own geometry
+## instead means it naturally follows the terrain's real height/contours
+## exactly, since it's reading the terrain's own vertices, not a proxy's.
+## Units/buildings/tagged props are still hidden by toggling their own
+## .visible off in _update_node_visibility() below, same as always — this is
+## only about terrain, which can't be toggled the same way.
+@export var terrain_mesh_path: NodePath
 ## Only affects how blocky the dim "remembered but not currently seen" areas
 ## look — current vision is a smooth analytic circle regardless of this value,
 ## so there's no reason to push it high anymore.
@@ -53,8 +68,9 @@ var _vision_positions: PackedVector2Array = PackedVector2Array()
 var _vision_radii: PackedFloat32Array = PackedFloat32Array()
 var _vision_count: int = 0
 
-@onready var _mesh_instance: MeshInstance3D = $MeshInstance3D
-@onready var _material: ShaderMaterial = _mesh_instance.get_surface_override_material(0)
+## The terrain's own base material (StandardMaterial3D_b6ruc) with the fog
+## ShaderMaterial chained onto it via next_pass — see terrain_mesh_path above.
+@onready var _material: ShaderMaterial = get_node(terrain_mesh_path).get_active_material(0).next_pass
 
 func _ready() -> void:
 	var cell_count := grid_resolution * grid_resolution
@@ -64,12 +80,6 @@ func _ready() -> void:
 	_image = Image.create(grid_resolution, grid_resolution, false, Image.FORMAT_RGBA8)
 	_image.fill(Color.BLACK)
 	fog_texture = ImageTexture.create_from_image(_image)
-
-	var mesh: PlaneMesh = _mesh_instance.mesh
-	mesh.size = map_size
-	_mesh_instance.position = Vector3(
-		map_origin.x + map_size.x * 0.5, 0.05, map_origin.y + map_size.y * 0.5
-	)
 
 	_material.set_shader_parameter("fog_tex", fog_texture)
 	_material.set_shader_parameter("map_origin", map_origin)
@@ -94,9 +104,18 @@ func _process(delta: float) -> void:
 	_explored_timer = 0.0
 	_update_explored()
 
+## Peer 0 is the neutral/AI-owner sentinel (Gatherable, Objective guards
+## before capture) — never a real player, so it must never be treated as
+## "mine" here even though multiplayer.get_unique_id() degrades to 0 (instead
+## of the usual 1) in the direct-run-main.tscn-bypassing-the-lobby test
+## workflow. Without this guard, that mode wrongly grants full vision from
+## every un-captured Objective's guards, and _update_node_visibility() below
+## wrongly renders them (and their buildings) through the fog entirely.
 func _update_vision_sources() -> void:
 	_vision_count = 0
 	var my_peer := multiplayer.get_unique_id()
+	if my_peer == 0:
+		return
 
 	for node in get_tree().get_nodes_in_group("units"):
 		if _vision_count >= MAX_VISION_SOURCES:
@@ -201,19 +220,32 @@ func _rebuild_texture() -> void:
 ## don't move, so once explored they stay visible at their known position —
 ## same "remembered map" idea classic RTS fog uses for static structures.
 func _update_node_visibility() -> void:
+	## 0 is never really "mine" — see the guard/comment in _update_vision_sources().
 	var my_peer := multiplayer.get_unique_id()
+	var i_am_valid_peer := my_peer != 0
 
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
 		if unit:
-			unit.visible = unit.owner_peer_id == my_peer or is_visible_at(unit.global_position)
+			unit.visible = (i_am_valid_peer and unit.owner_peer_id == my_peer) or is_visible_at(unit.global_position)
 
 	for node in get_tree().get_nodes_in_group("buildings"):
 		var building := node as ProductionBuilding
 		if building:
-			building.visible = building.owner_peer_id == my_peer or is_explored_at(building.global_position)
+			building.visible = (i_am_valid_peer and building.owner_peer_id == my_peer) or is_explored_at(building.global_position)
 
 	for node in get_tree().get_nodes_in_group("gatherables"):
 		var res := node as Gatherable
 		if res:
 			res.visible = is_explored_at(res.global_position)
+
+	## Purely decorative scenery (imported models with no Unit/ProductionBuilding
+	## script attached, e.g. an Objective's terrain dressing) — add "fog_static_props"
+	## to a node's Groups in the Inspector to have fog hide it too. Same "remembered
+	## map" rule as buildings/gatherables above: once explored it stays visible,
+	## since it's static and being wrong about its remembered appearance never
+	## matters the way a stale unit position would.
+	for node in get_tree().get_nodes_in_group("fog_static_props"):
+		var prop := node as Node3D
+		if prop:
+			prop.visible = is_explored_at(prop.global_position)

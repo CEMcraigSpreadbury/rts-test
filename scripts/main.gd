@@ -894,8 +894,14 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			units.append(unit)
 
 	var formation_positions := _formation_positions(units, world_pos)
+	## Capping the whole group to its slowest member's speed is what actually
+	## keeps a mixed-speed selection's formation shape intact throughout the
+	## move — the nearest-slot assignment above already gets everyone to the
+	## right place, but without this a fast unit reaches its slot early and
+	## drifts/jostles around while slower units are still catching up.
+	var group_speed := _slowest_move_speed(units)
 	for i in units.size():
-		_dispatch_smart_command(units[i], target_node, formation_positions[i], attack_move_fallback)
+		_dispatch_smart_command(units[i], target_node, formation_positions[i], attack_move_fallback, group_speed)
 
 const FORMATION_COLUMNS: int = 4
 ## Wider than it looks like it needs to be on paper: each unit's
@@ -981,11 +987,22 @@ func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3]) -> Array[
 		assigned += 1
 	return result
 
+## -1 (no override) for a single-unit selection — see Unit.formation_speed.
+func _slowest_move_speed(units: Array[Unit]) -> float:
+	if units.size() <= 1:
+		return -1.0
+	var slowest: float = units[0].move_speed
+	for unit in units:
+		slowest = minf(slowest, unit.move_speed)
+	return slowest
+
 ## Shared by right-click/attack-order dispatch and a rally point resolving
 ## onto a resource/enemy/under-construction building: gather/attack/build the
 ## target if it makes sense for one, otherwise fall back to a plain move (or
-## attack-move, when armed). world_pos is only used by that fallback branch.
-func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, attack_move_fallback: bool) -> void:
+## attack-move, when armed). world_pos/speed_override are only used by that
+## fallback branch — a gather/attack/build target ignores both, same reasoning
+## as the formation slot position itself (see _formation_positions).
+func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, attack_move_fallback: bool, speed_override: float = -1.0) -> void:
 	## Natural resources (owner_peer_id 0) are gatherable by anyone; a
 	## player-built Farm is locked to whoever built it. A resource that
 	## requires_building_on_top (e.g. a Gold Deposit) also isn't gatherable
@@ -1013,10 +1030,10 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 		unit.command_build(target_node)
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.BUILD)
 	elif attack_move_fallback:
-		unit.command_attack_move(world_pos)
+		unit.command_attack_move(world_pos, speed_override)
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	else:
-		unit.command_move(world_pos)
+		unit.command_move(world_pos, speed_override)
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.MOVE)
 
 ## append: true once the current patrol-targeting session's first click has

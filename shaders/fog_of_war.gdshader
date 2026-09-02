@@ -1,5 +1,12 @@
 shader_type spatial;
-render_mode unshaded, blend_mix, cull_disabled;
+// depth_test_disabled matters now that this also runs as a next_pass on the
+// terrain's own material (see fog_of_war.gd/main.tscn): rendering identical
+// geometry at identical depth right after the base pass makes a normal depth
+// test flicker (z-fighting) since neither fragment reliably wins. This pass
+// is meant to always draw on top of whatever's beneath it regardless, so
+// skipping the depth test entirely avoids the comparison instead of trying
+// to win it.
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, depth_test_disabled;
 
 // Sampled by world-space XZ position rather than mesh UVs, so the overlay
 // always lines up with FogOfWar's grid regardless of how the plane mesh's

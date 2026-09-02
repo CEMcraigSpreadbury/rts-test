@@ -12,6 +12,12 @@ extends Node3D
 @export var min_zoom: float = 8.0
 @export var max_zoom: float = 22.0
 @export var pitch_degrees: float = 30.0
+## near_blur/far_blur must each stay larger than the matching transition width
+## baked into Camera3D's CameraAttributesPractical resource (dof_blur_near_transition/
+## dof_blur_far_transition) — otherwise the transition ramp overshoots past the
+## focus pivot onto the wrong side of it, so the two blur ramps overlap right on
+## the pivot instead of leaving it sharp, blurring the screen center instead of
+## the foreground/background either side of it.
 @export var near_blur: float = 3.5
 @export var far_blur: float = 6.0
 
