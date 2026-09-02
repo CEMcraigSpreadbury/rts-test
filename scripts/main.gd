@@ -120,6 +120,9 @@ var selected_building: ProductionBuilding = null
 var selected_resource: Gatherable = null
 var drag_start: Vector2 = Vector2.ZERO
 var dragging: bool = false
+## Captured from the press event (double_click is only ever set there, not on
+## release) and consumed by _finish_selection once the button comes back up.
+var _pending_double_click: bool = false
 
 ## "" | "move" | "attack" | "patrol" — armed by a command-card button/hotkey,
 ## consumed by the next left-click (see _handle_pending_order_input).
@@ -804,10 +807,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			if event.pressed:
 				drag_start = event.position
 				dragging = true
+				_pending_double_click = event.double_click
 			elif dragging:
 				dragging = false
 				selection_box.visible = false
-				_finish_selection(drag_start, event.position)
+				_finish_selection(drag_start, event.position, _pending_double_click)
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
 			if selected_building != null and selected_building.can_rally:
 				_set_rally_point(event.position)
@@ -924,6 +928,23 @@ func _select_next_idle_villager() -> void:
 	villager.play_select_sound()
 	_center_camera_on([villager])
 
+## Double-clicking a unit selects every other owned unit of the same type
+## currently visible on screen — same "same type" notion as display_name
+## already uses elsewhere (Villager/Soldier/Cavalry/...).
+func _select_all_visible_units_of_type(unit_type: String) -> void:
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	var viewport_rect := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	for child in units_root.get_children():
+		if child is Unit and child.owner_peer_id == _my_peer_id() and child.display_name == unit_type \
+				and not camera.is_position_behind(child.global_position):
+			var screen_pos: Vector2 = camera.unproject_position(child.global_position)
+			if viewport_rect.has_point(screen_pos):
+				child.selected = true
+				selected_units.append(child)
+	_play_random_select_sound(selected_units)
+
 func _center_camera_on(members: Array) -> void:
 	var sum := Vector3.ZERO
 	var count := 0
@@ -937,7 +958,7 @@ func _center_camera_on(members: Array) -> void:
 	camera_rig.global_position.x = avg.x
 	camera_rig.global_position.z = avg.z
 
-func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
+func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool = false) -> void:
 	_prune_selected_units()
 	_active_group_number = -1
 	var rect := Rect2(
@@ -952,17 +973,22 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 	if start_pos.distance_to(end_pos) <= CLICK_DRAG_THRESHOLD:
 		var collider: Object = _raycast(end_pos).get("collider")
 		if collider is Unit and collider.owner_peer_id == _my_peer_id():
-			collider.selected = true
-			selected_units.append(collider)
-			collider.play_select_sound()
 			_select_building(null)
 			_select_resource(null)
+			if double_click:
+				_select_all_visible_units_of_type(collider.display_name)
+			else:
+				collider.selected = true
+				selected_units.append(collider)
+				collider.play_select_sound()
 			clicked_ring_target = collider
 		elif collider is ProductionBuilding and collider.owner_peer_id == _my_peer_id():
 			_select_building(collider)
 			collider.play_select_sound()
 			_select_resource(null)
 			clicked_ring_target = collider
+			if double_click:
+				_center_camera_on([collider])
 		elif collider is Gatherable:
 			## Any resource node (own or not — trees/berries/gold deposits have
 			## no owner) shows its remaining amount in the info panel; unlike
@@ -977,6 +1003,8 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2) -> void:
 			_select_building(null)
 			_select_resource(null)
 			clicked_ring_target = collider
+			if double_click and collider is ProductionBuilding:
+				_center_camera_on([collider])
 		else:
 			_select_building(null)
 			_select_resource(null)
