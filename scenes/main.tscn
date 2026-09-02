@@ -12732,7 +12732,6 @@ process_material = SubResource("ParticleProcessMaterial_dust")
 draw_pass_1 = SubResource("SphereMesh_dust")
 
 [node name="FogOfWar" type="Node3D" parent="." unique_id=1933763603]
-visible = false
 script = ExtResource("11_fog_script")
 map_origin = Vector2(-84, -75)
 map_size = Vector2(168, 150)

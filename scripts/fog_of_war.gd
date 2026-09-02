@@ -33,9 +33,15 @@ signal fog_updated
 ## only about terrain, which can't be toggled the same way.
 @export var terrain_mesh_path: NodePath
 ## Only affects how blocky the dim "remembered but not currently seen" areas
-## look — current vision is a smooth analytic circle regardless of this value,
-## so there's no reason to push it high anymore.
-@export var grid_resolution: int = 96
+## look — current vision is a smooth analytic circle regardless of this value.
+## Cell size is map_size / grid_resolution: this was tuned for the original
+## 60x60 map (0.625 world units/cell); after extending the map to 168x150
+## without raising this, cells grew to ~1.75x1.56 units and the blend looked
+## chunky. 256 restores roughly the original density (~0.66/0.59 units/cell)
+## — cheap to push higher still, _rebuild_texture()'s full-grid pass runs only
+## a few times a second and grid_resolution^2 simple ops is trivial even at
+## much larger sizes.
+@export var grid_resolution: int = 256
 @export var explored_update_interval: float = 0.15
 
 ## Must match MAX_VISION_SOURCES in fog_of_war.gdshader.
