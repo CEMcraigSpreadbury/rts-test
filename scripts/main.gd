@@ -65,6 +65,11 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 ## covering unit orders (move/attack/stop/patrol/build/promote/abilities),
 ## confirmed building placement, and queuing production/upgrades.
 @export var on_command_sound_effects: Array[AudioStream] = []
+## Played (locally, throttled) whenever one of the local player's own units or
+## buildings takes damage — see _maybe_alert_under_attack.
+@export var on_under_attack_sound_effects: Array[AudioStream] = []
+
+@onready var ui_root: Node = $UI
 
 func _play_command_sound() -> void:
 	AudioUtils.play_random(command_audio_player, on_command_sound_effects)
@@ -244,6 +249,15 @@ func _ready() -> void:
 
 	game_over_panel.visible = false
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
+
+	## Built in code rather than saved in the scene — it's just a full-screen
+	## color wash, nothing worth hand-authoring, and this avoids yet another
+	## edit to the already-enormous main.tscn.
+	_under_attack_flash = ColorRect.new()
+	_under_attack_flash.color = Color(1.0, 0.15, 0.1, 0.0)
+	_under_attack_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_under_attack_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui_root.add_child(_under_attack_flash)
 
 	pause_menu.visible = false
 	master_volume_slider.value = Settings.volumes["Master"] * 100.0
@@ -448,6 +462,44 @@ func _show_damage_feedback(node: Node3D, amount: int) -> void:
 	_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
 	if node is Unit:
 		node.play_hit_flash()
+	_maybe_alert_under_attack(node)
+
+## Purely local per-viewer decision (this runs identically for every peer,
+## on both the host's immediate call and every client's relayed RPC) — only
+## fires when it's specifically *this* viewer's own stuff being hit, throttled
+## so a sustained attack pings/flashes once every few seconds instead of once
+## per hit. Records where, so KEY_BACKSPACE can jump the camera there.
+const UNDER_ATTACK_ALERT_COOLDOWN_MS: int = 6000
+var _last_under_attack_alert_ms: int = -UNDER_ATTACK_ALERT_COOLDOWN_MS
+var _last_attack_position: Vector3 = Vector3.ZERO
+var _has_attack_alert: bool = false
+var _under_attack_flash: ColorRect
+
+func _maybe_alert_under_attack(node: Node3D) -> void:
+	var node_owner_peer_id: int = -1
+	if node is Unit:
+		node_owner_peer_id = (node as Unit).owner_peer_id
+	elif node is ProductionBuilding:
+		node_owner_peer_id = (node as ProductionBuilding).owner_peer_id
+	if node_owner_peer_id != _my_peer_id():
+		return
+	var now := Time.get_ticks_msec()
+	if now - _last_under_attack_alert_ms < UNDER_ATTACK_ALERT_COOLDOWN_MS:
+		return
+	_last_under_attack_alert_ms = now
+	_last_attack_position = node.global_position
+	_has_attack_alert = true
+	AudioUtils.play_random(command_audio_player, on_under_attack_sound_effects)
+	_under_attack_flash.color.a = 0.0
+	var tween := create_tween()
+	tween.tween_property(_under_attack_flash, "color:a", 0.35, 0.1)
+	tween.tween_property(_under_attack_flash, "color:a", 0.0, 1.0)
+
+func _jump_to_last_attack() -> void:
+	if not _has_attack_alert:
+		return
+	camera_rig.global_position.x = _last_attack_position.x
+	camera_rig.global_position.z = _last_attack_position.z
 
 func _on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
 	_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
@@ -682,6 +734,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_BACKSPACE:
+		_jump_to_last_attack()
+		get_viewport().set_input_as_handled()
+		return
+
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_PERIOD:
+		_select_next_idle_villager()
+		get_viewport().set_input_as_handled()
+		return
+
 	## Gated on nothing being selected (the idle construction menu) or the
 	## build submenu being open (a unit's Build button) — the only two times
 	## the action panel actually shows these buttons, matching what's on
@@ -820,6 +882,36 @@ func _activate_control_group(number: int) -> void:
 		building_in_group.play_select_sound()
 
 	_active_group_number = number
+
+## Cycles through the local player's own fully-idle gatherers (can_gather,
+## not off doing anything else) each press, wrapping around — same
+## select-and-recenter pattern as reactivating a control group.
+var _idle_villager_cycle_index: int = -1
+
+func _select_next_idle_villager() -> void:
+	var idle_villagers: Array[Unit] = []
+	for node in get_tree().get_nodes_in_group("units"):
+		var unit := node as Unit
+		if unit and unit.owner_peer_id == _my_peer_id() and unit.can_gather \
+				and unit.status_activity == Unit.Activity.IDLE and unit.status_command == Unit.Command.NONE:
+			idle_villagers.append(unit)
+	if idle_villagers.is_empty():
+		return
+
+	_idle_villager_cycle_index = (_idle_villager_cycle_index + 1) % idle_villagers.size()
+	var villager := idle_villagers[_idle_villager_cycle_index]
+
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	_select_building(null)
+	_select_resource(null)
+	_active_group_number = -1
+
+	villager.selected = true
+	selected_units.append(villager)
+	villager.play_select_sound()
+	_center_camera_on([villager])
 
 func _center_camera_on(members: Array) -> void:
 	var sum := Vector3.ZERO
