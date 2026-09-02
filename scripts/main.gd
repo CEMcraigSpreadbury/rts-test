@@ -326,6 +326,8 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.position = data.position
 	unit.animation_changed.connect(_on_unit_animation_changed.bind(unit))
 	unit.projectile_fired.connect(_on_unit_projectile_fired.bind(unit))
+	unit.damaged.connect(_relay_damage_number.bind(unit))
+	unit.resource_deposited.connect(_on_unit_resource_deposited.bind(unit))
 	return unit
 
 ## RPCs declared directly on dynamically-spawned Unit nodes weren't reaching
@@ -399,6 +401,53 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 	)
 	tween.tween_callback(projectile.queue_free)
 
+## Damage taken and resources deposited only ever happen on the host (both
+## take_damage() and Unit._deposit_and_continue() are authority-gated), so —
+## same reasoning as animation/projectile relaying above — the host spawns its
+## own local popup immediately and relays to every other peer to do the same.
+func _relay_damage_number(amount: int, node: Node3D) -> void:
+	_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_damage_number.rpc(node.get_path(), amount)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_damage_number(node_path: NodePath, amount: int) -> void:
+	var node := get_node_or_null(node_path) as Node3D
+	if node:
+		_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+
+func _on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
+	_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_resource_number.rpc(unit.get_path(), amount, color)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_resource_number(unit_path: NodePath, amount: int, color: Color) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
+
+## Purely local cosmetic popup — rises and fades in place, then frees itself.
+## Shared by damage numbers (red, flat integer) and resource numbers ("+N" in
+## the resource's own display_color).
+func _spawn_floating_number(world_pos: Vector3, text: String, color: Color) -> void:
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 56
+	label.outline_size = 12
+	label.modulate = color
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	add_child(label)
+	label.global_position = world_pos + Vector3(randf_range(-0.3, 0.3), 0.0, randf_range(-0.3, 0.3))
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y + 1.2, 0.9) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, 0.9).set_delay(0.3)
+	tween.set_parallel(false)
+	tween.tween_callback(label.queue_free)
+
 ## Hand-placed buildings (currently just Objective guards' buildings) never
 ## go through _spawn_building_from_data below, so without this their
 ## item_completed/destroyed signals have no listener and producing a unit
@@ -406,6 +455,7 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 func register_objective_building(building: ProductionBuilding) -> void:
 	building.item_completed.connect(_on_building_item_completed.bind(building))
 	building.destroyed.connect(_on_building_destroyed.bind(building))
+	building.damaged.connect(_relay_damage_number.bind(building))
 
 ## Most buildable structures are ProductionBuildings (Town Center, Barracks,
 ## House), but Farm is a buildable Gatherable (no construction/production
@@ -422,6 +472,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.team_tint = data.get("tint", Color.WHITE)
 		building.item_completed.connect(_on_building_item_completed.bind(building))
 		building.destroyed.connect(_on_building_destroyed.bind(building))
+		building.damaged.connect(_relay_damage_number.bind(building))
 		if multiplayer.is_server() and building.is_main_base:
 			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
 		if data.has("deposit_path"):

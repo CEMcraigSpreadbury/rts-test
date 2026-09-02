@@ -13,6 +13,9 @@ signal queue_changed
 signal item_completed(item: ProducibleItem)
 signal construction_finished
 signal destroyed
+## Relayed by main.gd for a floating damage-number popup, same reasoning as
+## Unit.damaged — take_damage() only ever runs on the host.
+signal damaged(amount: int)
 
 const DESTROY_SINK_DURATION: float = 1.5
 
@@ -181,6 +184,7 @@ func time_remaining() -> float:
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or is_destroyed:
 		return
+	damaged.emit(amount)
 	current_health = maxi(current_health - amount, 0)
 	health_fraction = float(current_health) / float(maxi(max_health, 1))
 	if current_health <= 0:

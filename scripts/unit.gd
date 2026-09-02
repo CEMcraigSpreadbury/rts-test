@@ -50,6 +50,14 @@ signal animation_changed(anim_name: String)
 ## cosmetic projectile visual flying toward the target. Real damage timing is
 ## tracked independently on the host via _pending_projectile_hits, not this.
 signal projectile_fired(target: Node3D)
+## Relayed the same way (see main.gd) for a floating damage-number popup —
+## take_damage() only ever runs on the host, so without relaying this every
+## other peer would never see the number at all.
+signal damaged(amount: int)
+## Relayed the same way, for a floating "+N" resource popup. Carries the
+## resource's display_color directly (rather than the ResourceType resource
+## itself) since that's all the popup needs and it's trivially RPC-safe.
+signal resource_deposited(amount: int, color: Color)
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -202,8 +210,19 @@ func play_order_sound(kind: OrderSoundKind) -> void:
 
 var selected: bool = false:
 	set(value):
+		var was_selected := selected
 		selected = value
 		selection_ring.visible = value
+		if value and not was_selected:
+			_play_selection_punch()
+
+## Quick scale bounce on newly becoming selected — purely a local visual, not
+## networked, same as selected itself (selection is per-viewer, like sprite flip).
+func _play_selection_punch() -> void:
+	selection_ring.scale = Vector3.ONE * 0.5
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(selection_ring, "scale", Vector3.ONE, 0.25)
 
 ## Setter (not just a plain bool) so the crown reacts immediately whether set
 ## locally (host, on promotion) or received over the wire on other peers via
@@ -492,6 +511,7 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	var armor: int = CombatUtils.nearby_aura_armor_bonus(get_tree(), self) \
 			+ UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category)
 	amount = maxi(amount - armor, 1)
+	damaged.emit(amount)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die()
@@ -753,6 +773,7 @@ func _head_to_dropoff() -> void:
 func _deposit_and_continue() -> void:
 	if status_carried_amount > 0 and status_carried_type != null:
 		ResourceStockpile.add(owner_peer_id, status_carried_type, status_carried_amount)
+		resource_deposited.emit(status_carried_amount, status_carried_type.display_color)
 	status_carried_amount = 0
 	status_carried_type = null
 
