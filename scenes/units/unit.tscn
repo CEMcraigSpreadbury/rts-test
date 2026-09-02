@@ -23,6 +23,27 @@ outer_radius = 0.7
 shading_mode = 0
 albedo_color = Color(0.2, 1, 0.3, 1)
 
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_walkdust"]
+emission_shape = 1
+emission_sphere_radius = 0.5
+direction = Vector3(0, 1, 0)
+spread = 50.0
+initial_velocity_min = 0.2
+initial_velocity_max = 0.5
+gravity = Vector3(0, 0.15, 0)
+scale_min = 0.4
+scale_max = 0.9
+color = Color(0.75, 0.68, 0.55, 0.45)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_walkdust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.75, 0.68, 0.55, 0.45)
+
+[sub_resource type="QuadMesh" id="QuadMesh_walkdust"]
+material = SubResource("StandardMaterial3D_walkdust")
+size = Vector2(0.12, 0.12)
+
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
 properties/0/path = NodePath(".:position")
 properties/0/spawn = true
@@ -70,10 +91,17 @@ surface_material_override/0 = SubResource("StandardMaterial3D_ring")
 [node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=2051781566]
 radius = 0.45
 
+[node name="WalkDust" type="GPUParticles3D" parent="." unique_id=1126440812]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+lifetime = 0.5
+preprocess = 0.2
+process_material = SubResource("ParticleProcessMaterial_walkdust")
+draw_pass_1 = SubResource("QuadMesh_walkdust")
+
 [node name="UnitAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1233211235]
-bus = "SFX"
 unit_size = 20.0
 max_distance = 40.0
+bus = &"SFX"
 
 [node name="CrownIcon" type="Sprite3D" parent="." unique_id=1233211234]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8366616, 0)

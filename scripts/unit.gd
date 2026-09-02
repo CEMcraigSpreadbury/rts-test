@@ -193,6 +193,9 @@ signal order_completed
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
 @onready var crown_icon: Sprite3D = $CrownIcon
+## Inspector-configurable (amount/color/spread/etc. all live on the node
+## itself) — see _process() for when it's toggled on/off.
+@onready var walk_dust: GPUParticles3D = get_node_or_null("WalkDust")
 ## Shared by selection and order-acknowledgment sounds — both are short,
 ## non-overlapping-in-practice one-shots, so a second dedicated player isn't
 ## worth another node per unit scene.
@@ -737,6 +740,12 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 ## world rotation plus that peer's own current camera.
 func _process(_delta: float) -> void:
 	_update_health_bar_visual()
+	## Driven off the sprite's own already-cross-peer-correct animation state
+	## (see _set_animation/animation_changed) rather than status_activity or
+	## raw velocity directly — those are only reliable on the authoritative
+	## peer, while every peer already shows the right walk/idle animation.
+	if walk_dust:
+		walk_dust.emitting = sprite.animation == "walk"
 
 	var camera := get_viewport().get_camera_3d()
 	if not camera:
