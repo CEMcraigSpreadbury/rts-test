@@ -76,6 +76,9 @@ var linked_deposit: Gatherable = null
 @export var health_fraction: float = 1.0
 ## Mirrored purely for the "N building" UI display.
 @export var synced_builder_count: int = 0
+## item_name -> how many of that item are currently in queue (including the
+## one in progress) — drives the small count badge on each producible button.
+@export var synced_queue_counts: Dictionary = {}
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
@@ -259,6 +262,11 @@ func _process(delta: float) -> void:
 	synced_current_item_name = queue[0].item_name if not queue.is_empty() else ""
 	synced_current_item_progress = clampf(1.0 - synced_time_remaining / maxf(queue[0].build_time, 0.01), 0.0, 1.0) \
 			if not queue.is_empty() else 0.0
+
+	var counts: Dictionary = {}
+	for queued_item in queue:
+		counts[queued_item.item_name] = counts.get(queued_item.item_name, 0) + 1
+	synced_queue_counts = counts
 
 func _update_health_bar_visual() -> void:
 	if not health_bar:

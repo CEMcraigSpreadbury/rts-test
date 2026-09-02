@@ -34,7 +34,7 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @onready var camera: Camera3D = $CameraRig/Yaw/Pitch/Camera3D
 @onready var camera_rig: Node3D = $CameraRig
 @onready var selection_box: ColorRect = $UI/SelectionBox
-@onready var resource_label: Label = $UI/ResourceLabel
+@onready var resource_label: RichTextLabel = $UI/ResourceLabel
 @onready var units_root: Node3D = $Units
 @onready var unit_spawner: MultiplayerSpawner = $UnitSpawner
 @onready var buildings_root: Node3D = $Buildings
@@ -70,6 +70,7 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @export var on_under_attack_sound_effects: Array[AudioStream] = []
 
 @onready var ui_root: Node = $UI
+@onready var minimap: Control = $UI/Minimap
 
 func _play_command_sound() -> void:
 	AudioUtils.play_random(command_audio_player, on_command_sound_effects)
@@ -100,6 +101,66 @@ func _play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 	tween.set_parallel(false)
 	tween.tween_callback(ring.queue_free)
 
+const PATH_MARKER_COLOR: Color = Color(0.45, 0.75, 1.0, 0.9)
+
+## Persistent (until reached/cleared) flag marking one point in a unit's
+## shift-drawn path — see _path_markers. Only actually shown while that unit
+## is selected — see _update_path_markers.
+func _add_path_marker(unit: Unit, world_pos: Vector3) -> void:
+	var markers: Array = _path_markers.get(unit, [])
+
+	var marker := Node3D.new()
+	add_child(marker)
+	marker.global_position = world_pos + Vector3(0, 0.05, 0)
+	marker.visible = selected_units.has(unit)
+
+	var flag_mesh := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.18
+	torus.outer_radius = 0.28
+	flag_mesh.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = PATH_MARKER_COLOR
+	flag_mesh.material_override = mat
+	marker.add_child(flag_mesh)
+
+	markers.append(marker)
+	_path_markers[unit] = markers
+
+func _clear_path_markers(unit: Unit) -> void:
+	if not _path_markers.has(unit):
+		return
+	for marker in _path_markers[unit]:
+		if is_instance_valid(marker):
+			marker.queue_free()
+	_path_markers.erase(unit)
+
+## Pops (and frees) the oldest marker for each unit once it's actually gotten
+## close to that point — an approximation of "this waypoint was reached"
+## driven by the unit's own replicated position, since the host's real
+## order_queue isn't networked and this is cosmetic-only anyway. Also keeps
+## each remaining marker's visibility in sync with whether its unit is
+## currently selected, every frame (selection changes constantly and isn't
+## routed through a single choke point worth hooking instead).
+func _update_path_markers() -> void:
+	for unit in _path_markers.keys():
+		if not is_instance_valid(unit):
+			_clear_path_markers(unit)
+			continue
+		var markers: Array = _path_markers[unit]
+		while not markers.is_empty() and is_instance_valid(markers[0]) \
+				and unit.global_position.distance_to(markers[0].global_position) <= PATH_MARKER_ARRIVAL_DISTANCE:
+			markers[0].queue_free()
+			markers.pop_front()
+		if markers.is_empty():
+			_path_markers.erase(unit)
+			continue
+		var is_selected := selected_units.has(unit)
+		for marker in markers:
+			if is_instance_valid(marker):
+				marker.visible = is_selected
+
 @onready var game_over_panel: PanelContainer = $UI/GameOverPanel
 @onready var game_over_label: Label = $UI/GameOverPanel/Margin/VBox/ResultLabel
 
@@ -123,6 +184,13 @@ var dragging: bool = false
 ## Captured from the press event (double_click is only ever set there, not on
 ## release) and consumed by _finish_selection once the button comes back up.
 var _pending_double_click: bool = false
+## Unit -> Array[Node3D], the flag markers for its still-pending shift-drawn
+## waypoints, in order. Purely a local visual aid on this client (not driven
+## by the host's real, authoritative order_queue) so a multi-point path is
+## visible on screen after being planned out — see _add_path_marker/
+## _update_path_markers/_clear_path_markers.
+var _path_markers: Dictionary = {}
+const PATH_MARKER_ARRIVAL_DISTANCE: float = 1.0
 
 ## "" | "move" | "attack" | "patrol" — armed by a command-card button/hotkey,
 ## consumed by the next left-click (see _handle_pending_order_input).
@@ -146,6 +214,11 @@ var _showing_build_submenu: bool = false
 ## Captured when a construction button is pressed while _showing_build_submenu
 ## is true, so the host can send these units to build what gets placed.
 var _pending_builder_paths: Array[NodePath] = []
+## True once a placement has been confirmed with Shift held — the current
+## placement (or the next one, even a different building type — see
+## _on_construction_button_pressed) continues that same builder chain rather
+## than starting a fresh one. See _confirm_placement/_rpc_request_build.
+var _build_queue_active: bool = false
 
 ## Command panel info section — built once per selection change, then only
 ## had their values (not structure) updated every frame, to avoid rebuilding
@@ -154,6 +227,9 @@ var _info_progress_bar: ProgressBar = null
 var _info_empty_label: Label = null
 var _info_slot_row: HBoxContainer = null
 var _info_last_queue_size: int = -1
+## item_name -> its producible button's queued-count badge; updated every
+## frame in _refresh_building_info() from ProductionBuilding.synced_queue_counts.
+var _info_producible_badges: Dictionary = {}
 var _info_stats_label: Label = null
 ## Parallel to selected_units when more than one is selected.
 var _info_unit_portrait_bars: Array[ProgressBar] = []
@@ -238,6 +314,14 @@ var _resource_totals: Dictionary = {}
 var _population_used: int = 0
 var _population_cap: int = 0
 
+## resource_name -> true while it's one of the ones flashing red because the
+## last attempted purchase couldn't afford it — see _flash_missing_resources.
+var _flashing_resource_names: Dictionary = {}
+var _resource_flash_on: bool = false
+var _resource_flash_tween: Tween
+const RESOURCE_FLASH_CYCLE_COUNT: int = 4
+const RESOURCE_FLASH_INTERVAL: float = 0.15
+
 func _ready() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	Population.changed.connect(_on_population_changed)
@@ -249,6 +333,7 @@ func _ready() -> void:
 		_spawn_all_players()
 
 	chat_input.text_submitted.connect(_on_chat_submitted)
+	minimap.ping_requested.connect(_on_minimap_ping_requested)
 
 	game_over_panel.visible = false
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
@@ -371,6 +456,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.projectile_fired.connect(_on_unit_projectile_fired.bind(unit))
 	unit.damaged.connect(_relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(_on_unit_resource_deposited.bind(unit))
+	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
 	return unit
 
 ## RPCs declared directly on dynamically-spawned Unit nodes weren't reaching
@@ -693,6 +779,7 @@ func _process(_delta: float) -> void:
 	if placing_type:
 		_update_placement_ghost()
 	_update_hover_ring()
+	_update_path_markers()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over:
@@ -758,6 +845,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_COMMA:
+		_select_all_military()
+		get_viewport().set_input_as_handled()
+		return
+
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+		if not selected_units.is_empty():
+			_center_camera_on(selected_units)
+		elif selected_building != null and is_instance_valid(selected_building):
+			_center_camera_on([selected_building])
+		get_viewport().set_input_as_handled()
+		return
+
 	## Gated on nothing being selected (the idle construction menu) or the
 	## build submenu being open (a unit's Build button) — the only two times
 	## the action panel actually shows these buttons, matching what's on
@@ -816,7 +916,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if selected_building != null and selected_building.can_rally:
 				_set_rally_point(event.position)
 			else:
-				_issue_move_order(event.position)
+				_issue_move_order(event.position, event.shift_pressed)
 	elif event is InputEventMouseMotion and dragging:
 		if drag_start.distance_to(event.position) > CLICK_DRAG_THRESHOLD:
 			selection_box.visible = true
@@ -945,6 +1045,30 @@ func _select_all_visible_units_of_type(unit_type: String) -> void:
 				selected_units.append(child)
 	_play_random_select_sound(selected_units)
 
+## Selects every owned combat unit (can_gather == false) anywhere on the map,
+## not just what's on screen — matches the usual RTS "select army" hotkey,
+## which is meant to work regardless of where those units currently are.
+func _select_all_military() -> void:
+	var military: Array[Unit] = []
+	for node in get_tree().get_nodes_in_group("units"):
+		var unit := node as Unit
+		if unit and unit.owner_peer_id == _my_peer_id() and not unit.can_gather:
+			military.append(unit)
+	if military.is_empty():
+		return
+
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	_select_building(null)
+	_select_resource(null)
+	_active_group_number = -1
+
+	for unit in military:
+		unit.selected = true
+		selected_units.append(unit)
+	_play_random_select_sound(selected_units)
+
 func _center_camera_on(members: Array) -> void:
 	var sum := Vector3.ZERO
 	var count := 0
@@ -1048,7 +1172,10 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 
 ## Selection is local, but actually moving/gathering only ever happens on the
 ## host, so the command is sent there and executed on its authoritative units.
-func _issue_move_order(screen_pos: Vector2) -> void:
+## append: true while Shift is held — the order is queued to run after
+## whatever this unit is currently doing (including any earlier shift-queued
+## orders) instead of replacing it — see _rpc_issue_command.
+func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	_prune_selected_units()
 	if selected_units.is_empty():
 		return
@@ -1061,13 +1188,18 @@ func _issue_move_order(screen_pos: Vector2) -> void:
 		unit_paths.append(unit.get_path())
 
 	var target_path := _resolve_order_target_path(result)
-	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false)
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false, append)
 	_play_command_sound()
 	_play_command_feedback(result.position, false)
+	for unit in selected_units:
+		if append:
+			_add_path_marker(unit, result.position)
+		else:
+			_clear_path_markers(unit)
 
 ## Same target inference as a plain move order, except empty ground issues an
 ## attack-move instead of a plain move — see _rpc_issue_command's attack_move_fallback.
-func _issue_attack_order(screen_pos: Vector2) -> void:
+func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	_prune_selected_units()
 	if selected_units.is_empty():
 		return
@@ -1080,9 +1212,14 @@ func _issue_attack_order(screen_pos: Vector2) -> void:
 		unit_paths.append(unit.get_path())
 
 	var target_path := _resolve_order_target_path(result)
-	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true)
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true, append)
 	_play_command_sound()
 	_play_command_feedback(result.position, true)
+	for unit in selected_units:
+		if append:
+			_add_path_marker(unit, result.position)
+		else:
+			_clear_path_markers(unit)
 
 func _issue_stop_order() -> void:
 	_prune_selected_units()
@@ -1091,11 +1228,12 @@ func _issue_stop_order() -> void:
 	var unit_paths: Array[NodePath] = []
 	for unit in selected_units:
 		unit_paths.append(unit.get_path())
+		_clear_path_markers(unit)
 	_rpc_issue_stop.rpc_id(1, unit_paths)
 	_play_command_sound()
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool) -> void:
+func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -1118,7 +1256,18 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 	## drifts/jostles around while slower units are still catching up.
 	var group_speed := _slowest_move_speed(units)
 	for i in units.size():
-		_dispatch_smart_command(units[i], target_node, formation_positions[i], attack_move_fallback, group_speed)
+		var unit := units[i]
+		## append only actually queues if the unit is currently mid-order —
+		## an idle unit (nothing to finish first) or one that already has a
+		## queue going dispatches/appends normally either way, but a unit
+		## with nothing in flight has nothing for order_completed to ever
+		## fire from, so queuing here would silently strand the order forever.
+		var unit_is_busy := unit.status_command != Unit.Command.NONE or not unit.order_queue.is_empty()
+		if append and unit_is_busy:
+			unit.queue_order(target_path, formation_positions[i], attack_move_fallback, group_speed)
+		else:
+			unit.clear_order_queue()
+			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed)
 
 const FORMATION_COLUMNS: int = 4
 ## Wider than it looks like it needs to be on paper: each unit's
@@ -1213,6 +1362,17 @@ func _slowest_move_speed(units: Array[Unit]) -> float:
 		slowest = minf(slowest, unit.move_speed)
 	return slowest
 
+## Fires whenever a unit's current command runs its own natural course (a
+## move arrives, a fight runs out of enemies, a build finishes) — see
+## Unit.order_completed. Only ever emitted host-side, so this only ever runs
+## on the host too, same as every other order-dispatch path here.
+func _on_unit_order_completed(unit: Unit) -> void:
+	if unit.order_queue.is_empty():
+		return
+	var order: Dictionary = unit.order_queue.pop_front()
+	var target_node: Node = get_node_or_null(order["target_path"]) if order["target_path"] != NodePath() else null
+	_dispatch_smart_command(unit, target_node, order["world_pos"], order["attack_move_fallback"], order["speed_override"])
+
 ## Shared by right-click/attack-order dispatch and a rally point resolving
 ## onto a resource/enemy/under-construction building: gather/attack/build the
 ## target if it makes sense for one, otherwise fall back to a plain move (or
@@ -1286,6 +1446,7 @@ func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
 		var unit := get_node_or_null(path) as Unit
 		if unit == null or unit.owner_peer_id != sender_id:
 			continue
+		unit.clear_order_queue()
 		unit.command_stop()
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.STOP)
 
@@ -1320,11 +1481,13 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 				_play_command_sound()
 			_armed_monarch_ability = {}
 		"move":
-			_issue_move_order(event.position)
-			pending_order_mode = ""
+			_issue_move_order(event.position, event.shift_pressed)
+			if not event.shift_pressed:
+				pending_order_mode = ""
 		"attack":
-			_issue_attack_order(event.position)
-			pending_order_mode = ""
+			_issue_attack_order(event.position, event.shift_pressed)
+			if not event.shift_pressed:
+				pending_order_mode = ""
 		"patrol":
 			var result := _raycast(event.position)
 			if result.is_empty():
@@ -1354,9 +1517,54 @@ func _on_population_changed(used: int, cap: int) -> void:
 func _update_resource_label() -> void:
 	var parts: Array[String] = []
 	for resource_type in DEBUG_RESOURCE_TYPES:
-		parts.append("%s: %d" % [resource_type.display_name, _resource_totals.get(resource_type.display_name, 0)])
+		var text := "%s: %d" % [resource_type.display_name, _resource_totals.get(resource_type.display_name, 0)]
+		if _resource_flash_on and _flashing_resource_names.has(resource_type.display_name):
+			text = "[color=#ff4433]%s[/color]" % text
+		parts.append(text)
 	parts.append("Population: %d/%d" % [_population_used, _population_cap])
 	resource_label.text = "   ".join(parts)
+
+## Mirrors ResourceStockpile.can_afford(), but against this client's own
+## _resource_totals rather than the singleton directly — ResourceStockpile's
+## totals are only meaningful on the host (see resource_stockpile.gd), so a
+## non-host client calling can_afford() on it directly would always read 0.
+func _can_afford_locally(costs: Array[ResourceCost]) -> bool:
+	for cost in costs:
+		if _resource_totals.get(cost.resource_type.display_name, 0) < cost.amount:
+			return false
+	return true
+
+func _missing_resource_names(costs: Array[ResourceCost]) -> Array[String]:
+	var missing: Array[String] = []
+	for cost in costs:
+		if _resource_totals.get(cost.resource_type.display_name, 0) < cost.amount:
+			missing.append(cost.resource_type.display_name)
+	return missing
+
+## Called wherever a purchase is refused locally for lack of funds (building
+## placement, producible items). No-ops (no flash) if the costs are actually
+## affordable — callers don't need to check _can_afford_locally themselves first.
+func _flash_missing_resources(costs: Array[ResourceCost]) -> void:
+	var missing := _missing_resource_names(costs)
+	if missing.is_empty():
+		return
+
+	for resource_name in missing:
+		_flashing_resource_names[resource_name] = true
+
+	if _resource_flash_tween and _resource_flash_tween.is_valid():
+		_resource_flash_tween.kill()
+	_resource_flash_tween = create_tween()
+	for i in RESOURCE_FLASH_CYCLE_COUNT:
+		_resource_flash_tween.tween_callback(func():
+			_resource_flash_on = not _resource_flash_on
+			_update_resource_label()
+		).set_delay(RESOURCE_FLASH_INTERVAL)
+	_resource_flash_tween.tween_callback(func():
+		_flashing_resource_names.clear()
+		_resource_flash_on = false
+		_update_resource_label()
+	)
 
 func _select_building(building: ProductionBuilding) -> void:
 	selected_building = building
@@ -1388,6 +1596,7 @@ func _select_building(building: ProductionBuilding) -> void:
 		building.item_completed.connect(_on_selected_building_item_completed.bind(building))
 
 	var buttons: Array[Control] = []
+	_info_producible_badges.clear()
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
 		if not _producible_is_visible(building, item):
@@ -1398,7 +1607,9 @@ func _select_building(building: ProductionBuilding) -> void:
 		var slot: int = buttons.size()
 		var hotkey: String = OS.get_keycode_string(PRODUCIBLE_HOTKEYS[slot]) if slot < PRODUCIBLE_HOTKEYS.size() else "?"
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item)]
-		buttons.append(_make_command_button(hotkey, tooltip, item.icon, _on_producible_button_pressed.bind(building, i)))
+		var button := _make_command_button(hotkey, tooltip, item.icon, _on_producible_button_pressed.bind(building, i))
+		_info_producible_badges[item.item_name] = _add_queue_count_badge(button)
+		buttons.append(button)
 	_fill_action_panel_grid(buttons)
 
 ## A trainable UNIT is always offered. An UPGRADE is hidden once already
@@ -1498,12 +1709,17 @@ func _make_empty_action_slot() -> Control:
 ## Idle construction menu and a unit's Build submenu both funnel through here:
 ## while the submenu is open this also captures which selected units (that
 ## can build) should be sent to build whatever gets placed.
+## Holding Shift while picking the NEXT building (even a different type) keeps
+## the same builders queued up from a chain already in progress — see
+## _confirm_placement, which is what actually starts/continues _build_queue_active.
 func _on_construction_button_pressed(building_type: BuildingType) -> void:
-	_pending_builder_paths.clear()
-	if _showing_build_submenu:
-		for unit in selected_units:
-			if is_instance_valid(unit) and unit.can_build:
-				_pending_builder_paths.append(unit.get_path())
+	if not (_build_queue_active and Input.is_key_pressed(KEY_SHIFT)):
+		_pending_builder_paths.clear()
+		_build_queue_active = false
+		if _showing_build_submenu:
+			for unit in selected_units:
+				if is_instance_valid(unit) and unit.can_build:
+					_pending_builder_paths.append(unit.get_path())
 	_start_placement(building_type)
 	_play_command_sound()
 
@@ -1603,6 +1819,16 @@ func _refresh_building_info() -> void:
 			slot.custom_minimum_size = Vector2(20, 20)
 			slot.color = Color(1, 1, 1, 0.2)
 			_info_slot_row.add_child(slot)
+
+	_refresh_producible_badges(building)
+
+func _refresh_producible_badges(building: ProductionBuilding) -> void:
+	for item_name in _info_producible_badges:
+		var badge: Label = _info_producible_badges[item_name]
+		var count: int = building.synced_queue_counts.get(item_name, 0)
+		badge.visible = count > 0
+		if count > 0:
+			badge.text = str(count)
 
 ## Builds either a single unit's stat readout or a grid of portrait+health
 ## widgets for a multi-unit selection — structural, called once per selection
@@ -1726,6 +1952,10 @@ func _on_selected_building_item_completed(_item: ProducibleItem, building: Produ
 		_select_building(building)
 
 func _on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
+	var item := building.producibles[item_index]
+	if not _can_afford_locally(item.get_costs()):
+		_flash_missing_resources(item.get_costs())
+		return
 	_rpc_enqueue.rpc_id(1, building.get_path(), item_index)
 	_play_command_sound()
 
@@ -1898,9 +2128,11 @@ func _update_hover_ring() -> void:
 	if placing_type or dragging or chat_input.visible or game_over:
 		if hover_ring:
 			hover_ring.visible = false
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		return
 
 	var collider: Object = _raycast(get_viewport().get_mouse_position()).get("collider")
+	_update_hover_cursor(collider)
 	var hovered: Node3D = collider if (collider != null and _is_ring_target(collider) and collider.visible) else null
 	var target: Node3D = hovered if hovered else (clicked_ring_target if is_instance_valid(clicked_ring_target) else null)
 
@@ -1918,6 +2150,21 @@ func _update_hover_ring() -> void:
 	mesh.inner_radius = maxf(radius - 0.08, 0.01)
 	hover_ring.global_position = target.global_position + Vector3(0, 0.05, 0)
 	hover_ring.visible = true
+
+## Only meaningful feedback while units are actually selected (nothing to
+## click-to-attack/gather with otherwise) — an enemy/resource still gets the
+## plain arrow when nothing of mine is selected to act on it.
+func _update_hover_cursor(collider: Object) -> void:
+	if selected_units.is_empty():
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+		return
+	if (collider is Unit and collider.owner_peer_id != _my_peer_id()) \
+			or (collider is ProductionBuilding and collider.owner_peer_id != _my_peer_id()):
+		Input.set_default_cursor_shape(Input.CURSOR_CROSS)
+	elif collider is Gatherable:
+		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
+	else:
+		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
 func _hover_ring_radius(node: Node) -> float:
 	if node is Unit:
@@ -1943,6 +2190,29 @@ func _make_command_button(hotkey_label: String, tooltip: String, icon: Texture2D
 	button.icon = icon
 	button.pressed.connect(callback)
 	return button
+
+## Small bottom-right count badge for a producible button, showing how many
+## of that item are currently queued (including the one in progress). Hidden
+## (count 0) rather than removed, so _refresh_building_info() can just flip
+## visibility every frame instead of adding/removing nodes.
+func _add_queue_count_badge(button: Button) -> Label:
+	var badge := Label.new()
+	badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	## Anchored corner is the growth pivot too, so a wider (multi-digit) label
+	## expands up-and-left back into the button instead of out past its edge.
+	badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	badge.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	badge.offset_right = -3
+	badge.offset_bottom = -1
+	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	badge.add_theme_font_size_override("font_size", 20)
+	badge.add_theme_color_override("font_shadow_color", Color.BLACK)
+	badge.add_theme_constant_override("shadow_offset_x", 1)
+	badge.add_theme_constant_override("shadow_offset_y", 1)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.visible = false
+	button.add_child(badge)
+	return badge
 
 func _format_costs(costs: Array[ResourceCost]) -> String:
 	var parts: Array[String] = []
@@ -2112,25 +2382,58 @@ func _handle_placement_input(event: InputEvent) -> void:
 			_confirm_placement()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_cancel_placement()
+			_pending_builder_paths.clear()
+			_build_queue_active = false
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		_cancel_placement()
+		_pending_builder_paths.clear()
+		_build_queue_active = false
 
 func _confirm_placement() -> void:
 	if not placement_valid:
 		_cancel_placement()
 		return
+	## Checked here (rather than only relying on the host's own can_afford
+	## guard in _rpc_request_build) so an unaffordable click gets immediate
+	## feedback instead of just silently doing nothing once the RPC reaches
+	## the host and gets refused there. Placement mode is left running so the
+	## player can keep waiting for resources and try the same spot again.
+	if not _can_afford_locally(placing_type.get_costs()):
+		_flash_missing_resources(placing_type.get_costs())
+		return
 	var my_building_types: Array[BuildingType] = _my_faction().building_types
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _placement_target.get_path() if _placement_target else NodePath()
-	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths)
+	var placed_type := placing_type
+	var shift_held := Input.is_key_pressed(KEY_SHIFT)
+	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths, shift_held)
 	_play_command_sound()
+
+	## Holding Shift keeps the same builders and stays in placement mode
+	## (re-arming the same building type) so the next click queues another
+	## one instead of ending the session — see _on_unit_order_completed on
+	## the host side for how builders actually work through the chain.
+	if shift_held:
+		_build_queue_active = true
+		for path in _pending_builder_paths:
+			var builder := get_node_or_null(path) as Unit
+			if builder:
+				_add_path_marker(builder, placement_ghost.global_position)
+		_start_placement(placed_type)
+		return
+
+	for path in _pending_builder_paths:
+		var builder := get_node_or_null(path) as Unit
+		if builder:
+			_clear_path_markers(builder)
 	_cancel_placement()
 	_pending_builder_paths.clear()
+	_build_queue_active = false
 	if _showing_build_submenu:
 		_close_build_submenu()
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath]) -> void:
+func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath], append: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -2202,9 +2505,20 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 
 		## Sends whichever villager(s) opened the build menu to go build what
 		## they just placed, instead of leaving them standing idle next to it.
+		## Shift-chained placements queue this after the builder's current
+		## order instead — see _confirm_placement/_on_unit_order_completed.
+		## Same "only actually queue if there's something to finish first" logic
+		## as _rpc_issue_command — an idle builder with nothing in flight would
+		## never have anything trigger order_completed to dispatch a queued order.
 		for path in builder_paths:
 			var builder := get_node_or_null(path) as Unit
-			if builder != null and builder.owner_peer_id == sender_id:
+			if builder == null or builder.owner_peer_id != sender_id:
+				continue
+			var builder_is_busy := builder.status_command != Unit.Command.NONE or not builder.order_queue.is_empty()
+			if append and builder_is_busy:
+				builder.queue_order(building.get_path(), building.global_position, false)
+			else:
+				builder.clear_order_queue()
 				builder.command_build(building)
 
 func _cancel_placement() -> void:
@@ -2284,3 +2598,52 @@ func _rpc_display_chat(line: String) -> void:
 	if chat_lines.size() > MAX_CHAT_LINES:
 		chat_lines.pop_front()
 	chat_log.text = "\n".join(chat_lines)
+
+## Right-click on the minimap; relayed through the host (same call-to-1-then-
+## broadcast shape as chat) so every player sees the same ping at once,
+## including the one who placed it.
+func _on_minimap_ping_requested(world_pos: Vector3) -> void:
+	_rpc_request_ping.rpc_id(1, world_pos)
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_ping(world_pos: Vector3) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+	_rpc_show_ping.rpc(world_pos, sender_id)
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_show_ping(world_pos: Vector3, sender_id: int) -> void:
+	minimap.show_ping(world_pos)
+	_play_ping_effect(world_pos)
+	chat_lines.append("Player %d pinged the map" % sender_id)
+	if chat_lines.size() > MAX_CHAT_LINES:
+		chat_lines.pop_front()
+	chat_log.text = "\n".join(chat_lines)
+
+## Bigger and longer-lived than _play_command_feedback's move/attack rings —
+## a ping needs to catch the eye of someone who isn't even looking at this
+## part of the map yet, not just confirm a click that was just made.
+func _play_ping_effect(world_pos: Vector3) -> void:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.5
+	torus.outer_radius = 0.8
+	ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.85, 0.1, 0.9)
+	ring.material_override = mat
+	add_child(ring)
+	ring.global_position = world_pos + Vector3(0, 0.1, 0)
+	ring.scale = Vector3.ONE * 0.3
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3.ONE * 4.0, 1.2) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(mat, "albedo_color:a", 0.0, 1.2)
+	tween.set_parallel(false)
+	tween.tween_callback(ring.queue_free)

@@ -10,6 +10,16 @@ const OWN_OUTLINE_COLOR: Color = Color(1, 1, 1, 0.9)
 const UNIT_DOT_RADIUS: float = 2.5
 const BUILDING_DOT_RADIUS: float = 4.0
 const FRUSTUM_COLOR: Color = Color(1, 1, 1, 0.6)
+const PING_COLOR: Color = Color(1.0, 0.85, 0.1, 1.0)
+const PING_DURATION: float = 3.0
+
+## Right-click-to-ping: main.gd relays this out to every player (see
+## show_ping()) once the host has confirmed it, so it's driven externally
+## rather than drawn the instant this peer clicks.
+signal ping_requested(world_pos: Vector3)
+
+var _ping_local_pos: Vector2 = Vector2.ZERO
+var _ping_time_left: float = 0.0
 
 @onready var fog: FogOfWar = get_node(^"../../FogOfWar")
 @onready var camera_rig: Node3D = get_node(^"../../CameraRig")
@@ -20,10 +30,18 @@ var _dragging: bool = false
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _ping_time_left > 0.0:
+		_ping_time_left = maxf(_ping_time_left - delta, 0.0)
 	## Fog only updates a few times a second, but unit dots should move
 	## smoothly, so just redraw every frame — this is a tiny Control.
 	queue_redraw()
+
+## Called by main.gd once a ping (this peer's own or a teammate's) has been
+## confirmed by the host — see _rpc_show_ping.
+func show_ping(world_pos: Vector3) -> void:
+	_ping_local_pos = _world_to_local(world_pos)
+	_ping_time_left = PING_DURATION
 
 func _world_to_local(world_pos: Vector3) -> Vector2:
 	var u := (world_pos.x - fog.map_origin.x) / fog.map_size.x
@@ -67,6 +85,11 @@ func _draw() -> void:
 			draw_arc(p, UNIT_DOT_RADIUS, 0.0, TAU, 10, OWN_OUTLINE_COLOR, 1.0)
 
 	_draw_camera_frustum()
+	if _ping_time_left > 0.0:
+		var t: float = 1.0 - _ping_time_left / PING_DURATION
+		var color := PING_COLOR
+		color.a = 1.0 - t
+		draw_arc(_ping_local_pos, lerpf(2.0, 12.0, t), 0.0, TAU, 16, color, 2.0)
 	draw_rect(Rect2(Vector2.ZERO, size), BORDER_COLOR, false, 2.0)
 
 ## Approximates what the main camera currently frames by ray-casting its four
@@ -94,6 +117,8 @@ func _gui_input(event: InputEvent) -> void:
 			_pan_to(event.position)
 	elif event is InputEventMouseMotion and _dragging:
 		_pan_to(event.position)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		ping_requested.emit(_local_to_world(event.position))
 
 func _pan_to(local_pos: Vector2) -> void:
 	var world_pos := _local_to_world(local_pos)

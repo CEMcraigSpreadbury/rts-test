@@ -152,6 +152,9 @@ properties/10/replication_mode = 2
 properties/11/path = NodePath(".:team_tint")
 properties/11/spawn = true
 properties/11/replication_mode = 2
+properties/12/path = NodePath(".:synced_queue_counts")
+properties/12/spawn = true
+properties/12/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")

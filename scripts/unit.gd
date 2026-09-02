@@ -58,6 +58,14 @@ signal damaged(amount: int)
 ## resource's display_color directly (rather than the ResourceType resource
 ## itself) since that's all the popup needs and it's trivially RPC-safe.
 signal resource_deposited(amount: int, color: Color)
+## Host-only, never relayed to other peers (order_queue itself isn't
+## networked — only the host ever advances it, same as every other combat/
+## movement decision). Fired the moment a command naturally runs its course
+## (a move arrives, an attack runs out of enemies, a build finishes) so
+## main.gd can pop and dispatch the next shift-queued order, if any. Not
+## fired on an explicit stop or death — those are interruptions, not
+## completions, and clear order_queue instead of advancing it.
+signal order_completed
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -270,6 +278,25 @@ var build_target: ProductionBuilding = null
 var _dying: bool = false
 var patrol_points: Array[Vector3] = []
 var patrol_index: int = 0
+## Shift-queued follow-on orders — see main.gd's _rpc_issue_command/
+## _rpc_request_build (append param) and _on_unit_order_completed. Each
+## entry is a plain Dictionary (target_path/world_pos/attack_move_fallback/
+## speed_override) rather than a class since it's just a few RPC parameters
+## held onto until this unit's current order finishes, same style as
+## rally_target_path/rally_point on ProductionBuilding. Host-only; never
+## networked, since only the host ever dispatches from it.
+var order_queue: Array[Dictionary] = []
+
+func queue_order(target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, speed_override: float = -1.0) -> void:
+	order_queue.append({
+		"target_path": target_path,
+		"world_pos": world_pos,
+		"attack_move_fallback": attack_move_fallback,
+		"speed_override": speed_override,
+	})
+
+func clear_order_queue() -> void:
+	order_queue.clear()
 ## Set directly by Objective for its guards; 0.0 = no leash (every normal
 ## player unit) — a leashed unit breaks off a chase and resumes patrol
 ## instead of following a fleeing/kiting target indefinitely.
@@ -481,6 +508,7 @@ func end_build_command() -> void:
 	_leave_build_site()
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
+	order_completed.emit()
 
 ## --- Monarch ---
 
@@ -674,7 +702,18 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## attack range of its target would look "finished navigating" while still
 	## mid-chase and get yanked into _advance_patrol() before _start_attacking()
 	## ever got a chance to run, causing it to circle the enemy instead of fighting.
-	if status_activity == Activity.MOVING and nav_agent.is_navigation_finished():
+	##
+	## The extra distance check guards against a NavigationAgent3D quirk: right
+	## after move_to() sets a brand new target_position from a cold/idle start,
+	## is_navigation_finished() can read true for a frame or two before the
+	## async path is actually computed (no path yet reads as "nothing left to
+	## do"). That was always harmless before this flag existed — resetting
+	## status_command a frame early didn't stop the unit's real navigation —
+	## but with a shift-queued order waiting, this false completion would
+	## immediately pop and dispatch it, making the unit skip straight to the
+	## next waypoint instead of ever visiting the first one.
+	if status_activity == Activity.MOVING and nav_agent.is_navigation_finished() \
+			and global_position.distance_to(nav_agent.target_position) <= nav_agent.target_desired_distance + 0.5:
 		if status_command == Command.MOVE or status_command == Command.ATTACK_MOVE:
 			## Reset status_command too, not just status_activity — otherwise
 			## a unit that has ever finished a move order (including every
@@ -685,6 +724,7 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 			## order, don't interrupt it").
 			status_activity = Activity.IDLE
 			status_command = Command.NONE
+			order_completed.emit()
 		elif status_command == Command.PATROL:
 			_advance_patrol()
 
@@ -926,6 +966,7 @@ func _find_new_target_or_idle() -> void:
 			attack_target = null
 			status_command = Command.NONE
 			status_activity = Activity.IDLE
+			order_completed.emit()
 	elif status_command == Command.PATROL:
 		var nearest: Unit = _find_nearest_enemy_in_range(aggro_range)
 		if nearest:
