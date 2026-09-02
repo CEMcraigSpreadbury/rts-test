@@ -119,6 +119,11 @@ var _destroy_start_y: float = 0.0
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
 @onready var select_audio_player: AudioStreamPlayer = $SelectAudioPlayer
+## Both purely cosmetic and Inspector-configurable per building type (particle
+## count/color/spread/etc. are all edited directly on these nodes, not the
+## script) — see _update_construction_visual() for when each one fires.
+@onready var placement_particles: GPUParticles3D = get_node_or_null("PlacementBurst")
+@onready var construction_particles: GPUParticles3D = get_node_or_null("ConstructionDust")
 
 func play_select_sound() -> void:
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
@@ -282,10 +287,27 @@ func _update_construction_visual() -> void:
 		if not _construction_visual_applied:
 			_apply_construction_transparency()
 			_construction_visual_applied = true
+			## Fires once per peer, right when is_under_construction is first
+			## seen true — not gated to the host, since this flag is what
+			## _process() already uses on every peer to notice the transition
+			## (is_under_construction itself is synced, but arrives async, so
+			## polling for the change here is more reliable than trying to
+			## catch it exactly once in _ready()).
+			if placement_particles:
+				placement_particles.restart()
 		_update_construction_rise()
+		## Checked every frame (not just on the transition above) so the dust
+		## follows synced_builder_count live — it should stop the moment the
+		## last builder leaves/dies and resume as soon as one arrives, not
+		## just run continuously for the whole (possibly builder-less) time
+		## the site sits under construction.
+		if construction_particles:
+			construction_particles.emitting = synced_builder_count > 0
 	elif _construction_visual_applied:
 		_restore_materials()
 		_construction_visual_applied = false
+		if construction_particles:
+			construction_particles.emitting = false
 
 const _CONSTRUCTION_ALPHA: float = 0.45
 

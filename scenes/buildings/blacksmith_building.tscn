@@ -1,9 +1,9 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://nmacionkrw86"]
 
-[ext_resource type="Script" path="res://scripts/production_building.gd" id="1_building_script"]
-[ext_resource type="Script" path="res://scripts/producible_item.gd" id="3_item_script"]
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
-[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="8_cost_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="10_gold"]
 
@@ -22,9 +22,8 @@ script = ExtResource("3_item_script")
 item_name = "Infantry Weapons I"
 kind = 1
 build_time = 20.0
-costs = Array[Resource]([SubResource("ResourceCost_weapon1")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon1")])
 upgrade_category = 1
-upgrade_stat = 0
 upgrade_bonus = 1
 
 [sub_resource type="Resource" id="ResourceCost_weapon2"]
@@ -37,9 +36,8 @@ script = ExtResource("3_item_script")
 item_name = "Infantry Weapons II"
 kind = 1
 build_time = 25.0
-costs = Array[Resource]([SubResource("ResourceCost_weapon2")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon2")])
 upgrade_category = 1
-upgrade_stat = 0
 upgrade_bonus = 2
 requires_upgrade = SubResource("ProducibleItem_infantry_weapon_1")
 
@@ -53,9 +51,8 @@ script = ExtResource("3_item_script")
 item_name = "Infantry Weapons III"
 kind = 1
 build_time = 30.0
-costs = Array[Resource]([SubResource("ResourceCost_weapon3")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon3")])
 upgrade_category = 1
-upgrade_stat = 0
 upgrade_bonus = 2
 requires_upgrade = SubResource("ProducibleItem_infantry_weapon_2")
 
@@ -69,7 +66,7 @@ script = ExtResource("3_item_script")
 item_name = "Infantry Armor I"
 kind = 1
 build_time = 20.0
-costs = Array[Resource]([SubResource("ResourceCost_armor1")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor1")])
 upgrade_category = 1
 upgrade_stat = 1
 upgrade_bonus = 1
@@ -84,7 +81,7 @@ script = ExtResource("3_item_script")
 item_name = "Infantry Armor II"
 kind = 1
 build_time = 25.0
-costs = Array[Resource]([SubResource("ResourceCost_armor2")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor2")])
 upgrade_category = 1
 upgrade_stat = 1
 upgrade_bonus = 1
@@ -100,7 +97,7 @@ script = ExtResource("3_item_script")
 item_name = "Infantry Armor III"
 kind = 1
 build_time = 30.0
-costs = Array[Resource]([SubResource("ResourceCost_armor3")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor3")])
 upgrade_category = 1
 upgrade_stat = 1
 upgrade_bonus = 1
@@ -114,6 +111,46 @@ albedo_color = Color(0.35, 0.35, 0.38, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3, 2, 3)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
+emission_shape = 1
+emission_sphere_radius = 1.2
+direction = Vector3(0, 1, 0)
+spread = 60.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+scale_min = 0.5
+scale_max = 1.5
+color = Color(0.45, 0.35, 0.22, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_debris"]
+shading_mode = 0
+albedo_color = Color(0.45, 0.35, 0.22, 1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_debris"]
+material = SubResource("StandardMaterial3D_debris")
+size = Vector2(0.15, 0.15)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_construction"]
+emission_shape = 1
+emission_sphere_radius = 2.5
+direction = Vector3(0, 1, 0)
+spread = 40.0
+initial_velocity_min = 0.3
+initial_velocity_max = 0.8
+gravity = Vector3(0, 0.3, 0)
+scale_min = 0.6
+scale_max = 1.2
+color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="QuadMesh" id="QuadMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+size = Vector2(0.2, 0.2)
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
 properties/0/path = NodePath(".:position")
@@ -156,34 +193,55 @@ properties/12/path = NodePath(".:synced_queue_counts")
 properties/12/spawn = true
 properties/12/replication_mode = 2
 
-[node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
+[node name="ProductionBuilding" type="StaticBody3D" unique_id=1175755585 groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Blacksmith"
-costs = Array[Resource]([SubResource("ResourceCost_blacksmith_building")])
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_blacksmith_building")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_infantry_weapon_1"), SubResource("ProducibleItem_infantry_weapon_2"), SubResource("ProducibleItem_infantry_weapon_3"), SubResource("ProducibleItem_infantry_armor_1"), SubResource("ProducibleItem_infantry_armor_2"), SubResource("ProducibleItem_infantry_armor_3")])
 can_rally = false
-producibles = Array[Resource]([SubResource("ProducibleItem_infantry_weapon_1"), SubResource("ProducibleItem_infantry_weapon_2"), SubResource("ProducibleItem_infantry_weapon_3"), SubResource("ProducibleItem_infantry_armor_1"), SubResource("ProducibleItem_infantry_armor_2"), SubResource("ProducibleItem_infantry_armor_3")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=889590015]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+visible = false
 mesh = SubResource("BoxMesh_body")
 surface_material_override/0 = SubResource("StandardMaterial3D_body")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2020250434]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_body")
 
-[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=1352662391]
 radius = 2.2
 height = 2.0
 
-[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="."]
-bus = "SFX"
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1509913892]
+bus = &"SFX"
 
-[node name="HealthBar" type="Node3D" parent="."]
+[node name="PlacementBurst" type="GPUParticles3D" parent="." unique_id=1496578262]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+emitting = false
+amount = 24
+lifetime = 0.6
+one_shot = true
+explosiveness = 1.0
+randomness = 0.3
+process_material = SubResource("ParticleProcessMaterial_placement")
+draw_pass_1 = SubResource("QuadMesh_debris")
+
+[node name="ConstructionDust" type="GPUParticles3D" parent="." unique_id=521798061]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+emitting = false
+amount = 64
+lifetime = 1.4
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_construction")
+draw_pass_1 = SubResource("QuadMesh_dust")
+
+[node name="HealthBar" type="Node3D" parent="." unique_id=589647958]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
 visible = false
 
-[node name="Background" type="Sprite3D" parent="HealthBar"]
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=355006111]
 transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
 cast_shadow = 0
 modulate = Color(0.1, 0.1, 0.1, 0.85)
@@ -192,7 +250,7 @@ billboard = 1
 texture_filter = 0
 texture = ExtResource("7_bar_tex")
 
-[node name="Fill" type="Sprite3D" parent="HealthBar"]
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=964428048]
 transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
 cast_shadow = 0
 modulate = Color(0.25, 0.9, 0.3, 1)
@@ -201,5 +259,5 @@ billboard = 1
 texture_filter = 0
 texture = ExtResource("7_bar_tex")
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=591086384]
 replication_config = SubResource("SceneReplicationConfig_building")
