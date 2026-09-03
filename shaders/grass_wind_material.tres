@@ -1,0 +1,43 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://crjxgq7la7x5g"]
+
+[ext_resource type="Shader" uid="uid://cpqcytvhedoun" path="res://shaders/grass_wind.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" uid="uid://cptvfvrbmpc1f" path="res://assets/art/Foliage Sprites/sprite_0008.png" id="2_2ls8m"]
+
+[sub_resource type="Gradient" id="Gradient_color"]
+colors = PackedColorArray(0.017635133, 0.05078125, 0.0057525635, 1, 0.10769653, 0.125, 0.032714844, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_color"]
+gradient = SubResource("Gradient_color")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_color"]
+frequency = 0.05
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_color"]
+width = 128
+height = 128
+noise = SubResource("FastNoiseLite_color")
+seamless = true
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_wind"]
+frequency = 0.5
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_wind"]
+width = 128
+height = 128
+noise = SubResource("FastNoiseLite_wind")
+seamless = true
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_shader")
+shader_parameter/billboard = false
+shader_parameter/shape_texture = ExtResource("2_2ls8m")
+shader_parameter/use_atlas = false
+shader_parameter/noise_texture = SubResource("NoiseTexture2D_color")
+shader_parameter/color_gradient = SubResource("GradientTexture1D_color")
+shader_parameter/random_variation = 0.05
+shader_parameter/wind_texture = SubResource("NoiseTexture2D_wind")
+shader_parameter/wind_velocity = Vector2(0.99026805, 0.1391731)
+shader_parameter/alpha_cut_start = 0.1
+shader_parameter/alpha_cut_end = 0.9
+shader_parameter/alpha_mode = 0

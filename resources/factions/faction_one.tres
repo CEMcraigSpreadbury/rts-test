@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="8_gold_deposit"]
 [ext_resource type="PackedScene" uid="uid://cn64mdp666snd" path="res://scenes/buildings/stables_building.tscn" id="9_stables"]
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="10_unit"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/blacksmith_building.tscn" id="11_blacksmith"]
+[ext_resource type="PackedScene" uid="uid://nmacionkrw86" path="res://scenes/buildings/blacksmith_building.tscn" id="11_blacksmith"]
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
