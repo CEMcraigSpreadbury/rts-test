@@ -84,12 +84,46 @@ var _vision_count: int = 0
 ## nothing to remember to toggle.
 @onready var _material: ShaderMaterial = _setup_terrain_fog_material()
 
+## Grass layers painted with the Grass Painter editor plugin (addons/grass_painter)
+## get fog support wired straight onto their own material's uniforms (see
+## grass_wind.gdshader's fog_enabled/fog_tex/fog_map_origin/.../fog_vision_*)
+## rather than a chained next_pass — a next_pass was tried first but relies
+## on every grass layer's node already being in the tree by the time this
+## node's _ready() runs, which sibling order in the scene doesn't guarantee
+## (this project already hit that same class of ordering bug once before,
+## with Objective guard ownership).
+##
+## Found by matching the shader itself (any MultiMeshInstance3D anywhere in
+## the tree whose material uses grass_wind.gdshader), not a "fog_grass" group
+## tag — a tag would only ever get added to a layer the next time it's
+## selected/created in the dock, silently leaving every layer painted before
+## this fix (or a scene resave) unfogged forever. Matching by shader instead
+## means every grass layer gets fog for free, with nothing to remember to redo.
+const GRASS_SHADER: Shader = preload("res://shaders/grass_wind.gdshader")
+var _grass_materials: Array[ShaderMaterial] = []
+
 func _setup_terrain_fog_material() -> ShaderMaterial:
 	var terrain_material: Material = get_node(terrain_mesh_path).get_active_material(0)
 	var fog_material := ShaderMaterial.new()
 	fog_material.shader = preload("res://shaders/fog_of_war.gdshader")
 	terrain_material.next_pass = fog_material
 	return fog_material
+
+func _setup_grass_fog_materials() -> void:
+	_grass_materials.clear()
+	_find_grass_materials(get_tree().root)
+
+func _find_grass_materials(node: Node) -> void:
+	if node is MultiMeshInstance3D:
+		var grass_material := (node as MultiMeshInstance3D).material_override as ShaderMaterial
+		if grass_material and grass_material.shader == GRASS_SHADER:
+			grass_material.set_shader_parameter("fog_enabled", true)
+			grass_material.set_shader_parameter("fog_tex", fog_texture)
+			grass_material.set_shader_parameter("fog_map_origin", map_origin)
+			grass_material.set_shader_parameter("fog_map_size", map_size)
+			_grass_materials.append(grass_material)
+	for child in node.get_children():
+		_find_grass_materials(child)
 
 func _ready() -> void:
 	var cell_count := grid_resolution * grid_resolution
@@ -103,6 +137,8 @@ func _ready() -> void:
 	_material.set_shader_parameter("fog_tex", fog_texture)
 	_material.set_shader_parameter("map_origin", map_origin)
 	_material.set_shader_parameter("map_size", map_size)
+
+	call_deferred("_setup_grass_fog_materials")
 
 	_vision_positions.resize(MAX_VISION_SOURCES)
 	_vision_radii.resize(MAX_VISION_SOURCES)
@@ -162,6 +198,13 @@ func _push_vision_to_shader() -> void:
 	_material.set_shader_parameter("vision_count", _vision_count)
 	_material.set_shader_parameter("vision_positions", _vision_positions)
 	_material.set_shader_parameter("vision_radii", _vision_radii)
+	## grass_wind.gdshader's fog uniforms are named with a fog_ prefix (see
+	## that shader) since it also has its own unrelated uniforms — different
+	## names than fog_of_war.gdshader's, same values.
+	for grass_material in _grass_materials:
+		grass_material.set_shader_parameter("fog_vision_count", _vision_count)
+		grass_material.set_shader_parameter("fog_vision_positions", _vision_positions)
+		grass_material.set_shader_parameter("fog_vision_radii", _vision_radii)
 
 ## Exact (not grid-quantized) check against this tick's own vision sources —
 ## smoother and cheaper than a lookup into a rasterized grid would be, since

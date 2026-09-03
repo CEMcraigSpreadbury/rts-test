@@ -89,6 +89,12 @@ func _play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = Color(1.0, 0.3, 0.25, 0.9) if is_attack else Color(1.0, 1.0, 1.0, 0.9)
+	## render_priority controls draw order between transparent objects
+	## (higher draws later/on top, independent of distance sorting) — this is
+	## what keeps the ring drawing over dense grass, without no_depth_test,
+	## which would also make it ignore the unit/building's own opaque sprite
+	## and draw in front of that too.
+	mat.render_priority = 10
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = world_pos + Vector3(0, 0.1, 0)
@@ -121,7 +127,9 @@ func _add_path_marker(unit: Unit, world_pos: Vector3) -> void:
 	flag_mesh.mesh = torus
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = PATH_MARKER_COLOR
+	mat.render_priority = 10
 	flag_mesh.material_override = mat
 	marker.add_child(flag_mesh)
 
@@ -737,7 +745,18 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	if building.can_rally and building.has_rally_point:
 		var rally_target: Node = get_node_or_null(building.rally_target_path) \
 				if building.rally_target_path != NodePath() else null
-		_dispatch_smart_command(unit, rally_target, building.rally_point, false)
+		## Same reasoning as spawn_pos's jitter above: every unit this building
+		## ever produces would otherwise be sent to this exact same coordinate.
+		## Once a few units are already standing there, a new arrival's
+		## avoidance fights the crowd for that one precise point and can get
+		## stuck jittering right next to them, stuck in the walk animation
+		## instead of ever settling — a small spread lets them actually
+		## cluster around the rally point instead of stacking on it. Only
+		## meaningful for a plain-ground rally; a rally_target (gather/attack/
+		## build) makes _dispatch_smart_command path to the target node
+		## itself and ignore this position entirely.
+		var rally_pos := building.rally_point + Vector3(randf_range(-1.2, 1.2), 0.0, randf_range(-1.2, 1.2))
+		_dispatch_smart_command(unit, rally_target, rally_pos, false)
 
 ## Only ever fires host-side (construction progress is host-authoritative),
 ## so the chat line is sent explicitly to whichever peer owns the building
@@ -2111,6 +2130,11 @@ func _ensure_hover_ring() -> void:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.albedo_color = HOVER_RING_COLOR
+	## render_priority (not no_depth_test — that would also draw this in
+	## front of the unit/building's own opaque sprite) forces this to draw
+	## after dense grass in the transparent pass, on top of it, while still
+	## depth-testing normally against opaque geometry.
+	material.render_priority = 10
 	hover_ring.set_surface_override_material(0, material)
 	hover_ring.visible = false
 	add_child(hover_ring)

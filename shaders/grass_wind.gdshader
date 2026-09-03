@@ -25,6 +25,27 @@ uniform float alpha_cut_start : hint_range(0.0, 1.0, 0.05) = 0.1;
 uniform float alpha_cut_end : hint_range(0.0, 1.0, 0.05) = 0.9;
 uniform int alpha_mode : hint_enum("Smooth", "Dithered", "Cut") = 0;
 
+group_uniforms FogOfWar;
+// Wired up by fog_of_war.gd directly onto each grass layer's own material
+// (see FogOfWar._setup_grass_fog_materials) — not part of the original
+// referenced shader, kept in its own uniform group and named with a fog_
+// prefix so it's obviously separate from everything above.
+//
+// fog_enabled defaults off and must be explicitly turned on by fog_of_war.gd
+// — the material also renders in the editor (while painting, with no
+// FogOfWar node running anywhere), where every uniform below is unset
+// garbage; without this gate, an unbound fog_tex + fog_vision_count == 0
+// made every blade discard itself, which is exactly what made grass
+// disappear entirely both in the editor and anywhere fog isn't wired up.
+uniform bool fog_enabled = false;
+uniform sampler2D fog_tex : source_color, filter_linear;
+uniform vec2 fog_map_origin;
+uniform vec2 fog_map_size;
+const int FOG_MAX_VISION_SOURCES = 32;
+uniform vec2 fog_vision_positions[FOG_MAX_VISION_SOURCES];
+uniform float fog_vision_radii[FOG_MAX_VISION_SOURCES];
+uniform int fog_vision_count;
+
 varying flat int id;
 varying vec3 world_pos;
 
@@ -103,6 +124,29 @@ void fragment() {
 		if(alpha < 0.1) discard;
 	}
 
+	// Fog of war: identical math to fog_of_war.gdshader's terrain overlay
+	// (fog_tex's alpha channel encodes 1.0 = never explored down to ~0.6 =
+	// explored, with vision carving a smooth currently-visible hole out of
+	// that), applied here as a multiply-and-discard on this blade's own
+	// alpha instead of a separate overlay pass — a next_pass tried first but
+	// depends on FogOfWar._ready() finding this layer's node already in the
+	// tree, which isn't guaranteed by sibling order; doing it inline here
+	// has no such ordering dependency. Gated on fog_enabled — see that
+	// uniform's declaration for why this can't just run unconditionally.
+	if (fog_enabled) {
+		vec2 fog_uv = (world_pos.xz - fog_map_origin) / fog_map_size;
+		vec4 fog = texture(fog_tex, fog_uv);
+		float fog_vis = 0.0;
+		for (int i = 0; i < fog_vision_count; i++) {
+			float d = distance(world_pos.xz, fog_vision_positions[i]);
+			float r = fog_vision_radii[i];
+			fog_vis = max(fog_vis, 1.0 - smoothstep(r * 0.85, r, d));
+		}
+		ALPHA *= 1.0 - fog.a * (1.0 - fog_vis);
+		if (ALPHA < 0.01) {
+			discard;
+		}
+	}
 }
 
 void light(){
