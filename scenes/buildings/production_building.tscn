@@ -70,6 +70,12 @@ color = Color(0.8, 0.75, 0.65, 0.5)
 transparency = 1
 shading_mode = 0
 albedo_color = Color(0.8, 0.75, 0.65, 0.5)
+vertex_color_use_as_albedo = true
+billboard_mode = 3
+billboard_keep_scale = true
+particles_anim_h_frames = 1
+particles_anim_v_frames = 1
+particles_anim_loop = false
 
 [sub_resource type="QuadMesh" id="QuadMesh_dust"]
 material = SubResource("StandardMaterial3D_dust")

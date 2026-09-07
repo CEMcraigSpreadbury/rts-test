@@ -1,0 +1,2020 @@
+{
+  "version": 1,
+  "prompt_version": "ui-kit-v2",
+  "components": [
+    {
+      "asset_id": "ea8c546d-b78b-4b63-b126-80b2c60d8623",
+      "name": "merged_banner_frame",
+      "component_type": "other",
+      "group": null,
+      "state": null,
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 1105,
+      "height": 289,
+      "x": 915,
+      "y": 23
+    },
+    {
+      "asset_id": "4a5712ef-c524-4284-b2c3-0553d2ae45c6",
+      "name": "small_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_a",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 31,
+        "top": 31,
+        "right": 31,
+        "bottom": 31
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 247,
+      "height": 91,
+      "x": 34,
+      "y": 43
+    },
+    {
+      "asset_id": "9765da28-52c7-4c01-82d2-17b0f00de8ac",
+      "name": "long_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_a",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 31,
+        "top": 31,
+        "right": 31,
+        "bottom": 31
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 611,
+      "height": 93,
+      "x": 289,
+      "y": 45
+    },
+    {
+      "asset_id": "8d1df2ad-1e53-4592-9182-65171be4ab8f",
+      "name": "small_gold_frame_b",
+      "component_type": "frame",
+      "group": "gold_frame_set_b",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 42,
+        "top": 42,
+        "right": 43,
+        "bottom": 40
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 237,
+      "height": 93,
+      "x": 40,
+      "y": 151
+    },
+    {
+      "asset_id": "1e4c7997-c8cf-4bbe-a967-e6d92e11890c",
+      "name": "wide_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_c",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 8,
+        "top": 32,
+        "right": 0,
+        "bottom": 32
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 462,
+      "height": 126,
+      "x": 26,
+      "y": 269
+    },
+    {
+      "asset_id": "86c95fef-8c9d-487f-8c1d-aa36ea11283e",
+      "name": "mid_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_d",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 329,
+      "height": 120,
+      "x": 500,
+      "y": 277
+    },
+    {
+      "asset_id": "7ae14142-f74f-43af-ab91-281cb556380a",
+      "name": "wide_stone_frame_a",
+      "component_type": "frame",
+      "group": "stone_frame_set_a",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 68,
+        "top": 69,
+        "right": 66,
+        "bottom": 55
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 773,
+      "height": 372,
+      "x": 1238,
+      "y": 339
+    },
+    {
+      "asset_id": "9f9abdc5-b900-4a5f-8982-b2960a1f58b5",
+      "name": "square_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_e",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 351,
+      "height": 347,
+      "x": 847,
+      "y": 347
+    },
+    {
+      "asset_id": "f681ae3d-0502-4505-b336-b59cf133afb8",
+      "name": "square_gold_frame_b",
+      "component_type": "frame",
+      "group": "gold_frame_set_f",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 342,
+      "height": 265,
+      "x": 37,
+      "y": 418
+    },
+    {
+      "asset_id": "1935a614-02e9-4ecb-a136-23c87525bb6d",
+      "name": "square_gold_frame_c",
+      "component_type": "frame",
+      "group": "gold_frame_set_g",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 422,
+      "height": 264,
+      "x": 405,
+      "y": 419
+    },
+    {
+      "asset_id": "5f267c7b-ec80-4174-a3f1-96602038187b",
+      "name": "ornate_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_h",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 489,
+      "height": 479,
+      "x": 410,
+      "y": 691
+    },
+    {
+      "asset_id": "f037ffcf-3cce-478f-b033-2bf9d02dbe31",
+      "name": "small_gold_shield_frame",
+      "component_type": "frame",
+      "group": "shield_frame_set_a",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 256,
+      "height": 463,
+      "x": 926,
+      "y": 711
+    },
+    {
+      "asset_id": "8980253e-d8b7-402f-9454-df8ddf1fb672",
+      "name": "tall_gold_frame_a",
+      "component_type": "frame",
+      "group": "gold_frame_set_i",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 342,
+      "height": 454,
+      "x": 37,
+      "y": 715
+    },
+    {
+      "asset_id": "a1ca7842-dcab-4533-b326-782039070eec",
+      "name": "arched_stone_frame",
+      "component_type": "frame",
+      "group": "stone_frame_set_b",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 46,
+        "top": 124,
+        "right": 48,
+        "bottom": 57
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 284,
+      "height": 447,
+      "x": 1202,
+      "y": 728
+    },
+    {
+      "asset_id": "da2fdc4c-267d-4f82-85bf-2b755bafeb87",
+      "name": "wide_gold_frame_b",
+      "component_type": "frame",
+      "group": "gold_frame_set_j",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 503,
+      "height": 285,
+      "x": 1517,
+      "y": 749
+    },
+    {
+      "asset_id": "309fae74-4032-47ca-be5d-a8b7e9e5302b",
+      "name": "wide_gold_frame_c",
+      "component_type": "frame",
+      "group": "gold_frame_set_k",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 42,
+        "top": 42,
+        "right": 37,
+        "bottom": 45
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 492,
+      "height": 132,
+      "x": 1514,
+      "y": 1051
+    },
+    {
+      "asset_id": "7e53213b-f12c-4e64-88ab-02d6ea2c46e9",
+      "name": "lion_banner_frame",
+      "component_type": "frame",
+      "group": "banner_frame_set_a",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 722,
+      "height": 131,
+      "x": 36,
+      "y": 1183
+    },
+    {
+      "asset_id": "af7bd959-168d-49a1-ba8c-d72fb819851a",
+      "name": "wide_gold_frame_d",
+      "component_type": "frame",
+      "group": "gold_frame_set_l",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 544,
+      "height": 140,
+      "x": 1465,
+      "y": 1199
+    },
+    {
+      "asset_id": "d3619e30-d5bd-43ee-8c84-5a9fe6a9c72a",
+      "name": "small_gold_frame_d",
+      "component_type": "frame",
+      "group": "gold_frame_set_m",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 136,
+      "height": 134,
+      "x": 801,
+      "y": 1205
+    },
+    {
+      "asset_id": "d6a09f30-82f4-45b8-9fbc-2c3734e026d7",
+      "name": "small_gold_frame_e",
+      "component_type": "frame",
+      "group": "gold_frame_set_m",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 135,
+      "height": 136,
+      "x": 962,
+      "y": 1206
+    },
+    {
+      "asset_id": "905dc0c4-c3e9-4b14-a689-a2d836f2b192",
+      "name": "small_gold_frame_f",
+      "component_type": "frame",
+      "group": "gold_frame_set_m",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 141,
+      "height": 137,
+      "x": 1121,
+      "y": 1206
+    },
+    {
+      "asset_id": "1cae3db1-a10a-4683-8559-3465dd0e566c",
+      "name": "small_gold_frame_g",
+      "component_type": "frame",
+      "group": "gold_frame_set_m",
+      "state": "fill",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 136,
+      "height": 137,
+      "x": 1283,
+      "y": 1206
+    },
+    {
+      "asset_id": "5635ca37-7f6f-4d3f-abdd-ca53062e8352",
+      "name": "stone_slider_frame",
+      "component_type": "frame",
+      "group": "stone_frame_set_c",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 713,
+      "height": 142,
+      "x": 35,
+      "y": 1335
+    },
+    {
+      "asset_id": "aa872d49-34a2-4546-b216-ccac537e6151",
+      "name": "wide_gold_frame_e",
+      "component_type": "frame",
+      "group": "gold_frame_set_n",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 37,
+        "top": 37,
+        "right": 34,
+        "bottom": 40
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 544,
+      "height": 126,
+      "x": 1465,
+      "y": 1349
+    },
+    {
+      "asset_id": "bfeb21cd-aed5-46b1-b0bd-794779c6d7cb",
+      "name": "small_stone_frame",
+      "component_type": "frame",
+      "group": "stone_frame_set_d",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 215,
+      "height": 113,
+      "x": 790,
+      "y": 1357
+    },
+    {
+      "asset_id": "69d69d31-566b-48e2-86b4-ce606da17c51",
+      "name": "mid_stone_frame_b",
+      "component_type": "frame",
+      "group": "stone_frame_set_d",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 404,
+      "height": 111,
+      "x": 1018,
+      "y": 1358
+    },
+    {
+      "asset_id": "01d60c0c-1ef2-4ea9-855b-43d760e01561",
+      "name": "arched_shield_frame",
+      "component_type": "frame",
+      "group": "stone_frame_set_e",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 55,
+        "top": 119,
+        "right": 52,
+        "bottom": 59
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 317,
+      "height": 503,
+      "x": 1701,
+      "y": 1491
+    },
+    {
+      "asset_id": "bd8be6d5-3a38-4e10-8a52-0285dbd2a20d",
+      "name": "large_stone_frame",
+      "component_type": "frame",
+      "group": "stone_frame_set_f",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 119,
+        "top": 88,
+        "right": 112,
+        "bottom": 85
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 954,
+      "height": 516,
+      "x": 29,
+      "y": 1495
+    },
+    {
+      "asset_id": "9cb95908-d17e-47bf-a9fd-be221d24e62d",
+      "name": "large_stone_frame_b",
+      "component_type": "frame",
+      "group": "stone_frame_set_g",
+      "state": null,
+      "scalable": true,
+      "nine_slice": {
+        "left": 85,
+        "top": 73,
+        "right": 90,
+        "bottom": 79
+      },
+      "source_sheet_asset_id": "838277d3-197f-4f69-8279-cf61ad1560e4",
+      "width": 676,
+      "height": 513,
+      "x": 1003,
+      "y": 1497
+    },
+    {
+      "asset_id": "29035738-4a14-4ffb-a474-a810edaa96ed",
+      "name": "shield_icon_gray",
+      "component_type": "icon",
+      "group": "shield_emblem",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 137,
+      "height": 166,
+      "x": 1831,
+      "y": 35
+    },
+    {
+      "asset_id": "920ef7bf-4702-41e5-bb30-501acc65ae09",
+      "name": "shield_icon_blue",
+      "component_type": "icon",
+      "group": "shield_emblem",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 130,
+      "height": 162,
+      "x": 1643,
+      "y": 37
+    },
+    {
+      "asset_id": "9d534139-4fbf-4f1d-b809-53dacceeaf0b",
+      "name": "ornate_frame_gold_b",
+      "component_type": "frame",
+      "group": "top_panel_frame",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 413,
+      "height": 104,
+      "x": 477,
+      "y": 38
+    },
+    {
+      "asset_id": "ff26192b-6a25-484f-8b40-c6c493be93ad",
+      "name": "ornate_frame_gold_a",
+      "component_type": "frame",
+      "group": "top_panel_frame",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 394,
+      "height": 104,
+      "x": 34,
+      "y": 39
+    },
+    {
+      "asset_id": "4e1a719f-e82a-49c1-82f4-fbfb14d812b5",
+      "name": "tab_gold_active",
+      "component_type": "tab",
+      "group": "top_tab_bar",
+      "state": "selected",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 662,
+      "height": 99,
+      "x": 937,
+      "y": 54
+    },
+    {
+      "asset_id": "2628f5a3-d43c-42a3-962a-cc7ed9021895",
+      "name": "ornate_frame_spiked",
+      "component_type": "frame",
+      "group": "top_panel_frame_spiked",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 476,
+      "height": 117,
+      "x": 446,
+      "y": 174
+    },
+    {
+      "asset_id": "2d688396-d290-41cf-937a-4c708d526b94",
+      "name": "ornate_frame_gold_c",
+      "component_type": "frame",
+      "group": "top_panel_frame",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 401,
+      "height": 109,
+      "x": 30,
+      "y": 178
+    },
+    {
+      "asset_id": "c3b34d47-4370-4ceb-8877-ff23d7df31b6",
+      "name": "lion_shield_badge",
+      "component_type": "badge",
+      "group": "crest_badge",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 270,
+      "height": 232,
+      "x": 1695,
+      "y": 245
+    },
+    {
+      "asset_id": "fe3ad939-f028-4b54-9052-c3d2106a8281",
+      "name": "helmet_icon_gold",
+      "component_type": "icon",
+      "group": "crest_icons",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 152,
+      "height": 166,
+      "x": 1470,
+      "y": 275
+    },
+    {
+      "asset_id": "43bbcd5b-159b-425f-a8e5-005175900a5f",
+      "name": "helmet_icon_blue",
+      "component_type": "icon",
+      "group": "crest_icons",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 154,
+      "height": 164,
+      "x": 1287,
+      "y": 278
+    },
+    {
+      "asset_id": "26440009-c0ad-4dee-b0cc-587204c1188d",
+      "name": "sun_medallion",
+      "component_type": "badge",
+      "group": "medallion_row",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 149,
+      "height": 152,
+      "x": 1102,
+      "y": 283
+    },
+    {
+      "asset_id": "9a860712-563b-4fad-8dfd-0978e1cef010",
+      "name": "coin_medallion",
+      "component_type": "badge",
+      "group": "medallion_row",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 146,
+      "height": 146,
+      "x": 919,
+      "y": 289
+    },
+    {
+      "asset_id": "eb889762-90aa-418e-ae61-38aa0e0877d9",
+      "name": "shield_button_gold",
+      "component_type": "button",
+      "group": "shield_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 176,
+      "height": 170,
+      "x": 35,
+      "y": 315
+    },
+    {
+      "asset_id": "0cf3cc76-acb0-46a6-8bed-052902902869",
+      "name": "shield_button_silver",
+      "component_type": "button",
+      "group": "shield_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 178,
+      "height": 169,
+      "x": 235,
+      "y": 316
+    },
+    {
+      "asset_id": "d70ff990-7037-4d8e-8869-105f5893b67e",
+      "name": "crossed_swords_button",
+      "component_type": "button",
+      "group": "mode_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 177,
+      "height": 169,
+      "x": 437,
+      "y": 316
+    },
+    {
+      "asset_id": "25e43064-7ce4-40e3-917c-e9381ee132a3",
+      "name": "flag_button_red",
+      "component_type": "button",
+      "group": "mode_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 179,
+      "height": 168,
+      "x": 638,
+      "y": 317
+    },
+    {
+      "asset_id": "db8da3bd-4d26-417b-b70f-c6604596ace9",
+      "name": "lion_shield_badge_small",
+      "component_type": "badge",
+      "group": "crest_badge_small",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 194,
+      "height": 167,
+      "x": 1735,
+      "y": 496
+    },
+    {
+      "asset_id": "3f1b5f42-0a5d-4604-802d-28bcc3315c68",
+      "name": "anvil_button",
+      "component_type": "button",
+      "group": "workshop_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 179,
+      "height": 172,
+      "x": 234,
+      "y": 499
+    },
+    {
+      "asset_id": "53b5c401-5f9a-4d71-b6f2-1bc1210ff282",
+      "name": "compass_button",
+      "component_type": "button",
+      "group": "workshop_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 178,
+      "height": 172,
+      "x": 437,
+      "y": 499
+    },
+    {
+      "asset_id": "72c78258-87e3-462f-84b7-61a1271df9be",
+      "name": "scroll_button",
+      "component_type": "button",
+      "group": "workshop_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 179,
+      "height": 171,
+      "x": 638,
+      "y": 499
+    },
+    {
+      "asset_id": "4d46d392-d26c-44a6-88f8-f79e1dec7b4d",
+      "name": "castle_button",
+      "component_type": "button",
+      "group": "workshop_choice",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 178,
+      "height": 171,
+      "x": 35,
+      "y": 500
+    },
+    {
+      "asset_id": "1dd7f89b-0b5c-4d4f-9ebc-7ec5dd27f3b5",
+      "name": "red_orb_ring",
+      "component_type": "toggle",
+      "group": "orb_toggle_row",
+      "state": "on",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 104,
+      "height": 103,
+      "x": 1175,
+      "y": 508
+    },
+    {
+      "asset_id": "efd11360-6ba0-4d6e-9701-915d3b92802c",
+      "name": "amber_orb_ring",
+      "component_type": "toggle",
+      "group": "orb_toggle_row",
+      "state": "on",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 105,
+      "height": 102,
+      "x": 911,
+      "y": 509
+    },
+    {
+      "asset_id": "f048290a-d7ee-494b-b86b-7aca172e47f2",
+      "name": "dark_orb_ring",
+      "component_type": "toggle",
+      "group": "orb_toggle_row",
+      "state": "off",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 102,
+      "height": 102,
+      "x": 1045,
+      "y": 509
+    },
+    {
+      "asset_id": "66264ecd-4556-4b04-9281-c709ac5bc31f",
+      "name": "green_orb_ring",
+      "component_type": "toggle",
+      "group": "orb_toggle_row",
+      "state": "on",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 104,
+      "height": 102,
+      "x": 1307,
+      "y": 509
+    },
+    {
+      "asset_id": "84a1908a-3d7c-4928-a044-a1655720512e",
+      "name": "blue_orb_ring",
+      "component_type": "toggle",
+      "group": "orb_toggle_row",
+      "state": "on",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 103,
+      "height": 102,
+      "x": 1439,
+      "y": 509
+    },
+    {
+      "asset_id": "23401820-dd82-4473-8d4a-9abc08cff959",
+      "name": "purple_orb_ring",
+      "component_type": "toggle",
+      "group": "orb_toggle_row",
+      "state": "on",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 104,
+      "height": 102,
+      "x": 1570,
+      "y": 509
+    },
+    {
+      "asset_id": "36ca6c72-46ec-4ab9-8d7a-7e368517d9bb",
+      "name": "long_banner_frame_left",
+      "component_type": "frame",
+      "group": "banner_bar",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 1271,
+      "height": 104,
+      "x": 24,
+      "y": 705
+    },
+    {
+      "asset_id": "e4bc5201-d8c4-4791-a769-0e914ef35aff",
+      "name": "long_banner_frame_right",
+      "component_type": "frame",
+      "group": "banner_bar",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 700,
+      "height": 94,
+      "x": 1314,
+      "y": 715
+    },
+    {
+      "asset_id": "25d93dba-b671-4c5b-8703-d595c457abf5",
+      "name": "slider_horizontal_gold",
+      "component_type": "track",
+      "group": "slider_gold",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 381,
+      "height": 75,
+      "x": 1241,
+      "y": 860
+    },
+    {
+      "asset_id": "d5565e5c-0174-4112-a9d2-446d2ee47021",
+      "name": "play_button",
+      "component_type": "button",
+      "group": "media_controls",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 115,
+      "height": 111,
+      "x": 51,
+      "y": 862
+    },
+    {
+      "asset_id": "585dad4c-da45-4505-a524-33bac0518441",
+      "name": "stop_button",
+      "component_type": "button",
+      "group": "media_controls",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 116,
+      "height": 111,
+      "x": 351,
+      "y": 862
+    },
+    {
+      "asset_id": "fdb48aa9-ff9e-4fc0-8498-46d37c23d41f",
+      "name": "pause_button",
+      "component_type": "button",
+      "group": "media_controls",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 116,
+      "height": 110,
+      "x": 202,
+      "y": 863
+    },
+    {
+      "asset_id": "66d04095-c142-4071-ab22-7b0c1e0d815e",
+      "name": "close_button_red",
+      "component_type": "button",
+      "group": "media_controls",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 113,
+      "height": 110,
+      "x": 501,
+      "y": 863
+    },
+    {
+      "asset_id": "47f52ae4-026a-43c7-86da-40807649e84e",
+      "name": "arrow_button_left",
+      "component_type": "button",
+      "group": "arrow_buttons",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 88,
+      "height": 87,
+      "x": 1671,
+      "y": 867
+    },
+    {
+      "asset_id": "65d2a4a0-6766-4b2f-b4bf-5c50f661d756",
+      "name": "arrow_button_right",
+      "component_type": "button",
+      "group": "arrow_buttons",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 88,
+      "height": 87,
+      "x": 1783,
+      "y": 867
+    },
+    {
+      "asset_id": "264e9965-acff-4bc6-9f7f-f1d822e739db",
+      "name": "arrow_button_up",
+      "component_type": "button",
+      "group": "arrow_buttons",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 77,
+      "height": 81,
+      "x": 1922,
+      "y": 868
+    },
+    {
+      "asset_id": "99725b10-6ea9-4ec9-a266-f9c6c5039939",
+      "name": "radio_selected_red",
+      "component_type": "radio",
+      "group": "status_radio_row",
+      "state": "selected",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 86,
+      "height": 85,
+      "x": 1107,
+      "y": 873
+    },
+    {
+      "asset_id": "0b5a3d60-74b9-4237-a423-f584c4c891b9",
+      "name": "radio_selected_gold",
+      "component_type": "radio",
+      "group": "status_radio_row",
+      "state": "selected",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 84,
+      "height": 84,
+      "x": 657,
+      "y": 874
+    },
+    {
+      "asset_id": "b21863b7-18e8-4fcb-9a5c-f995bd00a3ba",
+      "name": "radio_unselected_dark_a",
+      "component_type": "radio",
+      "group": "status_radio_row",
+      "state": "unselected",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 84,
+      "height": 84,
+      "x": 767,
+      "y": 874
+    },
+    {
+      "asset_id": "3cf6f07d-e27c-4395-b47c-0c4887014166",
+      "name": "radio_unselected_dark_b",
+      "component_type": "radio",
+      "group": "status_radio_row",
+      "state": "unselected",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 84,
+      "height": 84,
+      "x": 879,
+      "y": 874
+    },
+    {
+      "asset_id": "70787f4c-3641-416a-a950-6797054af05e",
+      "name": "radio_checked_green",
+      "component_type": "radio",
+      "group": "status_radio_row",
+      "state": "checked",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 85,
+      "height": 84,
+      "x": 993,
+      "y": 874
+    },
+    {
+      "asset_id": "49054b3b-2461-4a57-a697-259a88b0f664",
+      "name": "slider_horizontal_bronze",
+      "component_type": "track",
+      "group": "slider_bronze",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 403,
+      "height": 74,
+      "x": 1238,
+      "y": 955
+    },
+    {
+      "asset_id": "26712b5c-b4ee-4fad-9c62-0ffa2ac189e0",
+      "name": "vertical_scrollbar_gold",
+      "component_type": "track",
+      "group": "scrollbar_gold",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 76,
+      "height": 669,
+      "x": 1922,
+      "y": 1015
+    },
+    {
+      "asset_id": "714d85f4-0022-4b4f-8ab2-1eb62e7b8738",
+      "name": "diagonal_arrow_button_up_left",
+      "component_type": "button",
+      "group": "corner_arrow_buttons",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 81,
+      "height": 78,
+      "x": 1678,
+      "y": 1017
+    },
+    {
+      "asset_id": "4b6eac64-5952-43f8-8898-12594964a59a",
+      "name": "diagonal_arrow_button_down_right",
+      "component_type": "button",
+      "group": "corner_arrow_buttons",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 80,
+      "height": 78,
+      "x": 1795,
+      "y": 1017
+    },
+    {
+      "asset_id": "a5eea0a9-8dd4-4ff5-be14-b6ab426b2d0f",
+      "name": "bar_frame_blue_a",
+      "component_type": "frame",
+      "group": "status_bar_blue",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 494,
+      "height": 61,
+      "x": 47,
+      "y": 1033
+    },
+    {
+      "asset_id": "80b0f72f-b46a-48ad-920a-7e8683530b14",
+      "name": "bar_fill_green",
+      "component_type": "fill",
+      "group": "status_bar_green",
+      "state": "fill",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 515,
+      "height": 61,
+      "x": 615,
+      "y": 1033
+    },
+    {
+      "asset_id": "24cb4fbb-7b3f-4754-81a4-b68411c50a57",
+      "name": "slider_horizontal_gold_alt",
+      "component_type": "track",
+      "group": "slider_gold",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 423,
+      "height": 63,
+      "x": 1227,
+      "y": 1054
+    },
+    {
+      "asset_id": "e2b9aa99-f41c-4da5-a242-81946fa30e3d",
+      "name": "bar_frame_blue_b",
+      "component_type": "frame",
+      "group": "status_bar_blue",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 494,
+      "height": 58,
+      "x": 47,
+      "y": 1123
+    },
+    {
+      "asset_id": "091b3241-bdcc-4321-b09e-ca47446bafa6",
+      "name": "bar_fill_blue",
+      "component_type": "fill",
+      "group": "status_bar_blue",
+      "state": "fill",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 515,
+      "height": 59,
+      "x": 615,
+      "y": 1123
+    },
+    {
+      "asset_id": "746fb9a9-5f1b-42de-b3e7-8e9935840c13",
+      "name": "vertical_scrollbar_dark_a",
+      "component_type": "track",
+      "group": "scrollbar_dark",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 58,
+      "height": 542,
+      "x": 1713,
+      "y": 1159
+    },
+    {
+      "asset_id": "482cdc22-e09c-4e38-8923-ba585dee7c47",
+      "name": "vertical_scrollbar_gold_b",
+      "component_type": "track",
+      "group": "scrollbar_gold",
+      "state": "empty",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 57,
+      "height": 540,
+      "x": 1825,
+      "y": 1161
+    },
+    {
+      "asset_id": "1f784d9a-1b06-4027-a268-d1413f29e5e7",
+      "name": "large_frame_silver",
+      "component_type": "frame",
+      "group": "content_frame_silver",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 441,
+      "height": 298,
+      "x": 33,
+      "y": 1233
+    },
+    {
+      "asset_id": "b991c80a-fe60-4b57-bb8c-3cf2f705380c",
+      "name": "large_frame_gold",
+      "component_type": "frame",
+      "group": "content_frame_gold",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 552,
+      "height": 285,
+      "x": 515,
+      "y": 1233
+    },
+    {
+      "asset_id": "15206c94-1402-4778-804c-7eccb008139b",
+      "name": "medium_frame_gold_ornate",
+      "component_type": "frame",
+      "group": "content_frame_gold_ornate",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 443,
+      "height": 100,
+      "x": 1114,
+      "y": 1233
+    },
+    {
+      "asset_id": "6c24a014-dd70-439c-9557-efc9875d1136",
+      "name": "vertical_border_dark",
+      "component_type": "frame",
+      "group": "vertical_frame_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 51,
+      "height": 409,
+      "x": 1595,
+      "y": 1238
+    },
+    {
+      "asset_id": "2a9d1e1f-6caf-45a7-8e6c-b473671fb93d",
+      "name": "square_frame_gold",
+      "component_type": "frame",
+      "group": "content_frame_gold_ornate",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 416,
+      "height": 356,
+      "x": 1110,
+      "y": 1363
+    },
+    {
+      "asset_id": "16856930-6ba1-403d-8523-62d2aa7dd2de",
+      "name": "corner_brick_frame",
+      "component_type": "frame",
+      "group": "stone_corner_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 253,
+      "height": 311,
+      "x": 486,
+      "y": 1555
+    },
+    {
+      "asset_id": "d1f014aa-9332-4641-baff-3856c8940458",
+      "name": "corner_frame_dark_gold",
+      "component_type": "frame",
+      "group": "stone_corner_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 208,
+      "height": 212,
+      "x": 33,
+      "y": 1557
+    },
+    {
+      "asset_id": "3d34a1de-f353-4620-84be-0aeafbf58f34",
+      "name": "corner_frame_gold_ornate",
+      "component_type": "frame",
+      "group": "stone_corner_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 177,
+      "height": 186,
+      "x": 277,
+      "y": 1557
+    },
+    {
+      "asset_id": "8a02ceff-5d6a-4a08-a4ed-367a93651d98",
+      "name": "chevron_pointer_gold",
+      "component_type": "icon",
+      "group": "pointer_icons",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 92,
+      "height": 106,
+      "x": 923,
+      "y": 1568
+    },
+    {
+      "asset_id": "ca578795-3c65-4358-9dc9-42d422df0ff1",
+      "name": "tag_frame_dark",
+      "component_type": "frame",
+      "group": "tag_frame",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 171,
+      "height": 83,
+      "x": 700,
+      "y": 1607
+    },
+    {
+      "asset_id": "1d9e1068-d249-4ef6-9af2-6de4025b962d",
+      "name": "corner_bracket_gold",
+      "component_type": "frame",
+      "group": "gold_corner_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 114,
+      "height": 137,
+      "x": 133,
+      "y": 1690
+    },
+    {
+      "asset_id": "c31c4bd6-c06f-46e6-b397-cad4f236be49",
+      "name": "map_pin_red",
+      "component_type": "icon",
+      "group": "map_pins",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 85,
+      "height": 126,
+      "x": 988,
+      "y": 1733
+    },
+    {
+      "asset_id": "4e385ee9-c577-419b-b8f3-38ae16db283f",
+      "name": "map_pin_green",
+      "component_type": "icon",
+      "group": "map_pins",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 88,
+      "height": 130,
+      "x": 825,
+      "y": 1735
+    },
+    {
+      "asset_id": "2ef86ca1-a1bd-4f64-8ecb-36ffc4e97b02",
+      "name": "square_frame_gold_2",
+      "component_type": "frame",
+      "group": "square_frame_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 147,
+      "height": 146,
+      "x": 1686,
+      "y": 1779
+    },
+    {
+      "asset_id": "c6cca714-ad29-415b-97e1-6466a7869533",
+      "name": "bookmark_ribbon_blue",
+      "component_type": "badge",
+      "group": "ribbon_markers",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 156,
+      "height": 187,
+      "x": 1173,
+      "y": 1783
+    },
+    {
+      "asset_id": "6fd5ff10-c1a8-4e13-a9ff-80ddcc5396d6",
+      "name": "bookmark_ribbon_red",
+      "component_type": "badge",
+      "group": "ribbon_markers",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 144,
+      "height": 188,
+      "x": 1349,
+      "y": 1783
+    },
+    {
+      "asset_id": "3e337ffd-6d12-4a27-9e44-1084039629ea",
+      "name": "square_frame_dark",
+      "component_type": "frame",
+      "group": "square_frame_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 139,
+      "height": 140,
+      "x": 1526,
+      "y": 1783
+    },
+    {
+      "asset_id": "3833f331-27d3-499e-a025-ee86cfdb5bf8",
+      "name": "square_frame_black",
+      "component_type": "frame",
+      "group": "square_frame_set",
+      "state": "normal",
+      "scalable": true,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 140,
+      "height": 139,
+      "x": 1858,
+      "y": 1783
+    },
+    {
+      "asset_id": "6c4d8ba3-5210-4f50-aa8e-4ecbdcacc127",
+      "name": "stone_corner_piece",
+      "component_type": "decoration",
+      "group": "stone_corner_set",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 126,
+      "height": 200,
+      "x": 271,
+      "y": 1787
+    },
+    {
+      "asset_id": "15370555-d03c-49b7-86c5-f68bea67d0d8",
+      "name": "ornate_corner_gold",
+      "component_type": "decoration",
+      "group": "gold_corner_set",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 181,
+      "height": 186,
+      "x": 32,
+      "y": 1803
+    },
+    {
+      "asset_id": "8a3cbfbc-ddcd-43c5-b3f3-8300535101b9",
+      "name": "stone_block_corner_a",
+      "component_type": "decoration",
+      "group": "stone_blocks",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 61,
+      "height": 177,
+      "x": 453,
+      "y": 1809
+    },
+    {
+      "asset_id": "d76dbea3-7512-4ea0-8f12-896dd4e8972c",
+      "name": "stone_block_corner_b",
+      "component_type": "decoration",
+      "group": "stone_blocks",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 63,
+      "height": 177,
+      "x": 520,
+      "y": 1809
+    },
+    {
+      "asset_id": "66b52333-69c6-422e-b752-1ed5b35d70d4",
+      "name": "ornate_divider_gold_a",
+      "component_type": "divider",
+      "group": "ornate_dividers",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 478,
+      "height": 29,
+      "x": 637,
+      "y": 1912
+    },
+    {
+      "asset_id": "54b49e8f-5898-4545-8f23-82651aa99665",
+      "name": "ornate_divider_gold_b",
+      "component_type": "divider",
+      "group": "ornate_dividers",
+      "state": "normal",
+      "scalable": false,
+      "nine_slice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      },
+      "source_sheet_asset_id": "032020db-edc0-4246-87fd-3e8bc1c6ae55",
+      "width": 489,
+      "height": 48,
+      "x": 630,
+      "y": 1961
+    }
+  ]
+}

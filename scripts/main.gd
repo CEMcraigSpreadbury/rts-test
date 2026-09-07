@@ -33,6 +33,11 @@ const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, 
 ## The action panel's grid always has exactly this many slots (4 columns x 3
 ## rows), padded with blank placeholders, so its size never changes with context.
 const ACTION_PANEL_SLOT_COUNT: int = 12
+const QUEUE_SLOT_TEXTURE: Texture2D = preload("res://assets/ui/HUD/elements/square_frame_dark.png")
+const RESOURCE_TICK_RATE: float = 6.0
+const RESOURCE_TICK_MIN_SPEED: float = 12.0
+const BAR_FRAME_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_frame.png")
+const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill_green.png")
 
 ## Same list (and order) as lobby.tscn's Lobby.available_factions — that
 ## shared order is what a "faction_index" in Network.players refers to.
@@ -52,19 +57,21 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @onready var building_spawner: MultiplayerSpawner = $BuildingSpawner
 @onready var player_spawn_points: Node3D = $PlayerSpawnPoints
 
-@onready var info_panel: PanelContainer = $UI/InfoPanel
-@onready var info_panel_name_label: Label = $UI/InfoPanel/Margin/VBox/BuildingNameLabel
-@onready var info_panel_content: VBoxContainer = $UI/InfoPanel/Margin/VBox/InfoContainer
+@onready var info_panel_divider: TextureRect = $UI/BottomBar/InfoPanel/Margin/VBox/TitleDivider
+@onready var info_panel_name_label: Label = $UI/BottomBar/InfoPanel/Margin/VBox/BuildingNameLabel
+@onready var info_panel_content: VBoxContainer = $UI/BottomBar/InfoPanel/Margin/VBox/InfoContainer
+@onready var portrait_frame: TextureRect = $UI/BottomBar/InfoPanel/PortraitFrame
+@onready var portrait_rect: ColorRect = $UI/BottomBar/InfoPanel/PortraitFrame/Portrait
+@onready var portrait_health_label: Label = $UI/BottomBar/InfoPanel/PortraitHealthLabel
 
 ## Single contextual action panel — always visible, its grid's contents and
 ## title change with the selection: nothing selected shows the construction
 ## menu, a selected building shows its producibles, selected units show the
 ## Move/Stop/Attack/Patrol commands.
-@onready var action_panel_title: Label = $UI/ActionPanel/Margin/VBox/Title
-@onready var action_panel_grid: GridContainer = $UI/ActionPanel/Margin/VBox/Grid
+@onready var action_panel_grid: GridContainer = $UI/BottomBar/ActionPanel/Margin/VBox/Grid
 
-@onready var chat_log: RichTextLabel = $UI/ChatLog
-@onready var chat_input: LineEdit = $UI/ChatInput
+@onready var chat_log: RichTextLabel = $UI/BottomBar/ChatLog
+@onready var chat_input: LineEdit = $UI/BottomBar/ChatInput
 
 ## Non-positional (unlike Unit/ProductionBuilding's OnSelectSoundEffect) since
 ## this is feedback for the local player's own click/hotkey, not something
@@ -81,7 +88,7 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @export var on_under_attack_sound_effects: Array[AudioStream] = []
 
 @onready var ui_root: Node = $UI
-@onready var minimap: Control = $UI/Minimap
+@onready var minimap: Control = $UI/BottomBar/MinimapFrame/Minimap
 
 func _play_command_sound() -> void:
 	AudioUtils.play_random(command_audio_player, on_command_sound_effects)
@@ -248,7 +255,7 @@ var _build_queue_active: bool = false
 ## Command panel info section — built once per selection change, then only
 ## had their values (not structure) updated every frame, to avoid rebuilding
 ## Control nodes 60 times a second for something that just needs a number to move.
-var _info_progress_bar: ProgressBar = null
+var _info_progress_bar: TextureProgressBar = null
 var _info_empty_label: Label = null
 var _info_slot_row: HBoxContainer = null
 var _info_last_queue_size: int = -1
@@ -382,6 +389,9 @@ var _population_cap: int = 0
 ## resource_name -> true while it's one of the ones flashing red because the
 ## last attempted purchase couldn't afford it — see _flash_missing_resources.
 var _flashing_resource_names: Dictionary = {}
+var _resource_display_totals: Dictionary = {}
+var _impact_process_material: ParticleProcessMaterial
+var _impact_mesh: QuadMesh
 var _resource_flash_on: bool = false
 var _resource_flash_tween: Tween
 const RESOURCE_FLASH_CYCLE_COUNT: int = 4
@@ -402,8 +412,15 @@ func _ready() -> void:
 	if multiplayer.is_server():
 		_spawn_all_players()
 
+	_build_impact_effect_resources()
 	chat_input.text_submitted.connect(_on_chat_submitted)
 	minimap.ping_requested.connect(_on_minimap_ping_requested)
+
+	var utility_buttons: VBoxContainer = $UI/BottomBar/UtilityButtons
+	utility_buttons.get_node(^"IdleButton").pressed.connect(_select_next_idle_villager)
+	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
+	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
+	utility_buttons.get_node(^"FormationStaggeredButton").pressed.connect(_set_formation_type.bind(Formation.Type.STAGGERED))
 	chat_log.visible = false
 	UiDebugEditor.register_editable_root(ui_root, "main")
 
@@ -679,9 +696,64 @@ func _rpc_damage_number(node_path: NodePath, amount: int) -> void:
 ## Unit (buildings have no sprite to flash).
 func _show_damage_feedback(node: Node3D, amount: int) -> void:
 	_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+	_spawn_impact_burst(node.global_position + Vector3(0, 0.9, 0))
 	if node is Unit:
 		node.play_hit_flash()
 	_maybe_alert_under_attack(node)
+
+## One-shot dust/spark puff at the point of a hit. The process material and
+## mesh are built once in _ready and shared by every burst — only the emitter
+## node itself is per-hit, and it frees itself once the burst finishes.
+func _spawn_impact_burst(world_pos: Vector3) -> void:
+	var particles := GPUParticles3D.new()
+	particles.amount = 8
+	particles.lifetime = 0.35
+	particles.one_shot = true
+	particles.explosiveness = 1.0
+	particles.process_material = _impact_process_material
+	particles.draw_pass_1 = _impact_mesh
+	add_child(particles)
+	particles.global_position = world_pos
+	particles.emitting = true
+	particles.finished.connect(particles.queue_free)
+
+func _build_impact_effect_resources() -> void:
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = 0.15
+	process.direction = Vector3(0, 1, 0)
+	process.spread = 65.0
+	process.initial_velocity_min = 1.4
+	process.initial_velocity_max = 3.0
+	process.gravity = Vector3(0, -5.0, 0)
+	process.scale_min = 0.3
+	process.scale_max = 0.8
+	process.color = Color(0.95, 0.85, 0.6, 0.9)
+	_impact_process_material = process
+
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	material.billboard_keep_scale = true
+	material.albedo_color = Color(0.95, 0.85, 0.6, 0.9)
+	var mesh := QuadMesh.new()
+	mesh.size = Vector2(0.14, 0.14)
+	mesh.material = material
+	_impact_mesh = mesh
+
+## Screen shake is per-viewer (rts_camera drops it when the source is off
+## screen), but the events that cause it only fire on the host — so it relays
+## the world position out the same way damage numbers do.
+func _relay_impact_shake(world_pos: Vector3, amount: float) -> void:
+	camera_rig.shake_at(world_pos, amount)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_impact_shake.rpc(world_pos, amount)
+
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_impact_shake(world_pos: Vector3, amount: float) -> void:
+	camera_rig.shake_at(world_pos, amount)
 
 ## Purely local per-viewer decision (this runs identically for every peer,
 ## on both the host's immediate call and every client's relayed RPC) — only
@@ -801,6 +873,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 ## --- Win condition (host only) ---
 
 func _on_building_destroyed(building: ProductionBuilding) -> void:
+	_relay_impact_shake(building.global_position, 0.55)
 	if not multiplayer.is_server() or not building.is_main_base or game_over:
 		return
 	var peer_id: int = building.owner_peer_id
@@ -938,6 +1011,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 ## rather than shown locally — same reasoning as the debug command replies
 ## above, just the message differs.
 func _on_building_construction_finished(building: ProductionBuilding) -> void:
+	_relay_impact_shake(building.global_position, 0.25)
 	if not multiplayer.is_server():
 		return
 	_rpc_display_chat.rpc_id(building.owner_peer_id, "Construction complete: %s" % building.building_name)
@@ -948,7 +1022,8 @@ func _get_dropoff_for(peer_id: int) -> Node3D:
 		return null
 	return town_center.get_node_or_null("DropoffPoint")
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_update_resource_ticker(delta)
 	if selected_building:
 		_refresh_building_info()
 	elif not selected_units.is_empty():
@@ -1002,6 +1077,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 	if chat_input.visible:
 		return
+
+	if event is InputEventKey and event.pressed and not event.echo:
+		_pulse_action_button(OS.get_keycode_string(event.keycode))
 
 	if placing_type:
 		_handle_placement_input(event)
@@ -1747,8 +1825,30 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 				pending_order_mode = ""
 
 func _on_stockpile_changed(resource_name: String, amount: int) -> void:
+	## First value for a resource (the starting stockpile) snaps — only later
+	## changes are worth counting up to.
+	if not _resource_display_totals.has(resource_name):
+		_resource_display_totals[resource_name] = float(amount)
 	_resource_totals[resource_name] = amount
 	_update_resource_label()
+
+## Eases each displayed total toward its real value so income reads as a
+## counter ticking up rather than numbers popping between frames.
+func _update_resource_ticker(delta: float) -> void:
+	var changed := false
+	for resource_name in _resource_totals:
+		var target := float(_resource_totals[resource_name])
+		var current: float = _resource_display_totals.get(resource_name, target)
+		if is_equal_approx(current, target):
+			continue
+		var speed: float = maxf(absf(target - current) * RESOURCE_TICK_RATE, RESOURCE_TICK_MIN_SPEED)
+		current = move_toward(current, target, speed * delta)
+		if absf(target - current) < 0.5:
+			current = target
+		_resource_display_totals[resource_name] = current
+		changed = true
+	if changed:
+		_update_resource_label()
 
 func _on_population_changed(used: int, cap: int) -> void:
 	_population_used = used
@@ -1758,7 +1858,8 @@ func _on_population_changed(used: int, cap: int) -> void:
 func _update_resource_label() -> void:
 	var parts: Array[String] = []
 	for resource_type in DEBUG_RESOURCE_TYPES:
-		var text := "%s: %d" % [resource_type.display_name, _resource_totals.get(resource_type.display_name, 0)]
+		var shown: int = int(round(_resource_display_totals.get(resource_type.display_name, float(_resource_totals.get(resource_type.display_name, 0)))))
+		var text := "%s: %d" % [resource_type.display_name, shown]
 		if _resource_flash_on and _flashing_resource_names.has(resource_type.display_name):
 			text = "[color=#ff4433]%s[/color]" % text
 		parts.append(text)
@@ -1815,9 +1916,9 @@ func _select_building(building: ProductionBuilding) -> void:
 		return
 	selected_resource = null
 
-	info_panel.visible = true
+	_show_info_header()
 	info_panel_name_label.text = building.building_name
-	action_panel_title.text = building.building_name
+	_update_portrait(building.team_tint, "")
 	for child in action_panel_grid.get_children():
 		child.queue_free()
 	_build_building_info(building)
@@ -1884,24 +1985,25 @@ func _refresh_command_panel() -> void:
 	_showing_build_submenu = false
 
 	if not selected_units.is_empty():
-		info_panel.visible = true
+		_show_info_header()
 		_populate_unit_command_buttons()
 		_build_unit_info()
 		_refresh_unit_info_values()
 		return
 
-	action_panel_title.text = "Construct"
 	_populate_construction_buttons()
 
 	if selected_resource != null and is_instance_valid(selected_resource):
-		info_panel.visible = true
+		_show_info_header()
 		info_panel_name_label.text = selected_resource.display_name
+		portrait_frame.visible = false
+		portrait_health_label.visible = false
 		_info_resource_label = Label.new()
 		info_panel_content.add_child(_info_resource_label)
 		_refresh_resource_info()
 		return
 
-	info_panel.visible = false
+	_clear_info_header()
 
 ## Left-click select/deselect a resource node (see selected_resource);
 ## null clears it back to whatever the rest of the selection implies.
@@ -1943,7 +2045,7 @@ func _fill_action_panel_grid(buttons: Array[Control]) -> void:
 
 func _make_empty_action_slot() -> Control:
 	var slot := Control.new()
-	slot.custom_minimum_size = Vector2(56, 56)
+	slot.custom_minimum_size = Vector2(40, 40)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return slot
 
@@ -1972,7 +2074,6 @@ func _any_selected_can_build() -> bool:
 
 func _open_build_submenu() -> void:
 	_showing_build_submenu = true
-	action_panel_title.text = "Build"
 	for child in action_panel_grid.get_children():
 		child.queue_free()
 	_populate_construction_buttons()
@@ -1986,11 +2087,48 @@ func _close_build_submenu() -> void:
 
 ## --- Command panel info section ---
 
-func _make_progress_bar_with_overlay() -> ProgressBar:
-	var bar := ProgressBar.new()
+## The info panel's frame is part of the bottom bar's stonework, so it stays
+## on screen with nothing selected — only its contents come and go.
+func _show_info_header() -> void:
+	info_panel_name_label.visible = true
+	info_panel_divider.visible = true
+
+func _clear_info_header() -> void:
+	info_panel_name_label.visible = false
+	info_panel_divider.visible = false
+	portrait_frame.visible = false
+	portrait_health_label.visible = false
+
+func _update_portrait(tint: Color, health_text: String) -> void:
+	portrait_frame.visible = true
+	portrait_health_label.visible = true
+	portrait_rect.color = tint
+	portrait_health_label.text = health_text
+	_punch_control(portrait_frame)
+
+func _flat_bar_stylebox(color: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = color
+	return box
+
+## TextureProgressBar rather than ProgressBar: it clips texture_progress to
+## the current value instead of scaling it, so the fill art stays laid out
+## across the bar's full width and is revealed as the value climbs. The
+## nine-patch margins keep the art's end caps from smearing when the bar is
+## wider than the source image.
+func _make_progress_bar_with_overlay() -> TextureProgressBar:
+	var bar := TextureProgressBar.new()
 	bar.custom_minimum_size = Vector2(0, 20)
 	bar.max_value = 1.0
-	bar.show_percentage = false
+	bar.step = 0.0
+	bar.texture_under = BAR_FRAME_TEXTURE
+	bar.texture_progress = BAR_FILL_TEXTURE
+	bar.fill_mode = TextureProgressBar.FILL_LEFT_TO_RIGHT
+	bar.nine_patch_stretch = true
+	bar.stretch_margin_left = 10
+	bar.stretch_margin_right = 10
+	bar.stretch_margin_top = 6
+	bar.stretch_margin_bottom = 6
 	var overlay := Label.new()
 	overlay.name = "Overlay"
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2025,6 +2163,8 @@ func _build_building_info(building: ProductionBuilding) -> void:
 
 func _refresh_building_info() -> void:
 	var building := selected_building
+	var shown_health: int = int(round(building.health_fraction * building.max_health))
+	portrait_health_label.text = "%d / %d" % [shown_health, building.max_health]
 	if _info_progress_bar == null:
 		_build_building_info(building)
 
@@ -2056,9 +2196,10 @@ func _refresh_building_info() -> void:
 		for child in _info_slot_row.get_children():
 			child.queue_free()
 		for i in queued_behind:
-			var slot := ColorRect.new()
-			slot.custom_minimum_size = Vector2(20, 20)
-			slot.color = Color(1, 1, 1, 0.2)
+			var slot := TextureRect.new()
+			slot.custom_minimum_size = Vector2(24, 24)
+			slot.texture = QUEUE_SLOT_TEXTURE
+			slot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			_info_slot_row.add_child(slot)
 
 	_refresh_producible_badges(building)
@@ -2078,12 +2219,15 @@ func _build_unit_info() -> void:
 	if selected_units.size() == 1:
 		var unit := selected_units[0]
 		info_panel_name_label.text = unit.display_name
+		_update_portrait(unit.team_tint, "")
 		_info_stats_label = Label.new()
 		_info_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+		_info_stats_label.add_theme_font_size_override("font_size", 14)
 		info_panel_content.add_child(_info_stats_label)
 		return
 
 	info_panel_name_label.text = "%d units selected" % selected_units.size()
+	_update_portrait(selected_units[0].team_tint, "%d units" % selected_units.size())
 	var portrait_grid := GridContainer.new()
 	portrait_grid.columns = 4
 	portrait_grid.add_theme_constant_override("h_separation", 6)
@@ -2098,7 +2242,10 @@ func _build_unit_info() -> void:
 		var health_bar := ProgressBar.new()
 		health_bar.custom_minimum_size = Vector2(36, 6)
 		health_bar.max_value = 1.0
+		health_bar.step = 0.0
 		health_bar.show_percentage = false
+		health_bar.add_theme_stylebox_override("background", _flat_bar_stylebox(Color(0.08, 0.08, 0.09)))
+		health_bar.add_theme_stylebox_override("fill", _flat_bar_stylebox(Color(0.35, 0.75, 0.3)))
 		cell.add_child(health_bar)
 		portrait_grid.add_child(cell)
 		_info_unit_portrait_bars.append(health_bar)
@@ -2106,25 +2253,28 @@ func _build_unit_info() -> void:
 
 func _refresh_unit_info_values() -> void:
 	if selected_units.size() == 1:
+		var unit := selected_units[0]
+		portrait_health_label.text = "%d / %d" % [unit.status_current_health, unit.max_health]
 		if _info_stats_label:
-			_info_stats_label.text = _format_unit_stats(selected_units[0])
+			_info_stats_label.text = _format_unit_stats(unit)
 		return
 	for i in _info_unit_portrait_bars.size():
 		if i < selected_units.size() and is_instance_valid(selected_units[i]):
 			var unit := selected_units[i]
 			_info_unit_portrait_bars[i].value = float(unit.status_current_health) / float(maxi(unit.max_health, 1))
 
+## Health already reads out under the portrait, and the info panel is only as
+## wide as the console allows — so these stay short enough not to wrap.
 func _format_unit_stats(unit: Unit) -> String:
-	var lines: Array[String] = ["HP: %d / %d" % [unit.status_current_health, unit.max_health]]
+	var lines: Array[String] = []
 	if unit.can_fight:
-		lines.append("Attack: %d dmg every %.1fs (range %.1f)" % [unit.attack_damage, unit.attack_cooldown, unit.attack_range])
+		lines.append("Dmg %d / %.1fs (rng %.1f)" % [unit.attack_damage, unit.attack_cooldown, unit.attack_range])
 	if unit.can_gather:
-		lines.append("Gather level %d (carries %d)" % [unit.gather_level, unit.carry_capacity])
-	lines.append("Move speed: %.1f" % unit.move_speed)
+		lines.append("Gather lvl %d (carries %d)" % [unit.gather_level, unit.carry_capacity])
+	lines.append("Speed %.1f" % unit.move_speed)
 	return "\n".join(lines)
 
 func _populate_unit_command_buttons() -> void:
-	action_panel_title.text = "Commands"
 	var buttons: Array[Control] = [
 		_make_command_button(OS.get_keycode_string(UNIT_MOVE_KEY), "Move", null, _arm_move_mode),
 		_make_command_button(OS.get_keycode_string(UNIT_STOP_KEY), "Stop", null, _issue_stop_order),
@@ -2431,12 +2581,34 @@ func _format_construction_status(building: ProductionBuilding) -> String:
 func _make_command_button(hotkey_label: String, tooltip: String, icon: Texture2D, callback: Callable) -> Button:
 	var button := Button.new()
 	button.theme_type_variation = &"SquareButton"
-	button.custom_minimum_size = Vector2(56, 56)
+	button.custom_minimum_size = Vector2(40, 40)
 	button.text = hotkey_label
 	button.tooltip_text = tooltip
 	button.icon = icon
 	button.pressed.connect(callback)
+	button.pressed.connect(_punch_control.bind(button))
 	return button
+
+## Quick squash-and-settle on a HUD control, so a click or hotkey visibly
+## registers on the panel itself rather than only in the world.
+func _punch_control(control: Control) -> void:
+	if control.size == Vector2.ZERO:
+		return
+	control.pivot_offset = control.size * 0.5
+	control.scale = Vector2.ONE * 0.86
+	var tween := create_tween()
+	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, 0.18)
+
+## Hotkeys drive the same actions as the command-card buttons but never touch
+## them, which left the panel looking inert during keyboard play. Buttons are
+## labelled with their own hotkey, so that label is the lookup key.
+func _pulse_action_button(hotkey_label: String) -> void:
+	for child in action_panel_grid.get_children():
+		var button := child as Button
+		if button and button.text == hotkey_label:
+			_punch_control(button)
+			return
 
 ## Small bottom-right count badge for a producible button, showing how many
 ## of that item are currently queued (including the one in progress). Hidden

@@ -30,8 +30,15 @@ extends Node3D
 @onready var pitch: Node3D = $Yaw/Pitch
 @onready var camera: Camera3D = $Yaw/Pitch/Camera3D
 
+## Screen shake is deliberately brief — a quick jolt, not a rumble. Trauma
+## decays linearly over SHAKE_DURATION and the offset falls off as its square,
+## so it lands hard and settles almost immediately.
+const SHAKE_DURATION: float = 0.15
+const SHAKE_MAX_OFFSET: float = 0.22
+
 var zoom_distance: float = 18.0
 var panning: bool = false
+var _shake_trauma: float = 0.0
 
 func _ready() -> void:
 	pitch.rotation_degrees.x = -pitch_degrees
@@ -60,7 +67,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		var pan_amount := mouse_pan_sensitivity * zoom_distance
 		global_position += (right * event.relative.x - forward * event.relative.y) * pan_amount
 
+## Jolts the camera for something happening at world_pos — ignored outright if
+## that point isn't in frame, so a base collapsing across the map never shakes
+## a camera the player has pointed somewhere else.
+func shake_at(world_pos: Vector3, amount: float) -> void:
+	if not camera.is_position_in_frustum(world_pos):
+		return
+	_shake_trauma = clampf(maxf(_shake_trauma, amount), 0.0, 1.0)
+
+## Offsets the camera on its own local X/Y only — Z belongs to _update_zoom(),
+## and shaking the rig itself would fight panning.
+func _update_shake(delta: float) -> void:
+	if _shake_trauma <= 0.0:
+		return
+	_shake_trauma = maxf(_shake_trauma - delta / SHAKE_DURATION, 0.0)
+	var strength: float = _shake_trauma * _shake_trauma * SHAKE_MAX_OFFSET
+	camera.position.x = randf_range(-strength, strength)
+	camera.position.y = randf_range(-strength, strength)
+
 func _process(delta: float) -> void:
+	_update_shake(delta)
+
 	## Input.is_key_pressed() polls raw OS key state and ignores whatever has UI
 	## focus, so without this a focused text field (e.g. chat) wouldn't stop WASD/Q/E.
 	## Specifically checking for a LineEdit (not "any focused Control") matters:

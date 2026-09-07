@@ -5,7 +5,6 @@ extends Control
 ## rough camera-frustum outline, and click/drag-to-pan.
 
 const TERRAIN_COLOR: Color = Color(0.22, 0.32, 0.19, 1.0)
-const BORDER_COLOR: Color = Color(0.9, 0.9, 0.9, 0.8)
 const OWN_OUTLINE_COLOR: Color = Color(1, 1, 1, 0.9)
 const UNIT_DOT_RADIUS: float = 2.5
 const BUILDING_DOT_RADIUS: float = 4.0
@@ -21,9 +20,9 @@ signal ping_requested(world_pos: Vector3)
 var _ping_local_pos: Vector2 = Vector2.ZERO
 var _ping_time_left: float = 0.0
 
-@onready var fog: FogOfWar = get_node(^"../../FogOfWar")
-@onready var camera_rig: Node3D = get_node(^"../../CameraRig")
-@onready var camera: Camera3D = get_node(^"../../CameraRig/Yaw/Pitch/Camera3D")
+@onready var fog: FogOfWar = owner.get_node(^"FogOfWar")
+@onready var camera_rig: Node3D = owner.get_node(^"CameraRig")
+@onready var camera: Camera3D = owner.get_node(^"CameraRig/Yaw/Pitch/Camera3D")
 
 var _dragging: bool = false
 
@@ -90,7 +89,6 @@ func _draw() -> void:
 		var color := PING_COLOR
 		color.a = 1.0 - t
 		draw_arc(_ping_local_pos, lerpf(2.0, 12.0, t), 0.0, TAU, 16, color, 2.0)
-	draw_rect(Rect2(Vector2.ZERO, size), BORDER_COLOR, false, 2.0)
 
 ## Approximates what the main camera currently frames by ray-casting its four
 ## viewport corners onto the ground plane — gives a properly perspective-skewed

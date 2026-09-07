@@ -1,0 +1,1708 @@
+{
+  "meta": {
+    "app": "SpriteCook UI Kit Builder",
+    "image": "ui-kit.png",
+    "size": {
+      "w": 2048,
+      "h": 5117
+    }
+  },
+  "frames": {
+    "merged_banner_frame": {
+      "frame": {
+        "x": 4,
+        "y": 4,
+        "w": 1105,
+        "h": 289
+      },
+      "state": null,
+      "group": null,
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "small_gold_frame_a": {
+      "frame": {
+        "x": 1113,
+        "y": 4,
+        "w": 247,
+        "h": 91
+      },
+      "state": null,
+      "group": "gold_frame_set_a",
+      "nineSlice": {
+        "left": 31,
+        "top": 31,
+        "right": 31,
+        "bottom": 31
+      }
+    },
+    "long_gold_frame_a": {
+      "frame": {
+        "x": 1364,
+        "y": 4,
+        "w": 611,
+        "h": 93
+      },
+      "state": null,
+      "group": "gold_frame_set_a",
+      "nineSlice": {
+        "left": 31,
+        "top": 31,
+        "right": 31,
+        "bottom": 31
+      }
+    },
+    "small_gold_frame_b": {
+      "frame": {
+        "x": 4,
+        "y": 297,
+        "w": 237,
+        "h": 93
+      },
+      "state": null,
+      "group": "gold_frame_set_b",
+      "nineSlice": {
+        "left": 42,
+        "top": 42,
+        "right": 43,
+        "bottom": 40
+      }
+    },
+    "wide_gold_frame_a": {
+      "frame": {
+        "x": 245,
+        "y": 297,
+        "w": 462,
+        "h": 126
+      },
+      "state": null,
+      "group": "gold_frame_set_c",
+      "nineSlice": {
+        "left": 8,
+        "top": 32,
+        "right": 0,
+        "bottom": 32
+      }
+    },
+    "mid_gold_frame_a": {
+      "frame": {
+        "x": 711,
+        "y": 297,
+        "w": 329,
+        "h": 120
+      },
+      "state": null,
+      "group": "gold_frame_set_d",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "wide_stone_frame_a": {
+      "frame": {
+        "x": 1044,
+        "y": 297,
+        "w": 773,
+        "h": 372
+      },
+      "state": null,
+      "group": "stone_frame_set_a",
+      "nineSlice": {
+        "left": 68,
+        "top": 69,
+        "right": 66,
+        "bottom": 55
+      }
+    },
+    "square_gold_frame_a": {
+      "frame": {
+        "x": 4,
+        "y": 673,
+        "w": 351,
+        "h": 347
+      },
+      "state": null,
+      "group": "gold_frame_set_e",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "square_gold_frame_b": {
+      "frame": {
+        "x": 359,
+        "y": 673,
+        "w": 342,
+        "h": 265
+      },
+      "state": null,
+      "group": "gold_frame_set_f",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "square_gold_frame_c": {
+      "frame": {
+        "x": 705,
+        "y": 673,
+        "w": 422,
+        "h": 264
+      },
+      "state": null,
+      "group": "gold_frame_set_g",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_gold_frame_a": {
+      "frame": {
+        "x": 1131,
+        "y": 673,
+        "w": 489,
+        "h": 479
+      },
+      "state": null,
+      "group": "gold_frame_set_h",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "small_gold_shield_frame": {
+      "frame": {
+        "x": 1624,
+        "y": 673,
+        "w": 256,
+        "h": 463
+      },
+      "state": null,
+      "group": "shield_frame_set_a",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "tall_gold_frame_a": {
+      "frame": {
+        "x": 4,
+        "y": 1156,
+        "w": 342,
+        "h": 454
+      },
+      "state": null,
+      "group": "gold_frame_set_i",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "arched_stone_frame": {
+      "frame": {
+        "x": 350,
+        "y": 1156,
+        "w": 284,
+        "h": 447
+      },
+      "state": null,
+      "group": "stone_frame_set_b",
+      "nineSlice": {
+        "left": 46,
+        "top": 124,
+        "right": 48,
+        "bottom": 57
+      }
+    },
+    "wide_gold_frame_b": {
+      "frame": {
+        "x": 638,
+        "y": 1156,
+        "w": 503,
+        "h": 285
+      },
+      "state": null,
+      "group": "gold_frame_set_j",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "wide_gold_frame_c": {
+      "frame": {
+        "x": 1145,
+        "y": 1156,
+        "w": 492,
+        "h": 132
+      },
+      "state": null,
+      "group": "gold_frame_set_k",
+      "nineSlice": {
+        "left": 42,
+        "top": 42,
+        "right": 37,
+        "bottom": 45
+      }
+    },
+    "lion_banner_frame": {
+      "frame": {
+        "x": 4,
+        "y": 1614,
+        "w": 722,
+        "h": 131
+      },
+      "state": null,
+      "group": "banner_frame_set_a",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "wide_gold_frame_d": {
+      "frame": {
+        "x": 730,
+        "y": 1614,
+        "w": 544,
+        "h": 140
+      },
+      "state": null,
+      "group": "gold_frame_set_l",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "small_gold_frame_d": {
+      "frame": {
+        "x": 1278,
+        "y": 1614,
+        "w": 136,
+        "h": 134
+      },
+      "state": null,
+      "group": "gold_frame_set_m",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "small_gold_frame_e": {
+      "frame": {
+        "x": 1418,
+        "y": 1614,
+        "w": 135,
+        "h": 136
+      },
+      "state": null,
+      "group": "gold_frame_set_m",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "small_gold_frame_f": {
+      "frame": {
+        "x": 1557,
+        "y": 1614,
+        "w": 141,
+        "h": 137
+      },
+      "state": null,
+      "group": "gold_frame_set_m",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "small_gold_frame_g": {
+      "frame": {
+        "x": 1702,
+        "y": 1614,
+        "w": 136,
+        "h": 137
+      },
+      "state": "fill",
+      "group": "gold_frame_set_m",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "stone_slider_frame": {
+      "frame": {
+        "x": 4,
+        "y": 1758,
+        "w": 713,
+        "h": 142
+      },
+      "state": "empty",
+      "group": "stone_frame_set_c",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "wide_gold_frame_e": {
+      "frame": {
+        "x": 721,
+        "y": 1758,
+        "w": 544,
+        "h": 126
+      },
+      "state": null,
+      "group": "gold_frame_set_n",
+      "nineSlice": {
+        "left": 37,
+        "top": 37,
+        "right": 34,
+        "bottom": 40
+      }
+    },
+    "small_stone_frame": {
+      "frame": {
+        "x": 1269,
+        "y": 1758,
+        "w": 215,
+        "h": 113
+      },
+      "state": null,
+      "group": "stone_frame_set_d",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "mid_stone_frame_b": {
+      "frame": {
+        "x": 1488,
+        "y": 1758,
+        "w": 404,
+        "h": 111
+      },
+      "state": null,
+      "group": "stone_frame_set_d",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "arched_shield_frame": {
+      "frame": {
+        "x": 4,
+        "y": 1904,
+        "w": 317,
+        "h": 503
+      },
+      "state": null,
+      "group": "stone_frame_set_e",
+      "nineSlice": {
+        "left": 55,
+        "top": 119,
+        "right": 52,
+        "bottom": 59
+      }
+    },
+    "large_stone_frame": {
+      "frame": {
+        "x": 325,
+        "y": 1904,
+        "w": 954,
+        "h": 516
+      },
+      "state": null,
+      "group": "stone_frame_set_f",
+      "nineSlice": {
+        "left": 119,
+        "top": 88,
+        "right": 112,
+        "bottom": 85
+      }
+    },
+    "large_stone_frame_b": {
+      "frame": {
+        "x": 1283,
+        "y": 1904,
+        "w": 676,
+        "h": 513
+      },
+      "state": null,
+      "group": "stone_frame_set_g",
+      "nineSlice": {
+        "left": 85,
+        "top": 73,
+        "right": 90,
+        "bottom": 79
+      }
+    },
+    "shield_icon_gray": {
+      "frame": {
+        "x": 4,
+        "y": 2424,
+        "w": 137,
+        "h": 166
+      },
+      "state": "normal",
+      "group": "shield_emblem",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "shield_icon_blue": {
+      "frame": {
+        "x": 145,
+        "y": 2424,
+        "w": 130,
+        "h": 162
+      },
+      "state": "normal",
+      "group": "shield_emblem",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_frame_gold_b": {
+      "frame": {
+        "x": 279,
+        "y": 2424,
+        "w": 413,
+        "h": 104
+      },
+      "state": "normal",
+      "group": "top_panel_frame",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_frame_gold_a": {
+      "frame": {
+        "x": 696,
+        "y": 2424,
+        "w": 394,
+        "h": 104
+      },
+      "state": "normal",
+      "group": "top_panel_frame",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "tab_gold_active": {
+      "frame": {
+        "x": 1094,
+        "y": 2424,
+        "w": 662,
+        "h": 99
+      },
+      "state": "selected",
+      "group": "top_tab_bar",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_frame_spiked": {
+      "frame": {
+        "x": 4,
+        "y": 2594,
+        "w": 476,
+        "h": 117
+      },
+      "state": "normal",
+      "group": "top_panel_frame_spiked",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_frame_gold_c": {
+      "frame": {
+        "x": 484,
+        "y": 2594,
+        "w": 401,
+        "h": 109
+      },
+      "state": "normal",
+      "group": "top_panel_frame",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "lion_shield_badge": {
+      "frame": {
+        "x": 889,
+        "y": 2594,
+        "w": 270,
+        "h": 232
+      },
+      "state": "normal",
+      "group": "crest_badge",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "helmet_icon_gold": {
+      "frame": {
+        "x": 1163,
+        "y": 2594,
+        "w": 152,
+        "h": 166
+      },
+      "state": "normal",
+      "group": "crest_icons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "helmet_icon_blue": {
+      "frame": {
+        "x": 1319,
+        "y": 2594,
+        "w": 154,
+        "h": 164
+      },
+      "state": "normal",
+      "group": "crest_icons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "sun_medallion": {
+      "frame": {
+        "x": 1477,
+        "y": 2594,
+        "w": 149,
+        "h": 152
+      },
+      "state": "normal",
+      "group": "medallion_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "coin_medallion": {
+      "frame": {
+        "x": 1630,
+        "y": 2594,
+        "w": 146,
+        "h": 146
+      },
+      "state": "normal",
+      "group": "medallion_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "shield_button_gold": {
+      "frame": {
+        "x": 1780,
+        "y": 2594,
+        "w": 176,
+        "h": 170
+      },
+      "state": "normal",
+      "group": "shield_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "shield_button_silver": {
+      "frame": {
+        "x": 4,
+        "y": 2830,
+        "w": 178,
+        "h": 169
+      },
+      "state": "normal",
+      "group": "shield_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "crossed_swords_button": {
+      "frame": {
+        "x": 186,
+        "y": 2830,
+        "w": 177,
+        "h": 169
+      },
+      "state": "normal",
+      "group": "mode_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "flag_button_red": {
+      "frame": {
+        "x": 367,
+        "y": 2830,
+        "w": 179,
+        "h": 168
+      },
+      "state": "normal",
+      "group": "mode_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "lion_shield_badge_small": {
+      "frame": {
+        "x": 550,
+        "y": 2830,
+        "w": 194,
+        "h": 167
+      },
+      "state": "normal",
+      "group": "crest_badge_small",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "anvil_button": {
+      "frame": {
+        "x": 748,
+        "y": 2830,
+        "w": 179,
+        "h": 172
+      },
+      "state": "normal",
+      "group": "workshop_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "compass_button": {
+      "frame": {
+        "x": 931,
+        "y": 2830,
+        "w": 178,
+        "h": 172
+      },
+      "state": "normal",
+      "group": "workshop_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "scroll_button": {
+      "frame": {
+        "x": 1113,
+        "y": 2830,
+        "w": 179,
+        "h": 171
+      },
+      "state": "normal",
+      "group": "workshop_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "castle_button": {
+      "frame": {
+        "x": 1296,
+        "y": 2830,
+        "w": 178,
+        "h": 171
+      },
+      "state": "normal",
+      "group": "workshop_choice",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "red_orb_ring": {
+      "frame": {
+        "x": 1478,
+        "y": 2830,
+        "w": 104,
+        "h": 103
+      },
+      "state": "on",
+      "group": "orb_toggle_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "amber_orb_ring": {
+      "frame": {
+        "x": 1586,
+        "y": 2830,
+        "w": 105,
+        "h": 102
+      },
+      "state": "on",
+      "group": "orb_toggle_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "dark_orb_ring": {
+      "frame": {
+        "x": 1695,
+        "y": 2830,
+        "w": 102,
+        "h": 102
+      },
+      "state": "off",
+      "group": "orb_toggle_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "green_orb_ring": {
+      "frame": {
+        "x": 1801,
+        "y": 2830,
+        "w": 104,
+        "h": 102
+      },
+      "state": "on",
+      "group": "orb_toggle_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "blue_orb_ring": {
+      "frame": {
+        "x": 1909,
+        "y": 2830,
+        "w": 103,
+        "h": 102
+      },
+      "state": "on",
+      "group": "orb_toggle_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "purple_orb_ring": {
+      "frame": {
+        "x": 4,
+        "y": 3006,
+        "w": 104,
+        "h": 102
+      },
+      "state": "on",
+      "group": "orb_toggle_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "long_banner_frame_left": {
+      "frame": {
+        "x": 112,
+        "y": 3006,
+        "w": 1271,
+        "h": 104
+      },
+      "state": "normal",
+      "group": "banner_bar",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "long_banner_frame_right": {
+      "frame": {
+        "x": 4,
+        "y": 3114,
+        "w": 700,
+        "h": 94
+      },
+      "state": "normal",
+      "group": "banner_bar",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "slider_horizontal_gold": {
+      "frame": {
+        "x": 708,
+        "y": 3114,
+        "w": 381,
+        "h": 75
+      },
+      "state": "empty",
+      "group": "slider_gold",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "play_button": {
+      "frame": {
+        "x": 1093,
+        "y": 3114,
+        "w": 115,
+        "h": 111
+      },
+      "state": "normal",
+      "group": "media_controls",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "stop_button": {
+      "frame": {
+        "x": 1212,
+        "y": 3114,
+        "w": 116,
+        "h": 111
+      },
+      "state": "normal",
+      "group": "media_controls",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "pause_button": {
+      "frame": {
+        "x": 1332,
+        "y": 3114,
+        "w": 116,
+        "h": 110
+      },
+      "state": "normal",
+      "group": "media_controls",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "close_button_red": {
+      "frame": {
+        "x": 1452,
+        "y": 3114,
+        "w": 113,
+        "h": 110
+      },
+      "state": "normal",
+      "group": "media_controls",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "arrow_button_left": {
+      "frame": {
+        "x": 1569,
+        "y": 3114,
+        "w": 88,
+        "h": 87
+      },
+      "state": "normal",
+      "group": "arrow_buttons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "arrow_button_right": {
+      "frame": {
+        "x": 1661,
+        "y": 3114,
+        "w": 88,
+        "h": 87
+      },
+      "state": "normal",
+      "group": "arrow_buttons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "arrow_button_up": {
+      "frame": {
+        "x": 1753,
+        "y": 3114,
+        "w": 77,
+        "h": 81
+      },
+      "state": "normal",
+      "group": "arrow_buttons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "radio_selected_red": {
+      "frame": {
+        "x": 1834,
+        "y": 3114,
+        "w": 86,
+        "h": 85
+      },
+      "state": "selected",
+      "group": "status_radio_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "radio_selected_gold": {
+      "frame": {
+        "x": 1924,
+        "y": 3114,
+        "w": 84,
+        "h": 84
+      },
+      "state": "selected",
+      "group": "status_radio_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "radio_unselected_dark_a": {
+      "frame": {
+        "x": 4,
+        "y": 3229,
+        "w": 84,
+        "h": 84
+      },
+      "state": "unselected",
+      "group": "status_radio_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "radio_unselected_dark_b": {
+      "frame": {
+        "x": 92,
+        "y": 3229,
+        "w": 84,
+        "h": 84
+      },
+      "state": "unselected",
+      "group": "status_radio_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "radio_checked_green": {
+      "frame": {
+        "x": 180,
+        "y": 3229,
+        "w": 85,
+        "h": 84
+      },
+      "state": "checked",
+      "group": "status_radio_row",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "slider_horizontal_bronze": {
+      "frame": {
+        "x": 269,
+        "y": 3229,
+        "w": 403,
+        "h": 74
+      },
+      "state": "empty",
+      "group": "slider_bronze",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "vertical_scrollbar_gold": {
+      "frame": {
+        "x": 676,
+        "y": 3229,
+        "w": 76,
+        "h": 669
+      },
+      "state": "empty",
+      "group": "scrollbar_gold",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "diagonal_arrow_button_up_left": {
+      "frame": {
+        "x": 756,
+        "y": 3229,
+        "w": 81,
+        "h": 78
+      },
+      "state": "normal",
+      "group": "corner_arrow_buttons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "diagonal_arrow_button_down_right": {
+      "frame": {
+        "x": 841,
+        "y": 3229,
+        "w": 80,
+        "h": 78
+      },
+      "state": "normal",
+      "group": "corner_arrow_buttons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "bar_frame_blue_a": {
+      "frame": {
+        "x": 925,
+        "y": 3229,
+        "w": 494,
+        "h": 61
+      },
+      "state": "normal",
+      "group": "status_bar_blue",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "bar_fill_green": {
+      "frame": {
+        "x": 1423,
+        "y": 3229,
+        "w": 515,
+        "h": 61
+      },
+      "state": "fill",
+      "group": "status_bar_green",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "slider_horizontal_gold_alt": {
+      "frame": {
+        "x": 4,
+        "y": 3902,
+        "w": 423,
+        "h": 63
+      },
+      "state": "empty",
+      "group": "slider_gold",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "bar_frame_blue_b": {
+      "frame": {
+        "x": 431,
+        "y": 3902,
+        "w": 494,
+        "h": 58
+      },
+      "state": "normal",
+      "group": "status_bar_blue",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "bar_fill_blue": {
+      "frame": {
+        "x": 929,
+        "y": 3902,
+        "w": 515,
+        "h": 59
+      },
+      "state": "fill",
+      "group": "status_bar_blue",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "vertical_scrollbar_dark_a": {
+      "frame": {
+        "x": 1448,
+        "y": 3902,
+        "w": 58,
+        "h": 542
+      },
+      "state": "empty",
+      "group": "scrollbar_dark",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "vertical_scrollbar_gold_b": {
+      "frame": {
+        "x": 1510,
+        "y": 3902,
+        "w": 57,
+        "h": 540
+      },
+      "state": "empty",
+      "group": "scrollbar_gold",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "large_frame_silver": {
+      "frame": {
+        "x": 1571,
+        "y": 3902,
+        "w": 441,
+        "h": 298
+      },
+      "state": "normal",
+      "group": "content_frame_silver",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "large_frame_gold": {
+      "frame": {
+        "x": 4,
+        "y": 4448,
+        "w": 552,
+        "h": 285
+      },
+      "state": "normal",
+      "group": "content_frame_gold",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "medium_frame_gold_ornate": {
+      "frame": {
+        "x": 560,
+        "y": 4448,
+        "w": 443,
+        "h": 100
+      },
+      "state": "normal",
+      "group": "content_frame_gold_ornate",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "vertical_border_dark": {
+      "frame": {
+        "x": 1007,
+        "y": 4448,
+        "w": 51,
+        "h": 409
+      },
+      "state": "normal",
+      "group": "vertical_frame_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "square_frame_gold": {
+      "frame": {
+        "x": 1062,
+        "y": 4448,
+        "w": 416,
+        "h": 356
+      },
+      "state": "normal",
+      "group": "content_frame_gold_ornate",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "corner_brick_frame": {
+      "frame": {
+        "x": 1482,
+        "y": 4448,
+        "w": 163,
+        "h": 208
+      },
+      "state": "normal",
+      "group": "stone_corner_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "corner_frame_dark_gold": {
+      "frame": {
+        "x": 1649,
+        "y": 4448,
+        "w": 208,
+        "h": 212
+      },
+      "state": "normal",
+      "group": "stone_corner_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "corner_frame_gold_ornate": {
+      "frame": {
+        "x": 1861,
+        "y": 4448,
+        "w": 177,
+        "h": 186
+      },
+      "state": "normal",
+      "group": "stone_corner_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "chevron_pointer_gold": {
+      "frame": {
+        "x": 4,
+        "y": 4861,
+        "w": 92,
+        "h": 106
+      },
+      "state": "normal",
+      "group": "pointer_icons",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "tag_frame_dark": {
+      "frame": {
+        "x": 100,
+        "y": 4861,
+        "w": 171,
+        "h": 83
+      },
+      "state": "normal",
+      "group": "tag_frame",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "corner_bracket_gold": {
+      "frame": {
+        "x": 275,
+        "y": 4861,
+        "w": 114,
+        "h": 137
+      },
+      "state": "normal",
+      "group": "gold_corner_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "map_pin_red": {
+      "frame": {
+        "x": 393,
+        "y": 4861,
+        "w": 85,
+        "h": 126
+      },
+      "state": "normal",
+      "group": "map_pins",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "map_pin_green": {
+      "frame": {
+        "x": 482,
+        "y": 4861,
+        "w": 88,
+        "h": 130
+      },
+      "state": "normal",
+      "group": "map_pins",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "square_frame_gold_2": {
+      "frame": {
+        "x": 574,
+        "y": 4861,
+        "w": 147,
+        "h": 146
+      },
+      "state": "normal",
+      "group": "square_frame_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "bookmark_ribbon_blue": {
+      "frame": {
+        "x": 725,
+        "y": 4861,
+        "w": 156,
+        "h": 187
+      },
+      "state": "normal",
+      "group": "ribbon_markers",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "bookmark_ribbon_red": {
+      "frame": {
+        "x": 885,
+        "y": 4861,
+        "w": 144,
+        "h": 188
+      },
+      "state": "normal",
+      "group": "ribbon_markers",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "square_frame_dark": {
+      "frame": {
+        "x": 1033,
+        "y": 4861,
+        "w": 139,
+        "h": 140
+      },
+      "state": "normal",
+      "group": "square_frame_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "square_frame_black": {
+      "frame": {
+        "x": 1176,
+        "y": 4861,
+        "w": 140,
+        "h": 139
+      },
+      "state": "normal",
+      "group": "square_frame_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "stone_corner_piece": {
+      "frame": {
+        "x": 1320,
+        "y": 4861,
+        "w": 126,
+        "h": 200
+      },
+      "state": "normal",
+      "group": "stone_corner_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_corner_gold": {
+      "frame": {
+        "x": 1450,
+        "y": 4861,
+        "w": 181,
+        "h": 186
+      },
+      "state": "normal",
+      "group": "gold_corner_set",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "stone_block_corner_a": {
+      "frame": {
+        "x": 1635,
+        "y": 4861,
+        "w": 61,
+        "h": 177
+      },
+      "state": "normal",
+      "group": "stone_blocks",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "stone_block_corner_b": {
+      "frame": {
+        "x": 1700,
+        "y": 4861,
+        "w": 63,
+        "h": 177
+      },
+      "state": "normal",
+      "group": "stone_blocks",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_divider_gold_a": {
+      "frame": {
+        "x": 4,
+        "y": 5065,
+        "w": 478,
+        "h": 29
+      },
+      "state": "normal",
+      "group": "ornate_dividers",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    "ornate_divider_gold_b": {
+      "frame": {
+        "x": 486,
+        "y": 5065,
+        "w": 489,
+        "h": 48
+      },
+      "state": "normal",
+      "group": "ornate_dividers",
+      "nineSlice": {
+        "left": 0,
+        "top": 0,
+        "right": 0,
+        "bottom": 0
+      }
+    }
+  }
+}
