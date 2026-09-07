@@ -26,6 +26,7 @@ offset_right = 160.0
 offset_bottom = 100.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 14
 
 [node name="Title" type="Label" parent="VBox"]
 layout_mode = 2
@@ -33,8 +34,44 @@ theme_override_font_sizes/font_size = 24
 text = "RTS Test - Multiplayer"
 horizontal_alignment = 1
 
+[node name="SteamRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="QuickPlayButton" type="Button" parent="VBox/SteamRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Quick Play"
+
+[node name="HostSteamButton" type="Button" parent="VBox/SteamRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Host Steam Lobby"
+
+[node name="InviteButton" type="Button" parent="VBox/SteamRow"]
+layout_mode = 2
+text = "Invite Friend"
+
+[node name="SearchingRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="SearchingLabel" type="Label" parent="VBox/SearchingRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Searching for opponent..."
+
+[node name="CancelSearchButton" type="Button" parent="VBox/SearchingRow"]
+layout_mode = 2
+text = "Cancel"
+
+[node name="DirectConnectLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Direct Connect (IP)"
+
 [node name="ConnectRow" type="HBoxContainer" parent="VBox"]
 layout_mode = 2
+theme_override_constants/separation = 14
 
 [node name="AddressEdit" type="LineEdit" parent="VBox/ConnectRow"]
 layout_mode = 2
@@ -60,3 +97,7 @@ layout_mode = 2
 [node name="StartButton" type="Button" parent="VBox"]
 layout_mode = 2
 text = "Start Game"
+
+[node name="DisconnectButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "Disconnect"

@@ -17,12 +17,19 @@ const UNIT_PATROL_KEY: Key = KEY_P
 ## for the actual building choice — safe since only one of the two menus is
 ## ever live for a given selection state.
 const UNIT_BUILD_KEY: Key = KEY_B
+## Formation-shape hotkeys — cycles the active selection's move-order shape
+## (see Formation.Type / current_formation_type / _set_formation_type). F1-F3
+## are unused elsewhere (camera only reads W/A/S/D/Q/E, see above), matching
+## the AoE-style formation hotkey convention.
+const FORMATION_BOX_KEY: Key = KEY_F1
+const FORMATION_LINE_KEY: Key = KEY_F2
+const FORMATION_STAGGERED_KEY: Key = KEY_F3
 ## Assigned by position in a Monarch's monarch_abilities, same convention as
 ## PRODUCIBLE_HOTKEYS/BUILDING_HOTKEYS below — a passive ability still claims
 ## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
 const MONARCH_ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
-const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_G]
+const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_G, KEY_O]
 ## The action panel's grid always has exactly this many slots (4 columns x 3
 ## rows), padded with blank placeholders, so its size never changes with context.
 const ACTION_PANEL_SLOT_COUNT: int = 12
@@ -35,6 +42,10 @@ const ACTION_PANEL_SLOT_COUNT: int = 12
 @onready var camera_rig: Node3D = $CameraRig
 @onready var selection_box: ColorRect = $UI/SelectionBox
 @onready var resource_label: RichTextLabel = $UI/ResourceLabel
+## Shows the current selection's move-order formation shape — see
+## current_formation_type/_set_formation_type. Purely a display; the actual
+## shape logic lives host-side in Formation/_formation_positions.
+@onready var formation_label: Label = $UI/FormationLabel
 @onready var units_root: Node3D = $Units
 @onready var unit_spawner: MultiplayerSpawner = $UnitSpawner
 @onready var buildings_root: Node3D = $Buildings
@@ -181,6 +192,12 @@ func _update_path_markers() -> void:
 @onready var sfx_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/SfxRow/Slider
 
 var selected_units: Array[Unit] = []
+## Client-local formation shape choice — which Formation.Type the next move/
+## attack-move order for the current selection will use. Set via
+## _set_formation_type (FORMATION_BOX_KEY/LINE_KEY/STAGGERED_KEY below) and
+## sent along with each move order's RPC so the host (the only side that
+## simulates movement) knows which shape to arrange the group's slots into.
+var current_formation_type: Formation.Type = Formation.DEFAULT_TYPE
 var selected_building: ProductionBuilding = null
 ## Left-click-selected resource node (tree/berry bush/gold deposit/farm),
 ## shown read-only in the info panel with its remaining amount — mutually
@@ -283,6 +300,40 @@ var placement_valid: bool = false
 ## building there itself rather than trusting a client-supplied position.
 var _placement_target: Gatherable = null
 
+## --- Wall drag placement (placing_type.is_wall) ---
+## True from the moment the left mouse button goes down over valid ground
+## until it's released — _update_wall_drag() only grows _wall_drag_points
+## while this is true; before/after that a click just arms or ends the drag.
+var _wall_dragging: bool = false
+## Sampled every _process() frame while dragging, spaced ~wall_segment_length
+## apart along the actual cursor path (not a straight line from start to
+## current point) so the wall follows curves/turns the same way the mouse
+## drew them — see _wall_extend_path_to().
+var _wall_drag_points: Array[Vector3] = []
+## One ghost Node3D per would-be segment/corner, rebuilt (not just
+## repositioned) every time _wall_drag_points changes length, since the
+## count of pieces changes as the drag grows. Tinted per-piece (unlike the
+## single-ghost case) so one bad segment in an otherwise-clear run is visible
+## without invalidating pieces that are actually fine.
+var _wall_ghosts: Array[Node3D] = []
+## Live "N segments — cost" readout shown while dragging — see its creation
+## in _ready() and updates in _rebuild_wall_ghost().
+var _wall_drag_label: Label = null
+const WALL_SEGMENT_FOOTPRINT_RADIUS: float = 0.9
+const WALL_CORNER_FOOTPRINT_RADIUS: float = 0.45
+## Minimum direction change (radians) between two consecutive straight runs
+## of the drag path before a corner piece is inserted — small jitter in the
+## mouse path shouldn't spam corner posts along an otherwise-straight wall.
+const WALL_CORNER_ANGLE_THRESHOLD: float = 0.28
+## Hard cap on segments per single drag — keeps one drag's RPC payload and
+## cost bounded even if a player drags all the way across the map.
+const WALL_MAX_SEGMENTS: int = 80
+
+## --- Gate tool (placing_type.is_gate_tool) ---
+## The owned wall segment/corner currently under the mouse that the gate
+## would replace if clicked, or null when nothing valid is hovered.
+var _gate_target: ProductionBuilding = null
+
 ## Purely local visual: only ever shown for the local player's own selected
 ## building, so it's built on demand rather than living in a networked scene.
 var rally_marker: Node3D = null
@@ -315,6 +366,12 @@ const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
 	preload("res://resources/gold_resource_type.tres"),
 ]
 var chat_lines: Array[String] = []
+## Bumped on every show/hide request so a stale timer (from an older message)
+## doesn't hide the log after a newer one already reset the countdown.
+var _chat_hide_token: int = 0
+const CHAT_LOG_VISIBLE_DURATION: float = 3.0
+const CHAT_LOG_FADE_DURATION: float = 0.5
+var _chat_log_tween: Tween
 
 ## resource_label shows every resource total plus population on one line;
 ## rebuilt in full on any single change since there are only a handful of values.
@@ -337,14 +394,25 @@ func _ready() -> void:
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
 	building_spawner.spawn_function = _spawn_building_from_data
+	## Connected before _spawn_all_players() (not after) so the host's own
+	## spawn fires this too, not just a joining client's replicated one —
+	## CameraRig's authored position in main.tscn only happens to line up
+	## with spawn index 0, so every peer needs this to see their own base.
+	building_spawner.spawned.connect(_on_building_spawned_for_camera)
 	if multiplayer.is_server():
 		_spawn_all_players()
 
 	chat_input.text_submitted.connect(_on_chat_submitted)
 	minimap.ping_requested.connect(_on_minimap_ping_requested)
+	chat_log.visible = false
+	UiDebugEditor.register_editable_root(ui_root, "main")
 
 	game_over_panel.visible = false
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
+
+	Network.player_disconnected.connect(_on_network_player_disconnected)
+	Network.server_disconnected.connect(_on_network_server_disconnected)
+	_build_opponent_left_panel()
 
 	## Built in code rather than saved in the scene — it's just a full-screen
 	## color wash, nothing worth hand-authoring, and this avoids yet another
@@ -354,6 +422,23 @@ func _ready() -> void:
 	_under_attack_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_under_attack_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ui_root.add_child(_under_attack_flash)
+
+	## Live "N segments — cost" readout for the wall drag tool — built here
+	## rather than in main.tscn for the same reason as _under_attack_flash: a
+	## small always-on-top overlay isn't worth another hand-edit to an already
+	## enormous scene file. Hidden except mid-drag; see _rebuild_wall_ghost().
+	_wall_drag_label = Label.new()
+	_wall_drag_label.visible = false
+	_wall_drag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_wall_drag_label.add_theme_font_size_override("font_size", 20)
+	_wall_drag_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
+	_wall_drag_label.add_theme_constant_override("shadow_offset_x", 1)
+	_wall_drag_label.add_theme_constant_override("shadow_offset_y", 1)
+	_wall_drag_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_wall_drag_label.position = Vector2(-100.0, 12.0)
+	_wall_drag_label.custom_minimum_size = Vector2(200.0, 0.0)
+	_wall_drag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ui_root.add_child(_wall_drag_label)
 
 	pause_menu.visible = false
 	master_volume_slider.value = Settings.volumes["Master"] * 100.0
@@ -538,6 +623,43 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 	)
 	tween.tween_callback(projectile.queue_free)
 
+## Building equivalent of _on_unit_projectile_fired/_rpc_spawn_projectile_visual/
+## _spawn_projectile_visual above — kept separate rather than sharing those
+## (typed for Unit) since Unit and ProductionBuilding have no common combat
+## base class (see CombatUtils' own header comment for why).
+func _on_building_projectile_fired(target: Node3D, building: ProductionBuilding) -> void:
+	if not is_instance_valid(target):
+		return
+	_spawn_building_projectile_visual(building, target)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_spawn_building_projectile_visual.rpc(building.get_path(), target.get_path())
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_spawn_building_projectile_visual(shooter_path: NodePath, target_path: NodePath) -> void:
+	var shooter := get_node_or_null(shooter_path) as ProductionBuilding
+	var target := get_node_or_null(target_path) as Node3D
+	if shooter == null or target == null or not is_instance_valid(target):
+		return
+	_spawn_building_projectile_visual(shooter, target)
+
+func _spawn_building_projectile_visual(shooter: ProductionBuilding, target: Node3D) -> void:
+	if shooter.projectile_scene == null or not is_instance_valid(target):
+		return
+	var projectile: Node3D = shooter.projectile_scene.instantiate()
+	add_child(projectile)
+	var start_pos: Vector3 = shooter.global_position + Vector3(0, 2.5, 0)
+	var end_pos: Vector3 = target.global_position + Vector3(0, 0.8, 0)
+	var dist: float = start_pos.distance_to(end_pos)
+	var duration: float = maxf(dist / maxf(shooter.projectile_speed, 0.01), 0.05)
+	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
+	projectile.global_position = start_pos
+	var tween := create_tween()
+	tween.tween_method(
+		func(t: float): projectile.global_position = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0),
+		0.0, 1.0, duration
+	)
+	tween.tween_callback(projectile.queue_free)
+
 ## Damage taken and resources deposited only ever happen on the host (both
 ## take_damage() and Unit._deposit_and_continue() are authority-gated), so —
 ## same reasoning as animation/projectile relaying above — the host spawns its
@@ -638,6 +760,7 @@ func register_objective_building(building: ProductionBuilding) -> void:
 	building.item_completed.connect(_on_building_item_completed.bind(building))
 	building.destroyed.connect(_on_building_destroyed.bind(building))
 	building.damaged.connect(_relay_damage_number.bind(building))
+	building.projectile_fired.connect(_on_building_projectile_fired.bind(building))
 
 ## Most buildable structures are ProductionBuildings (Town Center, Barracks,
 ## House), but Farm is a buildable Gatherable (no construction/production
@@ -647,6 +770,10 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 	var scene: PackedScene = load(data.scene_path)
 	var node: Node = scene.instantiate()
 	node.position = data.position
+	## Only wall pieces ever supply this — every other buildable structure is
+	## placed axis-aligned, so this key is simply absent for them.
+	if data.has("rotation") and node is Node3D:
+		(node as Node3D).rotation = data.rotation
 
 	if node is ProductionBuilding:
 		var building: ProductionBuilding = node
@@ -656,6 +783,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.destroyed.connect(_on_building_destroyed.bind(building))
 		building.damaged.connect(_relay_damage_number.bind(building))
 		building.construction_finished.connect(_on_building_construction_finished.bind(building))
+		building.projectile_fired.connect(_on_building_projectile_fired.bind(building))
 		if multiplayer.is_server() and building.is_main_base:
 			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
 		if data.has("deposit_path"):
@@ -708,6 +836,53 @@ func _rpc_game_over(winner_peer_id: int) -> void:
 func _on_return_to_lobby_pressed() -> void:
 	Network.leave_game()
 	get_tree().change_scene_to_file("res://scenes/lobby.tscn")
+
+## Built in code rather than added to main.tscn, same reasoning as
+## _under_attack_flash above — this is small and only needs to exist at all
+## once Quick Play makes opponent disconnects a routine occurrence rather
+## than the rare LAN-friend-crashed case it used to be.
+var _opponent_left_panel: PanelContainer = null
+var _opponent_left_label: Label = null
+
+func _build_opponent_left_panel() -> void:
+	_opponent_left_panel = PanelContainer.new()
+	_opponent_left_panel.visible = false
+	_opponent_left_panel.set_anchors_preset(Control.PRESET_CENTER)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 12)
+	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_right", 12)
+	margin.add_theme_constant_override("margin_bottom", 12)
+	_opponent_left_panel.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	margin.add_child(vbox)
+
+	_opponent_left_label = Label.new()
+	_opponent_left_label.add_theme_font_size_override("font_size", 24)
+	_opponent_left_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_opponent_left_label)
+
+	var return_button := Button.new()
+	return_button.text = "Return to Lobby"
+	return_button.pressed.connect(_on_return_to_lobby_pressed)
+	vbox.add_child(return_button)
+
+	ui_root.add_child(_opponent_left_panel)
+
+func _show_opponent_left(message: String) -> void:
+	if game_over:
+		return
+	_opponent_left_label.text = message
+	_opponent_left_panel.visible = true
+
+func _on_network_player_disconnected(_peer_id: int, player_data: Dictionary) -> void:
+	_show_opponent_left("%s disconnected." % player_data.get("name", "Opponent"))
+
+func _on_network_server_disconnected() -> void:
+	_show_opponent_left("Lost connection to host.")
 
 func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
@@ -796,7 +971,12 @@ func _process(_delta: float) -> void:
 		else:
 			_refresh_resource_info()
 	if placing_type:
-		_update_placement_ghost()
+		if placing_type.is_wall:
+			_update_wall_drag()
+		elif placing_type.is_gate_tool:
+			_update_gate_ghost()
+		else:
+			_update_placement_ghost()
 	_update_hover_ring()
 	_update_path_markers()
 
@@ -892,7 +1072,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed and not event.echo and not selected_units.is_empty() \
 			and not _showing_build_submenu:
-		if event.keycode == UNIT_MOVE_KEY:
+		if event.keycode == FORMATION_BOX_KEY:
+			_set_formation_type(Formation.Type.BOX)
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == FORMATION_LINE_KEY:
+			_set_formation_type(Formation.Type.LINE)
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == FORMATION_STAGGERED_KEY:
+			_set_formation_type(Formation.Type.STAGGERED)
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_MOVE_KEY:
 			_arm_move_mode()
 			get_viewport().set_input_as_handled()
 			return
@@ -1088,6 +1280,23 @@ func _select_all_military() -> void:
 		selected_units.append(unit)
 	_play_random_select_sound(selected_units)
 
+## Fires for every unit/building spawn on every peer (see the spawner.spawned
+## connection above); only acts on this peer's own main-base Town Center, and
+## only the first time, so the camera opens over your own base instead of
+## wherever CameraRig happens to be authored in main.tscn.
+var _camera_centered_on_spawn: bool = false
+
+func _on_building_spawned_for_camera(node: Node) -> void:
+	if _camera_centered_on_spawn:
+		return
+	if not (node is ProductionBuilding):
+		return
+	var building: ProductionBuilding = node
+	if building.owner_peer_id != _my_peer_id() or not building.is_main_base:
+		return
+	_camera_centered_on_spawn = true
+	_center_camera_on([building])
+
 func _center_camera_on(members: Array) -> void:
 	var sum := Vector3.ZERO
 	var count := 0
@@ -1194,6 +1403,14 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 ## append: true while Shift is held — the order is queued to run after
 ## whatever this unit is currently doing (including any earlier shift-queued
 ## orders) instead of replacing it — see _rpc_issue_command.
+## Client-local: no networking needed here since it only decides which shape
+## *this* player's own next move order will request — the host is still the
+## one that actually computes and enforces the resulting slot positions (see
+## current_formation_type/_rpc_issue_command).
+func _set_formation_type(type: Formation.Type) -> void:
+	current_formation_type = type
+	formation_label.text = "Formation: %s" % Formation.type_name(type)
+
 func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	_prune_selected_units()
 	if selected_units.is_empty():
@@ -1207,7 +1424,7 @@ func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 		unit_paths.append(unit.get_path())
 
 	var target_path := _resolve_order_target_path(result)
-	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false, append)
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, false)
 	for unit in selected_units:
@@ -1231,7 +1448,7 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 		unit_paths.append(unit.get_path())
 
 	var target_path := _resolve_order_target_path(result)
-	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true, append)
+	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, true)
 	for unit in selected_units:
@@ -1252,7 +1469,7 @@ func _issue_stop_order() -> void:
 	_play_command_sound()
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool) -> void:
+func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -1267,13 +1484,24 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
 
-	var formation_positions := _formation_positions(units, world_pos)
+	var formation_positions := _formation_positions(units, world_pos, formation_type)
 	## Capping the whole group to its slowest member's speed is what actually
 	## keeps a mixed-speed selection's formation shape intact throughout the
 	## move — the nearest-slot assignment above already gets everyone to the
 	## right place, but without this a fast unit reaches its slot early and
 	## drifts/jostles around while slower units are still catching up.
 	var group_speed := _slowest_move_speed(units)
+	## Group cohesion (see Unit.formation_group/_update_cohesion) piggybacks
+	## on the same "is this an actual multi-unit formation move" signal as
+	## group_speed itself — only wire units together into a shared group when
+	## there's more than one of them, so a single-unit order never carries
+	## cohesion tracking it has no use for.
+	## One shared array reference handed to every unit in the group (cheaper
+	## than a per-unit filtered copy) — it therefore includes the unit itself
+	## alongside its groupmates. Unit._update_cohesion is responsible for
+	## skipping `other == self` when it averages this group's progress, so a
+	## unit's own progress never counts toward its own "group average".
+	var cohesion_group: Array[Unit] = units if group_speed > 0.0 else ([] as Array[Unit])
 	for i in units.size():
 		var unit := units[i]
 		## append only actually queues if the unit is currently mid-order —
@@ -1283,35 +1511,28 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		## fire from, so queuing here would silently strand the order forever.
 		var unit_is_busy := unit.status_command != Unit.Command.NONE or not unit.order_queue.is_empty()
 		if append and unit_is_busy:
-			unit.queue_order(target_path, formation_positions[i], attack_move_fallback, group_speed)
+			unit.queue_order(target_path, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
 		else:
 			unit.clear_order_queue()
-			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed)
+			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
 
-const FORMATION_COLUMNS: int = 4
-## Wider than it looks like it needs to be on paper: each unit's
-## NavigationAgent3D avoidance radius is 0.45 (unit.gd), so at the old 1.2
-## spacing adjacent slots left almost no slack for avoidance to negotiate,
-## and a group would jostle into whatever gap opened up instead of settling
-## into its exact assigned slot — looking like a scrambled cluster instead
-## of a grid even though the math was correct.
-const FORMATION_SPACING: float = 2.0
-
-## Arranges units into a grid oriented to face the direction of travel —
-## front rank arrives exactly at target_pos, further ranks trail behind it —
-## instead of the old fixed screen-space block that never rotated with the
-## order. Only matters for the plain-move/attack-move fallback in
-## _dispatch_smart_command; a gather/attack/build target ignores its
-## assigned position entirely and paths to the target node itself.
+## Arranges units into the given Formation.Type shape, oriented to face the
+## direction of travel — front rank/slot arrives exactly at target_pos,
+## further ranks trail behind it — instead of a fixed screen-space block
+## that never rotated with the order. Only matters for the plain-move/
+## attack-move fallback in _dispatch_smart_command; a gather/attack/build
+## target ignores its assigned position entirely and paths to the target
+## node itself. Actual per-shape geometry lives in Formation
+## (scripts/formation.gd) — this just builds the facing and hands off to it.
 ##
 ## Returned positions are aligned to `units` by index (result[i] is where
-## units[i] should go), but which unit gets which grid slot is decided by
+## units[i] should go), but which unit gets which shape slot is decided by
 ## nearest-available-slot assignment (see _assign_slots_to_units), not by
 ## raw selection order — assigning slot i to units[i] directly would send
 ## units to whichever slot their index happened to land on regardless of
 ## where they actually are, causing them to needlessly cross paths to swap
 ## places with each other.
-func _formation_positions(units: Array[Unit], target_pos: Vector3) -> Array[Vector3]:
+func _formation_positions(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> Array[Vector3]:
 	if units.is_empty():
 		return []
 	if units.size() == 1:
@@ -1330,13 +1551,8 @@ func _formation_positions(units: Array[Unit], target_pos: Vector3) -> Array[Vect
 	var forward: Vector3 = to_target.normalized() if to_target.length_squared() > 0.0001 else Vector3.FORWARD
 	var right := Vector3(forward.z, 0.0, -forward.x)
 
-	var slots: Array[Vector3] = []
-	for i in units.size():
-		var col: int = i % FORMATION_COLUMNS
-		var row: int = i / FORMATION_COLUMNS
-		var col_offset: float = (col - (FORMATION_COLUMNS - 1) / 2.0) * FORMATION_SPACING
-		var row_offset: float = row * FORMATION_SPACING
-		slots.append(target_pos + right * col_offset - forward * row_offset)
+	var formation := Formation.new(units, formation_type)
+	var slots := formation.get_slot_positions(target_pos, forward, right)
 
 	return _assign_slots_to_units(units, slots)
 
@@ -1390,7 +1606,13 @@ func _on_unit_order_completed(unit: Unit) -> void:
 		return
 	var order: Dictionary = unit.order_queue.pop_front()
 	var target_node: Node = get_node_or_null(order["target_path"]) if order["target_path"] != NodePath() else null
-	_dispatch_smart_command(unit, target_node, order["world_pos"], order["attack_move_fallback"], order["speed_override"])
+	## Dictionary values don't reliably preserve inner-array typing, so the
+	## formation group read back out is a plain Array — re-typed here via
+	## assign() rather than handing it straight to cohesion_group's typed
+	## Array[Unit] parameter.
+	var formation_group: Array[Unit] = []
+	formation_group.assign(order["formation_group"])
+	_dispatch_smart_command(unit, target_node, order["world_pos"], order["attack_move_fallback"], order["speed_override"], formation_group)
 
 ## Shared by right-click/attack-order dispatch and a rally point resolving
 ## onto a resource/enemy/under-construction building: gather/attack/build the
@@ -1398,7 +1620,7 @@ func _on_unit_order_completed(unit: Unit) -> void:
 ## attack-move, when armed). world_pos/speed_override are only used by that
 ## fallback branch — a gather/attack/build target ignores both, same reasoning
 ## as the formation slot position itself (see _formation_positions).
-func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, attack_move_fallback: bool, speed_override: float = -1.0) -> void:
+func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, attack_move_fallback: bool, speed_override: float = -1.0, cohesion_group: Array[Unit] = []) -> void:
 	## Natural resources (owner_peer_id 0) are gatherable by anyone; a
 	## player-built Farm is locked to whoever built it. A resource that
 	## requires_building_on_top (e.g. a Gold Deposit) also isn't gatherable
@@ -1426,10 +1648,10 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 		unit.command_build(target_node)
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.BUILD)
 	elif attack_move_fallback:
-		unit.command_attack_move(world_pos, speed_override)
+		unit.command_attack_move(world_pos, speed_override, cohesion_group)
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	else:
-		unit.command_move(world_pos, speed_override)
+		unit.command_move(world_pos, speed_override, cohesion_group)
 		_play_unit_order_sound(unit, Unit.OrderSoundKind.MOVE)
 
 ## append: true once the current patrol-targeting session's first click has
@@ -2208,6 +2430,7 @@ func _format_construction_status(building: ProductionBuilding) -> String:
 ## wired so real art can be dropped in later without touching this code).
 func _make_command_button(hotkey_label: String, tooltip: String, icon: Texture2D, callback: Callable) -> Button:
 	var button := Button.new()
+	button.theme_type_variation = &"SquareButton"
 	button.custom_minimum_size = Vector2(56, 56)
 	button.text = hotkey_label
 	button.tooltip_text = tooltip
@@ -2261,6 +2484,10 @@ func _start_placement(building_type: BuildingType) -> void:
 	## (via _refresh_command_panel()) while the ghost is still following the mouse.
 	if selected_building != null:
 		_select_building(null)
+	if building_type.is_wall or building_type.is_gate_tool:
+		## Both use their own snap/rebuild logic each frame instead of a
+		## single mouse-following ghost — see _update_wall_drag/_update_gate_ghost.
+		return
 	placement_ghost = _build_ghost(building_type.scene)
 	add_child(placement_ghost)
 
@@ -2301,6 +2528,13 @@ func _collect_ghost_surfaces(node: Node) -> void:
 			var ghost_material := StandardMaterial3D.new()
 			ghost_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			ghost_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			## Grass (grass_wind_material.tres) alpha-blends at render_priority 0
+			## too, and a MultiMeshInstance3D sorts as one draw call against this
+			## ghost's distance rather than per-blade — so without outranking it
+			## here, whichever one's centroid happens to read as "farther" can
+			## draw last and blot out the other. Bumping priority above 0 always
+			## wins the tie, regardless of distance.
+			ghost_material.render_priority = 1
 			mesh_instance.set_surface_override_material(i, ghost_material)
 			_ghost_surfaces.append({"material": ghost_material, "base_color": base_color})
 	for child in node.get_children():
@@ -2311,7 +2545,13 @@ func _set_ghost_valid(valid: bool) -> void:
 	for entry in _ghost_surfaces:
 		var material: StandardMaterial3D = entry["material"]
 		var base_color: Color = entry["base_color"]
-		material.albedo_color = Color(base_color.r * tint.r, base_color.g * tint.g, base_color.b * tint.b, tint.a)
+		## Multiplying straight through (base * tint) crushes to near-black on
+		## a dark-shaded source model (e.g. base_basic_shaded.glb), making
+		## valid/invalid unreadable — blending toward the tint instead keeps
+		## some of the original hue while still guaranteeing the red/green
+		## signal reads clearly regardless of how dark the source material is.
+		var blended: Color = base_color.lerp(tint, 0.75)
+		material.albedo_color = Color(blended.r, blended.g, blended.b, tint.a)
 
 func _update_placement_ghost() -> void:
 	if placing_type.requires_deposit:
@@ -2386,6 +2626,12 @@ func _find_valid_deposit(collider: Object) -> Gatherable:
 func _matches_scene(node: Node, scene: PackedScene) -> bool:
 	return scene != null and node.scene_file_path == scene.resource_path
 
+func _matches_any_scene(node: Node, scenes: Array[PackedScene]) -> bool:
+	for scene in scenes:
+		if _matches_scene(node, scene):
+			return true
+	return false
+
 func _is_placement_valid(pos: Vector3, radius: float) -> bool:
 	var space_state := get_world_3d().direct_space_state
 	var shape := SphereShape3D.new()
@@ -2401,6 +2647,9 @@ func _is_placement_valid(pos: Vector3, radius: float) -> bool:
 	return true
 
 func _handle_placement_input(event: InputEvent) -> void:
+	if placing_type.is_wall:
+		_handle_wall_drag_input(event)
+		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_confirm_placement()
@@ -2414,6 +2663,9 @@ func _handle_placement_input(event: InputEvent) -> void:
 		_build_queue_active = false
 
 func _confirm_placement() -> void:
+	if placing_type.is_gate_tool:
+		_confirm_gate_placement()
+		return
 	if not placement_valid:
 		_cancel_placement()
 		return
@@ -2527,23 +2779,27 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 				deposit.is_claimed = false
 			, CONNECT_ONE_SHOT)
 
-		## Sends whichever villager(s) opened the build menu to go build what
-		## they just placed, instead of leaving them standing idle next to it.
-		## Shift-chained placements queue this after the builder's current
-		## order instead — see _confirm_placement/_on_unit_order_completed.
-		## Same "only actually queue if there's something to finish first" logic
-		## as _rpc_issue_command — an idle builder with nothing in flight would
-		## never have anything trigger order_completed to dispatch a queued order.
-		for path in builder_paths:
-			var builder := get_node_or_null(path) as Unit
-			if builder == null or builder.owner_peer_id != sender_id:
-				continue
-			var builder_is_busy := builder.status_command != Unit.Command.NONE or not builder.order_queue.is_empty()
-			if append and builder_is_busy:
-				builder.queue_order(building.get_path(), building.global_position, false)
-			else:
-				builder.clear_order_queue()
-				builder.command_build(building)
+		_dispatch_builders_to(building, builder_paths, sender_id, append)
+
+## Sends whichever villager(s) opened the build menu to go build what they
+## just placed, instead of leaving them standing idle next to it. Shared by
+## the normal/wall/gate build RPCs. Shift-chained placements queue this after
+## the builder's current order instead — see _confirm_placement/
+## _on_unit_order_completed. Same "only actually queue if there's something to
+## finish first" logic as _rpc_issue_command — an idle builder with nothing in
+## flight would never have anything trigger order_completed to dispatch a
+## queued order.
+func _dispatch_builders_to(building: ProductionBuilding, builder_paths: Array[NodePath], sender_id: int, append: bool) -> void:
+	for path in builder_paths:
+		var builder := get_node_or_null(path) as Unit
+		if builder == null or builder.owner_peer_id != sender_id:
+			continue
+		var builder_is_busy := builder.status_command != Unit.Command.NONE or not builder.order_queue.is_empty()
+		if append and builder_is_busy:
+			builder.queue_order(building.get_path(), building.global_position, false)
+		else:
+			builder.clear_order_queue()
+			builder.command_build(building)
 
 func _cancel_placement() -> void:
 	if placement_ghost:
@@ -2552,6 +2808,623 @@ func _cancel_placement() -> void:
 	_ghost_surfaces.clear()
 	placing_type = null
 	_placement_target = null
+	_cancel_wall_drag()
+	_gate_target = null
+
+## --- Wall drag placement ---
+## Click-drag a run of wall segments (Age of Empires IV-style): the path
+## follows the actual cursor movement rather than snapping to a straight
+## line, sampled every wall_segment_length along the way; a corner piece is
+## auto-inserted wherever the path bends past WALL_CORNER_ANGLE_THRESHOLD.
+## _wall_compute_pieces() is the single source of truth for what a drag would
+## build — both the live ghost and the final RPC call it fresh off the same
+## _wall_drag_points, so what's previewed is always exactly what gets built
+## (no silent per-piece drop on confirm, unlike AoE4's own wall tool).
+
+func _handle_wall_drag_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_begin_wall_drag()
+		elif _wall_dragging:
+			_confirm_wall_placement()
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		_cancel_placement()
+		_pending_builder_paths.clear()
+		_build_queue_active = false
+		return
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_cancel_placement()
+		_pending_builder_paths.clear()
+		_build_queue_active = false
+
+func _begin_wall_drag() -> void:
+	var mouse_pos := get_viewport().get_mouse_position()
+	var result := _raycast(mouse_pos)
+	if result.is_empty():
+		return
+	_wall_dragging = true
+	_wall_drag_points = [result.position]
+	_rebuild_wall_ghost()
+
+func _update_wall_drag() -> void:
+	if not _wall_dragging:
+		return
+	var mouse_pos := get_viewport().get_mouse_position()
+	var result := _raycast(mouse_pos)
+	if result.is_empty():
+		return
+	## Backtracking over already-placed pieces takes priority over extending
+	## forward — a player correcting a mistake by dragging back over the wall
+	## should retract it, not simultaneously grow a new branch from wherever
+	## the cursor happens to be.
+	if _wall_try_backtrack(result.position):
+		_rebuild_wall_ghost()
+		return
+	if _wall_extend_path_to(result.position):
+		_rebuild_wall_ghost()
+
+## How close the cursor needs to get to an already-placed piece (measured to
+## the segment itself, not just its endpoints) to count as "hovering back
+## over it" and retract the path there. Generous enough to be easy to land
+## on, tight enough not to trigger from a normal straight forward drag.
+const WALL_UNDO_THRESHOLD: float = WALL_SEGMENT_FOOTPRINT_RADIUS + 0.3
+
+## Retracts _wall_drag_points back to just past the piece the cursor is now
+## hovering, so moving the mouse back over a mistake undoes it (and every
+## piece placed after it) in real time instead of requiring a full restart.
+## Never considers the live frontier segment (the one currently being drawn
+## toward the cursor) a backtrack target, and only fires when the cursor sits
+## closer to that old piece than to the current end of the drag — otherwise a
+## plain straight drag would trip it constantly, since the cursor is always
+## incidentally near the extended line of earlier segments too.
+func _wall_try_backtrack(target: Vector3) -> bool:
+	if _wall_drag_points.size() < 3:
+		return false
+	var flat_target := Vector3(target.x, 0.0, target.z)
+	var best_i := -1
+	var best_dist := INF
+	for i in _wall_drag_points.size() - 2:
+		var flat_a := _wall_drag_points[i]
+		flat_a.y = 0.0
+		var flat_b := _wall_drag_points[i + 1]
+		flat_b.y = 0.0
+		var dist := _distance_point_to_segment(flat_target, flat_a, flat_b)
+		if dist < best_dist:
+			best_dist = dist
+			best_i = i
+	if best_i == -1 or best_dist > WALL_UNDO_THRESHOLD:
+		return false
+	## Compared against the frontier SEGMENT (not just its far endpoint) —
+	## comparing to the endpoint alone would make the cursor read as "closer
+	## to the old piece" for the whole near half of the segment currently
+	## being drawn, retracting it during perfectly ordinary forward dragging.
+	var frontier_a: Vector3 = _wall_drag_points[-2]
+	frontier_a.y = 0.0
+	var frontier_b: Vector3 = _wall_drag_points[-1]
+	frontier_b.y = 0.0
+	var frontier_dist := _distance_point_to_segment(flat_target, frontier_a, frontier_b)
+	if frontier_dist <= best_dist:
+		return false
+	_wall_drag_points = _wall_drag_points.slice(0, best_i + 1)
+	return true
+
+func _distance_point_to_segment(p: Vector3, a: Vector3, b: Vector3) -> float:
+	var ab := b - a
+	var len_sq := ab.length_squared()
+	if len_sq < 0.0001:
+		return p.distance_to(a)
+	var t: float = clampf((p - a).dot(ab) / len_sq, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+## Walks from the last committed point toward target in fixed
+## wall_segment_length steps (re-sampling ground height at each new point),
+## rather than just drawing one straight line from drag-start to the current
+## mouse position — that's what lets the wall follow a curved drag instead of
+## always being a single straight chord. Returns whether any point was added.
+func _wall_extend_path_to(target: Vector3) -> bool:
+	if _wall_drag_points.is_empty() or _wall_drag_points.size() > WALL_MAX_SEGMENTS:
+		return false
+	var seg_len: float = placing_type.wall_segment_length
+	var added := false
+	var last: Vector3 = _wall_drag_points[-1]
+	var to_target := target - last
+	to_target.y = 0.0
+	while to_target.length() >= seg_len and _wall_drag_points.size() <= WALL_MAX_SEGMENTS:
+		var dir := to_target.normalized()
+		var next_point := last + dir * seg_len
+		## A straight step that would clip a tree/resource gets bent sideways
+		## just enough to clear it instead of just landing on an invalid,
+		## red-tinted piece — see _wall_find_blocking_obstacle/_wall_deflect_around.
+		var obstacle := _wall_find_blocking_obstacle(last, next_point)
+		if obstacle != null:
+			next_point = _wall_deflect_around(last, next_point, dir, obstacle)
+		next_point.y = _sample_ground_y(next_point, next_point.y)
+		_wall_drag_points.append(next_point)
+		last = next_point
+		to_target = target - last
+		to_target.y = 0.0
+		added = true
+	return added
+
+## Shape-queries the corridor a straight step from a to b would sweep through
+## (segment-length long, wall-width wide) and returns the nearest Gatherable
+## overlapping it, or null if the step is clear.
+func _wall_find_blocking_obstacle(a: Vector3, b: Vector3) -> Gatherable:
+	var dir := b - a
+	dir.y = 0.0
+	if dir.length() < 0.001:
+		return null
+	dir = dir.normalized()
+	var mid := (a + b) * 0.5
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(a.distance_to(b), 2.0, WALL_SEGMENT_FOOTPRINT_RADIUS * 2.0 + 1.0)
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = Transform3D(Basis(dir, Vector3.UP, dir.cross(Vector3.UP)), mid)
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	var closest: Gatherable = null
+	var closest_dist := INF
+	var space_state := get_world_3d().direct_space_state
+	for result in space_state.intersect_shape(query, 8):
+		if result.collider is Gatherable:
+			var dist: float = mid.distance_to(result.collider.global_position)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest = result.collider
+	return closest
+
+## How far a resource node's own footprint extends, read off its
+## NavigationObstacle3D the same way ProductionBuilding.get_footprint_radius()
+## does — falls back to a generic clearance if a given Gatherable has none.
+func _obstacle_radius(node: Node3D) -> float:
+	var obstacle := node.get_node_or_null("NavigationObstacle3D") as NavigationObstacle3D
+	return obstacle.radius if obstacle else 1.2
+
+## Pushes next_point sideways, away from whichever side of the a->next_point
+## line the obstacle sits on, by enough to clear its footprint plus the
+## wall's own, then re-projects back onto the segment_length-from-`a` circle
+## so the piece a player actually sees rejected/accepted is the one this
+## directly targets. Not a real pathfinder — a long straight drag through a
+## cluster of trees can still take a couple of separately-deflected pieces to
+## fully clear (each step only reacts to what's directly in front of it) —
+## but every individual step it produces is provably clear of what it was
+## deflected for, unlike a pivot-around-`a` approach (which under-corrects
+## for any obstacle not near the far end of the step: rotating a line around
+## a fixed point can't move a point close to that pivot very far no matter
+## how hard you rotate, so it would often still leave the piece invalid).
+func _wall_deflect_around(a: Vector3, next_point: Vector3, dir: Vector3, obstacle: Gatherable) -> Vector3:
+	var perp := dir.cross(Vector3.UP).normalized()
+	var mid := (a + next_point) * 0.5
+	var to_obstacle := obstacle.global_position - mid
+	to_obstacle.y = 0.0
+	var lateral: float = perp.dot(to_obstacle)
+	var clearance: float = _obstacle_radius(obstacle) + WALL_SEGMENT_FOOTPRINT_RADIUS + 0.4
+	var needed: float = clearance - absf(lateral)
+	if needed <= 0.0:
+		return next_point
+	var side := signf(lateral) if lateral != 0.0 else 1.0
+	## Only next_point moves (a is already committed), so the midpoint only
+	## moves by half of whatever next_point shifts by — shifting next_point by
+	## 2x what the midpoint needs is what actually gets the midpoint clear.
+	return next_point - perp * side * (needed * 2.0)
+
+func _sample_ground_y(pos: Vector3, fallback_y: float) -> float:
+	var space_state := get_world_3d().direct_space_state
+	var query := PhysicsRayQueryParameters3D.create(pos + Vector3(0.0, 5.0, 0.0), pos - Vector3(0.0, 5.0, 0.0))
+	var result := space_state.intersect_ray(query)
+	return result.position.y if not result.is_empty() else fallback_y
+
+## Turns _wall_drag_points into the actual list of pieces a confirm would
+## build: one "segment" per consecutive pair of points, plus a "corner" at
+## any interior point where the path bends more than WALL_CORNER_ANGLE_THRESHOLD.
+## Deterministic and side-effect-free (only reads _wall_drag_points/placing_type
+## and runs placement-validity queries) so the ghost and the confirm RPC can
+## both call it and always agree.
+func _wall_compute_pieces() -> Array[Dictionary]:
+	var pieces: Array[Dictionary] = []
+	var pts := _wall_drag_points
+	## Segment midpoints placed so far, checked below against every new
+	## segment — legitimate end-to-end neighbors sit wall_segment_length apart
+	## (comfortably more than twice the footprint radius), so this only ever
+	## trips when the drag genuinely doubles back over ground it already
+	## covered (a hairpin or a literal backtrack), which _is_placement_valid
+	## alone can't catch since stripped ghosts carry no collision shape.
+	var segment_positions: Array[Vector3] = []
+	for i in pts.size() - 1:
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[i + 1]
+		var dir := b - a
+		dir.y = 0.0
+		if dir.length() < 0.001:
+			continue
+		dir = dir.normalized()
+		var mid := (a + b) * 0.5
+		var valid: bool = _footprint_is_flat(mid, WALL_SEGMENT_FOOTPRINT_RADIUS) \
+				and _is_placement_valid(mid, WALL_SEGMENT_FOOTPRINT_RADIUS) \
+				and not _wall_overlaps_own_run(segment_positions, mid, WALL_SEGMENT_FOOTPRINT_RADIUS)
+		segment_positions.append(mid)
+		pieces.append({"kind": "segment", "position": mid, "direction": dir, "valid": valid})
+
+		if i > 0 and placing_type.wall_corner_scene:
+			var prev_dir: Vector3 = pts[i] - pts[i - 1]
+			prev_dir.y = 0.0
+			if prev_dir.length() > 0.001:
+				prev_dir = prev_dir.normalized()
+				if prev_dir.angle_to(dir) > WALL_CORNER_ANGLE_THRESHOLD:
+					var bisector := prev_dir + dir
+					bisector = bisector.normalized() if bisector.length() > 0.001 else dir
+					var corner_valid: bool = _footprint_is_flat(pts[i], WALL_CORNER_FOOTPRINT_RADIUS) \
+							and _is_placement_valid(pts[i], WALL_CORNER_FOOTPRINT_RADIUS)
+					pieces.append({"kind": "corner", "position": pts[i], "direction": bisector, "valid": corner_valid})
+	return pieces
+
+func _wall_overlaps_own_run(existing_midpoints: Array[Vector3], mid: Vector3, radius: float) -> bool:
+	for other in existing_midpoints:
+		if other.distance_to(mid) < radius * 2.0:
+			return true
+	return false
+
+func _wall_all_pieces_valid(pieces: Array[Dictionary]) -> bool:
+	for piece in pieces:
+		if not piece["valid"]:
+			return false
+	return true
+
+## Sums per-piece costs into one merged ResourceCost per resource type —
+## ResourceStockpile.can_afford()/spend() check each array entry independently
+## against the live balance, so N separate "8 wood" entries would each pass
+## the same affordability check without ever accounting for each other.
+func _wall_total_cost(pieces: Array[Dictionary]) -> Array[ResourceCost]:
+	var totals: Dictionary = {}
+	for piece in pieces:
+		var unit_costs: Array[ResourceCost] = placing_type.get_costs() if piece["kind"] == "segment" else placing_type.get_corner_costs()
+		for cost in unit_costs:
+			totals[cost.resource_type] = totals.get(cost.resource_type, 0) + cost.amount
+	return _totals_to_costs(totals)
+
+func _totals_to_costs(totals: Dictionary) -> Array[ResourceCost]:
+	var result: Array[ResourceCost] = []
+	for resource_type in totals:
+		var cost := ResourceCost.new()
+		cost.resource_type = resource_type
+		cost.amount = totals[resource_type]
+		result.append(cost)
+	return result
+
+func _rebuild_wall_ghost() -> void:
+	for ghost in _wall_ghosts:
+		if is_instance_valid(ghost):
+			ghost.queue_free()
+	_wall_ghosts.clear()
+	var pieces := _wall_compute_pieces()
+	for piece in pieces:
+		var scene: PackedScene = placing_type.scene if piece["kind"] == "segment" else placing_type.wall_corner_scene
+		if scene == null:
+			continue
+		_wall_ghosts.append(_build_wall_piece_ghost(scene, piece["position"], piece["direction"], piece["valid"]))
+	_update_wall_drag_label(pieces)
+
+## Segment/corner counts and a live running total, refreshed every time the
+## drag grows — this is the gap AoE4 itself leaves (you only learn the true
+## cost after releasing the drag); showing it live is a deliberate improvement.
+func _update_wall_drag_label(pieces: Array[Dictionary]) -> void:
+	if pieces.is_empty():
+		_wall_drag_label.visible = false
+		return
+	var segment_count := 0
+	var corner_count := 0
+	for piece in pieces:
+		if piece["kind"] == "segment":
+			segment_count += 1
+		else:
+			corner_count += 1
+	var cost_text := _format_costs(_wall_total_cost(pieces))
+	var piece_text := "%d wall%s" % [segment_count, "" if segment_count == 1 else "s"]
+	if corner_count > 0:
+		piece_text += " + %d corner%s" % [corner_count, "" if corner_count == 1 else "s"]
+	_wall_drag_label.text = "%s — %s" % [piece_text, cost_text]
+	_wall_drag_label.modulate = Color.WHITE if _wall_all_pieces_valid(pieces) else Color(1.0, 0.55, 0.5)
+	_wall_drag_label.visible = true
+
+func _build_wall_piece_ghost(scene: PackedScene, pos: Vector3, dir: Vector3, valid: bool) -> Node3D:
+	var ghost: Node3D = scene.instantiate()
+	ghost.set_script(null)
+	_strip_ghost_children(ghost)
+	var surfaces: Array = []
+	_collect_ghost_surfaces_into(ghost, surfaces)
+	ghost.set_meta(&"ghost_surfaces", surfaces)
+	add_child(ghost)
+	ghost.global_position = pos
+	ghost.global_basis = Basis(dir, Vector3.UP, dir.cross(Vector3.UP))
+	_tint_wall_ghost(ghost, valid)
+	return ghost
+
+## Same per-surface translucent-material approach as _collect_ghost_surfaces(),
+## but writing into a caller-supplied array instead of the single shared
+## _ghost_surfaces list — a wall drag has many ghosts on screen at once, each
+## needing its own independent valid/invalid tint, unlike every other
+## placement type's single ghost.
+func _collect_ghost_surfaces_into(node: Node, out: Array) -> void:
+	if node is MeshInstance3D:
+		var mesh_instance: MeshInstance3D = node
+		var surface_count: int = mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+		for i in surface_count:
+			var base: Material = mesh_instance.get_active_material(i)
+			var base_color: Color = base.albedo_color if base is StandardMaterial3D else Color.WHITE
+			var ghost_material := StandardMaterial3D.new()
+			ghost_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			ghost_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			ghost_material.render_priority = 1
+			mesh_instance.set_surface_override_material(i, ghost_material)
+			out.append({"material": ghost_material, "base_color": base_color})
+	for child in node.get_children():
+		_collect_ghost_surfaces_into(child, out)
+
+func _tint_wall_ghost(ghost: Node3D, valid: bool) -> void:
+	var tint: Color = VALID_GHOST_COLOR if valid else INVALID_GHOST_COLOR
+	for entry in ghost.get_meta(&"ghost_surfaces", []):
+		var material: StandardMaterial3D = entry["material"]
+		var base_color: Color = entry["base_color"]
+		var blended: Color = base_color.lerp(tint, 0.75)
+		material.albedo_color = Color(blended.r, blended.g, blended.b, tint.a)
+
+func _confirm_wall_placement() -> void:
+	_wall_dragging = false
+	var pieces := _wall_compute_pieces()
+	if pieces.is_empty() or not _wall_all_pieces_valid(pieces):
+		_cancel_wall_drag()
+		return
+	var costs := _wall_total_cost(pieces)
+	if not _can_afford_locally(costs):
+		_flash_missing_resources(costs)
+		return
+
+	var my_building_types: Array[BuildingType] = _my_faction().building_types
+	var type_index: int = my_building_types.find(placing_type)
+	var positions: Array[Vector3] = []
+	var directions: Array[Vector3] = []
+	var kinds: Array[String] = []
+	for piece in pieces:
+		positions.append(piece["position"])
+		directions.append(piece["direction"])
+		kinds.append(piece["kind"])
+	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths)
+	_play_command_sound()
+
+	for path in _pending_builder_paths:
+		var builder := get_node_or_null(path) as Unit
+		if builder:
+			_clear_path_markers(builder)
+	_cancel_wall_drag()
+	_pending_builder_paths.clear()
+	_build_queue_active = false
+	if _showing_build_submenu:
+		_close_build_submenu()
+
+func _cancel_wall_drag() -> void:
+	_wall_dragging = false
+	_wall_drag_points.clear()
+	for ghost in _wall_ghosts:
+		if is_instance_valid(ghost):
+			ghost.queue_free()
+	_wall_ghosts.clear()
+	if _wall_drag_label:
+		_wall_drag_label.visible = false
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directions: Array[Vector3], kinds: Array[String], builder_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+	if not faction_by_peer.has(sender_id):
+		return
+	var sender_building_types: Array[BuildingType] = faction_by_peer[sender_id].building_types
+	if type_index < 0 or type_index >= sender_building_types.size():
+		return
+	var building_type: BuildingType = sender_building_types[type_index]
+	if not building_type.is_wall:
+		return
+	var count: int = positions.size()
+	if count == 0 or count != directions.size() or count != kinds.size() or count > WALL_MAX_SEGMENTS * 2:
+		return
+
+	## Re-validated piece-by-piece against the host's own world state rather
+	## than trusting the client's ghost — the drag may be stale (something
+	## else got built in that spot meanwhile) or the client tampered with it.
+	## Any single invalid piece rejects the whole run instead of silently
+	## building the rest, so what the player saw as "valid" is exactly what
+	## either does or doesn't appear.
+	var totals: Dictionary = {}
+	var sanitized_dirs: Array[Vector3] = []
+	var segment_positions: Array[Vector3] = []
+	for i in count:
+		var kind: String = kinds[i]
+		if kind != "segment" and kind != "corner":
+			return
+		if kind == "corner" and building_type.wall_corner_scene == null:
+			return
+		var radius: float = WALL_SEGMENT_FOOTPRINT_RADIUS if kind == "segment" else WALL_CORNER_FOOTPRINT_RADIUS
+		if not _footprint_is_flat(positions[i], radius) or not _is_placement_valid(positions[i], radius):
+			return
+		## A client's ghost only ever sends a normalized, horizontal direction
+		## (see _wall_compute_pieces) — never trust that blindly, since this
+		## gets written straight into a replicated Basis/rotation below and a
+		## degenerate or non-horizontal vector there can produce NaN that
+		## propagates to every peer.
+		var dir: Vector3 = directions[i]
+		dir.y = 0.0
+		if dir.length() < 0.01:
+			return
+		dir = dir.normalized()
+		sanitized_dirs.append(dir)
+		if kind == "segment":
+			if _wall_overlaps_own_run(segment_positions, positions[i], WALL_SEGMENT_FOOTPRINT_RADIUS):
+				return
+			segment_positions.append(positions[i])
+		var unit_costs: Array[ResourceCost] = building_type.get_costs() if kind == "segment" else building_type.get_corner_costs()
+		for cost in unit_costs:
+			totals[cost.resource_type] = totals.get(cost.resource_type, 0) + cost.amount
+
+	var merged_costs := _totals_to_costs(totals)
+	if not ResourceStockpile.can_afford(sender_id, merged_costs):
+		return
+	ResourceStockpile.spend(sender_id, merged_costs)
+
+	var team_index: int = team_index_by_peer.get(sender_id, 0)
+	var spawned_buildings: Array[ProductionBuilding] = []
+	for i in count:
+		var kind: String = kinds[i]
+		var scene: PackedScene = building_type.scene if kind == "segment" else building_type.wall_corner_scene
+		var duration: float = building_type.construction_time if kind == "segment" else building_type.construction_time * 0.5
+		var dir: Vector3 = sanitized_dirs[i]
+		var rot_basis := Basis(dir, Vector3.UP, dir.cross(Vector3.UP))
+		var spawn_data: Dictionary = {
+			"scene_path": scene.resource_path,
+			"peer_id": sender_id,
+			"position": positions[i],
+			"rotation": rot_basis.get_euler(),
+			"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+		}
+		var spawned: Node = building_spawner.spawn(spawn_data)
+		if spawned is ProductionBuilding:
+			var building: ProductionBuilding = spawned
+			building.begin_construction(duration)
+			spawned_buildings.append(building)
+
+	_dispatch_builders_across(spawned_buildings, builder_paths, sender_id)
+
+## Distributes wall pieces round-robin across however many builders were
+## selected, so a long drag with e.g. 3 villagers queued has each of them
+## start on a different segment and then work down their own third of the
+## run, instead of all piling onto the first piece one at a time.
+func _dispatch_builders_across(buildings: Array[ProductionBuilding], builder_paths: Array[NodePath], sender_id: int) -> void:
+	var builders: Array[Unit] = []
+	for path in builder_paths:
+		var builder := get_node_or_null(path) as Unit
+		if builder and builder.owner_peer_id == sender_id:
+			builders.append(builder)
+	if builders.is_empty() or buildings.is_empty():
+		return
+	for i in buildings.size():
+		var builder: Unit = builders[i % builders.size()]
+		var building: ProductionBuilding = buildings[i]
+		if i < builders.size():
+			builder.clear_order_queue()
+			builder.command_build(building)
+		else:
+			builder.queue_order(building.get_path(), building.global_position, false)
+
+## --- Gate tool ---
+## A second construction-menu entry (is_gate_tool) rather than a drag
+## modifier: click an already-placed (fully built) wall segment/corner
+## matching gate_target_scenes to swap it for wall_gate_scene. Reuses the single-ghost
+## machinery (placement_ghost/_ghost_surfaces/_set_ghost_valid) since, unlike
+## the wall drag, this only ever shows one ghost at a time.
+
+func _update_gate_ghost() -> void:
+	var mouse_pos := get_viewport().get_mouse_position()
+	var result := _raycast(mouse_pos)
+	_gate_target = _find_valid_gate_target(result.get("collider"))
+
+	if _gate_target == null:
+		if placement_ghost:
+			placement_ghost.visible = false
+		placement_valid = false
+		return
+
+	if placement_ghost == null:
+		placement_ghost = _build_ghost(placing_type.scene)
+		add_child(placement_ghost)
+	placement_ghost.visible = true
+	placement_ghost.global_transform = _gate_target.global_transform
+	placement_valid = true
+	_set_ghost_valid(true)
+
+## Only a fully-built segment can become a gate — a segment still under
+## construction has (possibly several) builders actively referencing it as
+## their build_target, and there's no clean way to hand that work off to a
+## brand new node mid-build, so it's simplest and safest to just require the
+## wall to finish first, same as AoE4's normal (non-blueprint-conversion) flow.
+func _find_valid_gate_target(collider: Object) -> ProductionBuilding:
+	if collider == null or not (collider is ProductionBuilding):
+		return null
+	var target: ProductionBuilding = collider
+	if target.is_destroyed or target.is_under_construction or target.owner_peer_id != _my_peer_id():
+		return null
+	if not _matches_any_scene(target, placing_type.gate_target_scenes):
+		return null
+	return target
+
+func _confirm_gate_placement() -> void:
+	if _gate_target == null or not is_instance_valid(_gate_target):
+		_cancel_placement()
+		return
+	if not _can_afford_locally(placing_type.get_costs()):
+		_flash_missing_resources(placing_type.get_costs())
+		return
+
+	var my_building_types: Array[BuildingType] = _my_faction().building_types
+	var type_index: int = my_building_types.find(placing_type)
+	var target_path := _gate_target.get_path()
+	_rpc_request_build_gate.rpc_id(1, type_index, target_path, _pending_builder_paths)
+	_play_command_sound()
+
+	for path in _pending_builder_paths:
+		var builder := get_node_or_null(path) as Unit
+		if builder:
+			_clear_path_markers(builder)
+	_cancel_placement()
+	_pending_builder_paths.clear()
+	_build_queue_active = false
+	if _showing_build_submenu:
+		_close_build_submenu()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_request_build_gate(type_index: int, target_path: NodePath, builder_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+	if not faction_by_peer.has(sender_id):
+		return
+	var sender_building_types: Array[BuildingType] = faction_by_peer[sender_id].building_types
+	if type_index < 0 or type_index >= sender_building_types.size():
+		return
+	var building_type: BuildingType = sender_building_types[type_index]
+	if not building_type.is_gate_tool:
+		return
+	var target := get_node_or_null(target_path) as ProductionBuilding
+	if target == null or target.is_destroyed or target.is_under_construction or target.owner_peer_id != sender_id:
+		return
+	if not _matches_any_scene(target, building_type.gate_target_scenes):
+		return
+	var costs := building_type.get_costs()
+	if not ResourceStockpile.can_afford(sender_id, costs):
+		return
+	ResourceStockpile.spend(sender_id, costs)
+
+	var replace_pos: Vector3 = target.global_position
+	var replace_rot: Vector3 = target.rotation
+	var team_index: int = team_index_by_peer.get(sender_id, 0)
+	target.queue_free()
+
+	var spawn_data: Dictionary = {
+		"scene_path": building_type.scene.resource_path,
+		"peer_id": sender_id,
+		"position": replace_pos,
+		"rotation": replace_rot,
+		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+	}
+	var spawned: Node = building_spawner.spawn(spawn_data)
+	if spawned is ProductionBuilding:
+		var building: ProductionBuilding = spawned
+		building.begin_construction(building_type.construction_time)
+		_dispatch_builders_to(building, builder_paths, sender_id, false)
 
 ## --- Chat / debug console ---
 ## Type a normal message to broadcast it to everyone, or "cmd ..." for a
@@ -2562,11 +3435,19 @@ func _open_chat_input() -> void:
 	chat_input.visible = true
 	chat_input.text = ""
 	chat_input.grab_focus()
+	## Bump the token so any pending auto-hide timer skips its hide while
+	## the log needs to stay up for typing.
+	_chat_hide_token += 1
+	if _chat_log_tween:
+		_chat_log_tween.kill()
+	chat_log.visible = true
+	chat_log.modulate.a = 1.0
 
 func _close_chat_input() -> void:
 	chat_input.visible = false
 	chat_input.text = ""
 	chat_input.release_focus()
+	_show_chat_log()
 
 func _on_chat_submitted(text: String) -> void:
 	_close_chat_input()
@@ -2622,6 +3503,23 @@ func _rpc_display_chat(line: String) -> void:
 	if chat_lines.size() > MAX_CHAT_LINES:
 		chat_lines.pop_front()
 	chat_log.text = "\n".join(chat_lines)
+	_show_chat_log()
+
+## Shows the chat log and (re)starts its auto-hide countdown; a stale timer
+## from an earlier call is ignored via the token check.
+func _show_chat_log() -> void:
+	if _chat_log_tween:
+		_chat_log_tween.kill()
+	chat_log.visible = true
+	chat_log.modulate.a = 1.0
+	_chat_hide_token += 1
+	var token := _chat_hide_token
+	var timer := get_tree().create_timer(CHAT_LOG_VISIBLE_DURATION)
+	timer.timeout.connect(func() -> void:
+		if token == _chat_hide_token and not chat_input.visible:
+			_chat_log_tween = create_tween()
+			_chat_log_tween.tween_property(chat_log, "modulate:a", 0.0, CHAT_LOG_FADE_DURATION)
+	)
 
 ## Right-click on the minimap; relayed through the host (same call-to-1-then-
 ## broadcast shape as chat) so every player sees the same ping at once,
@@ -2646,6 +3544,7 @@ func _rpc_show_ping(world_pos: Vector3, sender_id: int) -> void:
 	if chat_lines.size() > MAX_CHAT_LINES:
 		chat_lines.pop_front()
 	chat_log.text = "\n".join(chat_lines)
+	_show_chat_log()
 
 ## Bigger and longer-lived than _play_command_feedback's move/attack rings —
 ## a ping needs to catch the eye of someone who isn't even looking at this

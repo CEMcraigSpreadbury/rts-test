@@ -1,0 +1,96 @@
+[gd_scene format=3 uid="uid://hv63ugeypt36"]
+
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="2_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="3_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="5_bar_tex"]
+[ext_resource type="PackedScene" path="res://scenes/effects/projectile_arrow.tscn" id="6_projectile"]
+[ext_resource type="PackedScene" uid="uid://b6qxrecg5yiap" path="res://assets/art/Models/watchtower/watchtower.glb" id="7_model"]
+
+[sub_resource type="Resource" id="ResourceCost_watchtower_wood"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("3_wood")
+amount = 60
+
+[sub_resource type="Resource" id="ResourceCost_watchtower_gold"]
+script = ExtResource("2_cost_script")
+resource_type = ExtResource("4_gold")
+amount = 30
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(2, 6, 2)
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:is_under_construction")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+properties/2/path = NodePath(".:construction_progress")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:health_fraction")
+properties/3/spawn = true
+properties/3/replication_mode = 1
+properties/4/path = NodePath(".:synced_builder_count")
+properties/4/spawn = true
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:owner_peer_id")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:team_tint")
+properties/6/spawn = true
+properties/6/replication_mode = 2
+
+[node name="WatchtowerBuilding" type="StaticBody3D" unique_id=280335850 groups=["buildings"]]
+script = ExtResource("1_building_script")
+building_name = "Watchtower"
+costs = Array[ExtResource("2_cost_script")]([SubResource("ResourceCost_watchtower_wood"), SubResource("ResourceCost_watchtower_gold")])
+can_rally = false
+vision_range = 14.0
+max_health = 180
+attack_range = 8.0
+attack_damage = 6
+attack_cooldown = 1.2
+projectile_scene = ExtResource("6_projectile")
+projectile_speed = 18.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=938417055]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=1580307931]
+radius = 1.3
+height = 6.0
+
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=472320706]
+bus = &"SFX"
+
+[node name="HealthBar" type="Node3D" parent="." unique_id=1954426623]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1637342, 0)
+visible = false
+
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=748568441]
+transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
+cast_shadow = 0
+modulate = Color(0.1, 0.1, 0.1, 0.85)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("5_bar_tex")
+
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=577802595]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+cast_shadow = 0
+modulate = Color(0.25, 0.9, 0.3, 1)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("5_bar_tex")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=5042362]
+replication_config = SubResource("SceneReplicationConfig_building")
+
+[node name="watchtower" parent="." unique_id=1369203206 instance=ExtResource("7_model")]

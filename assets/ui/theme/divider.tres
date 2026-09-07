@@ -1,0 +1,7 @@
+[gd_resource type="AtlasTexture" load_steps=2 format=3]
+
+[ext_resource type="Texture2D" uid="uid://cio84q6xi23mj" path="res://assets/ui/DarkAgesUi_v1.0/DarkAgesUi_v1.0/32x32-Tilesheet.png" id="1_tile"]
+
+[resource]
+atlas = ExtResource("1_tile")
+region = Rect2(288, 256, 96, 32)

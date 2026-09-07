@@ -9,6 +9,7 @@
 [ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_jxfkj"]
 [ext_resource type="PackedScene" uid="uid://dgkib7dffccxc" path="res://scenes/units/spearman_unit.tscn" id="9_spearman_scene"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
+[ext_resource type="PackedScene" uid="uid://bk7f0u6jhxr5f" path="res://assets/art/Models/Barracks2/barracks2.glb" id="11_jxfkj"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
 
 [sub_resource type="Resource" id="ResourceCost_barracks_building"]
@@ -34,14 +35,8 @@ item_name = "Spearman"
 build_time = 5.5
 unit_scene = ExtResource("9_spearman_scene")
 
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(3, 2, 3)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.45, 0.35, 0.35, 1)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(3, 2, 3)
+size = Vector3(2.7772217, 2, 3.5512695)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
 emission_shape = 1
@@ -125,27 +120,25 @@ properties/12/spawn = true
 properties/12/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" unique_id=1614311513 groups=["buildings"]]
+transform = Transform3D(0.7071067, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.7071067, 0, 0, 0)
 script = ExtResource("1_building_script")
 building_name = "Barracks"
 costs = Array[ExtResource("10_cost_script")]([SubResource("ResourceCost_barracks_building")])
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_archer"), SubResource("ProducibleItem_spearman")])
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_1ng4x"), ExtResource("9_jxfkj")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=771700101]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=838743970]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, -0.012756418, 1, 0.115478486)
 shape = SubResource("BoxShape3D_body")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=890556865]
-radius = 2.2
+transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, 0, -0.0063278675, 0)
+radius = 2.25
 height = 2.0
+vertices = PackedVector3Array(1.4664905, 0, -1.8795857, -1.4458354, 0, -1.8589313, -1.5077997, 0, 1.7969662, 1.5387819, 0, 1.848604)
 
 [node name="SpawnPoint" type="Marker3D" parent="." unique_id=1657432524]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 0, 2.5)
+transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, -0.013812661, 0, 2.5210896)
 
 [node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=97035508]
 bus = &"SFX"
@@ -172,7 +165,6 @@ draw_pass_1 = SubResource("QuadMesh_dust")
 
 [node name="HealthBar" type="Node3D" parent="." unique_id=2140115230]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
-visible = false
 
 [node name="Background" type="Sprite3D" parent="HealthBar" unique_id=1845921125]
 transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
@@ -194,3 +186,6 @@ texture = ExtResource("6_bar_tex")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=872243082]
 replication_config = SubResource("SceneReplicationConfig_building")
+
+[node name="barracks2" parent="." unique_id=645515408 instance=ExtResource("11_jxfkj")]
+transform = Transform3D(0.9999999, 0, -5.9604645e-08, 0, 1, 0, 5.9604645e-08, 0, 0.9999999, 0, 0, 0)

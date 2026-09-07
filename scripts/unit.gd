@@ -9,6 +9,38 @@ const FLIP_DOT_THRESHOLD: float = 0.15
 ## Below this actual speed the unit is considered stopped (e.g. blocked by another unit).
 const MOVING_SPEED_THRESHOLD: float = 0.15
 const MOVE_ARRIVAL_DISTANCE: float = 0.5
+## Base avoidance footprint (also the default NavigationAgent3D.radius) —
+## see _update_formation_avoidance, which shrinks this and shifts
+## avoidance_priority for units settling into a formation slot.
+const FORMATION_BASE_RADIUS: float = 0.45
+## _formation_progress() (0 = leg just started, 1 = arrived at slot) fraction
+## beyond which a formation-moving unit starts "settling": shrinking its
+## avoidance radius and regaining avoidance_priority as it nears its slot.
+## Below this the unit is still mid-transit like any other formation-mate.
+const FORMATION_SETTLE_PROGRESS_START: float = 0.75
+## Floor for a fully-settled unit's shrunk avoidance radius. Must stay >= the
+## physical CapsuleShape3D.radius on scenes/units/unit.tscn (0.4 there as of
+## writing) — RVO only steers neighbors this far away, but move_and_slide()
+## still enforces the real capsule regardless, so shrinking the avoidance
+## radius below the physical body would let RVO permit neighbors closer than
+## the capsule can actually tolerate, causing hard-collision pushback/jitter
+## right during the settling window this feature exists to smooth out. Kept
+## as an explicit floor (not a multiplier of FORMATION_BASE_RADIUS) so it
+## can't silently drift under the physical capsule if that radius or
+## FORMATION_BASE_RADIUS ever change independently. If unit.tscn's capsule
+## radius ever changes, update this to match (plus the small margin).
+const FORMATION_SETTLE_RADIUS_FLOOR: float = 0.42
+## avoidance_priority (0..1) a formation-moving unit runs at while still
+## mid-transit (below FORMATION_SETTLE_PROGRESS_START) — kept below the
+## default 1.0 so it yields to groupmates that have already reached/are
+## settling into their own slots, instead of every unit in the formation
+## negotiating avoidance with equal priority all at once. Note: avoidance_priority
+## is a single global NavigationAgent3D knob, not formation-scoped — while
+## traveling, this also makes the unit yield priority to any other agent it
+## encounters (unrelated units included), not just formation-mates. Judged
+## harmless: everyone sharing the same team avoidance layer/mask already
+## negotiates through this same system regardless of formation membership.
+const FORMATION_TRAVELING_AVOIDANCE_PRIORITY: float = 0.4
 ## Drop-off points sit outside a building's avoidance-obstacle radius, so this
 ## needs more slack than a plain move order to reliably register as "arrived".
 const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
@@ -16,6 +48,14 @@ const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
 const ATTACK_LEASH_SLACK: float = 1.2
 ## Building footprints push agents back via avoidance same as for melee attacks.
 const BUILD_ARRIVAL_DISTANCE: float = 1.0
+## Seconds a builder can spend heading to a build site without covering
+## STUCK_MOVE_EPSILON of ground before it's treated as unreachable and
+## abandoned — see _tick_build_approach(). Otherwise a queued run of many
+## build orders (most notably a long wall) can leave a builder standing
+## forever if a later piece ends up boxed in by earlier ones the same run
+## already finished, since nothing else would ever make it give up.
+const BUILD_STUCK_TIMEOUT: float = 4.0
+const BUILD_STUCK_MOVE_EPSILON: float = 0.3
 ## How often an attack-moving/patrolling unit checks for nearby enemies to engage.
 const ENEMY_SCAN_INTERVAL: float = 0.25
 ## Multiplier applied when an attacker's damage_type matches its target's
@@ -79,8 +119,7 @@ signal order_completed
 @export var team_tint: Color = Color.WHITE:
 	set(value):
 		team_tint = value
-		if sprite:
-			sprite.modulate = value
+		_update_team_tint_visual()
 ## Which player controls this unit. The host is always peer 1.
 ## Setter keeps NavigationAgent3D avoidance layers in sync with ownership (see
 ## _update_avoidance_team below) so a captured Objective guard immediately
@@ -91,6 +130,27 @@ signal order_completed
 		owner_peer_id = value
 		if nav_agent:
 			_update_avoidance_team()
+		_update_team_tint_visual()
+
+## How much an enemy's team_tint still shows through — kept well under 1.0 so
+## it reads as a subtle recolor rather than a flat-painted sprite.
+const _ENEMY_TINT_STRENGTH: float = 0.35
+
+## Only enemy units (relative to this viewer's own peer id) get team-colored —
+## own/ally units keep their sprite's natural colors, since team_tint's whole
+## purpose is telling enemies apart from a glance, not decorating your own
+## army.
+func _resting_modulate() -> Color:
+	if owner_peer_id == multiplayer.get_unique_id():
+		return Color.WHITE
+	return Color.WHITE.lerp(team_tint, _ENEMY_TINT_STRENGTH)
+
+## Called from both team_tint's and owner_peer_id's setters (order of property
+## application during scene instantiation isn't guaranteed) as well as
+## _ready(), so whichever ends up set last still lands on the right result.
+func _update_team_tint_visual() -> void:
+	if sprite:
+		sprite.modulate = _resting_modulate()
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 8.0
 ## One is picked at random and played through select_audio_player whenever
@@ -260,7 +320,7 @@ func play_hit_flash() -> void:
 		_flash_tween.kill()
 	sprite.modulate = Color.WHITE
 	_flash_tween = create_tween()
-	_flash_tween.tween_property(sprite, "modulate", team_tint, 0.15)
+	_flash_tween.tween_property(sprite, "modulate", _resting_modulate(), 0.15)
 
 ## -1 = no override, move at this unit's own move_speed. Set only by a
 ## multi-unit formation move (main.gd:_rpc_issue_command/_slowest_move_speed)
@@ -271,6 +331,90 @@ func play_hit_flash() -> void:
 ## below) so a stale slowdown never outlives the move it was set for.
 var formation_speed: float = -1.0
 
+## Group cohesion (on top of formation_speed): the OTHER units this unit was
+## dispatched together with in the same formation move (this unit itself is
+## deliberately excluded — see _set_formation_cohesion — so it never counts
+## its own progress toward its own "group average"), and this unit's
+## straight-line distance to its own assigned slot, recomputed at the moment
+## this leg of the move actually starts (see _set_formation_cohesion) rather
+## than only once back at original order-issue time — a shift-queued order
+## only starts later, after the unit has moved for a prior leg, so a baseline
+## frozen at issue time would be stale from tick one of this leg. Both empty/
+## 0.0 outside an active formation move. formation_speed alone only stops a
+## fast unit from *finishing* early; it does nothing about a unit whose
+## particular path happens to be longer/blocked and falls behind, so
+## _update_cohesion below compares each unit's progress fraction toward its
+## own slot against the group's average and further throttles effective_speed
+## for anyone running ahead of the pack.
+var formation_group: Array[Unit] = []
+var formation_initial_distance: float = 0.0
+var _cohesion_recheck_timer: float = 0.0
+var _cohesion_target_speed_scale: float = 1.0
+var _cohesion_speed_scale: float = 1.0
+## Stall tracking so a permanently-blocked groupmate doesn't drag the whole
+## group's average (and therefore everyone else's throttle) down forever —
+## same idea as _build_stuck_timer/_tick_build_approach's give-up-after-
+## timeout pattern below, applied to formation progress instead of build
+## approach. Tracked as raw remaining path distance (meters), not a fraction
+## of formation_initial_distance — a fraction-of-total epsilon would demand a
+## fixed number of meters of progress per recheck regardless of how long the
+## leg is, so on any sufficiently long leg even a fully healthy, unthrottled
+## unit would structurally fail to clear it every single tick (see
+## _update_cohesion). Comparing raw meters-per-recheck against what this
+## unit's own current pace should cover scales correctly with leg length.
+var _cohesion_last_remaining_distance: float = -1.0
+var _cohesion_stall_timer: float = 0.0
+## Separate, shorter-fused timer for "literally not moving at all" (as
+## opposed to just slower than expected) — see COHESION_HARD_STALL_*.
+var _cohesion_hard_stall_timer: float = 0.0
+var _cohesion_stalled: bool = false
+
+const COHESION_RECHECK_INTERVAL: float = 0.2
+## Progress-fraction lead (0-1) over the group average tolerated before any
+## throttling kicks in — small formation-keeping wobble/noise shouldn't cause
+## constant micro-braking.
+const COHESION_AHEAD_DEADBAND: float = 0.08
+## Lead fraction at which throttling bottoms out at COHESION_MIN_SPEED_SCALE.
+const COHESION_MAX_THROTTLE_RANGE: float = 0.35
+## Never fully halts a unit that's ahead — just slows it — so it keeps
+## drifting forward instead of visibly stopping and starting.
+const COHESION_MIN_SPEED_SCALE: float = 0.35
+## How fast _cohesion_speed_scale eases toward its newly-recomputed target
+## per second — smooths the throttle instead of it snapping frame to frame.
+const COHESION_SCALE_LERP_RATE: float = 1.5
+## A unit must cover at least this fraction of (its own current commanded
+## pace x the recheck interval) in raw meters each recheck to count as
+## "still making progress". Deliberately not tiny (e.g. 0.25) — a unit only
+## has to dodge below near-total-standstill to keep resetting the timer at
+## that level, so a genuinely struggling unit (bumping an obstacle, weaving,
+## covering 30-40% of its expected pace) never crosses the bar and drags the
+## whole group down indefinitely, which is exactly what stall-exclusion is
+## supposed to prevent. 0.55 catches that "still crawling but clearly
+## struggling" case while the sustained COHESION_STUCK_TIMEOUT window below
+## (see its own comment) — not a loose per-tick tolerance — is what absorbs
+## normal one-off RVO jostling: a unit briefly slowing to negotiate around a
+## groupmate loses at most one or two ticks below 0.55x pace before resuming,
+## nowhere near the consecutive resets-that-don't-happen needed to accumulate
+## the full timeout, so transient avoidance noise still can't false-flag it.
+const COHESION_STALL_TOLERANCE: float = 0.55
+## 3.5s (not 2.0s) gives real margin for legitimate single-file chokepoint
+## queuing — this project has wall gate/segment/corner pieces
+## (scenes/buildings/wall_gate.tscn etc.) a formation can plausibly funnel
+## through, where several units waiting their turn via normal RVO negotiation
+## could sustain sub-0.55x pace for longer than a brief one-off jostle. A
+## genuinely stuck unit (boxed in, pathing failure) still gets excluded well
+## within a few seconds — an acceptable tradeoff for an RTS — while normal
+## queuing at a gate has room to clear before that happens.
+const COHESION_STUCK_TIMEOUT: float = 3.5
+## Raw meters progressed within one recheck window below which a unit counts
+## as making literally no progress at all, not merely slower progress than
+## expected — this can't legitimately happen from throttled pacing under any
+## circumstance, so it's excluded from the group average on a much shorter
+## fuse than the general stall timeout above, capping how long a dead-stopped
+## groupmate can drag down the pace-setter's own throttle.
+const COHESION_HARD_STALL_DISTANCE_EPS: float = 0.05
+const COHESION_HARD_STUCK_TIMEOUT: float = 0.6
+
 var target_resource: Gatherable = null
 var dropoff_point: Node3D = null
 var gather_timer: float = 0.0
@@ -278,6 +422,10 @@ var gather_timer: float = 0.0
 var attack_target: Node3D = null
 var attack_timer: float = 0.0
 var build_target: ProductionBuilding = null
+## Progress-stall tracking for _tick_build_approach() while heading to
+## build_target — reset whenever a new build site is targeted.
+var _build_stuck_timer: float = 0.0
+var _build_stuck_check_pos: Vector3 = Vector3.ZERO
 var _dying: bool = false
 var patrol_points: Array[Vector3] = []
 var patrol_index: int = 0
@@ -290,16 +438,50 @@ var patrol_index: int = 0
 ## networked, since only the host ever dispatches from it.
 var order_queue: Array[Dictionary] = []
 
-func queue_order(target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, speed_override: float = -1.0) -> void:
+func queue_order(target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	order_queue.append({
 		"target_path": target_path,
 		"world_pos": world_pos,
 		"attack_move_fallback": attack_move_fallback,
 		"speed_override": speed_override,
+		"formation_group": group,
 	})
 
 func clear_order_queue() -> void:
 	order_queue.clear()
+
+## Arms group-cohesion tracking for a fresh formation-move leg — see
+## formation_group/formation_initial_distance declaration above. Called only
+## from command_move/command_attack_move, i.e. exactly when this leg actually
+## starts (whether dispatched immediately or popped later off order_queue for
+## a shift-queued order), so the distance baseline is always taken from this
+## unit's real starting position for THIS leg rather than a stale position
+## from whenever the original order was issued. `group` deliberately should
+## NOT include this unit itself (see main.gd:_rpc_issue_command) — kept as-is
+## here rather than filtered, since _update_cohesion is what actually skips
+## self when averaging; an empty group (single-unit selection, or any
+## non-formation dispatch) leaves cohesion inert since _update_cohesion bails
+## out on an empty formation_group.
+func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> void:
+	formation_group = group
+	formation_initial_distance = global_position.distance_to(target_position) if not group.is_empty() else 0.0
+	_cohesion_recheck_timer = 0.0
+	_cohesion_target_speed_scale = 1.0
+	_cohesion_speed_scale = 1.0
+	_cohesion_last_remaining_distance = -1.0
+	_cohesion_stall_timer = 0.0
+	_cohesion_hard_stall_timer = 0.0
+	_cohesion_stalled = false
+
+func _clear_formation_cohesion() -> void:
+	formation_group = []
+	formation_initial_distance = 0.0
+	_cohesion_target_speed_scale = 1.0
+	_cohesion_speed_scale = 1.0
+	_cohesion_last_remaining_distance = -1.0
+	_cohesion_stall_timer = 0.0
+	_cohesion_hard_stall_timer = 0.0
+	_cohesion_stalled = false
 ## Set directly by Objective for its guards; 0.0 = no leash (every normal
 ## player unit) — a leashed unit breaks off a chase and resumes patrol
 ## instead of following a fleeing/kiting target indefinitely.
@@ -330,10 +512,11 @@ func _ready() -> void:
 		})
 		sprite.play("idle")
 	sprite.animation_finished.connect(_on_attack_animation_finished)
-	sprite.modulate = team_tint
+	_update_team_tint_visual()
 	nav_agent.path_desired_distance = 0.5
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
-	nav_agent.radius = 0.45
+	nav_agent.radius = FORMATION_BASE_RADIUS
+	nav_agent.avoidance_priority = 1.0
 	nav_agent.max_speed = move_speed
 	_update_avoidance_team()
 
@@ -365,7 +548,7 @@ func _update_avoidance_team() -> void:
 func move_to(target_position: Vector3) -> void:
 	nav_agent.target_position = target_position
 
-func command_move(target_position: Vector3, speed_override: float = -1.0) -> void:
+func command_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD:
 		return
 	_leave_build_site()
@@ -374,6 +557,7 @@ func command_move(target_position: Vector3, speed_override: float = -1.0) -> voi
 	status_activity = Activity.MOVING
 	attack_target = null
 	formation_speed = speed_override
+	_set_formation_cohesion(group, target_position)
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
 
@@ -389,6 +573,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	status_command = Command.GATHER
 	attack_target = null
 	formation_speed = -1.0
+	_clear_formation_cohesion()
 	target_resource = resource_node
 	dropoff_point = dropoff
 	resource_node.add_gatherer(self)
@@ -402,13 +587,14 @@ func command_attack(target: Node3D) -> void:
 	status_command = Command.ATTACK
 	attack_target = target
 	formation_speed = -1.0
+	_clear_formation_cohesion()
 	_head_to_target()
 
 ## One-shot: moves toward target_position, engaging (and fully converting to
 ## Command.ATTACK — see the scan in _physics_process) the first enemy found
 ## along the way. Once it engages, this order is gone for good; it does not
 ## resume toward target_position afterward.
-func command_attack_move(target_position: Vector3, speed_override: float = -1.0) -> void:
+func command_attack_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD or not can_fight:
 		return
 	_leave_build_site()
@@ -416,6 +602,7 @@ func command_attack_move(target_position: Vector3, speed_override: float = -1.0)
 	status_command = Command.ATTACK_MOVE
 	attack_target = null
 	formation_speed = speed_override
+	_set_formation_cohesion(group, target_position)
 	status_activity = Activity.MOVING
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
@@ -430,6 +617,7 @@ func command_patrol(points: Array[Vector3]) -> void:
 	status_command = Command.PATROL
 	attack_target = null
 	formation_speed = -1.0
+	_clear_formation_cohesion()
 	patrol_points = points
 	patrol_index = 0
 	status_activity = Activity.MOVING
@@ -452,6 +640,7 @@ func command_stop() -> void:
 	status_activity = Activity.IDLE
 	attack_target = null
 	formation_speed = -1.0
+	_clear_formation_cohesion()
 	patrol_points.clear()
 	nav_agent.target_position = global_position
 
@@ -467,6 +656,7 @@ func command_build(building: ProductionBuilding) -> void:
 	status_command = Command.BUILD
 	attack_target = null
 	formation_speed = -1.0
+	_clear_formation_cohesion()
 	build_target = building
 	_head_to_build_site()
 
@@ -477,6 +667,25 @@ func _head_to_build_site() -> void:
 	status_activity = Activity.TO_BUILD_SITE
 	nav_agent.target_desired_distance = build_target.get_footprint_radius() + BUILD_ARRIVAL_DISTANCE
 	move_to(build_target.global_position)
+	_build_stuck_timer = 0.0
+	_build_stuck_check_pos = global_position
+
+## Gives up on the current build site if this unit hasn't actually gotten any
+## closer to it for BUILD_STUCK_TIMEOUT seconds — most commonly a later piece
+## in a long wall run that's become boxed in by the earlier pieces this same
+## builder already finished, with no path left to reach it. Ending the build
+## command (rather than just sitting in TO_BUILD_SITE forever) fires
+## order_completed, which — for a queued run like the wall dispatch — moves
+## the builder on to whatever's queued next instead of freezing the whole run.
+func _tick_build_approach(delta: float) -> void:
+	_build_stuck_timer += delta
+	if _build_stuck_timer < BUILD_STUCK_TIMEOUT:
+		return
+	_build_stuck_timer = 0.0
+	if global_position.distance_to(_build_stuck_check_pos) < BUILD_STUCK_MOVE_EPSILON:
+		end_build_command()
+	else:
+		_build_stuck_check_pos = global_position
 
 func _start_building() -> void:
 	if not is_instance_valid(build_target) or not build_target.is_under_construction:
@@ -631,8 +840,11 @@ func _physics_process(delta: float) -> void:
 		_deposit_and_continue()
 	elif status_activity == Activity.TO_TARGET and nav_agent.is_navigation_finished():
 		_start_attacking()
-	elif status_activity == Activity.TO_BUILD_SITE and nav_agent.is_navigation_finished():
-		_start_building()
+	elif status_activity == Activity.TO_BUILD_SITE:
+		if nav_agent.is_navigation_finished():
+			_start_building()
+		else:
+			_tick_build_approach(delta)
 	elif status_activity == Activity.MOVING and (status_command == Command.ATTACK_MOVE or status_command == Command.PATROL):
 		_enemy_scan_timer -= delta
 		if _enemy_scan_timer <= 0.0:
@@ -672,8 +884,139 @@ func _physics_process(delta: float) -> void:
 	## group's slowest member — minf guards against it ever exceeding this
 	## unit's own move_speed even if it somehow got set wrong.
 	var effective_speed: float = minf(formation_speed, move_speed) if formation_speed > 0.0 else move_speed
+	_update_cohesion(delta, effective_speed)
+	effective_speed *= _cohesion_speed_scale
+	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	nav_agent.set_velocity(desired_velocity)
+
+## Group cohesion on top of formation_speed's flat pacing cap: throttles this
+## unit further, proportionally, when it's running ahead of the formation
+## group's average progress toward their slots — a unit with a short/clear
+## path would otherwise still reach its slot early and sit there drifting
+## while a unit stuck going around an obstacle catches up, even though both
+## have the same raw move_speed. Recomputed on a short timer (not every
+## frame, both for cost — O(group size) — and to avoid the target scale
+## flickering frame to frame) and then eased toward smoothly so the unit's
+## speed ramps rather than snaps.
+func _update_cohesion(delta: float, base_speed: float) -> void:
+	if formation_speed <= 0.0 or formation_group.is_empty() or formation_initial_distance <= 0.0:
+		_cohesion_speed_scale = 1.0
+		_cohesion_last_remaining_distance = -1.0
+		_cohesion_stall_timer = 0.0
+		_cohesion_hard_stall_timer = 0.0
+		_cohesion_stalled = false
+		return
+
+	_cohesion_recheck_timer -= delta
+	if _cohesion_recheck_timer <= 0.0:
+		_cohesion_recheck_timer = COHESION_RECHECK_INTERVAL
+		var self_progress := _formation_progress()
+
+		## Stall detection compares RAW meters progressed this recheck window
+		## against what this unit's own current commanded pace should cover —
+		## not a flat fraction of formation_initial_distance. A fixed fraction
+		## (e.g. "must gain 3% progress per tick") demands more raw meters on a
+		## longer leg, since progress is normalized by the whole leg length; a
+		## 50m leg needs 10x the ground-speed a 5m leg does just to clear the
+		## same fractional bar, so a fully healthy unit on a long enough leg
+		## would fail it every tick and never be able to reset the timer. Raw
+		## distance against this unit's own pace scales correctly regardless
+		## of leg length.
+		var remaining := nav_agent.distance_to_target()
+		var progressed_distance: float = (_cohesion_last_remaining_distance - remaining) if _cohesion_last_remaining_distance >= 0.0 else INF
+		## Reference pace is base_speed x this unit's own current throttle
+		## scale — i.e. what it was actually just commanded to do — so a
+		## unit that's legitimately pacing itself down (formation_speed cap,
+		## or its own cohesion throttle) is judged against its own reduced
+		## target, not against an unthrottled top speed it was never asked
+		## to hit.
+		var expected_min_distance: float = base_speed * _cohesion_speed_scale * COHESION_RECHECK_INTERVAL * COHESION_STALL_TOLERANCE
+		if progressed_distance >= expected_min_distance:
+			_cohesion_stall_timer = 0.0
+		else:
+			_cohesion_stall_timer += COHESION_RECHECK_INTERVAL
+		## Faster-fused "literally zero movement" check — this can't happen
+		## from any legitimate throttled pacing, so it doesn't need to wait
+		## out the full grace window above before this groupmate stops
+		## counting toward everyone else's average (see the critic's
+		## compounding-throttle concern: while a stuck unit is still counted,
+		## it can drag even the pace-setter below its own formation_speed
+		## floor).
+		if progressed_distance < COHESION_HARD_STALL_DISTANCE_EPS:
+			_cohesion_hard_stall_timer += COHESION_RECHECK_INTERVAL
+		else:
+			_cohesion_hard_stall_timer = 0.0
+		_cohesion_last_remaining_distance = remaining
+		_cohesion_stalled = _cohesion_stall_timer >= COHESION_STUCK_TIMEOUT or _cohesion_hard_stall_timer >= COHESION_HARD_STUCK_TIMEOUT
+
+		var total_progress := 0.0
+		var count := 0
+		for other in formation_group:
+			## formation_group is built by main.gd as "the units dispatched
+			## together" and deliberately does NOT exclude this unit itself
+			## (it's a single shared array reference across the whole group,
+			## cheaper than building a per-unit copy) — skip self here so a
+			## unit's own progress never counts toward its own "group average"
+			## (that would shrink the ahead-signal, worse for smaller groups).
+			if other == self or other == null or not is_instance_valid(other) or other.status_activity == Activity.DEAD:
+				continue
+			if other.formation_speed <= 0.0 or other.formation_initial_distance <= 0.0:
+				continue
+			## Excludes a stalled groupmate from the average rather than letting
+			## it drag every other unit's throttle down (and compounding, since
+			## effective_speed already stacks formation_speed x cohesion scale)
+			## indefinitely while it's stuck.
+			if other._cohesion_stalled:
+				continue
+			total_progress += other._formation_progress()
+			count += 1
+
+		_cohesion_target_speed_scale = 1.0
+		if count > 0:
+			var avg_progress: float = total_progress / count
+			var ahead: float = self_progress - avg_progress
+			if ahead > COHESION_AHEAD_DEADBAND:
+				var t: float = clampf((ahead - COHESION_AHEAD_DEADBAND) / (COHESION_MAX_THROTTLE_RANGE - COHESION_AHEAD_DEADBAND), 0.0, 1.0)
+				_cohesion_target_speed_scale = lerpf(1.0, COHESION_MIN_SPEED_SCALE, t)
+
+	_cohesion_speed_scale = move_toward(_cohesion_speed_scale, _cohesion_target_speed_scale, COHESION_SCALE_LERP_RATE * delta)
+
+## Formation-mates settling into their slots get avoidance priority back over
+## ones still mid-transit, and shrink their own avoidance radius, so a tight
+## formation (e.g. a Box at SPACING) settles slot-by-slot instead of every
+## unit negotiating RVO avoidance with every other at equal footing all at
+## once (the visible jostling/stutter this exists to fix). Deliberately reuses
+## _formation_progress() (already computed for cohesion) rather than adding
+## new per-unit state or touching formation shape/rank data — "close to my
+## own slot" is a good enough proxy for "front rank / about to settle"
+## without needing main.gd to hand down explicit rank info. Resets to the
+## base footprint/priority the instant formation_group is cleared (order
+## completion, retarget, or a non-formation command), so it never lingers
+## once a unit is done treating this as a formation leg.
+func _update_formation_avoidance() -> void:
+	if formation_group.is_empty():
+		nav_agent.radius = FORMATION_BASE_RADIUS
+		nav_agent.avoidance_priority = 1.0
+		return
+	var progress: float = _formation_progress()
+	if progress < FORMATION_SETTLE_PROGRESS_START:
+		nav_agent.radius = FORMATION_BASE_RADIUS
+		nav_agent.avoidance_priority = FORMATION_TRAVELING_AVOIDANCE_PRIORITY
+		return
+	var t: float = clampf((progress - FORMATION_SETTLE_PROGRESS_START) / (1.0 - FORMATION_SETTLE_PROGRESS_START), 0.0, 1.0)
+	nav_agent.radius = lerpf(FORMATION_BASE_RADIUS, FORMATION_SETTLE_RADIUS_FLOOR, t)
+	nav_agent.avoidance_priority = lerpf(FORMATION_TRAVELING_AVOIDANCE_PRIORITY, 1.0, t)
+
+## 0 (just started) to 1 (arrived) fraction of this unit's straight-line
+## distance-to-slot at the start of this leg (see _set_formation_cohesion)
+## that its actual remaining nav path distance now represents — used instead
+## of raw move_speed comparisons so a unit taking a longer/curved path around
+## an obstacle reads as "behind" even if its speed stat matches everyone else's.
+func _formation_progress() -> float:
+	if formation_initial_distance <= 0.0:
+		return 1.0
+	return clampf(1.0 - nav_agent.distance_to_target() / formation_initial_distance, 0.0, 1.0)
 
 func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## NavigationAgent3D's avoidance keeps emitting this every physics frame once
@@ -727,6 +1070,7 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 			## order, don't interrupt it").
 			status_activity = Activity.IDLE
 			status_command = Command.NONE
+			_clear_formation_cohesion()
 			order_completed.emit()
 		elif status_command == Command.PATROL:
 			_advance_patrol()

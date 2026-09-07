@@ -16,6 +16,9 @@ signal destroyed
 ## Relayed by main.gd for a floating damage-number popup, same reasoning as
 ## Unit.damaged — take_damage() only ever runs on the host.
 signal damaged(amount: int)
+## Purely cosmetic (see Unit.projectile_fired) — real damage lands later, off
+## _pending_projectile_hits, entirely independent of this signal/its visual.
+signal projectile_fired(target: Node3D)
 
 const DESTROY_SINK_DURATION: float = 1.5
 
@@ -63,6 +66,17 @@ var linked_deposit: Gatherable = null
 @export var max_health: int = 100
 ## True only for Town Center-type buildings: a player loses when all of theirs are destroyed.
 @export var is_main_base: bool = false
+## 0 (the default) means this building never attacks — set above 0 to make it
+## a defensive structure (e.g. a Watchtower) that fires on its own at any
+## enemy Unit that wanders within range, no player command involved.
+@export var attack_range: float = 0.0
+@export var attack_damage: int = 0
+@export var attack_cooldown: float = 1.5
+## Left null for a hitscan/instant attack; set to fire a visual projectile
+## (travel-time-delayed damage) instead — same scene/timing convention as
+## Unit.projectile_scene (e.g. res://scenes/effects/projectile_arrow.tscn).
+@export var projectile_scene: PackedScene = null
+@export var projectile_speed: float = 20.0
 
 ## Mirrored to non-authoritative peers purely so their UI/health bar reads correctly.
 @export var is_under_construction: bool = false
@@ -115,6 +129,16 @@ var current_health: int = 1
 var is_destroyed: bool = false
 var _destroy_timer: float = 0.0
 var _destroy_start_y: float = 0.0
+
+## Same throttled-rescan/delayed-hit pattern as Unit's own combat (see there
+## for why: an unthrottled O(units) scan every frame, and instant on-fire
+## damage instead of matching the projectile's actual travel time, are both
+## worth avoiding even for a stationary attacker).
+const _ENEMY_SCAN_INTERVAL: float = 0.25
+var attack_target: Unit = null
+var attack_timer: float = 0.0
+var _enemy_scan_timer: float = 0.0
+var _pending_projectile_hits: Array[Dictionary] = []
 
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
@@ -188,7 +212,9 @@ func time_remaining() -> float:
 		return 0.0
 	return maxf(queue[0].build_time - build_timer, 0.0)
 
-## Buildings can't fight back themselves, but they can call nearby units in to defend.
+## Most buildings can't fight back themselves, but any can call nearby units in
+## to defend — a Watchtower-style attacker (attack_range > 0) additionally
+## fights back on its own via _tick_tower_combat().
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or is_destroyed:
 		return
@@ -199,6 +225,61 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		_begin_destruction()
 		return
 	CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
+
+## --- Combat (only runs when attack_range > 0, e.g. a Watchtower) ---
+
+func _tick_tower_combat(delta: float) -> void:
+	_tick_pending_projectiles(delta)
+
+	if attack_target != null and not _is_attack_target_in_range(attack_target):
+		attack_target = null
+	_enemy_scan_timer -= delta
+	if attack_target == null and _enemy_scan_timer <= 0.0:
+		_enemy_scan_timer = _ENEMY_SCAN_INTERVAL
+		attack_target = CombatUtils.find_nearest_enemy_unit(get_tree(), global_position, owner_peer_id, attack_range)
+	if attack_target == null:
+		return
+
+	attack_timer += delta
+	if attack_timer < attack_cooldown:
+		return
+	attack_timer = 0.0
+	if projectile_scene != null:
+		## Damage lands later, when the shot actually arrives (see
+		## _tick_pending_projectiles) — same reasoning as Unit._fire_projectile.
+		_fire_projectile(attack_target)
+	else:
+		attack_target.take_damage(attack_damage, self)
+		if not _is_attack_target_in_range(attack_target):
+			attack_target = null
+
+func _is_attack_target_in_range(target: Unit) -> bool:
+	return is_instance_valid(target) and target.status_activity != Unit.Activity.DEAD \
+			and global_position.distance_to(target.global_position) <= attack_range
+
+func _fire_projectile(target: Unit) -> void:
+	var dist := global_position.distance_to(target.global_position)
+	var travel_time := dist / maxf(projectile_speed, 0.01)
+	_pending_projectile_hits.append({
+		"time_remaining": travel_time,
+		"target": target,
+		"damage": attack_damage,
+	})
+	projectile_fired.emit(target)
+
+## Real, authoritative delayed damage — projectile_fired's visual is purely
+## cosmetic and never applies damage itself. Keeps ticking even after
+## attack_target changes/clears, so a shot already in the air still lands.
+func _tick_pending_projectiles(delta: float) -> void:
+	for i in range(_pending_projectile_hits.size() - 1, -1, -1):
+		var hit: Dictionary = _pending_projectile_hits[i]
+		hit["time_remaining"] -= delta
+		if hit["time_remaining"] > 0.0:
+			continue
+		_pending_projectile_hits.remove_at(i)
+		var target: Unit = hit["target"]
+		if is_instance_valid(target) and target.status_activity != Unit.Activity.DEAD:
+			target.take_damage(hit["damage"], self)
 
 ## How far NavigationObstacle3D avoidance keeps agents pushed back from this
 ## building's center; units attacking a building need to account for this so
@@ -251,6 +332,9 @@ func _process(delta: float) -> void:
 				builder.end_build_command()
 			construction_finished.emit()
 		return
+
+	if attack_range > 0.0:
+		_tick_tower_combat(delta)
 
 	if queue.is_empty():
 		build_timer = 0.0
@@ -333,6 +417,9 @@ func _tint_recursive(node: Node) -> void:
 			var ghost: StandardMaterial3D = base.duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
 			ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			ghost.albedo_color.a = _CONSTRUCTION_ALPHA
+			## Same render-priority fix as the placement ghost (main.gd) — grass
+			## alpha-blends at priority 0 too and would otherwise draw over this.
+			ghost.render_priority = 1
 			mesh_instance.set_surface_override_material(i, ghost)
 		if surface_count > 0:
 			_original_materials[mesh_instance] = {

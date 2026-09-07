@@ -1,0 +1,194 @@
+[gd_resource type="Theme" load_steps=18 format=3]
+
+[ext_resource type="Texture2D" uid="uid://cio84q6xi23mj" path="res://assets/ui/DarkAgesUi_v1.0/DarkAgesUi_v1.0/32x32-Tilesheet.png" id="1_tile"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_panel_ornate"]
+atlas = ExtResource("1_tile")
+region = Rect2(0, 0, 96, 96)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_panel_ornate"]
+texture = SubResource("AtlasTexture_panel_ornate")
+texture_margin_left = 32.0
+texture_margin_top = 32.0
+texture_margin_right = 32.0
+texture_margin_bottom = 32.0
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_slot"]
+atlas = ExtResource("1_tile")
+region = Rect2(192, 96, 32, 32)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_slot_normal"]
+texture = SubResource("AtlasTexture_slot")
+texture_margin_left = 10.0
+texture_margin_top = 10.0
+texture_margin_right = 10.0
+texture_margin_bottom = 10.0
+content_margin_left = 11.0
+content_margin_top = 11.0
+content_margin_right = 11.0
+content_margin_bottom = 11.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_slot_hover"]
+atlas = ExtResource("1_tile")
+region = Rect2(256, 96, 32, 32)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_slot_hover"]
+texture = SubResource("AtlasTexture_slot_hover")
+texture_margin_left = 10.0
+texture_margin_top = 10.0
+texture_margin_right = 10.0
+texture_margin_bottom = 10.0
+content_margin_left = 11.0
+content_margin_top = 11.0
+content_margin_right = 11.0
+content_margin_bottom = 11.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_plate_normal"]
+atlas = ExtResource("1_tile")
+region = Rect2(0, 96, 63, 32)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_button_normal"]
+texture = SubResource("AtlasTexture_plate_normal")
+texture_margin_left = 14.0
+texture_margin_top = 6.0
+texture_margin_right = 14.0
+texture_margin_bottom = 6.0
+content_margin_left = 22.0
+content_margin_top = 16.0
+content_margin_right = 22.0
+content_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_button_disabled"]
+texture = SubResource("AtlasTexture_plate_normal")
+texture_margin_left = 14.0
+texture_margin_top = 6.0
+texture_margin_right = 14.0
+texture_margin_bottom = 6.0
+content_margin_left = 22.0
+content_margin_top = 16.0
+content_margin_right = 22.0
+content_margin_bottom = 16.0
+modulate_color = Color(0.55, 0.55, 0.55, 1)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_plate_hover"]
+atlas = ExtResource("1_tile")
+region = Rect2(64, 96, 63, 32)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_button_hover"]
+texture = SubResource("AtlasTexture_plate_hover")
+texture_margin_left = 14.0
+texture_margin_top = 6.0
+texture_margin_right = 14.0
+texture_margin_bottom = 6.0
+content_margin_left = 22.0
+content_margin_top = 16.0
+content_margin_right = 22.0
+content_margin_bottom = 16.0
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_button_pressed"]
+texture = SubResource("AtlasTexture_plate_hover")
+texture_margin_left = 14.0
+texture_margin_top = 6.0
+texture_margin_right = 14.0
+texture_margin_bottom = 6.0
+content_margin_left = 22.0
+content_margin_top = 16.0
+content_margin_right = 22.0
+content_margin_bottom = 16.0
+modulate_color = Color(0.72, 0.66, 0.5, 1)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lineedit"]
+atlas = ExtResource("1_tile")
+region = Rect2(192, 96, 32, 32)
+
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_lineedit"]
+texture = SubResource("AtlasTexture_lineedit")
+texture_margin_left = 10.0
+texture_margin_top = 10.0
+texture_margin_right = 10.0
+texture_margin_bottom = 10.0
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_check"]
+content_margin_left = 6.0
+content_margin_top = 6.0
+content_margin_right = 6.0
+content_margin_bottom = 6.0
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_check_on"]
+atlas = ExtResource("1_tile")
+region = Rect2(0, 256, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_check_off"]
+atlas = ExtResource("1_tile")
+region = Rect2(0, 288, 32, 32)
+
+[resource]
+default_font_size = 16
+VBoxContainer/constants/separation = 10
+HBoxContainer/constants/separation = 10
+SquareButton/base_type = &"Button"
+SquareButton/styles/normal = SubResource("StyleBoxTexture_slot_normal")
+SquareButton/styles/hover = SubResource("StyleBoxTexture_slot_hover")
+SquareButton/styles/pressed = SubResource("StyleBoxTexture_slot_hover")
+SquareButton/styles/focus = SubResource("StyleBoxTexture_slot_hover")
+SquareButton/styles/disabled = SubResource("StyleBoxTexture_slot_normal")
+SquareButton/font_sizes/font_size = 20
+Panel/styles/panel = SubResource("StyleBoxTexture_panel_ornate")
+PanelContainer/styles/panel = SubResource("StyleBoxTexture_panel_ornate")
+Button/styles/normal = SubResource("StyleBoxTexture_button_normal")
+Button/styles/hover = SubResource("StyleBoxTexture_button_hover")
+Button/styles/pressed = SubResource("StyleBoxTexture_button_pressed")
+Button/styles/focus = SubResource("StyleBoxTexture_button_hover")
+Button/styles/disabled = SubResource("StyleBoxTexture_button_disabled")
+Button/colors/font_color = Color(0.863, 0.769, 0.486, 1)
+Button/colors/font_hover_color = Color(1, 1, 1, 1)
+Button/colors/font_pressed_color = Color(0.757, 0.569, 0.286, 1)
+Button/colors/font_disabled_color = Color(0.6, 0.6, 0.6, 1)
+Button/colors/font_focus_color = Color(1, 1, 1, 1)
+Button/font_sizes/font_size = 18
+CheckButton/styles/normal = SubResource("StyleBoxEmpty_check")
+CheckButton/styles/hover = SubResource("StyleBoxEmpty_check")
+CheckButton/styles/pressed = SubResource("StyleBoxEmpty_check")
+CheckButton/styles/hover_pressed = SubResource("StyleBoxEmpty_check")
+CheckButton/styles/focus = SubResource("StyleBoxEmpty_check")
+CheckButton/styles/disabled = SubResource("StyleBoxEmpty_check")
+CheckButton/icons/checked = SubResource("AtlasTexture_check_on")
+CheckButton/icons/unchecked = SubResource("AtlasTexture_check_off")
+CheckButton/icons/checked_disabled = SubResource("AtlasTexture_check_on")
+CheckButton/icons/unchecked_disabled = SubResource("AtlasTexture_check_off")
+CheckButton/icons/checked_mirrored = SubResource("AtlasTexture_check_on")
+CheckButton/icons/unchecked_mirrored = SubResource("AtlasTexture_check_off")
+CheckButton/colors/font_color = Color(0.863, 0.769, 0.486, 1)
+CheckButton/colors/font_hover_color = Color(1, 1, 1, 1)
+CheckButton/colors/font_pressed_color = Color(1, 1, 1, 1)
+CheckButton/colors/font_disabled_color = Color(0.6, 0.6, 0.6, 1)
+CheckButton/colors/font_focus_color = Color(1, 1, 1, 1)
+CheckBox/styles/normal = SubResource("StyleBoxEmpty_check")
+CheckBox/styles/hover = SubResource("StyleBoxEmpty_check")
+CheckBox/styles/pressed = SubResource("StyleBoxEmpty_check")
+CheckBox/styles/hover_pressed = SubResource("StyleBoxEmpty_check")
+CheckBox/styles/focus = SubResource("StyleBoxEmpty_check")
+CheckBox/styles/disabled = SubResource("StyleBoxEmpty_check")
+CheckBox/icons/checked = SubResource("AtlasTexture_check_on")
+CheckBox/icons/unchecked = SubResource("AtlasTexture_check_off")
+CheckBox/icons/checked_disabled = SubResource("AtlasTexture_check_on")
+CheckBox/icons/unchecked_disabled = SubResource("AtlasTexture_check_off")
+CheckBox/colors/font_color = Color(0.863, 0.769, 0.486, 1)
+CheckBox/colors/font_hover_color = Color(1, 1, 1, 1)
+CheckBox/colors/font_disabled_color = Color(0.6, 0.6, 0.6, 1)
+Label/colors/font_color = Color(0.863, 0.769, 0.486, 1)
+Label/colors/font_shadow_color = Color(0, 0, 0, 0.7)
+Label/constants/shadow_offset_x = 1
+Label/constants/shadow_offset_y = 1
+LineEdit/styles/normal = SubResource("StyleBoxTexture_lineedit")
+LineEdit/styles/focus = SubResource("StyleBoxTexture_lineedit")
+LineEdit/colors/font_color = Color(0.863, 0.769, 0.486, 1)
+LineEdit/colors/font_placeholder_color = Color(0.62, 0.53, 0.45, 0.7)

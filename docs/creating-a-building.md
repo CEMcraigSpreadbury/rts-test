@@ -146,6 +146,31 @@ with no construction queue or Producibles list. To make one of these:
    `BuildingType.scene` can point at a `Gatherable` just as well as a
    `ProductionBuilding`; `BuildingType.get_costs()` duck-types either.
 
+## Variation E — defensive/attacking building (Watchtower-style)
+
+Any `ProductionBuilding` can defend itself: set **Attack Range** above 0 (in
+the **Combat** export group) and it starts firing on its own at the nearest
+enemy `Unit` that wanders within range, no player command involved — see
+`ProductionBuilding._tick_tower_combat()`. This works independently of
+**Producibles**, so a pure defensive tower like Watchtower just leaves that
+array empty.
+
+- **Attack Range**, **Attack Damage**, **Attack Cooldown** — same meaning as
+  the equivalent `Unit` fields.
+- **Projectile Scene**/**Projectile Speed** — set **Projectile Scene** (e.g.
+  `res://scenes/effects/projectile_arrow.tscn`) for a travel-time-delayed
+  ranged attack with a visual arrow, same convention as `Unit.projectile_scene`;
+  leave it null for an instant hitscan hit instead.
+- Target-finding uses `CombatUtils.find_nearest_enemy_unit()` (a building-safe
+  equivalent of `Unit._find_nearest_enemy_in_range()`, since there's no shared
+  base class between a `CharacterBody3D` Unit and a `StaticBody3D` building).
+- The projectile's cosmetic visual is wired the same way as a Unit's: host
+  fires `projectile_fired`, `main.gd` relays it to every peer via
+  `_on_building_projectile_fired`/`_rpc_spawn_building_projectile_visual`. An
+  Objective-owned attacking building still needs this connected —
+  `register_objective_building()` already does it alongside the other signal
+  hookups, so no extra wiring is needed there either.
+
 ## Variation D — Objective building (no Faction/BuildingType at all)
 
 A building guarded by an Objective (see `scripts/objective.gd`,

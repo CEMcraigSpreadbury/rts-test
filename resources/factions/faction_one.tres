@@ -8,10 +8,14 @@
 [ext_resource type="PackedScene" uid="uid://bdj2w2feks35t" path="res://scenes/buildings/house_building.tscn" id="5_house"]
 [ext_resource type="PackedScene" uid="uid://c0egasx03ggka" path="res://scenes/buildings/farm_building.tscn" id="6_farm"]
 [ext_resource type="PackedScene" uid="uid://bbmqgxak6tphl" path="res://scenes/buildings/mine_building.tscn" id="7_mine"]
-[ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="8_gold_deposit"]
+[ext_resource type="PackedScene" uid="uid://c10y275vh27ta" path="res://scenes/resource_nodes/gold_deposit.tscn" id="8_gold_deposit"]
 [ext_resource type="PackedScene" uid="uid://cn64mdp666snd" path="res://scenes/buildings/stables_building.tscn" id="9_stables"]
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="10_unit"]
 [ext_resource type="PackedScene" uid="uid://nmacionkrw86" path="res://scenes/buildings/blacksmith_building.tscn" id="11_blacksmith"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/wall_segment.tscn" id="12_wall_segment"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/wall_corner.tscn" id="13_wall_corner"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/wall_gate.tscn" id="14_wall_gate"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/watchtower_building.tscn" id="15_watchtower"]
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
@@ -61,9 +65,33 @@ building_name = "Blacksmith"
 scene = ExtResource("11_blacksmith")
 construction_time = 8.0
 
+[sub_resource type="Resource" id="BuildingType_wall"]
+script = ExtResource("2_building_type_script")
+building_name = "Wall"
+scene = ExtResource("12_wall_segment")
+footprint_radius = 0.9
+construction_time = 3.0
+is_wall = true
+wall_corner_scene = ExtResource("13_wall_corner")
+wall_gate_scene = ExtResource("14_wall_gate")
+
+[sub_resource type="Resource" id="BuildingType_gate"]
+script = ExtResource("2_building_type_script")
+building_name = "Gate"
+scene = ExtResource("14_wall_gate")
+is_gate_tool = true
+gate_target_scenes = Array[PackedScene]([ExtResource("12_wall_segment"), ExtResource("13_wall_corner")])
+
+[sub_resource type="Resource" id="BuildingType_watchtower"]
+script = ExtResource("2_building_type_script")
+building_name = "Watchtower"
+scene = ExtResource("15_watchtower")
+footprint_radius = 1.3
+construction_time = 8.0
+
 [resource]
 script = ExtResource("1_faction_script")
 faction_name = "Human"
-building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith")])
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit")])

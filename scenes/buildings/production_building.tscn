@@ -8,6 +8,7 @@
 [ext_resource type="AudioStream" uid="uid://c62kgj7qsdffx" path="res://assets/sfx/Facilities/Archery_1.wav" id="7_lthpd"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="8_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="9_gold"]
+[ext_resource type="PackedScene" uid="uid://bfi1dv808ws1t" path="res://assets/art/Models/Towncenter/base_basic_shaded.glb" id="9_t1yyl"]
 
 [sub_resource type="Resource" id="ResourceCost_towncenter"]
 script = ExtResource("7_cost_script")
@@ -31,14 +32,19 @@ build_time = 30.0
 costs = Array[ExtResource("7_cost_script")]([SubResource("ResourceCost_monarch_upgrade")])
 unlocks_monarch_promotion = true
 
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(3, 2, 3)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.65, 0.55, 0.4, 1)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3, 2, 3)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
+emission_shape = 1
+emission_sphere_radius = 1.2
+direction = Vector3(0, 1, 0)
+spread = 60.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+scale_min = 0.5
+scale_max = 1.5
+color = Color(0.45, 0.35, 0.22, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_debris"]
 shading_mode = 0
@@ -48,28 +54,9 @@ albedo_color = Color(0.45, 0.35, 0.22, 1)
 material = SubResource("StandardMaterial3D_debris")
 size = Vector2(0.15, 0.15)
 
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
-emission_shape = 1
-emission_sphere_radius = 1.2
-direction = Vector3(0, 1, 0)
-spread = 60.0
-initial_velocity_min = 2.0
-initial_velocity_max = 4.0
-gravity = Vector3(0, -9.8, 0)
-scale_min = 0.5
-scale_max = 1.5
-color = Color(0.45, 0.35, 0.22, 1)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
-shading_mode = 0
-transparency = 1
-albedo_color = Color(0.8, 0.75, 0.65, 0.5)
-
-[sub_resource type="QuadMesh" id="QuadMesh_dust"]
-material = SubResource("StandardMaterial3D_dust")
-size = Vector2(0.2, 0.2)
-
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_construction"]
+emission_shape = 1
+emission_sphere_radius = 1.0
 direction = Vector3(0, 1, 0)
 spread = 40.0
 initial_velocity_min = 0.3
@@ -78,8 +65,15 @@ gravity = Vector3(0, 0.3, 0)
 scale_min = 0.6
 scale_max = 1.2
 color = Color(0.8, 0.75, 0.65, 0.5)
-emission_shape = 1
-emission_sphere_radius = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="QuadMesh" id="QuadMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+size = Vector2(0.2, 0.2)
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
 properties/0/path = NodePath(".:position")
@@ -123,6 +117,7 @@ properties/12/spawn = true
 properties/12/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" unique_id=1849336778 groups=["buildings", "dropoff_points"]]
+transform = Transform3D(0.70710677, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.70710677, 0, 0, 0)
 script = ExtResource("1_building_script")
 building_name = "Town Center"
 costs = Array[ExtResource("7_cost_script")]([SubResource("ResourceCost_towncenter")])
@@ -131,11 +126,6 @@ vision_range = 30.0
 on_select_sound_effects = Array[AudioStream]([ExtResource("7_lthpd")])
 population_capacity = 10
 is_main_base = true
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=961561923]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1793394571]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
@@ -154,7 +144,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0, 2.5)
 [node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=722183787]
 bus = &"SFX"
 
-[node name="PlacementBurst" type="GPUParticles3D" parent="."]
+[node name="PlacementBurst" type="GPUParticles3D" parent="." unique_id=1956357573]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 emitting = false
 amount = 24
@@ -165,7 +155,7 @@ randomness = 0.3
 process_material = SubResource("ParticleProcessMaterial_placement")
 draw_pass_1 = SubResource("QuadMesh_debris")
 
-[node name="ConstructionDust" type="GPUParticles3D" parent="."]
+[node name="ConstructionDust" type="GPUParticles3D" parent="." unique_id=1253367529]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
 emitting = false
 amount = 12
@@ -198,3 +188,5 @@ texture = ExtResource("6_bar_tex")
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1213158684]
 replication_config = SubResource("SceneReplicationConfig_building")
+
+[node name="base_basic_shaded" parent="." unique_id=973166904 instance=ExtResource("9_t1yyl")]
