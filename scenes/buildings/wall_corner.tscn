@@ -4,6 +4,8 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Castle_1.wav" id="90_sfx_a"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Castle_2.wav" id="91_sfx_b"]
 
 [sub_resource type="Resource" id="ResourceCost_wallcorner"]
 script = ExtResource("3_cost_script")
@@ -52,6 +54,7 @@ costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_wallcorne
 can_rally = false
 max_health = 90
 construction_sink_depth = 1.9
+on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)

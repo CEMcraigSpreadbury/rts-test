@@ -15,7 +15,7 @@
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_segment.tscn" id="12_wall_segment"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_corner.tscn" id="13_wall_corner"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_gate.tscn" id="14_wall_gate"]
-[ext_resource type="PackedScene" path="res://scenes/buildings/watchtower_building.tscn" id="15_watchtower"]
+[ext_resource type="PackedScene" uid="uid://hv63ugeypt36" path="res://scenes/buildings/watchtower_building.tscn" id="15_watchtower"]
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")

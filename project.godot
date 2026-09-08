@@ -33,6 +33,7 @@ ui_editor/enabled=true
 
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+mouse_cursor/custom_image="res://assets/art/cursor_64.png"
 
 [editor_plugins]
 

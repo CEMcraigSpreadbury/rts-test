@@ -7,6 +7,8 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="10_gold"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Blacksmith_1.wav" id="90_sfx_a"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Blacksmith_2.wav" id="91_sfx_b"]
 
 [sub_resource type="Resource" id="ResourceCost_blacksmith_building"]
 script = ExtResource("8_cost_script")
@@ -195,6 +197,7 @@ building_name = "Blacksmith"
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_blacksmith_building")])
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_infantry_weapon_1"), SubResource("ProducibleItem_infantry_weapon_2"), SubResource("ProducibleItem_infantry_weapon_3"), SubResource("ProducibleItem_infantry_armor_1"), SubResource("ProducibleItem_infantry_armor_2"), SubResource("ProducibleItem_infantry_armor_3")])
 can_rally = false
+on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=2020250434]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.009735107, 1, 0.02142334)

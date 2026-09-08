@@ -5,6 +5,18 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Texture2D" uid="uid://bgxdtljq6ix1t" path="res://assets/art/crown.png" id="5_crown"]
+[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/06_confirm_1.wav" id="90_sfx_confirm1"]
+[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/06_confirm_2.wav" id="91_sfx_confirm2"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Drop_Whoosh.wav" id="92_sfx_whoosh"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Metal_Light.wav" id="93_sfx_metal_l"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Metal_Heavy.wav" id="94_sfx_metal_h"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Confirm_Cancel_1.wav" id="95_sfx_cancel1"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Confirm_Cancel_2.wav" id="96_sfx_cancel2"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Start_1.wav" id="97_sfx_bstart1"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Start_2.wav" id="98_sfx_bstart2"]
+[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/07_decline_1.wav" id="99_sfx_decline1"]
+[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/07_decline_2.wav" id="100_sfx_decline2"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Managing/Item_Pick.wav" id="101_sfx_pick"]
 
 [sub_resource type="Resource" id="ResourceCost_villager"]
 script = ExtResource("3_cost_script")
@@ -77,6 +89,13 @@ script = ExtResource("1_script")
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_villager")])
 walk_row = 3
 walk_frame_count = 6
+on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_confirm1"), ExtResource("91_sfx_confirm2")])
+on_move_sound_effects = Array[AudioStream]([ExtResource("92_sfx_whoosh")])
+on_attack_sound_effects = Array[AudioStream]([ExtResource("93_sfx_metal_l"), ExtResource("94_sfx_metal_h")])
+on_patrol_sound_effects = Array[AudioStream]([ExtResource("95_sfx_cancel1"), ExtResource("96_sfx_cancel2")])
+on_build_sound_effects = Array[AudioStream]([ExtResource("97_sfx_bstart1"), ExtResource("98_sfx_bstart2")])
+on_stop_sound_effects = Array[AudioStream]([ExtResource("99_sfx_decline1"), ExtResource("100_sfx_decline2")])
+on_gather_sound_effects = Array[AudioStream]([ExtResource("101_sfx_pick")])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1669979845]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)

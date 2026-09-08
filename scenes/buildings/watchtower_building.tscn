@@ -7,6 +7,8 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="5_bar_tex"]
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_arrow.tscn" id="6_projectile"]
 [ext_resource type="PackedScene" uid="uid://b6qxrecg5yiap" path="res://assets/art/Models/watchtower/watchtower.glb" id="7_model"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Tower_1.wav" id="90_sfx_a"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Tower_2.wav" id="91_sfx_b"]
 
 [sub_resource type="Resource" id="ResourceCost_watchtower_wood"]
 script = ExtResource("2_cost_script")
@@ -56,6 +58,7 @@ attack_damage = 6
 attack_cooldown = 1.2
 projectile_scene = ExtResource("6_projectile")
 projectile_speed = 18.0
+on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=938417055]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)

@@ -34,6 +34,10 @@ const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, 
 ## rows), padded with blank placeholders, so its size never changes with context.
 const ACTION_PANEL_SLOT_COUNT: int = 12
 const QUEUE_SLOT_TEXTURE: Texture2D = preload("res://assets/ui/HUD/elements/square_frame_dark.png")
+const RALLY_BANNER_SCENE: PackedScene = preload("res://assets/art/Models/Banner/banner.glb")
+const RALLY_DUST_HEIGHT: float = 0.35
+const SELECTION_PORTRAIT_COLUMNS: int = 6
+const SELECTION_PORTRAIT_LIMIT: int = 12
 const RESOURCE_TICK_RATE: float = 6.0
 const RESOURCE_TICK_MIN_SPEED: float = 12.0
 const BAR_FRAME_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_frame.png")
@@ -86,6 +90,14 @@ const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill
 ## Played (locally, throttled) whenever one of the local player's own units or
 ## buildings takes damage — see _maybe_alert_under_attack.
 @export var on_under_attack_sound_effects: Array[AudioStream] = []
+## Played for the placing player the moment a build order goes out, in place
+## of the generic command sound.
+@export var on_building_placed_sound_effects: Array[AudioStream] = []
+## Played for a building's owner when it finishes construction — relayed from
+## the host, which is the only peer where construction_finished fires.
+@export var on_building_completed_sound_effects: Array[AudioStream] = []
+## Played for the owner when they plant a rally banner.
+@export var on_rally_set_sound_effects: Array[AudioStream] = []
 
 @onready var ui_root: Node = $UI
 @onready var minimap: Control = $UI/BottomBar/MinimapFrame/Minimap
@@ -392,6 +404,7 @@ var _flashing_resource_names: Dictionary = {}
 var _resource_display_totals: Dictionary = {}
 var _impact_process_material: ParticleProcessMaterial
 var _impact_mesh: QuadMesh
+var _rally_dust_material: ParticleProcessMaterial
 var _resource_flash_on: bool = false
 var _resource_flash_tween: Tween
 const RESOURCE_FLASH_CYCLE_COUNT: int = 4
@@ -705,12 +718,21 @@ func _show_damage_feedback(node: Node3D, amount: int) -> void:
 ## mesh are built once in _ready and shared by every burst — only the emitter
 ## node itself is per-hit, and it frees itself once the burst finishes.
 func _spawn_impact_burst(world_pos: Vector3) -> void:
+	_spawn_burst(_impact_process_material, world_pos, 8, 0.35)
+
+## Ring of dust kicked up where a rally banner is planted. Emitted above the
+## grass rather than at ground level — blades are ~0.55m tall and dense enough
+## to swallow a burst that starts on the ground.
+func _spawn_rally_dust(world_pos: Vector3) -> void:
+	_spawn_burst(_rally_dust_material, world_pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 16, 0.5)
+
+func _spawn_burst(material: ParticleProcessMaterial, world_pos: Vector3, amount: int, lifetime: float) -> void:
 	var particles := GPUParticles3D.new()
-	particles.amount = 8
-	particles.lifetime = 0.35
+	particles.amount = amount
+	particles.lifetime = lifetime
 	particles.one_shot = true
 	particles.explosiveness = 1.0
-	particles.process_material = _impact_process_material
+	particles.process_material = material
 	particles.draw_pass_1 = _impact_mesh
 	add_child(particles)
 	particles.global_position = world_pos
@@ -742,6 +764,29 @@ func _build_impact_effect_resources() -> void:
 	mesh.size = Vector2(0.14, 0.14)
 	mesh.material = material
 	_impact_mesh = mesh
+
+	## Emitted from a ring lying flat on the ground and pushed outward by
+	## radial velocity, so it reads as dust thrown out from the banner's base
+	## rather than a puff rising off it.
+	var dust := ParticleProcessMaterial.new()
+	dust.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	dust.emission_ring_axis = Vector3(0, 1, 0)
+	dust.emission_ring_radius = 0.35
+	dust.emission_ring_inner_radius = 0.2
+	dust.emission_ring_height = 0.05
+	dust.direction = Vector3(0, 1, 0)
+	dust.spread = 25.0
+	dust.initial_velocity_min = 0.4
+	dust.initial_velocity_max = 0.9
+	dust.radial_velocity_min = 1.2
+	dust.radial_velocity_max = 2.1
+	dust.damping_min = 1.5
+	dust.damping_max = 2.5
+	dust.gravity = Vector3(0, -1.0, 0)
+	dust.scale_min = 0.5
+	dust.scale_max = 1.1
+	dust.color = Color(0.82, 0.74, 0.6, 0.75)
+	_rally_dust_material = dust
 
 ## Screen shake is per-viewer (rts_camera drops it when the source is off
 ## screen), but the events that cause it only fire on the host — so it relays
@@ -1015,6 +1060,11 @@ func _on_building_construction_finished(building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
 		return
 	_rpc_display_chat.rpc_id(building.owner_peer_id, "Construction complete: %s" % building.building_name)
+	_rpc_building_completed_sound.rpc_id(building.owner_peer_id)
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_building_completed_sound() -> void:
+	AudioUtils.play_random(command_audio_player, on_building_completed_sound_effects)
 
 func _get_dropoff_for(peer_id: int) -> Node3D:
 	var town_center: ProductionBuilding = town_centers.get(peer_id)
@@ -2229,18 +2279,29 @@ func _build_unit_info() -> void:
 	info_panel_name_label.text = "%d units selected" % selected_units.size()
 	_update_portrait(selected_units[0].team_tint, "%d units" % selected_units.size())
 	var portrait_grid := GridContainer.new()
-	portrait_grid.columns = 4
-	portrait_grid.add_theme_constant_override("h_separation", 6)
-	portrait_grid.add_theme_constant_override("v_separation", 6)
-	for unit in selected_units:
+	portrait_grid.columns = SELECTION_PORTRAIT_COLUMNS
+	## Shrink-to-fit, or the columns stretch across the panel and the square
+	## portrait slots come out as wide rectangles.
+	portrait_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	portrait_grid.add_theme_constant_override("h_separation", 5)
+	portrait_grid.add_theme_constant_override("v_separation", 5)
+	## Two rows' worth is all the info panel has room for; the name label above
+	## already reports the true count when the selection runs past that.
+	for i in mini(selected_units.size(), SELECTION_PORTRAIT_LIMIT):
+		var unit := selected_units[i]
 		var cell := VBoxContainer.new()
 		cell.add_theme_constant_override("separation", 3)
-		var portrait := ColorRect.new()
-		portrait.custom_minimum_size = Vector2(36, 36)
-		portrait.color = unit.team_tint
+		var portrait := Button.new()
+		portrait.custom_minimum_size = Vector2(27, 27)
+		portrait.tooltip_text = unit.display_name
+		portrait.add_theme_stylebox_override("normal", _flat_bar_stylebox(unit.team_tint))
+		portrait.add_theme_stylebox_override("hover", _flat_bar_stylebox(unit.team_tint.lightened(0.3)))
+		portrait.add_theme_stylebox_override("pressed", _flat_bar_stylebox(unit.team_tint.darkened(0.2)))
+		portrait.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		portrait.pressed.connect(_on_unit_portrait_pressed.bind(unit))
 		cell.add_child(portrait)
 		var health_bar := ProgressBar.new()
-		health_bar.custom_minimum_size = Vector2(36, 6)
+		health_bar.custom_minimum_size = Vector2(27, 5)
 		health_bar.max_value = 1.0
 		health_bar.step = 0.0
 		health_bar.show_percentage = false
@@ -2250,6 +2311,20 @@ func _build_unit_info() -> void:
 		portrait_grid.add_child(cell)
 		_info_unit_portrait_bars.append(health_bar)
 	info_panel_content.add_child(portrait_grid)
+
+## Clicking one portrait in a multi-unit selection narrows the selection down
+## to just that unit — _process notices selected_units changed and rebuilds the
+## panel into its single-unit form on the next frame.
+func _on_unit_portrait_pressed(unit: Unit) -> void:
+	if not is_instance_valid(unit):
+		return
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	_active_group_number = -1
+	unit.selected = true
+	selected_units.append(unit)
+	unit.play_select_sound()
 
 func _refresh_unit_info_values() -> void:
 	if selected_units.size() == 1:
@@ -2428,6 +2503,8 @@ func _set_rally_point(screen_pos: Vector2) -> void:
 	selected_building.rally_target_path = target_path
 	selected_building.has_rally_point = true
 	_update_rally_marker()
+	_spawn_rally_dust(result.position)
+	AudioUtils.play_random(command_audio_player, on_rally_set_sound_effects)
 	_rpc_set_rally_point.rpc_id(1, selected_building.get_path(), result.position, target_path)
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2456,32 +2533,9 @@ func _update_rally_marker() -> void:
 func _ensure_rally_marker() -> void:
 	if rally_marker:
 		return
-	rally_marker = Node3D.new()
+	rally_marker = RALLY_BANNER_SCENE.instantiate()
+	rally_marker.scale = Vector3.ONE * 0.8
 	add_child(rally_marker)
-
-	var pole := MeshInstance3D.new()
-	var pole_mesh := CylinderMesh.new()
-	pole_mesh.top_radius = 0.05
-	pole_mesh.bottom_radius = 0.05
-	pole_mesh.height = 1.4
-	pole.mesh = pole_mesh
-	pole.position = Vector3(0, 0.7, 0)
-	var pole_mat := StandardMaterial3D.new()
-	pole_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	pole_mat.albedo_color = Color(0.9, 0.9, 0.9)
-	pole.set_surface_override_material(0, pole_mat)
-	rally_marker.add_child(pole)
-
-	var flag := MeshInstance3D.new()
-	var flag_mesh := BoxMesh.new()
-	flag_mesh.size = Vector3(0.5, 0.3, 0.02)
-	flag.mesh = flag_mesh
-	flag.position = Vector3(0.27, 1.15, 0)
-	var flag_mat := StandardMaterial3D.new()
-	flag_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flag_mat.albedo_color = Color(1.0, 0.85, 0.2)
-	flag.set_surface_override_material(0, flag_mat)
-	rally_marker.add_child(flag)
 
 ## --- Hover highlight ---
 
@@ -2855,7 +2909,7 @@ func _confirm_placement() -> void:
 	var placed_type := placing_type
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
 	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths, shift_held)
-	_play_command_sound()
+	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
 
 	## Holding Shift keeps the same builders and stays in placement mode
 	## (re-arming the same building type) so the next click queues another
@@ -3363,7 +3417,7 @@ func _confirm_wall_placement() -> void:
 		directions.append(piece["direction"])
 		kinds.append(piece["kind"])
 	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths)
-	_play_command_sound()
+	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
@@ -3543,7 +3597,7 @@ func _confirm_gate_placement() -> void:
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _gate_target.get_path()
 	_rpc_request_build_gate.rpc_id(1, type_index, target_path, _pending_builder_paths)
-	_play_command_sound()
+	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
