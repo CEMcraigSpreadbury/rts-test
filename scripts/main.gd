@@ -1,8 +1,8 @@
 extends Node3D
 
-const TEAM_COLORS: Array[Color] = [
-	Color(0.25, 0.55, 1.0), Color(1.0, 0.35, 0.3), Color(0.35, 1.0, 0.45), Color(1.0, 0.85, 0.3)
-]
+## The team color palette lives on Network (Network.TEAM_COLORS) rather than
+## here, so the lobby offers exactly the choices this scene spawns players
+## with. get_team_tint() below resolves a peer's actual color.
 
 ## Command-card hotkeys. The camera reads W/A/S/D/Q/E via raw Input.is_key_pressed()
 ## polling every frame (see rts_camera.gd), completely bypassing _unhandled_input,
@@ -452,19 +452,10 @@ func _ready() -> void:
 	Network.server_disconnected.connect(_on_network_server_disconnected)
 	_build_opponent_left_panel()
 
-	## Built in code rather than saved in the scene — it's just a full-screen
-	## color wash, nothing worth hand-authoring, and this avoids yet another
-	## edit to the already-enormous main.tscn.
-	_under_attack_flash = ColorRect.new()
-	_under_attack_flash.color = Color(1.0, 0.15, 0.1, 0.0)
-	_under_attack_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_under_attack_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
-	ui_root.add_child(_under_attack_flash)
-
 	## Live "N segments — cost" readout for the wall drag tool — built here
-	## rather than in main.tscn for the same reason as _under_attack_flash: a
-	## small always-on-top overlay isn't worth another hand-edit to an already
-	## enormous scene file. Hidden except mid-drag; see _rebuild_wall_ghost().
+	## rather than in main.tscn: a small always-on-top overlay isn't worth
+	## another hand-edit to an already enormous scene file. Hidden except
+	## mid-drag; see _rebuild_wall_ghost().
 	_wall_drag_label = Label.new()
 	_wall_drag_label.visible = false
 	_wall_drag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -518,12 +509,21 @@ func _spawn_all_players() -> void:
 	for i in peer_ids.size():
 		_spawn_player_base(peer_ids[i], i)
 
-## Public lookup so scripts outside main.gd (e.g. objective.gd, reached via
-## get_tree().current_scene) can re-tint a unit/building on a post-spawn
-## ownership change without duplicating TEAM_COLORS/team_index_by_peer.
+## The color this player chose in the lobby, and the single place that answer
+## comes from — every spawn path here and scripts outside main.gd (objective.gd
+## re-tinting a captured building, reached via get_tree().current_scene) go
+## through this rather than resolving a palette entry themselves.
+##
+## Falls back to the palette by join order for anyone who reaches a match
+## without a choice: the established run-main.tscn-straight-from-the-editor
+## workflow bypasses the lobby entirely, so Network.players is empty there and
+## nobody ever picked.
 func get_team_tint(peer_id: int) -> Color:
+	var chosen: Color = Network.players.get(peer_id, {}).get("color", Color.WHITE)
+	if chosen != Color.WHITE:
+		return chosen
 	var team_index: int = team_index_by_peer.get(peer_id, 0)
-	return TEAM_COLORS[team_index % TEAM_COLORS.size()]
+	return Network.TEAM_COLORS[team_index % Network.TEAM_COLORS.size()]
 
 ## index < 0 (or unset) defaults everyone to available_factions[0] — the safe
 ## fallback for the established direct-run-main.tscn-in-editor workflow, which
@@ -534,8 +534,8 @@ func _faction_for_peer(peer_id: int) -> Faction:
 
 func _spawn_player_base(peer_id: int, index: int) -> void:
 	var spawn_point: PlayerSpawnPoint = player_spawn_points.get_child(index % player_spawn_points.get_child_count())
-	var tint: Color = TEAM_COLORS[index % TEAM_COLORS.size()]
 	team_index_by_peer[peer_id] = index
+	var tint: Color = get_team_tint(peer_id)
 	var faction: Faction = _faction_for_peer(peer_id)
 	faction_by_peer[peer_id] = faction
 
@@ -820,13 +820,12 @@ func _rpc_impact_shake(world_pos: Vector3, amount: float) -> void:
 ## Purely local per-viewer decision (this runs identically for every peer,
 ## on both the host's immediate call and every client's relayed RPC) — only
 ## fires when it's specifically *this* viewer's own stuff being hit, throttled
-## so a sustained attack pings/flashes once every few seconds instead of once
-## per hit. Records where, so KEY_BACKSPACE can jump the camera there.
+## so a sustained attack pings once every few seconds instead of once per hit.
+## Records where, so KEY_BACKSPACE can jump the camera there.
 const UNDER_ATTACK_ALERT_COOLDOWN_MS: int = 6000
 var _last_under_attack_alert_ms: int = -UNDER_ATTACK_ALERT_COOLDOWN_MS
 var _last_attack_position: Vector3 = Vector3.ZERO
 var _has_attack_alert: bool = false
-var _under_attack_flash: ColorRect
 
 func _maybe_alert_under_attack(node: Node3D) -> void:
 	var node_owner_peer_id: int = -1
@@ -843,10 +842,7 @@ func _maybe_alert_under_attack(node: Node3D) -> void:
 	_last_attack_position = node.global_position
 	_has_attack_alert = true
 	AudioUtils.play_random(command_audio_player, on_under_attack_sound_effects)
-	_under_attack_flash.color.a = 0.0
-	var tween := create_tween()
-	tween.tween_property(_under_attack_flash, "color:a", 0.35, 0.1)
-	tween.tween_property(_under_attack_flash, "color:a", 0.0, 1.0)
+	minimap.show_attack_ping(node.global_position)
 
 func _jump_to_last_attack() -> void:
 	if not _has_attack_alert:
@@ -1001,8 +997,8 @@ func _on_return_to_lobby_pressed() -> void:
 	Network.leave_game()
 	get_tree().change_scene_to_file("res://scenes/lobby.tscn")
 
-## Built in code rather than added to main.tscn, same reasoning as
-## _under_attack_flash above — this is small and only needs to exist at all
+## Built in code rather than added to main.tscn, same reasoning as the wall
+## drag label above — this is small and only needs to exist at all
 ## once Quick Play makes opponent disconnects a routine occurrence rather
 ## than the rare LAN-friend-crashed case it used to be.
 var _opponent_left_panel: PanelContainer = null
@@ -1072,13 +1068,12 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	## of them across the map trying to resolve it. A small jitter keeps spawns
 	## from ever landing exactly on top of each other.
 	spawn_pos += Vector3(randf_range(-0.6, 0.6), 0.0, randf_range(-0.6, 0.6))
-	var team_index: int = team_index_by_peer.get(building.owner_peer_id, 0)
 	## population_cost isn't passed here — the spawned scene's own Unit.population_cost
 	## (set right on the unit for balancing, see get_population_cost()) is already authoritative.
 	var unit: Unit = unit_spawner.spawn({
 		"scene_path": item.unit_scene.resource_path,
 		"peer_id": building.owner_peer_id,
-		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+		"tint": get_team_tint(building.owner_peer_id),
 		"position": spawn_pos,
 	})
 	_relay_building_squash(building)
@@ -3377,12 +3372,11 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 	if deposit:
 		deposit.is_claimed = true
 
-	var team_index: int = team_index_by_peer.get(sender_id, 0)
 	var spawn_data: Dictionary = {
 		"scene_path": building_type.scene.resource_path,
 		"peer_id": sender_id,
 		"position": build_pos,
-		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+		"tint": get_team_tint(sender_id),
 	}
 	if deposit:
 		spawn_data["deposit_path"] = deposit.get_path()
@@ -3904,7 +3898,6 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 		return
 	ResourceStockpile.spend(sender_id, merged_costs)
 
-	var team_index: int = team_index_by_peer.get(sender_id, 0)
 	var spawned_buildings: Array[ProductionBuilding] = []
 	for i in count:
 		var kind: String = kinds[i]
@@ -3917,7 +3910,7 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 			"peer_id": sender_id,
 			"position": positions[i],
 			"rotation": rot_basis.get_euler(),
-			"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+			"tint": get_team_tint(sender_id),
 		}
 		var spawned: Node = building_spawner.spawn(spawn_data)
 		if spawned is ProductionBuilding:
@@ -4040,7 +4033,6 @@ func _rpc_request_build_gate(type_index: int, target_path: NodePath, builder_pat
 
 	var replace_pos: Vector3 = target.global_position
 	var replace_rot: Vector3 = target.rotation
-	var team_index: int = team_index_by_peer.get(sender_id, 0)
 	target.queue_free()
 
 	var spawn_data: Dictionary = {
@@ -4048,7 +4040,7 @@ func _rpc_request_build_gate(type_index: int, target_path: NodePath, builder_pat
 		"peer_id": sender_id,
 		"position": replace_pos,
 		"rotation": replace_rot,
-		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
+		"tint": get_team_tint(sender_id),
 	}
 	var spawned: Node = building_spawner.spawn(spawn_data)
 	if spawned is ProductionBuilding:

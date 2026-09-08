@@ -36,6 +36,21 @@ const MAX_PLAYERS: int = 4
 ## players into some other project's test lobby.
 const GAME_LOBBY_TAG: String = "rts-test"
 
+## The team colors players choose between in the lobby. Also the fallback
+## assignment, by join order, for anything that bypasses the lobby entirely —
+## notably the established run-main.tscn-straight-from-the-editor workflow,
+## which never populates `players` at all.
+##
+## Kept here rather than in main.gd because both ends need it: the lobby to
+## offer the choice, main.gd to color what gets spawned. Buildings recolor
+## only the blue parts of their texture to this (see team_color.gdshader), so
+## these want to stay reasonably saturated — a near-grey or near-white choice
+## reads as unpainted stone rather than as a team.
+const TEAM_COLORS: Array[Color] = [
+	Color(0.25, 0.55, 1.0), Color(1.0, 0.35, 0.3), Color(0.35, 1.0, 0.45), Color(1.0, 0.85, 0.3)
+]
+const TEAM_COLOR_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
+
 ## peer_id -> { "name": String, "color": Color, "faction_index": int, "ready": bool }
 var players: Dictionary = {}
 
@@ -64,7 +79,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	players.clear()
-	players[1] = {"name": "Host", "color": Color.WHITE, "faction_index": 0, "ready": false}
+	players[1] = {"name": "Host", "color": TEAM_COLORS[0], "faction_index": 0, "ready": false}
 	return OK
 
 func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
@@ -166,7 +181,7 @@ func _on_steam_lobby_created(connection: int, lobby_id: int) -> void:
 	peer.create_host(0)
 	multiplayer.multiplayer_peer = peer
 	players.clear()
-	players[my_peer_id()] = {"name": Steamworks.steam_username, "color": Color.WHITE, "faction_index": 0, "ready": false}
+	players[my_peer_id()] = {"name": Steamworks.steam_username, "color": TEAM_COLORS[0], "faction_index": 0, "ready": false}
 	_quick_play_searching = false
 	steam_lobby_ready.emit(lobby_id)
 
@@ -222,7 +237,15 @@ func my_peer_id() -> int:
 func _on_peer_connected(id: int) -> void:
 	players[id] = {"name": "Player %d" % id, "color": Color.WHITE, "faction_index": 0, "ready": false}
 	if is_host():
+		## Only the host sees every player's pick, so it owns color assignment
+		## outright — clients each guessing a default locally is exactly how two
+		## players end up the same color. Assigned before the sync below so the
+		## joiner receives its own color in that same snapshot, then broadcast
+		## so the peers who were already here learn it too (they only ever get
+		## this callback, never _sync_player_list).
+		players[id]["color"] = _first_free_color()
 		_sync_player_list.rpc_id(id, players)
+		_rpc_color_changed.rpc(id, players[id]["color"])
 	player_connected.emit(id)
 
 func _on_peer_disconnected(id: int) -> void:
@@ -304,6 +327,76 @@ func _apply_faction_change(peer_id: int, index: int) -> void:
 func _rpc_faction_changed(peer_id: int, index: int) -> void:
 	if players.has(peer_id):
 		players[peer_id]["faction_index"] = index
+	player_updated.emit(peer_id)
+
+## --- Team color selection (lobby only) ---
+##
+## Same host-relay shape as faction selection above, with one extra rule: two
+## players must never share a color, or telling their buildings apart on the
+## field stops working. Only the host sees everyone's current pick, so the
+## host alone decides — a client can propose, never apply.
+
+func set_my_color(index: int) -> void:
+	if index < 0 or index >= TEAM_COLORS.size():
+		return
+	if is_host():
+		_apply_color_change(my_peer_id(), TEAM_COLORS[index])
+	else:
+		_rpc_request_color.rpc_id(1, index)
+
+## The palette index a peer is currently on, or -1 for a color that isn't one
+## of the presets (nothing sets that today, but a saved custom color would).
+func color_index_of(peer_id: int) -> int:
+	return TEAM_COLORS.find(players.get(peer_id, {}).get("color", Color.WHITE))
+
+## Colors no other player has claimed — what the lobby offers this peer.
+func available_color_indices(peer_id: int) -> Array[int]:
+	var out: Array[int] = []
+	for i in TEAM_COLORS.size():
+		if _color_holder(TEAM_COLORS[i], peer_id) == 0:
+			out.append(i)
+	return out
+
+## The peer already using `color`, ignoring `except_peer_id`, or 0 for nobody.
+func _color_holder(color: Color, except_peer_id: int) -> int:
+	for id in players:
+		if id != except_peer_id and players[id].get("color", Color.WHITE) == color:
+			return id
+	return 0
+
+func _first_free_color() -> Color:
+	for color in TEAM_COLORS:
+		if _color_holder(color, 0) == 0:
+			return color
+	## Only reachable past MAX_PLAYERS, which the transports already cap.
+	return TEAM_COLORS[0]
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_color(index: int) -> void:
+	if not is_host() or index < 0 or index >= TEAM_COLORS.size():
+		return
+	_apply_color_change(multiplayer.get_remote_sender_id(), TEAM_COLORS[index])
+
+func _apply_color_change(peer_id: int, color: Color) -> void:
+	if not players.has(peer_id):
+		return
+	if _color_holder(color, peer_id) != 0:
+		## Taken. Re-broadcast the color they still have rather than staying
+		## silent, so the asking player's own picker snaps back to reality
+		## instead of sitting on a choice that never took.
+		var unchanged: Color = players[peer_id].get("color", Color.WHITE)
+		player_updated.emit(peer_id)
+		_rpc_color_changed.rpc(peer_id, unchanged)
+		return
+	players[peer_id]["color"] = color
+	player_updated.emit(peer_id)
+	if is_host():
+		_rpc_color_changed.rpc(peer_id, color)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_color_changed(peer_id: int, color: Color) -> void:
+	if players.has(peer_id):
+		players[peer_id]["color"] = color
 	player_updated.emit(peer_id)
 
 ## --- Ready-up (lobby only) ---

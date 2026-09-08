@@ -157,6 +157,27 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 					if faction_index < available_factions.size() else "?"
 			row.add_child(faction_label)
 
+		var swatch := ColorRect.new()
+		swatch.color = Network.players[id].get("color", Color.WHITE)
+		swatch.custom_minimum_size = Vector2(24, 24)
+		row.add_child(swatch)
+
+		if id == Network.my_peer_id():
+			var color_option := OptionButton.new()
+			var available: Array[int] = Network.available_color_indices(id)
+			var color_index: int = Network.color_index_of(id)
+			for i in Network.TEAM_COLORS.size():
+				color_option.add_item(Network.TEAM_COLOR_NAMES[i])
+				## A color someone else already holds stays listed but
+				## unpickable, rather than being dropped — otherwise the
+				## entries would shuffle position under the player's cursor
+				## every time another player changed theirs.
+				color_option.set_item_disabled(i, not available.has(i) and i != color_index)
+			if color_index >= 0:
+				color_option.select(color_index)
+			color_option.item_selected.connect(Network.set_my_color)
+			row.add_child(color_option)
+
 		var ready_check := CheckButton.new()
 		ready_check.text = "Ready"
 		ready_check.button_pressed = Network.players[id].get("ready", false)

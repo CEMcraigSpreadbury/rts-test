@@ -11,6 +11,12 @@ const BUILDING_DOT_RADIUS: float = 4.0
 const FRUSTUM_COLOR: Color = Color(1, 1, 1, 0.6)
 const PING_COLOR: Color = Color(1.0, 0.85, 0.1, 1.0)
 const PING_DURATION: float = 3.0
+const ATTACK_PING_COLOR: Color = Color(1.0, 0.2, 0.15, 1.0)
+const ATTACK_PING_DURATION: float = 4.0
+## Three expanding rings staggered over the ping's life, so an under-attack
+## warning reads as a repeated pulse rather than the single ripple a
+## communication ping draws.
+const ATTACK_PING_PULSES: int = 3
 
 ## Right-click-to-ping: main.gd relays this out to every player (see
 ## show_ping()) once the host has confirmed it, so it's driven externally
@@ -19,6 +25,12 @@ signal ping_requested(world_pos: Vector3)
 
 var _ping_local_pos: Vector2 = Vector2.ZERO
 var _ping_time_left: float = 0.0
+
+## Kept separate from the communication ping above so an attack warning and a
+## teammate's ping can be on screen at the same time without one erasing the
+## other.
+var _attack_ping_local_pos: Vector2 = Vector2.ZERO
+var _attack_ping_time_left: float = 0.0
 
 @onready var fog: FogOfWar = owner.get_node(^"FogOfWar")
 @onready var camera_rig: Node3D = owner.get_node(^"CameraRig")
@@ -32,6 +44,8 @@ func _my_peer_id() -> int:
 func _process(delta: float) -> void:
 	if _ping_time_left > 0.0:
 		_ping_time_left = maxf(_ping_time_left - delta, 0.0)
+	if _attack_ping_time_left > 0.0:
+		_attack_ping_time_left = maxf(_attack_ping_time_left - delta, 0.0)
 	## Fog only updates a few times a second, but unit dots should move
 	## smoothly, so just redraw every frame — this is a tiny Control.
 	queue_redraw()
@@ -41,6 +55,12 @@ func _process(delta: float) -> void:
 func show_ping(world_pos: Vector3) -> void:
 	_ping_local_pos = _world_to_local(world_pos)
 	_ping_time_left = PING_DURATION
+
+## Called by main.gd when something of this viewer's own is being attacked —
+## see _maybe_alert_under_attack. Purely local, already throttled there.
+func show_attack_ping(world_pos: Vector3) -> void:
+	_attack_ping_local_pos = _world_to_local(world_pos)
+	_attack_ping_time_left = ATTACK_PING_DURATION
 
 func _world_to_local(world_pos: Vector3) -> Vector2:
 	var u := (world_pos.x - fog.map_origin.x) / fog.map_size.x
@@ -89,6 +109,24 @@ func _draw() -> void:
 		var color := PING_COLOR
 		color.a = 1.0 - t
 		draw_arc(_ping_local_pos, lerpf(2.0, 12.0, t), 0.0, TAU, 16, color, 2.0)
+	if _attack_ping_time_left > 0.0:
+		var at: float = 1.0 - _attack_ping_time_left / ATTACK_PING_DURATION
+		## Only fade over the last quarter, so the warning stays at full
+		## strength for most of its life instead of dimming immediately.
+		var fade: float = clampf(_attack_ping_time_left / (ATTACK_PING_DURATION * 0.25), 0.0, 1.0)
+		## Solid core that throbs underneath the rings — a moving blob is much
+		## easier to catch out of the corner of your eye than outlines alone.
+		var throb: float = 0.5 + 0.5 * sin(at * ATTACK_PING_DURATION * TAU)
+		var core := ATTACK_PING_COLOR
+		core.a = fade
+		draw_circle(_attack_ping_local_pos, lerpf(3.5, 6.0, throb), core)
+		for i in ATTACK_PING_PULSES:
+			## Each pulse is the same ripple offset a third of a cycle along,
+			## wrapped so they chase each other outwards for the whole duration.
+			var pt: float = fmod(at * float(ATTACK_PING_PULSES) + float(i) / float(ATTACK_PING_PULSES), 1.0)
+			var acolor := ATTACK_PING_COLOR
+			acolor.a = (1.0 - pt * pt) * fade
+			draw_arc(_attack_ping_local_pos, lerpf(4.0, 26.0, pt), 0.0, TAU, 24, acolor, 3.0)
 
 ## Approximates what the main camera currently frames by ray-casting its four
 ## viewport corners onto the ground plane — gives a properly perspective-skewed

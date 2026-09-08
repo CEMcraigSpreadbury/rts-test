@@ -1,0 +1,46 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" uid="uid://dqr2prd6077l0" path="res://assets/art/MiniBigMonsters/Outline/MiniDarkLord-Sheet.png" id="2_sheet"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="4_food"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="5_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_dark_lord_food"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_food")
+amount = 180
+
+[sub_resource type="Resource" id="ResourceCost_dark_lord_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("5_gold")
+amount = 200
+
+[node name="DarkLord" instance=ExtResource("1_unit")]
+display_name = "Dark Lord"
+move_speed = 2.6
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_dark_lord_food"), SubResource("ResourceCost_dark_lord_gold")])
+population_cost = 4
+sprite_sheet = ExtResource("2_sheet")
+sprite_cell_size = Vector2i(40, 32)
+idle_frame_count = 8
+walk_row = 1
+walk_frame_count = 8
+attack_row = 3
+attack_frame_count = 11
+death_row = 6
+death_frame_count = 5
+gather_row = 2
+gather_frame_count = 3
+can_gather = false
+can_build = false
+max_health = 260
+attack_damage = 44
+attack_range = 1.8
+attack_cooldown = 1.4
+aggro_range = 9.0
+weak_to = 4
+vision_range = 10.0
+
+[node name="Sprite" parent="." index="1"]
+transform = Transform3D(1.25, 0, 0, 0, 1.25, 0, 0, 0, 1.25, 0, 0.93, 0)

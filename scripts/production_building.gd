@@ -21,6 +21,10 @@ signal damaged(amount: int)
 signal projectile_fired(target: Node3D)
 
 const DESTROY_SINK_DURATION: float = 1.5
+## Most items a building will hold at once, counting the one it's currently
+## working on — enqueue() refuses anything past this (and, since nothing is
+## charged for a refused order, the player keeps their resources).
+const MAX_QUEUE_SIZE: int = 7
 
 @export var building_name: String = "Production Building"
 ## The single source of truth for what this building costs to construct —
@@ -51,9 +55,15 @@ const DESTROY_SINK_DURATION: float = 1.5
 ## and gold still get hauled back to the Town Center rather than to whichever
 ## Mill happens to be closer.
 @export var dropoff_resource_types: Array[ResourceType] = []
-## Set alongside owner_peer_id at spawn time; used only for the minimap dot
-## color (buildings have no sprite to modulate the way units do).
-@export var team_tint: Color = Color.WHITE
+## Set alongside owner_peer_id at spawn time. Drives the minimap dot color and
+## the team_color.gdshader recolor of the model's blue parts (its flags,
+## banners and painted panels) — the wood, thatch and stone stay as painted.
+## Setter-driven so a post-spawn ownership change (objective.gd capturing a
+## building) re-tints it immediately rather than only ever applying at spawn.
+@export var team_tint: Color = Color.WHITE:
+	set(value):
+		team_tint = value
+		_apply_team_color()
 ## Set once a ProducibleItem with kind == UPGRADE and unlocks_monarch_promotion
 ## completes on this building (see main.gd:_on_building_item_completed).
 ## Mirrored to non-authoritative peers so their own command panel can tell
@@ -184,12 +194,17 @@ var _next_squash_msec: int = 0
 var _flash_meshes: Array[MeshInstance3D] = []
 var _flash_material: StandardMaterial3D
 var _flash_tween: Tween
+## MeshInstance3D -> Array[Material], as the model shipped. See _capture_source_materials().
+var _source_materials: Dictionary = {}
 
 func _ready() -> void:
 	current_health = max_health
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_collect_visuals()
+	## team_tint is normally assigned at spawn time, before there is a tree to
+	## walk, so the setter's own call is a no-op and this is where it lands.
+	_apply_team_color()
 
 func _collect_visuals() -> void:
 	for child in get_children():
@@ -200,6 +215,56 @@ func _collect_visuals() -> void:
 				_model_roots.append(child)
 				_model_base_scales.append((child as Node3D).scale)
 				_flash_meshes.append_array(meshes)
+	_capture_source_materials()
+
+## The material every model surface shipped with, taken once before any team
+## recolor so re-tinting (an objective building changing hands mid-match)
+## always rebuilds from the original art rather than from the previous team's
+## already-recolored version — recoloring a recolor would drift the hue.
+func _capture_source_materials() -> void:
+	for mesh_instance in _flash_meshes:
+		var surface_count: int = mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
+		var sources: Array = []
+		for i in surface_count:
+			sources.append(mesh_instance.get_active_material(i))
+		_source_materials[mesh_instance] = sources
+
+## Puts every model surface on shaders/team_color.gdshader, which repaints
+## just the blue parts of the texture (flags, banners, painted panels) in
+## team_tint and leaves wood, thatch and stone exactly as painted.
+##
+## A no-op before _ready — team_tint's setter usually fires at spawn time,
+## when _flash_meshes/_source_materials haven't been collected yet, so _ready()
+## calls this again once they have.
+func _apply_team_color() -> void:
+	if _source_materials.is_empty():
+		return
+	## Color.WHITE is the "no team assigned" default — a placement ghost, or a
+	## building sitting in a scene opened straight in the editor — not a real
+	## team choice. It also has zero saturation, so recoloring with it would
+	## drain the blue parts to grey rather than leave them alone. Either way
+	## the right answer is the art exactly as painted.
+	var untinted: bool = team_tint == Color.WHITE
+	for mesh_instance in _source_materials:
+		if not is_instance_valid(mesh_instance):
+			continue
+		var sources: Array = _source_materials[mesh_instance]
+		var team_materials: Array = []
+		for i in sources.size():
+			var team_material: Material = sources[i] if untinted else TeamColorMaterial.build(
+				sources[i], team_tint, TeamColorMaterial.TEAM_SHADER
+			)
+			team_materials.append(team_material)
+			mesh_instance.set_surface_override_material(i, team_material)
+
+		## Re-tinting mid-construction (a half-built objective changing hands)
+		## has to leave the see-through version on the surface and hand the
+		## fresh opaque one to _restore_materials for when it finishes, rather
+		## than snapping the site to solid early.
+		if _construction_visual_applied and _original_materials.has(mesh_instance):
+			_original_materials[mesh_instance]["materials"] = team_materials
+			for i in team_materials.size():
+				mesh_instance.set_surface_override_material(i, _construction_ghost_for(team_materials[i]))
 	_flash_material = StandardMaterial3D.new()
 	_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -280,6 +345,8 @@ func remove_builder(unit: Unit) -> void:
 
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.get_costs()):
+		return false
+	if queue.size() >= MAX_QUEUE_SIZE:
 		return false
 	if item.kind == ProducibleItem.Kind.UPGRADE:
 		if _purchased_upgrades.has(item) or queue.has(item):
@@ -499,6 +566,21 @@ func _update_construction_visual() -> void:
 
 const _CONSTRUCTION_ALPHA: float = 0.45
 
+## The see-through version of one surface's material. A team-colored surface
+## has to fade its recolored self — swapping in a plain StandardMaterial3D
+## would drop both the team color and (since these models keep their art in an
+## emission map, not an albedo one) the texture itself, leaving a white box.
+func _construction_ghost_for(base: Material) -> Material:
+	if base is ShaderMaterial:
+		return TeamColorMaterial.to_construction_variant(base, _CONSTRUCTION_ALPHA)
+	var ghost: StandardMaterial3D = base.duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+	ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ghost.albedo_color.a = _CONSTRUCTION_ALPHA
+	## Same render-priority fix as the placement ghost (main.gd) — grass
+	## alpha-blends at priority 0 too and would otherwise draw over this.
+	ghost.render_priority = 1
+	return ghost
+
 func _apply_construction_transparency() -> void:
 	_original_materials.clear()
 	_tint_recursive(self)
@@ -518,13 +600,7 @@ func _tint_recursive(node: Node) -> void:
 		for i in surface_count:
 			originals.append(mesh_instance.get_surface_override_material(i))
 			var base: Material = mesh_instance.get_active_material(i)
-			var ghost: StandardMaterial3D = base.duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
-			ghost.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			ghost.albedo_color.a = _CONSTRUCTION_ALPHA
-			## Same render-priority fix as the placement ghost (main.gd) — grass
-			## alpha-blends at priority 0 too and would otherwise draw over this.
-			ghost.render_priority = 1
-			mesh_instance.set_surface_override_material(i, ghost)
+			mesh_instance.set_surface_override_material(i, _construction_ghost_for(base))
 		if surface_count > 0:
 			_original_materials[mesh_instance] = {
 				"materials": originals,
