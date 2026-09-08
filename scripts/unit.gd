@@ -98,6 +98,9 @@ signal damaged(amount: int)
 ## resource's display_color directly (rather than the ResourceType resource
 ## itself) since that's all the popup needs and it's trivially RPC-safe.
 signal resource_deposited(amount: int, color: Color)
+## Emitted on each harvest tick (host only, like the gathering itself) so
+## main.gd can relay the node's squash animation out to every peer.
+signal resource_harvested(node: Gatherable)
 ## Host-only, never relayed to other peers (order_queue itself isn't
 ## networked — only the host ever advances it, same as every other combat/
 ## movement decision). Fired the moment a command naturally runs its course
@@ -256,28 +259,45 @@ func _update_team_tint_visual() -> void:
 ## Inspector-configurable (amount/color/spread/etc. all live on the node
 ## itself) — see _process() for when it's toggled on/off.
 @onready var walk_dust: GPUParticles3D = get_node_or_null("WalkDust")
-## Shared by selection and order-acknowledgment sounds — both are short,
-## non-overlapping-in-practice one-shots, so a second dedicated player isn't
-## worth another node per unit scene.
+## Positional — the battlefield half of this unit's voice, which currently
+## means just its attack bark. See _order_sound_player.
 @onready var unit_audio_player: AudioStreamPlayer3D = $UnitAudioPlayer
+## Non-positional — feedback on the local player's own click (selecting this
+## unit, and acknowledging orders given to it). Same reasoning, and the same
+## node name, as main.gd's own CommandAudioPlayer: this is interface feedback
+## rather than something happening at a world location, so attenuating it by
+## camera distance only makes your own units harder to hear.
+@onready var command_audio_player: AudioStreamPlayer = $CommandAudioPlayer
 
+## Always interface feedback: selection is only ever triggered locally, on the
+## selecting player's own machine, and never relayed.
 func play_select_sound() -> void:
-	AudioUtils.play_random(unit_audio_player, on_select_sound_effects)
+	AudioUtils.play_random(command_audio_player, on_select_sound_effects)
 
 func play_order_sound(kind: OrderSoundKind) -> void:
+	var player = _order_sound_player(kind)
 	match kind:
 		OrderSoundKind.MOVE:
-			AudioUtils.play_random(unit_audio_player, on_move_sound_effects)
+			AudioUtils.play_random(player, on_move_sound_effects)
 		OrderSoundKind.ATTACK:
-			AudioUtils.play_random(unit_audio_player, on_attack_sound_effects)
+			AudioUtils.play_random(player, on_attack_sound_effects)
 		OrderSoundKind.PATROL:
-			AudioUtils.play_random(unit_audio_player, on_patrol_sound_effects)
+			AudioUtils.play_random(player, on_patrol_sound_effects)
 		OrderSoundKind.BUILD:
-			AudioUtils.play_random(unit_audio_player, on_build_sound_effects)
+			AudioUtils.play_random(player, on_build_sound_effects)
 		OrderSoundKind.STOP:
-			AudioUtils.play_random(unit_audio_player, on_stop_sound_effects)
+			AudioUtils.play_random(player, on_stop_sound_effects)
 		OrderSoundKind.GATHER:
-			AudioUtils.play_random(unit_audio_player, on_gather_sound_effects)
+			AudioUtils.play_random(player, on_gather_sound_effects)
+
+## Attack keeps the positional player — it reads as a battlefield sound rather
+## than an interface one. Every other acknowledgment is pure interface feedback.
+## No owner check is needed either way: an order sound only ever reaches the
+## peer that gave the order (see main.gd's _play_unit_order_sound), so this is
+## always the local player's own unit. Untyped return for the same duck-typing
+## reason as AudioUtils.play_random.
+func _order_sound_player(kind: OrderSoundKind):
+	return unit_audio_player if kind == OrderSoundKind.ATTACK else command_audio_player
 
 var selected: bool = false:
 	set(value):
@@ -1164,18 +1184,54 @@ func _tick_gathering(delta: float) -> void:
 	if gather_timer >= interval:
 		gather_timer = 0.0
 		var amount: int = target_resource.resource_type.gather_amount_per_tick * gather_level
-		status_carried_amount += target_resource.gather(amount)
+		var node := target_resource
+		status_carried_amount += node.gather(amount)
+		if is_instance_valid(node):
+			resource_harvested.emit(node)
 
 	if status_carried_amount >= carry_capacity or not is_instance_valid(target_resource):
 		_head_to_dropoff()
 
 func _head_to_dropoff() -> void:
-	if dropoff_point == null or status_carried_amount <= 0:
+	if status_carried_amount <= 0:
+		_head_to_resource()
+		return
+	## Re-resolved on every trip rather than staying fixed to whatever
+	## command_gather was handed, so a farmer walks to whichever Mill is
+	## actually nearest right now — and so a drop-off built or destroyed
+	## mid-gather is accounted for instead of stranding this unit.
+	var nearest := _nearest_dropoff()
+	if nearest != null:
+		dropoff_point = nearest
+	if not is_instance_valid(dropoff_point):
+		dropoff_point = null
 		_head_to_resource()
 		return
 	status_activity = Activity.TO_DROPOFF
 	nav_agent.target_desired_distance = DROPOFF_ARRIVAL_DISTANCE
 	move_to(dropoff_point.global_position)
+
+## Closest DropoffPoint marker on a finished building this player owns that
+## accepts what's currently being carried — a Mill only takes Food, so wood
+## and gold keep going back to the Town Center. Host-only, like everything
+## else driven from _physics_process.
+func _nearest_dropoff() -> Node3D:
+	var best: Node3D = null
+	var best_distance: float = INF
+	for node in get_tree().get_nodes_in_group("dropoff_points"):
+		var building := node as ProductionBuilding
+		if building == null or building.owner_peer_id != owner_peer_id or building.is_under_construction:
+			continue
+		if not building.accepts_dropoff(status_carried_type):
+			continue
+		var point: Node3D = building.get_node_or_null("DropoffPoint")
+		if point == null:
+			continue
+		var distance: float = global_position.distance_to(point.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = point
+	return best
 
 func _deposit_and_continue() -> void:
 	if status_carried_amount > 0 and status_carried_type != null:

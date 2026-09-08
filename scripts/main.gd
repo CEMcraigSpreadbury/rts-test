@@ -96,6 +96,11 @@ const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill
 ## Played for a building's owner when it finishes construction — relayed from
 ## the host, which is the only peer where construction_finished fires.
 @export var on_building_completed_sound_effects: Array[AudioStream] = []
+## Played when a placement click lands somewhere the current ghost can't
+## actually go. Placement mode deliberately stays armed afterward, so this is
+## the only feedback the player gets that the click did nothing — see
+## _confirm_placement.
+@export var on_placement_blocked_sound_effects: Array[AudioStream] = []
 ## Played for the owner when they plant a rally banner.
 @export var on_rally_set_sound_effects: Array[AudioStream] = []
 
@@ -104,6 +109,9 @@ const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill
 
 func _play_command_sound() -> void:
 	AudioUtils.play_random(command_audio_player, on_command_sound_effects)
+
+func _play_placement_blocked_sound() -> void:
+	AudioUtils.play_random(command_audio_player, on_placement_blocked_sound_effects)
 
 ## Purely local (like the sound above and the rally marker) — a quick
 ## expanding, fading ring at the clicked ground point, so a right-click order
@@ -579,6 +587,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.projectile_fired.connect(_on_unit_projectile_fired.bind(unit))
 	unit.damaged.connect(_relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(_on_unit_resource_deposited.bind(unit))
+	unit.resource_harvested.connect(_on_unit_resource_harvested)
 	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
 	return unit
 
@@ -597,14 +606,19 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 	if unit:
 		unit.sprite.play(anim_name)
 
-## Order-dispatch functions below only ever run on the host (inside its
-## RPC handlers), so — same reasoning as animation_changed above — playing
-## the sound directly there would only ever be heard on the host's own
-## machine. This plays it locally right away, then relays to every other peer.
+## Order-dispatch functions below only ever run on the host (inside its RPC
+## handlers), so — same reasoning as animation_changed above — playing the
+## sound directly there would only ever be heard on the host's own machine.
+## Unlike animation, though, this goes to exactly ONE peer rather than all of
+## them: an order acknowledgment is interface feedback on the ordering
+## player's own click, and letting an opponent hear it would leak both what
+## they're doing and roughly where. So the host either owns the unit and plays
+## it locally, or forwards it to the single peer that does.
 func _play_unit_order_sound(unit: Unit, kind: Unit.OrderSoundKind) -> void:
-	unit.play_order_sound(kind)
-	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_unit_order_sound.rpc(unit.get_path(), kind)
+	if unit.owner_peer_id == _my_peer_id():
+		unit.play_order_sound(kind)
+	elif multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_unit_order_sound.rpc_id(unit.owner_peer_id, unit.get_path(), kind)
 
 @rpc("authority", "call_remote", "reliable")
 func _rpc_unit_order_sound(unit_path: NodePath, kind: Unit.OrderSoundKind) -> void:
@@ -712,6 +726,9 @@ func _show_damage_feedback(node: Node3D, amount: int) -> void:
 	_spawn_impact_burst(node.global_position + Vector3(0, 0.9, 0))
 	if node is Unit:
 		node.play_hit_flash()
+	elif node is ProductionBuilding:
+		node.play_hit_flash()
+		node.play_squash()
 	_maybe_alert_under_attack(node)
 
 ## One-shot dust/spark puff at the point of a hit. The process material and
@@ -837,8 +854,37 @@ func _jump_to_last_attack() -> void:
 	camera_rig.global_position.x = _last_attack_position.x
 	camera_rig.global_position.z = _last_attack_position.z
 
+## Production and resource deposits both resolve host-side, so a building's
+## squash is relayed out the same way the gatherable's is.
+func _relay_building_squash(building: ProductionBuilding) -> void:
+	building.play_squash()
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_building_squash.rpc(building.get_path())
+
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_building_squash(building_path: NodePath) -> void:
+	var building := get_node_or_null(building_path) as ProductionBuilding
+	if building:
+		building.play_squash()
+
+## Gathering is simulated host-side only, so the harvested node's squash has to
+## be relayed the same way damage numbers and hit flashes are.
+func _on_unit_resource_harvested(node: Gatherable) -> void:
+	node.play_harvest_squash()
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_harvest_squash.rpc(node.get_path())
+
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_harvest_squash(node_path: NodePath) -> void:
+	var node := get_node_or_null(node_path) as Gatherable
+	if node:
+		node.play_harvest_squash()
+
 func _on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
 	_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
+	var dropoff := unit.dropoff_point.get_parent() as ProductionBuilding if unit.dropoff_point else null
+	if dropoff:
+		_relay_building_squash(dropoff)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_rpc_resource_number.rpc(unit.get_path(), amount, color)
 
@@ -1035,6 +1081,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"tint": TEAM_COLORS[team_index % TEAM_COLORS.size()],
 		"position": spawn_pos,
 	})
+	_relay_building_squash(building)
 	if building.can_rally and building.has_rally_point:
 		var rally_target: Node = get_node_or_null(building.rally_target_path) \
 				if building.rally_target_path != NodePath() else null
@@ -1252,7 +1299,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				selection_box.visible = false
 				_finish_selection(drag_start, event.position, _pending_double_click)
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			if selected_building != null and selected_building.can_rally:
+			if _can_command_building(selected_building) and selected_building.can_rally:
 				_set_rally_point(event.position)
 			else:
 				_issue_move_order(event.position, event.shift_pressed)
@@ -1462,7 +1509,11 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 				selected_units.append(collider)
 				collider.play_select_sound()
 			clicked_ring_target = collider
-		elif collider is ProductionBuilding and collider.owner_peer_id == _my_peer_id():
+		## Any building is selectable, not just your own — an enemy's is worth
+		## inspecting. A fogged building keeps its collider (fog only toggles
+		## .visible, see fog_of_war.gd), so revealed-ness is checked here or
+		## you could click buildings you haven't scouted yet.
+		elif collider is ProductionBuilding and collider.visible:
 			_select_building(collider)
 			collider.play_select_sound()
 			_select_resource(null)
@@ -1926,23 +1977,31 @@ func _can_afford_locally(costs: Array[ResourceCost]) -> bool:
 			return false
 	return true
 
-func _missing_resource_names(costs: Array[ResourceCost]) -> Array[String]:
-	var missing: Array[String] = []
+## Returns the types themselves rather than just their display names so the
+## caller can reach each one's insufficient_sound_effects as well as its label.
+func _missing_resource_types(costs: Array[ResourceCost]) -> Array[ResourceType]:
+	var missing: Array[ResourceType] = []
 	for cost in costs:
 		if _resource_totals.get(cost.resource_type.display_name, 0) < cost.amount:
-			missing.append(cost.resource_type.display_name)
+			missing.append(cost.resource_type)
 	return missing
 
 ## Called wherever a purchase is refused locally for lack of funds (building
 ## placement, producible items). No-ops (no flash) if the costs are actually
 ## affordable — callers don't need to check _can_afford_locally themselves first.
 func _flash_missing_resources(costs: Array[ResourceCost]) -> void:
-	var missing := _missing_resource_names(costs)
+	var missing := _missing_resource_types(costs)
 	if missing.is_empty():
 		return
 
-	for resource_name in missing:
-		_flashing_resource_names[resource_name] = true
+	## Only the first shortfall is sounded even when a purchase is short on
+	## two resources at once: command_audio_player is a single stream, so
+	## playing both would just cut the first off mid-sample. The bar still
+	## flashes every missing resource.
+	AudioUtils.play_random(command_audio_player, missing[0].insufficient_sound_effects)
+
+	for resource_type in missing:
+		_flashing_resource_names[resource_type.display_name] = true
 
 	if _resource_flash_tween and _resource_flash_tween.is_valid():
 		_resource_flash_tween.kill()
@@ -1957,6 +2016,13 @@ func _flash_missing_resources(costs: Array[ResourceCost]) -> void:
 		_resource_flash_on = false
 		_update_resource_label()
 	)
+
+## Whether the local player may actually USE this building, as opposed to
+## merely looking at it. An enemy building can be selected and inspected for
+## as long as fog of war has it revealed, but never produces, rallies, or
+## takes orders — see _select_building and the rally handling.
+func _can_command_building(building: ProductionBuilding) -> bool:
+	return building != null and building.owner_peer_id == _my_peer_id()
 
 func _select_building(building: ProductionBuilding) -> void:
 	selected_building = building
@@ -1976,6 +2042,13 @@ func _select_building(building: ProductionBuilding) -> void:
 	if building.is_under_construction:
 		if not building.construction_finished.is_connected(_on_selected_building_constructed):
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
+		_fill_action_panel_grid([])
+		return
+
+	## Info panel and portrait are filled in above for any owner; the action
+	## panel is where "yours to command" starts, so an enemy building simply
+	## gets an empty grid instead of its production buttons.
+	if not _can_command_building(building):
 		_fill_action_panel_grid([])
 		return
 
@@ -2204,6 +2277,13 @@ func _build_building_info(building: ProductionBuilding) -> void:
 	if building.is_under_construction:
 		return
 
+	## What an opponent has queued isn't observable from outside their base,
+	## so the queue rows are only built for a building you own. Everything
+	## above this (name, portrait, health, construction progress) still fills
+	## in for an enemy building.
+	if not _can_command_building(building):
+		return
+
 	_info_empty_label = Label.new()
 	_info_empty_label.text = "Queue: empty"
 	info_panel_content.add_child(_info_empty_label)
@@ -2221,6 +2301,12 @@ func _refresh_building_info() -> void:
 	if building.is_under_construction:
 		_info_progress_bar.value = building.construction_progress
 		(_info_progress_bar.get_node("Overlay") as Label).text = _format_construction_status(building)
+		return
+
+	## _build_building_info stops before creating the queue rows for a
+	## building you don't own, so there's nothing further to update here.
+	if not _can_command_building(building):
+		_info_progress_bar.visible = false
 		return
 
 	if building.synced_queue_size <= 0:
@@ -2523,7 +2609,7 @@ func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3, target_pa
 	building.has_rally_point = true
 
 func _update_rally_marker() -> void:
-	if selected_building != null and selected_building.can_rally and selected_building.has_rally_point:
+	if _can_command_building(selected_building) and selected_building.can_rally and selected_building.has_rally_point:
 		_ensure_rally_marker()
 		rally_marker.visible = true
 		rally_marker.global_position = selected_building.rally_point
@@ -2616,11 +2702,47 @@ func _update_hover_cursor(collider: Object) -> void:
 	else:
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 
+## Clearance between a building's drawn edge and its ring. Sized off the
+## model rather than the NavigationObstacle3D because several models overhang
+## their obstacle badly (Town Center by 0.44, Beastmen Barracks by 0.74),
+## which drew the ring inside the building instead of around it.
+const HOVER_RING_BUILDING_MARGIN: float = 0.3
+
 func _hover_ring_radius(node: Node) -> float:
 	if node is Unit:
 		return HOVER_RING_UNIT_RADIUS
 	var obstacle: NavigationObstacle3D = node.get_node_or_null("NavigationObstacle3D")
-	return obstacle.radius + 0.2 if obstacle else 1.0
+	var obstacle_radius: float = obstacle.radius + 0.2 if obstacle else 1.0
+	## Gatherables deliberately keep using the obstacle radius: a tree's
+	## canopy reaches well past its trunk, and a ring out at the leaves would
+	## cover its neighbours rather than marking the one under the cursor.
+	if not (node is ProductionBuilding):
+		return obstacle_radius
+	## maxf keeps the obstacle as a floor, so this can only ever grow a ring.
+	return maxf(obstacle_radius, _visual_radius(node) + HOVER_RING_BUILDING_MARGIN)
+
+## How far the drawn geometry reaches from this node's origin, measured flat
+## in XZ. Only ever runs for the single node under the cursor, so walking the
+## mesh tree each frame costs nothing worth caching — and it stays correct if
+## a model is rescaled, rotated, or swapped out.
+func _visual_radius(node: Node3D) -> float:
+	var furthest: float = 0.0
+	for mesh_instance in _collect_mesh_instances(node):
+		var aabb: AABB = mesh_instance.get_aabb()
+		for i in 8:
+			var corner: Vector3 = node.to_local(mesh_instance.global_transform * aabb.get_endpoint(i))
+			furthest = maxf(furthest, Vector2(corner.x, corner.z).length())
+	return furthest
+
+## Sprite3D health bars and GPUParticles3D aren't MeshInstance3D, so they're
+## skipped for free — only real geometry counts toward the size.
+func _collect_mesh_instances(node: Node) -> Array[MeshInstance3D]:
+	var found: Array[MeshInstance3D] = []
+	if node is MeshInstance3D:
+		found.append(node)
+	for child in node.get_children():
+		found.append_array(_collect_mesh_instances(child))
+	return found
 
 func _format_construction_status(building: ProductionBuilding) -> String:
 	var percent := int(building.construction_progress * 100)
@@ -2788,6 +2910,7 @@ func _update_placement_ghost() -> void:
 	var result := _raycast(mouse_pos)
 	if result.is_empty():
 		placement_ghost.visible = false
+		placement_valid = false
 		return
 	placement_ghost.visible = true
 	placement_ghost.global_position = result.position
@@ -2796,7 +2919,9 @@ func _update_placement_ghost() -> void:
 	## other buildings/resources, never terrain, so a ghost could sit embedded
 	## in a slope/cliff (e.g. TileMapLayer3D terrain) and still read as valid.
 	var on_flat_ground: bool = _footprint_is_flat(result.position, placing_type.footprint_radius)
-	placement_valid = on_flat_ground and _is_placement_valid(result.position, placing_type.footprint_radius)
+	placement_valid = on_flat_ground \
+			and _is_placement_valid(result.position, placing_type.footprint_radius) \
+			and _has_nearby_host(result.position, placing_type, _my_peer_id())
 	_set_ghost_valid(placement_valid)
 
 ## Samples the footprint's center plus FOOTPRINT_SAMPLE_COUNT points around
@@ -2858,6 +2983,24 @@ func _matches_any_scene(node: Node, scenes: Array[PackedScene]) -> bool:
 			return true
 	return false
 
+## The Farm/Mill rule: a building_type with requires_nearby_host may only go
+## down within host_radius of a finished, same-owner instance of its
+## host_scene. Every other building type passes straight through. Checked on
+## both sides — locally for the ghost's red/green, and again host-side in
+## _rpc_request_build so a client can't place a Farm out in open country.
+func _has_nearby_host(pos: Vector3, building_type: BuildingType, peer_id: int) -> bool:
+	if not building_type.requires_nearby_host:
+		return true
+	for node in get_tree().get_nodes_in_group("buildings"):
+		var building := node as ProductionBuilding
+		if building == null or building.owner_peer_id != peer_id or building.is_under_construction:
+			continue
+		if not _matches_scene(building, building_type.host_scene):
+			continue
+		if building.global_position.distance_to(pos) <= building_type.host_radius:
+			return true
+	return false
+
 func _is_placement_valid(pos: Vector3, radius: float) -> bool:
 	var space_state := get_world_3d().direct_space_state
 	var shape := SphereShape3D.new()
@@ -2892,8 +3035,12 @@ func _confirm_placement() -> void:
 	if placing_type.is_gate_tool:
 		_confirm_gate_placement()
 		return
+	## Staying armed (rather than dropping the ghost) is deliberate: a click
+	## on unbuildable ground is nearly always a misjudged spot, not a change
+	## of mind, so the tool stays live and the player just clicks again. Same
+	## reasoning as the can't-afford branch below.
 	if not placement_valid:
-		_cancel_placement()
+		_play_placement_blocked_sound()
 		return
 	## Checked here (rather than only relying on the host's own can_afford
 	## guard in _rpc_request_build) so an unaffordable click gets immediate
@@ -2967,7 +3114,8 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 			return
 		build_pos = deposit.global_position
 	elif not _footprint_is_flat(world_pos, building_type.footprint_radius) \
-			or not _is_placement_valid(world_pos, building_type.footprint_radius):
+			or not _is_placement_valid(world_pos, building_type.footprint_radius) \
+			or not _has_nearby_host(world_pos, building_type, sender_id):
 		return
 
 	ResourceStockpile.spend(sender_id, costs)
@@ -3400,6 +3548,7 @@ func _confirm_wall_placement() -> void:
 	_wall_dragging = false
 	var pieces := _wall_compute_pieces()
 	if pieces.is_empty() or not _wall_all_pieces_valid(pieces):
+		_play_placement_blocked_sound()
 		_cancel_wall_drag()
 		return
 	var costs := _wall_total_cost(pieces)
@@ -3587,7 +3736,7 @@ func _find_valid_gate_target(collider: Object) -> ProductionBuilding:
 
 func _confirm_gate_placement() -> void:
 	if _gate_target == null or not is_instance_valid(_gate_target):
-		_cancel_placement()
+		_play_placement_blocked_sound()
 		return
 	if not _can_afford_locally(placing_type.get_costs()):
 		_flash_missing_resources(placing_type.get_costs())

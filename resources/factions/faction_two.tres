@@ -16,6 +16,14 @@
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_corner.tscn" id="13_wall_corner"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_gate.tscn" id="14_wall_gate"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/watchtower_building.tscn" id="15_watchtower"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/mill_building.tscn" id="16_mill"]
+
+[sub_resource type="Resource" id="BuildingType_mill"]
+script = ExtResource("2_building_type_script")
+building_name = "Mill"
+scene = ExtResource("16_mill")
+footprint_radius = 1.6
+construction_time = 8.0
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
@@ -42,6 +50,9 @@ script = ExtResource("2_building_type_script")
 building_name = "Farm"
 scene = ExtResource("6_farm")
 footprint_radius = 1.8
+requires_nearby_host = true
+host_scene = ExtResource("16_mill")
+host_radius = 8.0
 
 [sub_resource type="Resource" id="BuildingType_mine"]
 script = ExtResource("2_building_type_script")
@@ -93,6 +104,6 @@ construction_time = 8.0
 [resource]
 script = ExtResource("1_faction_script")
 faction_name = "Faction Two"
-building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower")])
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_mill")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit")])

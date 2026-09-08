@@ -1,6 +1,8 @@
 [gd_resource type="Resource" script_class="ResourceType" format=3 uid="uid://dyauvdobfesb8"]
 
 [ext_resource type="Script" uid="uid://hwhfoh2ijaqq" path="res://scripts/resource_type.gd" id="1_script"]
+[ext_resource type="AudioStream" uid="uid://beyt7f605jeek" path="res://assets/sfx/Inventory_SFX/Drops/Leather.wav" id="2_sfx_short"]
 
 [resource]
 script = ExtResource("1_script")
+insufficient_sound_effects = Array[AudioStream]([ExtResource("2_sfx_short")])

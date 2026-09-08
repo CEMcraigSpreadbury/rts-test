@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" uid="uid://4cmjn86yc3wu" path="res://assets/art/MiniBeastmens/Outline/MiniWolfPathfinder-Sheet.png" id="2_wolf"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_wolf_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 30
+
+[sub_resource type="Resource" id="ResourceCost_wolf_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("5_gold")
+amount = 25
+
+[node name="BeastmanRaider" instance=ExtResource("1_unit")]
+display_name = "Beastman Raider"
+move_speed = 8.0
+costs = Array[Resource]([SubResource("ResourceCost_wolf_wood"), SubResource("ResourceCost_wolf_gold")])
+sprite_sheet = ExtResource("2_wolf")
+walk_row = 1
+walk_frame_count = 6
+attack_row = 3
+attack_frame_count = 8
+death_row = 6
+death_frame_count = 6
+can_gather = false
+can_build = false
+max_health = 30
+attack_damage = 6
+attack_range = 1.3
+attack_cooldown = 0.9
+aggro_range = 8.0
+damage_type = 2
+weak_to = 1
+unit_category = 3

@@ -46,8 +46,42 @@ var gatherers: Array[Unit] = []
 @export var on_select_sound_effects: Array[AudioStream] = []
 @onready var select_audio_player: AudioStreamPlayer = get_node_or_null("SelectAudioPlayer")
 
+## The visual model is a differently-named child in every gatherable scene
+## (tree/bush/gold mound/farm mesh), so it's found by elimination rather than
+## by a path each scene would have to keep in sync.
+var _model: Node3D = null
+var _model_base_scale: Vector3 = Vector3.ONE
+var _squash_tween: Tween
+## Several gatherers can tick against the same node in quick succession, which
+## would restart the squash before it ever plays out and read as a jitter.
+const SQUASH_COOLDOWN_MSEC: int = 400
+var _next_squash_msec: int = 0
+
+func _ready() -> void:
+	for child in get_children():
+		if child is Node3D and not (child is CollisionShape3D or child is NavigationObstacle3D):
+			_model = child
+			_model_base_scale = _model.scale
+			break
+
 func play_select_sound() -> void:
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
+
+## A quick squash on every harvest tick. Purely local per peer — gather() only
+## runs on the host, so main.gd relays this out (see _on_unit_resource_harvested).
+func play_harvest_squash() -> void:
+	if _model == null:
+		return
+	var now: int = Time.get_ticks_msec()
+	if now < _next_squash_msec:
+		return
+	_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
+	if _squash_tween and _squash_tween.is_valid():
+		_squash_tween.kill()
+	_model.scale = _model_base_scale * Vector3(1.07, 0.88, 1.07)
+	_squash_tween = create_tween()
+	_squash_tween.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	_squash_tween.tween_property(_model, "scale", _model_base_scale, 0.4)
 
 func can_be_gathered() -> bool:
 	return not requires_building_on_top or has_required_building

@@ -21,6 +21,18 @@ extends Resource
 ## Which scene qualifies as a valid placement target when requires_deposit is on.
 @export var deposit_scene: PackedScene
 
+## When true, this building can only be placed within `host_radius` of a
+## finished, same-owner instance of `host_scene` — e.g. a Farm patch that has
+## to sit close to one of the player's Mills. Unlike requires_deposit the
+## ghost still follows the mouse freely; it just reads as invalid outside
+## every host's radius. See main.gd's _has_nearby_host.
+@export var requires_nearby_host: bool = false
+## Which built scene counts as a host when requires_nearby_host is on.
+## Matched by scene_file_path, same convention as deposit_scene.
+@export var host_scene: PackedScene
+## How far from a host's center this building may still be placed.
+@export var host_radius: float = 8.0
+
 ## When true, this entry places as a click-and-drag wall run instead of a
 ## single ghost: main.gd's wall drag flow (_start_wall_drag/_update_wall_drag/
 ## _confirm_wall_placement) takes over instead of the normal single-ghost path.

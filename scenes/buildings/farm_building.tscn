@@ -6,17 +6,12 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="AudioStream" uid="uid://b0ilrwmk4qfm8" path="res://assets/sfx/Facilities/Farm_1.wav" id="5_xui32"]
 [ext_resource type="AudioStream" uid="uid://c5k6a2557e3gb" path="res://assets/sfx/Facilities/Farm_2.wav" id="6_8i2vn"]
+[ext_resource type="PackedScene" uid="uid://qs5apug62gm2" path="res://assets/art/Models/Field/field.glb" id="7_8i2vn"]
 
 [sub_resource type="Resource" id="ResourceCost_farm_building"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 60
-
-[sub_resource type="BoxMesh" id="BoxMesh_field"]
-size = Vector3(3, 0.15, 3)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_field"]
-albedo_color = Color(0.45, 0.32, 0.18, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_field"]
 size = Vector3(3, 0.15, 3)
@@ -33,19 +28,17 @@ gather_range = 1.2
 max_gatherers = 2
 on_select_sound_effects = Array[AudioStream]([ExtResource("5_xui32"), ExtResource("6_8i2vn")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=646170069]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
-mesh = SubResource("BoxMesh_field")
-surface_material_override/0 = SubResource("StandardMaterial3D_field")
-
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=836235060]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.075, 0)
 shape = SubResource("BoxShape3D_field")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=2125933528]
-radius = 1.5
+radius = 1.7
 height = 0.5
 avoidance_enabled = false
 
 [node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1608162492]
-bus = "SFX"
+bus = &"SFX"
+
+[node name="field" parent="." unique_id=1627151712 instance=ExtResource("7_8i2vn")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16392225, 0)

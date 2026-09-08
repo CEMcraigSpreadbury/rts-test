@@ -85,6 +85,8 @@ properties/5/spawn = true
 properties/5/replication_mode = 2
 
 [node name="Unit" type="CharacterBody3D" unique_id=1622850852 groups=["units"]]
+collision_layer = 4
+collision_mask = 1
 script = ExtResource("1_script")
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_villager")])
 walk_row = 3
@@ -128,6 +130,9 @@ draw_pass_1 = SubResource("QuadMesh_walkdust")
 [node name="UnitAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1233211235]
 unit_size = 20.0
 max_distance = 40.0
+bus = &"SFX"
+
+[node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
 
 [node name="CrownIcon" type="Sprite3D" parent="." unique_id=1233211234]

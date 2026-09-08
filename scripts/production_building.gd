@@ -45,6 +45,12 @@ const DESTROY_SINK_DURATION: float = 1.5
 ## Center), and removed again if this building is destroyed. 0 for buildings
 ## that don't grant population room (Barracks, Farm).
 @export var population_capacity: int = 0
+## Which resources a gatherer may drop off here. Only read for buildings in
+## the "dropoff_points" group (see Unit._nearest_dropoff) — empty means "every
+## type", which is what the Town Center wants; a Mill lists Food alone so wood
+## and gold still get hauled back to the Town Center rather than to whichever
+## Mill happens to be closer.
+@export var dropoff_resource_types: Array[ResourceType] = []
 ## Set alongside owner_peer_id at spawn time; used only for the minimap dot
 ## color (buildings have no sprite to modulate the way units do).
 @export var team_tint: Color = Color.WHITE
@@ -156,10 +162,92 @@ func play_select_sound() -> void:
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
 var _fill_base_scale_x: float = 1.0
 
+## Squash/flash visuals. The model is a differently-named child in every
+## building scene, so it's identified as "the direct children that actually
+## contain meshes" — which also skips the HealthBar (Sprite3D) and the
+## particle emitters.
+const SQUASH_SCALE: Vector3 = Vector3(1.06, 0.9, 1.06)
+const SQUASH_DURATION: float = 0.4
+const FLASH_ALPHA: float = 0.5
+const FLASH_DURATION: float = 0.25
+## A busy building (several villagers depositing, a fast production queue, or
+## sustained fire) would otherwise restart the squash every few frames.
+const SQUASH_COOLDOWN_MSEC: int = 400
+
+var _model_roots: Array[Node3D] = []
+var _model_base_scales: Array[Vector3] = []
+var _squash_tween: Tween
+var _next_squash_msec: int = 0
+var _flash_meshes: Array[MeshInstance3D] = []
+var _flash_material: StandardMaterial3D
+var _flash_tween: Tween
+
 func _ready() -> void:
 	current_health = max_health
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
+	_collect_visuals()
+
+func _collect_visuals() -> void:
+	for child in get_children():
+		if child is Node3D:
+			var meshes: Array[MeshInstance3D] = []
+			_collect_meshes(child, meshes)
+			if not meshes.is_empty():
+				_model_roots.append(child)
+				_model_base_scales.append((child as Node3D).scale)
+				_flash_meshes.append_array(meshes)
+	_flash_material = StandardMaterial3D.new()
+	_flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_flash_material.albedo_color = Color(1, 1, 1, 0)
+
+func _collect_meshes(node: Node, out: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D:
+		out.append(node)
+	for child in node.get_children():
+		_collect_meshes(child, out)
+
+## Squashes the whole model on production, damage and resource deposits. Held
+## off during construction, where _update_construction_rise() is already
+## driving the meshes' own Y scale.
+func play_squash() -> void:
+	if is_under_construction or is_destroyed or _model_roots.is_empty():
+		return
+	var now: int = Time.get_ticks_msec()
+	if now < _next_squash_msec:
+		return
+	_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
+	if _squash_tween and _squash_tween.is_valid():
+		_squash_tween.kill()
+	_squash_tween = create_tween()
+	_squash_tween.set_parallel(true)
+	for i in _model_roots.size():
+		var root: Node3D = _model_roots[i]
+		root.scale = _model_base_scales[i] * SQUASH_SCALE
+		_squash_tween.tween_property(root, "scale", _model_base_scales[i], SQUASH_DURATION) \
+				.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+## White flash on taking damage. Applied as a material_overlay so it layers on
+## top of whatever the surfaces are currently using — the construction ghost
+## swaps surface override materials, and this must not fight that.
+func play_hit_flash() -> void:
+	if _flash_meshes.is_empty():
+		return
+	if _flash_tween and _flash_tween.is_valid():
+		_flash_tween.kill()
+	_flash_material.albedo_color.a = FLASH_ALPHA
+	for mesh in _flash_meshes:
+		if is_instance_valid(mesh):
+			mesh.material_overlay = _flash_material
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(_flash_material, "albedo_color:a", 0.0, FLASH_DURATION)
+	_flash_tween.tween_callback(_clear_hit_flash)
+
+func _clear_hit_flash() -> void:
+	for mesh in _flash_meshes:
+		if is_instance_valid(mesh):
+			mesh.material_overlay = null
 
 ## Called by whatever places this building (e.g. the placement system) once
 ## it's positioned in the world. Buildings placed directly in a scene file
@@ -280,6 +368,11 @@ func _tick_pending_projectiles(delta: float) -> void:
 		var target: Unit = hit["target"]
 		if is_instance_valid(target) and target.status_activity != Unit.Activity.DEAD:
 			target.take_damage(hit["damage"], self)
+
+## Whether a gatherer carrying `type` may unload here — see
+## dropoff_resource_types.
+func accepts_dropoff(type: ResourceType) -> bool:
+	return dropoff_resource_types.is_empty() or dropoff_resource_types.has(type)
 
 ## How far NavigationObstacle3D avoidance keeps agents pushed back from this
 ## building's center; units attacking a building need to account for this so

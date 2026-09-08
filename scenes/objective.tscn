@@ -46,6 +46,8 @@ owner_peer_id = 0
 team_tint = Color(0.5, 0.5, 0.5, 1)
 
 [node name="CaptureZone" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 4
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CaptureZone"]
 shape = SubResource("SphereShape3D_zone")
