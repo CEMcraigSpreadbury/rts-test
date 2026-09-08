@@ -1664,6 +1664,16 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			units.append(unit)
 
 	var formation_positions := _formation_positions(units, world_pos, formation_type)
+	## Chokepoint funnelling: if the route to the destination has to thread
+	## something narrower than this formation is wide (a gate, a slot between
+	## buildings), every unit heads for a shared waypoint just past that gap
+	## first and only disperses to its own slot once through — otherwise the
+	## flanks of a wide shape each path to their own slot independently and the
+	## group smears itself along the wall instead of columning up. Empty (the
+	## common case: open ground, or a single/small group) leaves dispatch
+	## exactly as it was. Host-side and one-shot, same as the formation shape
+	## itself — see _find_funnel_point.
+	var funnel := _find_funnel_point(units, _group_centroid(units), world_pos, formation_positions)
 	## Capping the whole group to its slowest member's speed is what actually
 	## keeps a mixed-speed selection's formation shape intact throughout the
 	## move — the nearest-slot assignment above already gets everyone to the
@@ -1694,6 +1704,16 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		else:
 			unit.clear_order_queue()
 			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
+			## Only on the immediately-dispatched branch, never on a queued one:
+			## the gap geometry was measured against where the group is standing
+			## right now, and a shift-queued leg doesn't start until some
+			## unknown amount of movement later, by which point that waypoint
+			## could be anywhere relative to the unit. set_funnel_waypoint is
+			## itself a no-op unless the dispatch above actually resulted in a
+			## move/attack-move (a gather/attack/build target ignores the slot
+			## position entirely, so it has no funnel leg to run).
+			if not funnel.is_empty():
+				_apply_funnel(unit, funnel)
 
 ## Arranges units into the given Formation.Type shape, oriented to face the
 ## direction of travel — front rank/slot arrives exactly at target_pos,
@@ -1717,23 +1737,31 @@ func _formation_positions(units: Array[Unit], target_pos: Vector3, formation_typ
 	if units.size() == 1:
 		return [target_pos]
 
-	var centroid := Vector3.ZERO
-	for unit in units:
-		centroid += unit.global_position
-	centroid /= units.size()
-
-	var to_target := target_pos - centroid
-	to_target.y = 0.0
-	## Degenerate case (target basically on top of the group's own centroid)
-	## still needs a facing to build `right` from — arbitrary is fine, it
-	## only affects which way a near-zero-distance formation fans out.
-	var forward: Vector3 = to_target.normalized() if to_target.length_squared() > 0.0001 else Vector3.FORWARD
+	var forward := _group_forward(_group_centroid(units), target_pos)
 	var right := Vector3(forward.z, 0.0, -forward.x)
 
 	var formation := Formation.new(units, formation_type)
 	var slots := formation.get_slot_positions(target_pos, forward, right)
 
 	return _assign_slots_to_units(units, slots)
+
+func _group_centroid(units: Array[Unit]) -> Vector3:
+	var centroid := Vector3.ZERO
+	if units.is_empty():
+		return centroid
+	for unit in units:
+		centroid += unit.global_position
+	centroid /= units.size()
+	return centroid
+
+## The group's direction of travel, flattened to XZ. Degenerate case (target
+## basically on top of the group's own centroid) still needs a facing to build
+## `right` from — arbitrary is fine, it only affects which way a
+## near-zero-distance formation fans out.
+func _group_forward(centroid: Vector3, target_pos: Vector3) -> Vector3:
+	var to_target := target_pos - centroid
+	to_target.y = 0.0
+	return to_target.normalized() if to_target.length_squared() > 0.0001 else Vector3.FORWARD
 
 ## Greedy nearest-pair assignment: repeatedly claims the closest remaining
 ## (unit, slot) pair until every unit has one. Not globally optimal (that's
@@ -1766,6 +1794,233 @@ func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3]) -> Array[
 		result[ui] = slots[si]
 		assigned += 1
 	return result
+
+## Chokepoint funnelling (see _find_funnel_point). How far to either side of the
+## route we bother looking for something that constricts it — anything further
+## out than this isn't shaping the corridor the group walks down, and treating
+## it as "the corridor edge" would make wide-open ground read as a gap.
+const CHOKE_PROBE_HALF_WIDTH: float = 12.0
+## Granularity of the corridor-width scan along the route, in meters. The gap
+## we care about (a gate, a slot between two buildings) is a couple of meters
+## across, so anything much finer than this only costs cycles.
+const CHOKE_BIN_SIZE: float = 2.0
+## Gaps narrower than this aren't a chokepoint to thread, they're a wall. Herding
+## the whole group at a waypoint they physically can't squeeze through would be
+## strictly worse than letting them path individually, so we leave those alone.
+const CHOKE_MIN_GAP: float = 1.0
+## How much narrower than the formation a gap has to be before it's worth
+## funnelling. Without a margin, a formation that fits with centimeters to spare
+## would still trigger the whole two-stage detour for no visible gain.
+const CHOKE_WIDTH_MARGIN: float = 1.5
+## Funnelling is a group behavior; a pair of units negotiates a gate fine on its
+## own and the waypoint detour would just be overhead.
+const CHOKE_MIN_UNITS: int = 3
+## How far past the gap the funnel waypoint is placed. Has to clear the gap
+## itself (so "reached the waypoint" genuinely means "through"), but staying
+## modest keeps units fanning out to their slots promptly on the far side.
+const CHOKE_EXIT_AHEAD: float = 3.5
+## Ignore constrictions this close to either end of the route: one right on top
+## of the group is something they're already inside (funnelling backwards into
+## it helps nobody), and one at the destination is just the destination being
+## tight, which the formation shape itself has to deal with.
+const CHOKE_MIN_DISTANCE_FROM_GROUP: float = 5.0
+const CHOKE_MIN_DISTANCE_FROM_TARGET: float = 4.0
+## Slack added to the formation's raw slot spread to get the width it actually
+## needs to pass somewhere — roughly one unit's body diameter (the physical
+## CapsuleShape3D radius on scenes/units/unit.tscn is 0.4), since the spread is
+## measured between slot centers.
+const CHOKE_UNIT_WIDTH: float = 1.0
+
+## Host-side, one-shot-per-order chokepoint analysis: does the route from this
+## group's centroid to its destination pass through somewhere narrower than the
+## formation is wide? If so, returns the waypoint every unit should thread
+## before dispersing to its own slot (see Unit.set_funnel_waypoint), otherwise
+## an empty Dictionary and the order dispatches exactly as it always has.
+##
+## Why geometry and not the navmesh: buildings in this project never carve the
+## baked NavigationRegion3D (they're NavigationObstacle3D footprints, i.e. pure
+## runtime RVO avoidance — nothing rebakes at runtime), so a navmesh query knows
+## nothing about the wall the player just built and would happily report a route
+## straight through a gate's posts as wide open. The navmesh path is still used
+## as the route's *shape* (so terrain detours are followed), but the corridor
+## width along it is measured against the actual building footprints.
+##
+## Cost: one path query plus one pass over the building list, on a move order
+## only. No per-frame work and no raycasts.
+func _find_funnel_point(units: Array[Unit], centroid: Vector3, target_pos: Vector3, slots: Array[Vector3]) -> Dictionary:
+	if units.size() < CHOKE_MIN_UNITS:
+		return {}
+	var route := _route_polyline(units[0], centroid, target_pos)
+	if route.size() < 2:
+		return {}
+
+	## Cumulative arclength at each route vertex, so a building's projection onto
+	## the polyline can be expressed as a single distance-along-route.
+	var cumulative: Array[float] = [0.0]
+	for i in route.size() - 1:
+		cumulative.append(cumulative[i] + _flat_distance(route[i], route[i + 1]))
+	var total_length: float = cumulative[cumulative.size() - 1]
+	if total_length < CHOKE_MIN_DISTANCE_FROM_GROUP + CHOKE_MIN_DISTANCE_FROM_TARGET:
+		return {}
+
+	var required_width := _formation_required_width(slots, centroid, target_pos)
+	if required_width <= CHOKE_MIN_GAP:
+		return {}
+
+	var bin_count: int = maxi(1, ceili(total_length / CHOKE_BIN_SIZE))
+	## Free space remaining on each side of the route center line, per bin.
+	## Starts "unconstrained" and is whittled down by each building that reaches
+	## into the corridor.
+	var left_free: Array[float] = []
+	var right_free: Array[float] = []
+	for i in bin_count:
+		left_free.append(CHOKE_PROBE_HALF_WIDTH)
+		right_free.append(CHOKE_PROBE_HALF_WIDTH)
+
+	for node in get_tree().get_nodes_in_group("buildings"):
+		var building := node as Node3D
+		if building == null or not is_instance_valid(building):
+			continue
+		if building is ProductionBuilding and building.is_destroyed:
+			continue
+		var radius: float = building.get_footprint_radius() if building.has_method("get_footprint_radius") else 0.0
+		if radius <= 0.0:
+			continue
+		var hit := _project_onto_route(route, cumulative, building.global_position)
+		var free: float = hit["lateral_distance"] - radius
+		if free > CHOKE_PROBE_HALF_WIDTH:
+			continue
+		free = maxf(free, 0.0)
+		## A building of radius r constricts the corridor over the whole stretch
+		## of route it sits alongside, not just the single point it projects to.
+		var arc: float = hit["arc"]
+		var first_bin: int = clampi(int(floor((arc - radius) / CHOKE_BIN_SIZE)), 0, bin_count - 1)
+		var last_bin: int = clampi(int(floor((arc + radius) / CHOKE_BIN_SIZE)), 0, bin_count - 1)
+		for b in range(first_bin, last_bin + 1):
+			if hit["lateral_sign"] >= 0.0:
+				left_free[b] = minf(left_free[b], free)
+			else:
+				right_free[b] = minf(right_free[b], free)
+
+	var best_bin: int = -1
+	var best_gap: float = INF
+	for b in bin_count:
+		## Constricted on BOTH sides or it isn't a chokepoint — a single building
+		## beside the route is something to walk around, not something to funnel
+		## through, and treating it as one edge of a "gap" whose other edge is
+		## open ground would fire on any building the group happens to pass.
+		if left_free[b] >= CHOKE_PROBE_HALF_WIDTH or right_free[b] >= CHOKE_PROBE_HALF_WIDTH:
+			continue
+		var arc: float = (b + 0.5) * CHOKE_BIN_SIZE
+		if arc < CHOKE_MIN_DISTANCE_FROM_GROUP or arc > total_length - CHOKE_MIN_DISTANCE_FROM_TARGET:
+			continue
+		var gap: float = left_free[b] + right_free[b]
+		if gap < best_gap:
+			best_gap = gap
+			best_bin = b
+	if best_bin < 0 or best_gap < CHOKE_MIN_GAP or best_gap + CHOKE_WIDTH_MARGIN > required_width:
+		return {}
+
+	var arc_at_gap: float = (best_bin + 0.5) * CHOKE_BIN_SIZE
+	var at := _route_point_at(route, cumulative, arc_at_gap)
+	var forward: Vector3 = at["forward"]
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	## The route's own center line isn't necessarily the gap's center (a gate can
+	## sit off to one side of it) — recenter on the free span actually measured.
+	var gap_center: Vector3 = at["position"] + right * ((left_free[best_bin] - right_free[best_bin]) * 0.5)
+	return {
+		"gap": gap_center,
+		"point": gap_center + forward * CHOKE_EXIT_AHEAD,
+		"forward": forward,
+	}
+
+## Navmesh path when there is one (so the route follows terrain rather than
+## cutting through it), straight line otherwise. Only ever the *shape* of the
+## route — see _find_funnel_point on why width can't come from the navmesh.
+func _route_polyline(unit: Unit, from: Vector3, to: Vector3) -> PackedVector3Array:
+	var map: RID = unit.nav_agent.get_navigation_map()
+	if map.is_valid():
+		var path := NavigationServer3D.map_get_path(map, from, to, true)
+		if path.size() >= 2:
+			return path
+	return PackedVector3Array([from, to])
+
+## Closest point on the route polyline to `point`, as distance-along-route
+## ("arc"), perpendicular distance, and which side of the route it's on
+## (positive = the route's right-hand side, matching the formation's `right`).
+func _project_onto_route(route: PackedVector3Array, cumulative: Array[float], point: Vector3) -> Dictionary:
+	var best := {"arc": 0.0, "lateral_distance": INF, "lateral_sign": 1.0}
+	var flat_point := Vector3(point.x, 0.0, point.z)
+	for i in route.size() - 1:
+		var a := Vector3(route[i].x, 0.0, route[i].z)
+		var b := Vector3(route[i + 1].x, 0.0, route[i + 1].z)
+		var segment := b - a
+		var length_squared: float = segment.length_squared()
+		if length_squared < 0.0001:
+			continue
+		var t: float = clampf((flat_point - a).dot(segment) / length_squared, 0.0, 1.0)
+		var projected: Vector3 = a + segment * t
+		var offset: Vector3 = flat_point - projected
+		var distance: float = offset.length()
+		if distance >= best["lateral_distance"]:
+			continue
+		var direction: Vector3 = segment.normalized()
+		var right := Vector3(direction.z, 0.0, -direction.x)
+		best = {
+			"arc": cumulative[i] + sqrt(length_squared) * t,
+			"lateral_distance": distance,
+			"lateral_sign": 1.0 if offset.dot(right) >= 0.0 else -1.0,
+		}
+	return best
+
+## Inverse of _project_onto_route: the world position `arc` meters along the
+## route, plus the direction of travel there.
+func _route_point_at(route: PackedVector3Array, cumulative: Array[float], arc: float) -> Dictionary:
+	for i in route.size() - 1:
+		var segment_length: float = cumulative[i + 1] - cumulative[i]
+		if segment_length < 0.0001:
+			continue
+		if arc > cumulative[i + 1] and i < route.size() - 2:
+			continue
+		var t: float = clampf((arc - cumulative[i]) / segment_length, 0.0, 1.0)
+		var direction: Vector3 = route[i + 1] - route[i]
+		direction.y = 0.0
+		return {
+			"position": route[i].lerp(route[i + 1], t),
+			"forward": direction.normalized() if direction.length_squared() > 0.0001 else Vector3.FORWARD,
+		}
+	return {"position": route[0], "forward": Vector3.FORWARD}
+
+## How wide a corridor this formation actually needs: the lateral spread of its
+## slots (measured on the same left/right axis the shape was built against, so
+## trailing ranks don't inflate it) plus one unit's body width, since the spread
+## is between slot centers.
+func _formation_required_width(slots: Array[Vector3], centroid: Vector3, target_pos: Vector3) -> float:
+	if slots.size() < 2:
+		return 0.0
+	var forward := _group_forward(centroid, target_pos)
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	var smallest: float = INF
+	var largest: float = -INF
+	for slot in slots:
+		var lateral: float = (slot - target_pos).dot(right)
+		smallest = minf(smallest, lateral)
+		largest = maxf(largest, lateral)
+	return (largest - smallest) + CHOKE_UNIT_WIDTH
+
+## Arms the funnel waypoint on one unit, unless it's already past the gap — a
+## unit on the far side would otherwise be sent backwards through the
+## chokepoint just to come back out again.
+func _apply_funnel(unit: Unit, funnel: Dictionary) -> void:
+	var forward: Vector3 = funnel["forward"]
+	var offset: Vector3 = unit.global_position - funnel["gap"]
+	offset.y = 0.0
+	if offset.dot(forward) > 0.0:
+		return
+	unit.set_funnel_waypoint(funnel["point"], forward)
+
+func _flat_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(b.x - a.x, b.z - a.z).length()
 
 ## -1 (no override) for a single-unit selection — see Unit.formation_speed.
 func _slowest_move_speed(units: Array[Unit]) -> float:

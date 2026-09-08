@@ -41,6 +41,24 @@ const FORMATION_SETTLE_RADIUS_FLOOR: float = 0.42
 ## harmless: everyone sharing the same team avoidance layer/mask already
 ## negotiates through this same system regardless of formation membership.
 const FORMATION_TRAVELING_AVOIDANCE_PRIORITY: float = 0.4
+## Chokepoint funnelling (see funnel_point / _update_funnel, armed host-side by
+## main.gd's _find_funnel_point when a formation move's route has to thread a
+## gap narrower than the formation is wide). How close to the funnel waypoint
+## this unit has to get before it's considered through the gap and released to
+## its real formation slot. Deliberately much larger than MOVE_ARRIVAL_DISTANCE:
+## the waypoint is a shared convergence point for the whole group, so demanding
+## everyone actually reach it would just build a traffic jam on top of it, and
+## the point of the waypoint is only to make units commit to the gap rather
+## than to be a destination in its own right. Also has to stay comfortably
+## above MOVE_ARRIVAL_DISTANCE + 0.5 so the funnel leg can never be mistaken
+## for the move order itself completing (see _physics_process's arrival check).
+const FUNNEL_CLEAR_DISTANCE: float = 3.0
+## Hard ceiling on how long a unit will keep heading for the funnel waypoint
+## before giving up and going straight to its slot. Pure safety valve: a unit
+## that can't reach the gap at all (blocked, or the gap got walled up mid-move)
+## must never be left standing at a waypoint forever, which is the one way a
+## two-stage move can be worse than no funnelling at all.
+const FUNNEL_TIMEOUT: float = 12.0
 ## Drop-off points sit outside a building's avoidance-obstacle radius, so this
 ## needs more slack than a plain move order to reliably register as "arrived".
 const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
@@ -61,6 +79,11 @@ const ENEMY_SCAN_INTERVAL: float = 0.25
 ## Multiplier applied when an attacker's damage_type matches its target's
 ## weak_to — see take_damage().
 const WEAKNESS_DAMAGE_MULTIPLIER: float = 1.5
+## Radius around an attack-move's destination that counts as "the place the
+## player pointed at". A unit under that order keeps picking new targets
+## inside this circle — enemy buildings included — until the area is clear or
+## it's given another order. See _find_assault_target().
+const ASSAULT_AREA_RADIUS: float = 12.0
 
 ## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
 ## hold (resource->dropoff->resource / target->next target / stay building
@@ -389,6 +412,19 @@ var _cohesion_stall_timer: float = 0.0
 var _cohesion_hard_stall_timer: float = 0.0
 var _cohesion_stalled: bool = false
 
+## Chokepoint funnelling state — host-only, same as everything else that
+## actually simulates movement. While _funnel_active, nav_agent is steered at
+## funnel_point (a spot just past a narrow gap the group has to thread) instead
+## of at this unit's real formation slot, which is parked in _funnel_final_target
+## until the unit is through. _funnel_forward is the group's direction of travel
+## through the gap, used to release a unit that has passed the waypoint off to
+## one side rather than driving it back to a point it has already overshot.
+var _funnel_active: bool = false
+var funnel_point: Vector3 = Vector3.ZERO
+var _funnel_forward: Vector3 = Vector3.FORWARD
+var _funnel_final_target: Vector3 = Vector3.ZERO
+var _funnel_timer: float = 0.0
+
 const COHESION_RECHECK_INTERVAL: float = 0.2
 ## Progress-fraction lead (0-1) over the group average tolerated before any
 ## throttling kicks in — small formation-keeping wobble/noise shouldn't cause
@@ -492,8 +528,15 @@ func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> vo
 	_cohesion_stall_timer = 0.0
 	_cohesion_hard_stall_timer = 0.0
 	_cohesion_stalled = false
+	## Any fresh move leg starts un-funnelled by definition; main.gd re-arms it
+	## immediately afterwards (via set_funnel_waypoint) if this particular leg's
+	## route actually needs one. Clearing here rather than only in command_move
+	## means every path that (re)baselines cohesion also drops a stale funnel,
+	## including the re-baseline _update_funnel itself does on release.
+	_funnel_active = false
 
 func _clear_formation_cohesion() -> void:
+	_funnel_active = false
 	formation_group = []
 	formation_initial_distance = 0.0
 	_cohesion_target_speed_scale = 1.0
@@ -513,6 +556,17 @@ var _enemy_scan_timer: float = 0.0
 ## Ranged units only: {"time_remaining": float, "target": Node3D, "damage": int}
 ## per shot currently in flight — see _tick_attacking's projectile_scene branch.
 var _pending_projectile_hits: Array[Dictionary] = []
+## Damage already committed to this unit by shots currently in the air. Read by
+## every target scan via CombatUtils.is_worth_attacking, which is what stops a
+## whole volley landing on someone the first three arrows already killed.
+var incoming_damage: int = 0
+## Set by command_attack_move: where the player pointed, and whether that
+## standing "clear this area" order is still live. Deliberately survives the
+## individual fights it spawns (command_attack keeps it, see keep_assault), so
+## killing one target leads to the next one in the area rather than ending the
+## order — only Stop or another command calls it off.
+var assault_center: Vector3 = Vector3.ZERO
+var assault_active: bool = false
 ## Host-only: ability index (within monarch_abilities) -> Time.get_ticks_msec()
 ## when it's usable again. Not synced — only the host ever checks cooldowns,
 ## in the RPC handler that validates an activation request.
@@ -576,10 +630,66 @@ func command_move(target_position: Vector3, speed_override: float = -1.0, group:
 	status_command = Command.MOVE
 	status_activity = Activity.MOVING
 	attack_target = null
+	assault_active = false
 	formation_speed = speed_override
 	_set_formation_cohesion(group, target_position)
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
+
+## Two-stage formation move: steer at `point` (a spot just past a narrow gap the
+## group's route has to thread) first, and only head for the slot this unit was
+## actually given once it's through. Host-only, and armed by main.gd right after
+## command_move/command_attack_move — so the caller has already set the real
+## slot as nav_agent.target_position, which is what gets parked here.
+## `forward` is the group's direction of travel through the gap.
+func set_funnel_waypoint(point: Vector3, forward: Vector3) -> void:
+	if not _funnel_can_arm():
+		return
+	var final_target: Vector3 = nav_agent.target_position
+	## Re-baselines cohesion onto the leg this unit is actually walking now
+	## (here -> gap) rather than leaving it pointed at the far-side slot. Both
+	## _update_cohesion and _update_formation_avoidance read progress as
+	## 1 — nav_agent.distance_to_target() / formation_initial_distance, so a
+	## baseline measured to the distant slot while nav_agent steers at the much
+	## nearer gap would read as "nearly arrived" from the first frame. Giving
+	## each leg its own baseline is exactly what _set_formation_cohesion already
+	## does for shift-queued orders. It also clears any stale funnel, hence the
+	## ordering here — arm afterwards, never before.
+	_set_formation_cohesion(formation_group, point)
+	_funnel_final_target = final_target
+	funnel_point = point
+	_funnel_forward = forward
+	_funnel_timer = 0.0
+	_funnel_active = true
+	nav_agent.target_position = point
+
+func _funnel_can_arm() -> bool:
+	return status_activity == Activity.MOVING \
+			and (status_command == Command.MOVE or status_command == Command.ATTACK_MOVE)
+
+## Releases the unit from the funnel waypoint onto its real slot once it's
+## through the gap. Three exits, any of which is enough:
+##   — it got within FUNNEL_CLEAR_DISTANCE of the waypoint (the normal case —
+##     the waypoint sits past the gap, so being near it means being through it);
+##   — it's already past the waypoint's plane, which catches a unit that
+##     squeezed through wide of the point and would otherwise be dragged
+##     backwards to reach it;
+##   — FUNNEL_TIMEOUT expired, the safety valve for a gap that turned out to be
+##     unreachable (blocked, or walled up mid-move) — without it a funnelled
+##     unit could stand at a waypoint indefinitely.
+func _update_funnel(delta: float) -> void:
+	if not _funnel_active:
+		return
+	_funnel_timer += delta
+	var offset: Vector3 = funnel_point - global_position
+	offset.y = 0.0
+	if offset.length() > FUNNEL_CLEAR_DISTANCE \
+			and offset.dot(_funnel_forward) > 0.0 \
+			and _funnel_timer < FUNNEL_TIMEOUT:
+		return
+	var final_target: Vector3 = _funnel_final_target
+	_set_formation_cohesion(formation_group, final_target)
+	nav_agent.target_position = final_target
 
 func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_gather or resource_node == null:
@@ -592,6 +702,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	_leave_gather_site()
 	status_command = Command.GATHER
 	attack_target = null
+	assault_active = false
 	formation_speed = -1.0
 	_clear_formation_cohesion()
 	target_resource = resource_node
@@ -599,26 +710,38 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	resource_node.add_gatherer(self)
 	_head_to_resource()
 
-func command_attack(target: Node3D) -> void:
+## keep_assault: true when this fight was picked *by* a standing attack-move
+## order, or is self-defense during one, rather than being a fresh player order
+## at a specific target. The assault then survives the fight, so
+## _find_new_target_or_idle can move on to the next thing in the area once this
+## target dies instead of the unit stopping there.
+func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	if not keep_assault:
+		assault_active = false
 	status_command = Command.ATTACK
 	attack_target = target
 	formation_speed = -1.0
 	_clear_formation_cohesion()
 	_head_to_target()
 
-## One-shot: moves toward target_position, engaging (and fully converting to
-## Command.ATTACK — see the scan in _physics_process) the first enemy found
-## along the way. Once it engages, this order is gone for good; it does not
-## resume toward target_position afterward.
+## Standing "assault this place" order: moves toward target_position, engaging
+## enemies met on the way, and once at the destination keeps taking new targets
+## within ASSAULT_AREA_RADIUS of it — enemy buildings included — as each one
+## dies. Individual fights convert to Command.ATTACK (see the scan in
+## _physics_process) but leave assault_active set, so unlike a plain move the
+## order isn't spent by the first engagement: it ends when the area is clear or
+## another command replaces it.
 func command_attack_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD or not can_fight:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	assault_center = target_position
+	assault_active = true
 	status_command = Command.ATTACK_MOVE
 	attack_target = null
 	formation_speed = speed_override
@@ -636,6 +759,7 @@ func command_patrol(points: Array[Vector3]) -> void:
 	_leave_gather_site()
 	status_command = Command.PATROL
 	attack_target = null
+	assault_active = false
 	formation_speed = -1.0
 	_clear_formation_cohesion()
 	patrol_points = points
@@ -659,6 +783,7 @@ func command_stop() -> void:
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
 	attack_target = null
+	assault_active = false
 	formation_speed = -1.0
 	_clear_formation_cohesion()
 	patrol_points.clear()
@@ -675,6 +800,7 @@ func command_build(building: ProductionBuilding) -> void:
 	_leave_gather_site()
 	status_command = Command.BUILD
 	attack_target = null
+	assault_active = false
 	formation_speed = -1.0
 	_clear_formation_cohesion()
 	build_target = building
@@ -805,7 +931,10 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		## override that order the moment the attacker lands one more hit
 		## before the unit escapes range, undoing the retreat entirely.
 		elif status_command != Command.ATTACK and status_command != Command.MOVE:
-			command_attack(attacker)
+			## keep_assault: being shot at while marching on an assault target
+			## makes this unit fight back, but must not quietly cancel the
+			## standing order to take the place it was sent to.
+			command_attack(attacker, true)
 		CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
 
 func _physics_process(delta: float) -> void:
@@ -858,8 +987,11 @@ func _physics_process(delta: float) -> void:
 		_start_gathering()
 	elif status_activity == Activity.TO_DROPOFF and nav_agent.is_navigation_finished():
 		_deposit_and_continue()
-	elif status_activity == Activity.TO_TARGET and nav_agent.is_navigation_finished():
-		_start_attacking()
+	elif status_activity == Activity.TO_TARGET:
+		if nav_agent.is_navigation_finished():
+			_start_attacking()
+		else:
+			_tick_approach_threats(delta)
 	elif status_activity == Activity.TO_BUILD_SITE:
 		if nav_agent.is_navigation_finished():
 			_start_building()
@@ -869,15 +1001,26 @@ func _physics_process(delta: float) -> void:
 		_enemy_scan_timer -= delta
 		if _enemy_scan_timer <= 0.0:
 			_enemy_scan_timer = ENEMY_SCAN_INTERVAL
-			var enemy := _find_nearest_enemy_in_range(aggro_range)
-			if enemy:
-				if status_command == Command.ATTACK_MOVE:
-					## "Engage and stop": fully hands off to the normal ATTACK
-					## flow, so the original destination is gone for good.
-					command_attack(enemy)
-				else:
-					## Patrol stays Command.PATROL through the fight so
-					## _find_new_target_or_idle() resumes the loop after.
+			if status_command == Command.ATTACK_MOVE:
+				## Deliberately the plain aggro scan rather than
+				## _find_assault_target(): while still marching, only something
+				## the unit has actually walked into should break it out of the
+				## formation move. Scanning the whole assault area from here
+				## made the group abandon formation on the very first tick and
+				## charge whatever happened to be nearest the destination, one
+				## unit at a time. Targets further into the area — and enemy
+				## buildings — are picked up on arrival instead, by the idle
+				## scan below, and after each kill by _find_new_target_or_idle.
+				var target := _find_nearest_enemy_in_range(aggro_range)
+				if target:
+					## Hands off to the normal ATTACK flow for this one fight,
+					## but keeps the assault so the destination isn't lost.
+					command_attack(target, true)
+			else:
+				## Patrol stays Command.PATROL through the fight so
+				## _find_new_target_or_idle() resumes the loop after.
+				var enemy := _find_nearest_enemy_in_range(aggro_range)
+				if enemy:
 					attack_target = enemy
 					_head_to_target()
 	## Standing guard: a unit with nothing else to do still watches for enemies
@@ -888,9 +1031,18 @@ func _physics_process(delta: float) -> void:
 		_enemy_scan_timer -= delta
 		if _enemy_scan_timer <= 0.0:
 			_enemy_scan_timer = ENEMY_SCAN_INTERVAL
-			var enemy := _find_nearest_enemy_in_range(aggro_range)
+			## A unit holding a cleared assault area watches that whole area
+			## (buildings included), not just its own aggro bubble — it was told
+			## to take the place, and only Stop or another order calls it off.
+			var enemy: Node3D = _find_assault_target() if assault_active \
+					else _find_nearest_enemy_in_range(aggro_range)
 			if enemy:
-				command_attack(enemy)
+				command_attack(enemy, true)
+
+	## Before the steering read below, so a unit released from its funnel
+	## waypoint this frame immediately starts steering at its real slot instead
+	## of spending one more frame closing on a waypoint it's already through.
+	_update_funnel(delta)
 
 	var direction := Vector3.ZERO
 	if not nav_agent.is_navigation_finished():
@@ -1282,6 +1434,32 @@ func _start_attacking() -> void:
 	status_activity = Activity.ATTACKING
 	attack_timer = attack_cooldown
 
+## Whatever gets in front of a unit while it's closing on a target that's
+## still a long way off is the more urgent problem. An assault produces exactly
+## that situation every time it clears one spot and moves on to the next thing
+## in the area, and without this the unit tunnel-visions on its distant target
+## and walks straight through an enemy line — and, being Command.ATTACK
+## already, doesn't even fight back when shot in the back, since take_damage
+## reads an attacking unit as already engaged.
+##
+## Only applies under a live assault: a target the player picked out by hand is
+## the one they want dead, and should not be second-guessed on the way there.
+func _tick_approach_threats(delta: float) -> void:
+	if not assault_active or not _is_target_alive(attack_target):
+		return
+	## Already closing on something within arm's reach — there's nothing
+	## "nearer" left for a scan to find, so don't pay for one.
+	if _flat_distance(global_position, attack_target.global_position) <= aggro_range:
+		return
+	_enemy_scan_timer -= delta
+	if _enemy_scan_timer > 0.0:
+		return
+	_enemy_scan_timer = ENEMY_SCAN_INTERVAL
+	var closer := _find_nearest_enemy_in_range(aggro_range)
+	if closer != null and closer != attack_target:
+		attack_target = closer
+		_head_to_target()
+
 func _face_attack_target(delta: float) -> void:
 	if not is_instance_valid(attack_target):
 		return
@@ -1307,6 +1485,14 @@ func _tick_attacking(delta: float) -> void:
 		_head_to_target()
 		return
 
+	## Overkill guard: if enough shots are already in the air to finish this
+	## target, go look for another one now instead of adding to the pile. The
+	## target scans skip already-doomed targets too, so this can't just re-pick
+	## the same one and spin.
+	if not CombatUtils.is_worth_attacking(attack_target):
+		_find_new_target_or_idle()
+		return
+
 	attack_timer += delta
 	## A nearby allied Monarch's passive aura can shrink the effective cooldown
 	## (not the exported stat itself — this is computed live each tick).
@@ -1327,11 +1513,15 @@ func _tick_attacking(delta: float) -> void:
 func _fire_projectile(target: Node3D) -> void:
 	var dist := global_position.distance_to(target.global_position)
 	var travel_time := dist / maxf(projectile_speed, 0.01)
+	var damage := _effective_attack_damage()
 	_pending_projectile_hits.append({
 		"time_remaining": travel_time,
 		"target": target,
-		"damage": _effective_attack_damage(),
+		"damage": damage,
 	})
+	## Held against the target for exactly as long as this shot is airborne, and
+	## released below however the shot ends — see CombatUtils.reserve_damage.
+	CombatUtils.reserve_damage(target, damage)
 	projectile_fired.emit(target)
 
 ## Real, authoritative delayed damage for ranged attacks — the projectile_fired
@@ -1346,6 +1536,9 @@ func _tick_pending_projectiles(delta: float) -> void:
 			continue
 		_pending_projectile_hits.remove_at(i)
 		var target = hit["target"]
+		## Released whether the shot lands or the target died first — the
+		## reservation only ever covers time in the air.
+		CombatUtils.reserve_damage(target, -int(hit["damage"]))
 		if not _is_target_alive(target):
 			continue
 		target.take_damage(hit["damage"], self)
@@ -1367,11 +1560,29 @@ func _is_target_alive(target) -> bool:
 
 func _find_new_target_or_idle() -> void:
 	if status_command == Command.ATTACK:
-		var nearest: Unit = _find_nearest_enemy_in_range(aggro_range)
+		var nearest: Node3D = _find_assault_target() if assault_active \
+				else _find_nearest_enemy_in_range(aggro_range)
 		if nearest:
 			attack_target = nearest
 			_head_to_target()
+		## Assault area is clear but the unit never actually got there — a fight
+		## that started en route can end a long way short of the destination.
+		## Walk the rest of the way, still scanning, rather than stopping
+		## wherever the last kill happened to leave it.
+		elif assault_active and _flat_distance(global_position, assault_center) > ASSAULT_AREA_RADIUS:
+			attack_target = null
+			status_command = Command.ATTACK_MOVE
+			status_activity = Activity.MOVING
+			## The group this unit marched out with has scattered into its own
+			## fights by now, so this last leg is walked solo at full speed.
+			formation_speed = -1.0
+			_clear_formation_cohesion()
+			nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
+			move_to(assault_center)
 		else:
+			## assault_active is deliberately left set here: the unit holds the
+			## ground it took, and the idle scan in _physics_process keeps
+			## watching the whole area for anything that wanders back into it.
 			attack_target = null
 			status_command = Command.NONE
 			status_activity = Activity.IDLE
@@ -1398,6 +1609,56 @@ func _advance_patrol() -> void:
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(patrol_points[patrol_index])
 
+## Target priority for a unit under a standing attack-move order:
+##   1. anything already inside its own aggro bubble (self-defense, and what it
+##      runs into on the way there),
+##   2. then enemy units inside the assault area,
+##   3. then enemy buildings inside the assault area.
+## Units before buildings deliberately — an army that stops to chew a farm while
+## archers shoot it in the back is the classic attack-ground failure. Returns
+## null once the area holds nothing worth attacking, which is what ends the
+## order (see _find_new_target_or_idle).
+func _find_assault_target() -> Node3D:
+	var nearest: Node3D = _find_nearest_enemy_in_range(aggro_range)
+	if nearest != null or not assault_active:
+		return nearest
+	nearest = _nearest_in_assault_area(&"units")
+	if nearest != null:
+		return nearest
+	return _nearest_in_assault_area(&"buildings")
+
+## Nearest living, not-already-doomed enemy of the given group whose own
+## position is inside the assault area. Membership is measured from
+## assault_center rather than from this unit, so every member of an assaulting
+## group agrees on which targets are in scope instead of each peeling off after
+## whatever happens to be nearest to it personally; distance from this unit is
+## only the tie-break between those in-scope targets.
+func _nearest_in_assault_area(group: StringName) -> Node3D:
+	var nearest: Node3D = null
+	var nearest_dist := INF
+	for node in get_tree().get_nodes_in_group(group):
+		var candidate := node as Node3D
+		if candidate == null or candidate == self:
+			continue
+		if not (candidate is Unit or candidate is ProductionBuilding):
+			continue
+		if candidate.owner_peer_id == owner_peer_id or not _is_target_alive(candidate):
+			continue
+		if not CombatUtils.is_worth_attacking(candidate):
+			continue
+		if _flat_distance(assault_center, candidate.global_position) > ASSAULT_AREA_RADIUS:
+			continue
+		var dist := _flat_distance(global_position, candidate.global_position)
+		if dist < nearest_dist:
+			nearest = candidate
+			nearest_dist = dist
+	return nearest
+
+## XZ-plane distance: vertical separation on sloped terrain shouldn't count
+## toward whether something is inside the area the player clicked.
+func _flat_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
+
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_dist := search_range
@@ -1406,6 +1667,11 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 			continue
 		var other: Unit = node
 		if other.owner_peer_id == owner_peer_id or not _is_target_alive(other):
+			continue
+		## Overkill guard: a target that already has enough arrows in the air to
+		## kill it isn't worth another shot. Skipping it here is what spreads a
+		## volley across the enemy line instead of stacking it on one dying unit.
+		if not CombatUtils.is_worth_attacking(other):
 			continue
 		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
 			continue
@@ -1422,6 +1688,7 @@ func _die() -> void:
 	status_activity = Activity.DEAD
 	status_command = Command.NONE
 	attack_target = null
+	assault_active = false
 	_leave_build_site()
 	_leave_gather_site()
 	## take_damage() (the only caller of _die()) already gates on

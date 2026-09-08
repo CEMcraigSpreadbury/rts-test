@@ -52,11 +52,47 @@ static func find_nearest_enemy_unit(tree: SceneTree, from_position: Vector3, own
 		var other: Unit = node
 		if other.owner_peer_id == owner_peer_id or other.status_activity == Unit.Activity.DEAD:
 			continue
+		if not is_worth_attacking(other):
+			continue
 		var dist := from_position.distance_to(other.global_position)
 		if dist <= nearest_dist:
 			nearest = other
 			nearest_dist = dist
 	return nearest
+
+## --- Overkill prevention ---
+##
+## Damage from a shot is reserved against its target the moment it's fired
+## (Unit/ProductionBuilding._fire_projectile) and released when that shot
+## resolves, however it resolves. Target selection then treats a target as
+## already dead once the reserved damage covers its remaining health, so a
+## volley from twenty archers spreads across the enemy line instead of
+## stacking onto whoever the first three arrows had already killed.
+##
+## `target` is untyped throughout: it may be a Unit or a ProductionBuilding
+## (no common combat base class between a CharacterBody3D and a StaticBody3D),
+## and a statically-typed parameter would make GDScript type-check the
+## argument before the body runs, throwing on an object freed between a shot
+## being fired and it landing instead of letting is_instance_valid() catch it.
+static func reserve_damage(target, amount: int) -> void:
+	if not is_instance_valid(target):
+		return
+	if target is Unit or target is ProductionBuilding:
+		target.incoming_damage += amount
+
+## Health `target` will have left once every shot currently in flight at it has
+## landed. Zero or less means it's already dead on arrival.
+static func effective_health(target) -> int:
+	if not is_instance_valid(target):
+		return 0
+	if target is Unit:
+		return target.status_current_health - target.incoming_damage
+	if target is ProductionBuilding:
+		return target.current_health - target.incoming_damage
+	return 0
+
+static func is_worth_attacking(target) -> bool:
+	return effective_health(target) > 0
 
 static func _find_nearby_aura(tree: SceneTree, unit: Unit) -> Ability:
 	for node in tree.get_nodes_in_group("units"):

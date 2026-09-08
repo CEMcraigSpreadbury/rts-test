@@ -142,6 +142,9 @@ var _destroy_start_y: float = 0.0
 ## worth avoiding even for a stationary attacker).
 const _ENEMY_SCAN_INTERVAL: float = 0.25
 var attack_target: Unit = null
+## Damage already committed to this building by shots currently in the air,
+## same reservation scheme as Unit.incoming_damage — see CombatUtils.
+var incoming_damage: int = 0
 var attack_timer: float = 0.0
 var _enemy_scan_timer: float = 0.0
 var _pending_projectile_hits: Array[Dictionary] = []
@@ -319,7 +322,11 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 func _tick_tower_combat(delta: float) -> void:
 	_tick_pending_projectiles(delta)
 
-	if attack_target != null and not _is_attack_target_in_range(attack_target):
+	## Dropping an already-doomed target here, not just an out-of-range one, is
+	## what makes a tower re-aim instead of emptying its next shots into a unit
+	## the arrows already in the air will finish.
+	if attack_target != null and (not _is_attack_target_in_range(attack_target) \
+			or not CombatUtils.is_worth_attacking(attack_target)):
 		attack_target = null
 	_enemy_scan_timer -= delta
 	if attack_target == null and _enemy_scan_timer <= 0.0:
@@ -353,6 +360,7 @@ func _fire_projectile(target: Unit) -> void:
 		"target": target,
 		"damage": attack_damage,
 	})
+	CombatUtils.reserve_damage(target, attack_damage)
 	projectile_fired.emit(target)
 
 ## Real, authoritative delayed damage — projectile_fired's visual is purely
@@ -366,6 +374,9 @@ func _tick_pending_projectiles(delta: float) -> void:
 			continue
 		_pending_projectile_hits.remove_at(i)
 		var target: Unit = hit["target"]
+		## Released whether the shot lands or the target died first — the
+		## reservation only ever covers time in the air.
+		CombatUtils.reserve_damage(target, -int(hit["damage"]))
 		if is_instance_valid(target) and target.status_activity != Unit.Activity.DEAD:
 			target.take_damage(hit["damage"], self)
 
