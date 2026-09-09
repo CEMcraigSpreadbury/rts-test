@@ -285,10 +285,12 @@ func _update_team_tint_visual() -> void:
 ## identical human "Moving!" was the single most obviously wrong thing about
 ## the order feedback.
 ##
-## Empty means SILENT, not "fall back to a default": the monsters and beastmen
-## have no lines yet, and a fallback would put human speech back in their
-## mouths, which is the exact bug this replaced. Authoring a "GRRR" line with
-## a matching clip is what gives one a voice.
+## Empty means SILENT, not "fall back to a default": the monsters have no
+## lines yet, and a fallback would put human speech back in their mouths,
+## which is the exact bug this replaced. Authoring a "GRRR" line with a
+## matching clip is what gives one a voice. Beastmen are commandable once
+## their barracks is captured, so they inherit unit.tscn's human lines for
+## now rather than being silenced.
 @export var move_command_lines: Array[CommandLine] = []
 @export var attack_command_lines: Array[CommandLine] = []
 @export var patrol_command_lines: Array[CommandLine] = []
