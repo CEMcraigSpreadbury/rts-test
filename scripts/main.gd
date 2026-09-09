@@ -47,6 +47,29 @@ const RESOURCE_TICK_RATE: float = 6.0
 const RESOURCE_TICK_MIN_SPEED: float = 12.0
 const BAR_FRAME_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_frame.png")
 const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill_green.png")
+## The game's single display font. Control-based UI picks this up from the
+## project theme (dark_ages_theme.tres) automatically; this const is for the
+## places that can't use a theme at all — Label3D floating numbers and the
+## command popups below.
+const GAME_FONT: Font = preload("res://assets/fonts/MedievalSharp-Book.ttf")
+
+## Purely local, never networked — a short shout that pops out of the cursor
+## when an order is issued, so a command reads as acknowledged immediately,
+## before the units have had time to visibly react. One line picked at random
+## per command kind; keys match _spawn_command_popup's `kind` argument.
+const COMMAND_POPUP_MESSAGES: Dictionary = {
+	"move": ["Moving!", "On it!", "On my way!", "Right away!", "At once!"],
+	"attack": ["Attack!!", "Charge!", "For glory!", "To arms!", "They'll fall!"],
+	"patrol": ["Patrolling!", "On watch!", "Eyes open!", "We'll hold the line!"],
+	"build": ["Building!", "Let's raise it!", "Consider it done!", "Good spot!"],
+}
+const COMMAND_POPUP_COLORS: Dictionary = {
+	"move": Color(1.0, 0.98, 0.86),
+	"attack": Color(1.0, 0.42, 0.32),
+	"patrol": Color(0.55, 0.85, 1.0),
+	"build": Color(1.0, 0.82, 0.38),
+}
+const COMMAND_POPUP_FONT_SIZE: int = 22
 
 ## Same list (and order) as lobby.tscn's Lobby.available_factions — that
 ## shared order is what a "faction_index" in Network.players refers to.
@@ -109,6 +132,18 @@ const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill
 ## Played for the owner when they plant a rally banner.
 @export var on_rally_set_sound_effects: Array[AudioStream] = []
 
+## Voice lines for the command popups, index-matched to the message lists
+## in COMMAND_POPUP_MESSAGES: element N here is the recording of line N
+## there, so attack_voice_lines[0] is the clip for "Attack!!". A short
+## array (or an empty slot in one) just means that line pops silently, so
+## these can be filled in as recordings arrive rather than all at once.
+## Reordering or adding to COMMAND_POPUP_MESSAGES means reordering these to
+## match — the pairing is by position, nothing checks it.
+@export var move_voice_lines: Array[AudioStream] = []
+@export var attack_voice_lines: Array[AudioStream] = []
+@export var patrol_voice_lines: Array[AudioStream] = []
+@export var build_voice_lines: Array[AudioStream] = []
+
 @onready var ui_root: Node = $UI
 @onready var minimap: Control = $UI/BottomBar/MinimapFrame/Minimap
 
@@ -151,6 +186,73 @@ func _play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 	tween.tween_callback(ring.queue_free)
 
 const PATH_MARKER_COLOR: Color = Color(0.45, 0.75, 1.0, 0.9)
+
+## The recordings for `kind`, or an empty list if it has none yet. Kept as a
+## match rather than a Dictionary because the arrays are @export vars, which
+## can't be referenced from a const.
+func _voice_lines_for(kind: String) -> Array[AudioStream]:
+	match kind:
+		"move": return move_voice_lines
+		"attack": return attack_voice_lines
+		"patrol": return patrol_voice_lines
+		"build": return build_voice_lines
+	return []
+
+## Plays the clip recorded for one specific popup line. Silently does nothing
+## if that line has no recording yet, so half-filled arrays are fine.
+func _play_command_voice_line(kind: String, index: int) -> void:
+	var lines := _voice_lines_for(kind)
+	if _voice_audio_player == null or index < 0 or index >= lines.size() or lines[index] == null:
+		return
+	_voice_audio_player.stream = lines[index]
+	_voice_audio_player.play()
+
+## Local-only cursor "juice" — a random line for the command kind that jumps
+## out of the mouse position, drifts up and fades. Peers never see this (it is
+## deliberately not part of any command RPC): it is feedback about *this*
+## player's click, not about what the units end up doing.
+func _spawn_command_popup(kind: String) -> void:
+	var messages: Array = COMMAND_POPUP_MESSAGES.get(kind, [])
+	if messages.is_empty() or ui_root == null:
+		return
+
+	var index := randi() % messages.size()
+	_play_command_voice_line(kind, index)
+
+	var label := Label.new()
+	label.text = messages[index]
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_override("font", GAME_FONT)
+	label.add_theme_font_size_override("font_size", COMMAND_POPUP_FONT_SIZE)
+	label.add_theme_color_override("font_color", COMMAND_POPUP_COLORS.get(kind, Color.WHITE))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	ui_root.add_child(label)
+
+	## reset_size() forces the layout now instead of next frame — without it
+	## size is still zero here, so centring on the cursor and the centre pivot
+	## the scale punch needs would both be computed from nothing and the first
+	## frame would pop in offset.
+	label.reset_size()
+	var start := get_viewport().get_mouse_position() - label.size * 0.5 + Vector2(0.0, -20.0)
+	label.position = start
+	label.pivot_offset = label.size * 0.5
+	label.scale = Vector2(0.35, 0.35)
+	label.rotation = deg_to_rad(randf_range(-7.0, 7.0))
+
+	var drift := Vector2(randf_range(-14.0, 14.0), -46.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	## TRANS_BACK/EASE_OUT overshoots past full size and settles back — that
+	## overshoot is the "jump"; a plain linear grow reads as a fade-in instead.
+	tween.tween_property(label, "scale", Vector2.ONE, 0.22) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "position", start + drift, 0.6) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "modulate:a", 0.0, 0.28).set_delay(0.34)
+	tween.set_parallel(false)
+	tween.tween_callback(label.queue_free)
 
 ## Persistent (until reached/cleared) flag marking one point in a unit's
 ## shift-drawn path — see _path_markers. Only actually shown while that unit
@@ -291,6 +393,13 @@ var _info_progress_bar: TextureProgressBar = null
 var _info_empty_label: Label = null
 var _info_slot_row: HBoxContainer = null
 var _info_last_queue_size: int = -1
+## The building state the info section's structure was built for. Ownership and
+## construction state both change what gets built (an enemy or half-built
+## building has no queue rows), and both can flip while the building stays
+## selected — capturing an objective being the obvious case — so the structure
+## is rebuilt when either stops matching.
+var _info_built_commandable: bool = false
+var _info_built_under_construction: bool = false
 ## item_name -> its producible button's queued-count badge; updated every
 ## frame in _refresh_building_info() from ProductionBuilding.synced_queue_counts.
 var _info_producible_badges: Dictionary = {}
@@ -358,6 +467,11 @@ var _wall_ghosts: Array[Node3D] = []
 ## Live "N segments — cost" readout shown while dragging — see its creation
 ## in _ready() and updates in _rebuild_wall_ghost().
 var _wall_drag_label: Label = null
+## Voice lines get their own player rather than sharing
+## command_audio_player: that one is a single stream, so a voice line sent
+## through it would cut off the command sound firing at the same moment.
+## Built in code for the same reason as _wall_drag_label below.
+var _voice_audio_player: AudioStreamPlayer = null
 const WALL_SEGMENT_FOOTPRINT_RADIUS: float = 0.9
 const WALL_CORNER_FOOTPRINT_RADIUS: float = 0.45
 ## Minimum direction change (radians) between two consecutive straight runs
@@ -473,6 +587,10 @@ func _ready() -> void:
 	## rather than in main.tscn: a small always-on-top overlay isn't worth
 	## another hand-edit to an already enormous scene file. Hidden except
 	## mid-drag; see _rebuild_wall_ghost().
+	_voice_audio_player = AudioStreamPlayer.new()
+	_voice_audio_player.bus = &"SFX"
+	ui_root.add_child(_voice_audio_player)
+
 	_wall_drag_label = Label.new()
 	_wall_drag_label.visible = false
 	_wall_drag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -929,6 +1047,7 @@ func _rpc_resource_number(unit_path: NodePath, amount: int, color: Color) -> voi
 func _spawn_floating_number(world_pos: Vector3, text: String, color: Color) -> void:
 	var label := Label3D.new()
 	label.text = text
+	label.font = GAME_FONT
 	label.font_size = 56
 	label.outline_size = 12
 	label.modulate = color
@@ -1610,6 +1729,20 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 		return result.collider.get_path()
 	return NodePath()
 
+## A right-click is a move order by default, but right-clicking something
+## hostile issues an attack instead (see _rpc_issue_command) — so the popup
+## has to read the same target _resolve_order_target_path does rather than
+## assuming "move", or clicking an enemy would cheerfully answer "On my way!".
+## Deliberately only enemy-owned things count: _resolve_order_target_path also
+## returns a path for Gatherables and for friendly buildings that are under
+## construction or sit on a deposit, and none of those are attacks.
+func _popup_kind_for_order(result: Dictionary) -> String:
+	var collider = result.get("collider")
+	if (collider is Unit or collider is ProductionBuilding) \
+			and collider.owner_peer_id != _my_peer_id():
+		return "attack"
+	return "move"
+
 ## Selection is local, but actually moving/gathering only ever happens on the
 ## host, so the command is sent there and executed on its authoritative units.
 ## append: true while Shift is held — the order is queued to run after
@@ -1639,6 +1772,7 @@ func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, false)
+	_spawn_command_popup(_popup_kind_for_order(result))
 	for unit in selected_units:
 		if append:
 			_add_path_marker(unit, result.position)
@@ -1663,6 +1797,7 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, true)
+	_spawn_command_popup("attack")
 	for unit in selected_units:
 		if append:
 			_add_path_marker(unit, result.position)
@@ -2564,6 +2699,7 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 				unit_paths.append(unit.get_path())
 			_rpc_issue_patrol.rpc_id(1, unit_paths, result.position, _patrol_started_this_session)
 			_play_command_sound()
+			_spawn_command_popup("patrol")
 			_patrol_started_this_session = true
 			if not event.shift_pressed:
 				pending_order_mode = ""
@@ -2913,6 +3049,8 @@ func _build_building_info(building: ProductionBuilding) -> void:
 	_info_empty_label = null
 	_info_slot_row = null
 	_info_last_queue_size = -1
+	_info_built_commandable = _can_command_building(building)
+	_info_built_under_construction = building.is_under_construction
 
 	_info_progress_bar = _make_progress_bar_with_overlay()
 	info_panel_content.add_child(_info_progress_bar)
@@ -2938,7 +3076,7 @@ func _refresh_building_info() -> void:
 	var building := selected_building
 	var shown_health: int = int(round(building.health_fraction * building.max_health))
 	portrait_health_label.text = "%d / %d" % [shown_health, building.max_health]
-	if _info_progress_bar == null:
+	if _info_progress_bar == null 			or _info_built_commandable != _can_command_building(building) 			or _info_built_under_construction != building.is_under_construction:
 		_build_building_info(building)
 
 	if building.is_under_construction:
@@ -3700,6 +3838,7 @@ func _confirm_placement() -> void:
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
 	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths, shift_held)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
+	_spawn_command_popup("build")
 
 	## Holding Shift keeps the same builders and stays in placement mode
 	## (re-arming the same building type) so the next click queues another
@@ -4209,6 +4348,7 @@ func _confirm_wall_placement() -> void:
 		kinds.append(piece["kind"])
 	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
+	_spawn_command_popup("build")
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
@@ -4388,6 +4528,7 @@ func _confirm_gate_placement() -> void:
 	var target_path := _gate_target.get_path()
 	_rpc_request_build_gate.rpc_id(1, type_index, target_path, _pending_builder_paths)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
+	_spawn_command_popup("build")
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit

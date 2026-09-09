@@ -48,8 +48,24 @@ func _ready() -> void:
 	for building in buildings.get_children():
 		building.owner_peer_id = 0
 
+## A destroyed building sticks around for its sink animation before freeing
+## itself, so is_destroyed has to be checked rather than just the child count.
+func _has_capturable_buildings() -> bool:
+	for building in buildings.get_children():
+		if building is ProductionBuilding and building.is_destroyed:
+			continue
+		return true
+	return false
+
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
+		return
+
+	## Razing every building at an objective removes the thing ownership of it
+	## would even transfer, so it stops being capturable at all rather than
+	## flipping owner over an empty patch of ground.
+	if not _has_capturable_buildings():
+		capture_progress = 0.0
 		return
 
 	var defenders_present := false

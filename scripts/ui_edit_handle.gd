@@ -27,6 +27,7 @@ const CORNERS := {
 	"bl": {"free_x": "offset_left", "free_y": "offset_bottom", "sign_x": -1.0, "sign_y": 1.0},
 	"br": {"free_x": "offset_right", "free_y": "offset_bottom", "sign_x": 1.0, "sign_y": 1.0},
 }
+const LABEL_FONT: Font = preload("res://assets/fonts/MedievalSharp-Book.ttf")
 
 var target: Control
 var save_key: String
@@ -64,7 +65,7 @@ func _draw() -> void:
 	for corner in CORNERS:
 		draw_rect(_grip_rect(corner), color, true)
 	var suffix := "  (auto — size only)" if managed else ""
-	draw_string(ThemeDB.fallback_font, Vector2(4, -6), "%s  %dx%d%s" % [String(target.name), int(size.x), int(size.y), suffix], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
+	draw_string(LABEL_FONT, Vector2(4, -6), "%s  %dx%d%s" % [String(target.name), int(size.x), int(size.y), suffix], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
 
 func _grip_rect(corner: String) -> Rect2:
 	var pos := Vector2.ZERO
