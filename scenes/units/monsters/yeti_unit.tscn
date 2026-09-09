@@ -3,23 +3,17 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://bmtfiui1tgfet" path="res://assets/art/MiniBigMonsters/Outline/MiniYeti-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="4_food"]
-[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 
-[sub_resource type="Resource" id="ResourceCost_yeti_food"]
+[sub_resource type="Resource" id="ResourceCost_yeti_favour"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_food")
-amount = 200
-
-[sub_resource type="Resource" id="ResourceCost_yeti_gold"]
-script = ExtResource("3_cost_script")
-resource_type = ExtResource("5_gold")
-amount = 150
+resource_type = ExtResource("4_favour")
+amount = 45
 
 [node name="Yeti" instance=ExtResource("1_unit")]
 display_name = "Yeti"
 move_speed = 2.2
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_yeti_food"), SubResource("ResourceCost_yeti_gold")])
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_yeti_favour")])
 population_cost = 4
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(40, 32)

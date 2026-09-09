@@ -5,4 +5,5 @@
 
 [resource]
 script = ExtResource("1_script")
+display_color = Color(0.78, 0.62, 0.42, 1)
 insufficient_sound_effects = Array[AudioStream]([ExtResource("2_sfx_short")])

@@ -49,8 +49,8 @@ const BAR_FRAME_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fra
 const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill_green.png")
 ## The game's single display font. Control-based UI picks this up from the
 ## project theme (dark_ages_theme.tres) automatically; this const is for the
-## places that can't use a theme at all — Label3D floating numbers and the
-## command popups below.
+## labels built in code that never enter the themed UI tree — the command
+## popups below and the pinned world popups (damage, resources, Favour).
 const GAME_FONT: Font = preload("res://assets/fonts/MedievalSharp-Book.ttf")
 
 ## Tint per command kind for the popup that jumps out of the cursor when an
@@ -76,6 +76,7 @@ const COMMAND_POPUP_FONT_SIZE: int = 22
 ## current_formation_type/_set_formation_type. Purely a display; the actual
 ## shape logic lives host-side in Formation/_formation_positions.
 @onready var formation_label: Label = $UI/FormationLabel
+@onready var fog_of_war: FogOfWar = $FogOfWar
 @onready var units_root: Node3D = $Units
 @onready var unit_spawner: MultiplayerSpawner = $UnitSpawner
 @onready var buildings_root: Node3D = $Buildings
@@ -193,6 +194,10 @@ func _command_lines_for(kind: String) -> Array[CommandLine]:
 ## The CommandLine most recently played for each command kind, so the next
 ## pick for that kind can exclude it. See _spawn_command_popup.
 var _last_command_line: Dictionary = {}
+
+## Damaged node instance_id -> {"total": int, "label": Label, "started": float}
+## for the aggregation window above. See _show_damage_feedback.
+var _damage_aggregates: Dictionary = {}
 
 ## Local-only cursor "juice" — a random line for the command kind that jumps
 ## out of the mouse position, drifts up and fades. Peers never see this (it is
@@ -527,7 +532,51 @@ const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
 	preload("res://resources/wood_resource_type.tres"),
 	preload("res://resources/food_resource_type.tres"),
 	preload("res://resources/gold_resource_type.tres"),
+	preload("res://resources/favour_resource_type.tres"),
 ]
+## Clears the Shrine model and its health bar (which sits at y 2.8).
+const FAVOUR_POPUP_HEIGHT: float = 3.4
+## Favour is the one resource with no ResourceCost lying around to read its
+## colour off at popup time (objectives grant it directly), so its type is
+## reached by name here.
+const FAVOUR_RESOURCE_TYPE: ResourceType = preload("res://resources/favour_resource_type.tres")
+## Clears a villager's head — deposit popups anchor to the villager, not the
+## building it is delivering into.
+const DEPOSIT_POPUP_HEIGHT: float = 1.2
+## Same head clearance as a deposit popup, but kept separate: this one also
+## has to sit above buildings, which take damage but never deliver.
+const DAMAGE_POPUP_HEIGHT: float = 1.2
+## Red only for hits landing on the local player's own units and buildings —
+## that is the one the player has to react to. Damage their own side deals
+## is the bone colour, so a fight reads as "red means me" at a glance
+## instead of every number in a melee being the same alarm colour.
+const DAMAGE_TAKEN_POPUP_COLOR: Color = Color(1.0, 0.42, 0.38)
+const DAMAGE_DEALT_POPUP_COLOR: Color = Color(0.96, 0.94, 0.88)
+## Pinned world popups run smaller than the command popup at the cursor: that
+## one is a single deliberate response to a click, whereas these are ambient
+## and several can be on screen at once.
+const PINNED_POPUP_FONT_SIZE: int = 18
+## Smaller again — damage is the highest-volume popup by far, and in a real
+## fight legibility comes from the numbers not overlapping.
+const DAMAGE_POPUP_FONT_SIZE: int = 15
+## Camera distance at which a pinned popup renders at its authored size —
+## rts_camera.gd's own starting zoom_distance, so the default view is 1:1.
+const POPUP_REFERENCE_DISTANCE: float = 18.0
+## Bounds on the distance scaling. Without them the range is unusable at the
+## extremes of rts_camera.gd's 8-22 zoom (fully in would be 2.25x).
+const POPUP_SCALE_MIN: float = 0.6
+const POPUP_SCALE_MAX: float = 1.25
+## Hits landing on one target inside this window are summed into a single
+## popup rather than stacking a label per hit. Measured from the first hit of
+## a run, not refreshed per hit, so sustained fire still ticks over into a new
+## number instead of one label absorbing an entire fight.
+const DAMAGE_AGGREGATE_WINDOW: float = 0.35
+## Only sweep _damage_aggregates for expired entries once it is at least this
+## big — below it the dictionary is smaller than the walk would cost.
+const DAMAGE_AGGREGATE_PRUNE_SIZE: int = 64
+## Meta key under which a pinned popup carries its own flight tween — see
+## _spawn_pinned_popup.
+const POPUP_TWEEN_META: StringName = &"pinned_popup_tween"
 var chat_lines: Array[String] = []
 ## Bumped on every show/hide request so a stale timer (from an older message)
 ## doesn't hide the log after a newer one already reset the countdown.
@@ -900,7 +949,11 @@ func _rpc_damage_number(node_path: NodePath, amount: int) -> void:
 ## Floating number for anything damageable; the hit flash only applies to
 ## Unit (buildings have no sprite to flash).
 func _show_damage_feedback(node: Node3D, amount: int) -> void:
-	_spawn_floating_number(node.global_position + Vector3(0, 1.2, 0), str(amount), Color(1.0, 0.3, 0.25))
+	## get() rather than node.owner_peer_id: this takes a plain Node3D (Unit
+	## and ProductionBuilding both land here), and a missing property comes
+	## back null, which simply compares unequal.
+	var mine: bool = node.get("owner_peer_id") == multiplayer.get_unique_id()
+	_show_damage_number(node, amount, mine)
 	_spawn_impact_burst(node.global_position + Vector3(0, 0.9, 0))
 	if node is Unit:
 		node.play_hit_flash()
@@ -908,6 +961,59 @@ func _show_damage_feedback(node: Node3D, amount: int) -> void:
 		node.play_hit_flash()
 		node.play_squash()
 	_maybe_alert_under_attack(node)
+
+## Sums hits on one target inside DAMAGE_AGGREGATE_WINDOW into a single popup,
+## so a battle line focusing one unit shows "37" rather than five overlapping
+## labels. The running label is replaced outright rather than having its text
+## rewritten in place: a new label re-punches and re-centres on the new text
+## width for free, where an in-place edit would have to fight the drift tween
+## and recompute the centring offset the follow lambda captured.
+func _show_damage_number(node: Node3D, amount: int, mine: bool) -> void:
+	## Gated on what is actually on screen rather than on a fog query of its
+	## own: FogOfWar already decides this per node, and it uses different rules
+	## for units (in vision now) and buildings (explored once, remembered), so
+	## re-deriving it here could only ever disagree with what the player sees.
+	if not node.is_visible_in_tree():
+		return
+	var id := node.get_instance_id()
+	var now := Time.get_ticks_msec() / 1000.0
+	var total := amount
+	var entry: Dictionary = _damage_aggregates.get(id, {})
+	if not entry.is_empty() and now - float(entry["started"]) <= DAMAGE_AGGREGATE_WINDOW:
+		total += int(entry["total"])
+		var previous: Label = entry["label"]
+		if is_instance_valid(previous):
+			var previous_tween: Tween = previous.get_meta(POPUP_TWEEN_META, null)
+			if previous_tween != null and previous_tween.is_valid():
+				previous_tween.kill()
+			previous.queue_free()
+	else:
+		## Only reset the clock when this hit starts a fresh run, so the window
+		## stays anchored to the first hit rather than sliding forward forever
+		## under continuous fire.
+		entry = {"started": now}
+
+	var color := DAMAGE_TAKEN_POPUP_COLOR if mine else DAMAGE_DEALT_POPUP_COLOR
+	## ignore_fog: the is_visible_in_tree() check above is the stricter and more
+	## accurate version of what the helper's own fog gate would do.
+	var label := _spawn_pinned_popup(node.global_position + Vector3(0.0, DAMAGE_POPUP_HEIGHT, 0.0),
+			str(total), color, true, DAMAGE_POPUP_FONT_SIZE)
+	## A popup skipped by the behind-camera check still has to keep
+	## accumulating: the target may come back into view mid-run, and the number
+	## shown then should be the whole run, not just the hits since it appeared.
+	_damage_aggregates[id] = {"total": total, "label": label, "started": entry["started"]}
+	_prune_damage_aggregates(now)
+
+## Entries are keyed by instance_id and only ever overwritten by a later hit on
+## the same node, so units that die mid-run would otherwise leave theirs behind
+## for the rest of the match. Only worth walking once the dictionary is big
+## enough that stale entries are plausible.
+func _prune_damage_aggregates(now: float) -> void:
+	if _damage_aggregates.size() <= DAMAGE_AGGREGATE_PRUNE_SIZE:
+		return
+	for id in _damage_aggregates.keys():
+		if now - float(_damage_aggregates[id]["started"]) > DAMAGE_AGGREGATE_WINDOW:
+			_damage_aggregates.erase(id)
 
 ## One-shot dust/spark puff at the point of a hit. The process material and
 ## mesh are built once in _ready and shared by every burst — only the emitter
@@ -1055,7 +1161,7 @@ func _rpc_harvest_squash(node_path: NodePath) -> void:
 		node.play_harvest_squash()
 
 func _on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
-	_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
+	_spawn_deposit_popup(unit, amount, color)
 	var dropoff := unit.dropoff_point.get_parent() as ProductionBuilding if unit.dropoff_point else null
 	if dropoff:
 		_relay_building_squash(dropoff)
@@ -1066,34 +1172,164 @@ func _on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
 func _rpc_resource_number(unit_path: NodePath, amount: int, color: Color) -> void:
 	var unit := get_node_or_null(unit_path) as Unit
 	if unit:
-		_spawn_floating_number(unit.global_position + Vector3(0, 1.2, 0), "+%d" % amount, color)
+		_spawn_deposit_popup(unit, amount, color)
 
-## Purely local cosmetic popup — rises and fades in place, then frees itself.
-## Shared by damage numbers (red, flat integer) and resource numbers ("+N" in
-## the resource's own display_color).
-func _spawn_floating_number(world_pos: Vector3, text: String, color: Color) -> void:
-	var label := Label3D.new()
+## Anchored at the depositing villager rather than at the drop-off building
+## itself: the villager is standing on the building when this fires, so it
+## reads as coming from the delivery, and it keeps a Town Center taking two
+## deliveries at once from stacking both popups on the same pixel.
+func _spawn_deposit_popup(unit: Unit, amount: int, color: Color) -> void:
+	var mine := unit.owner_peer_id == multiplayer.get_unique_id()
+	_spawn_pinned_popup(unit.global_position + Vector3(0.0, DEPOSIT_POPUP_HEIGHT, 0.0),
+			"+%d" % amount, color, mine)
+
+## Objective Favour income is banked host-side only (see objective.gd), so the
+## "+N" over the shrine has to be relayed the same way damage and resource
+## numbers are, rather than each peer spawning its own off local state.
+##
+## Fog-gated per peer, unlike the other floating numbers: those fire on
+## one-off events, whereas this one repeats for as long as an objective is
+## held, so an unguarded popup would be a permanent "someone owns this shrine
+## and is earning from it" beacon through unexplored fog. Owning it counts as
+## seeing it (same rule as fog_of_war.gd's own node visibility), though in
+## practice a held objective's buildings already grant vision over themselves.
+func show_favour_popup(objective: Objective, amount: int) -> void:
+	_spawn_favour_popup(objective, amount)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_favour_popup.rpc(objective.get_path(), amount)
+
+## Unreliable, unlike the otherwise-identical _rpc_resource_number: that one
+## fires on a discrete event a player would notice missing, whereas this
+## repeats every time an objective banks a point, so a dropped packet costs
+## one popup in a steady stream of them and isn't worth the retransmit.
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_favour_popup(objective_path: NodePath, amount: int) -> void:
+	var objective := get_node_or_null(objective_path) as Objective
+	if objective:
+		_spawn_favour_popup(objective, amount)
+
+func _spawn_favour_popup(objective: Objective, amount: int) -> void:
+	var mine := objective.owner_peer_id == multiplayer.get_unique_id()
+	_spawn_pinned_popup(objective.global_position + Vector3(0.0, FAVOUR_POPUP_HEIGHT, 0.0),
+			"+%d" % amount, FAVOUR_RESOURCE_TYPE.display_color, mine)
+
+## Every floating world label — damage, resource deliveries, Favour income —
+## goes through here. Built like _spawn_command_popup (2D Label in ui_root,
+## scale-punch then drift-and-fade) rather than as a world-space Label3D,
+## which these all used to be: a Label3D sits in the scene's own lighting and
+## depth and reads as part of the terrain, which is why it was hard to see
+## over grass. It differs from the command popup in staying pinned to
+## world_pos (see the follow lambda below) rather than drifting from a screen
+## position captured once at the cursor.
+##
+## Fog-gated, unlike the Label3D numbers this replaced for shrine income and
+## resource deliveries: a UI-layer label draws over everything, so an enemy's
+## popup would otherwise be a legible callout sitting on top of fog that is
+## deliberately hiding the unit or building underneath it. ignore_fog is for
+## callers that already know the popup is the local player's own.
+func _spawn_pinned_popup(world_pos: Vector3, text: String, color: Color, ignore_fog: bool = false,
+		font_size: int = PINNED_POPUP_FONT_SIZE) -> Label:
+	if ui_root == null:
+		return null
+	if not ignore_fog and not fog_of_war.is_visible_at(world_pos):
+		return null
+	## A point behind the camera still unprojects to a plausible-looking
+	## on-screen position, so it has to be rejected explicitly or popups from
+	## behind the player would appear in the middle of the view.
+	if camera.is_position_behind(world_pos):
+		return null
+
+	var label := Label.new()
 	label.text = text
-	label.font = GAME_FONT
-	label.font_size = 56
-	label.outline_size = 12
-	label.modulate = color
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	add_child(label)
-	label.global_position = world_pos + Vector3(randf_range(-0.3, 0.3), 0.0, randf_range(-0.3, 0.3))
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_override("font", GAME_FONT)
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
+	ui_root.add_child(label)
+
+	## See _spawn_command_popup — size is zero until this forces the layout.
+	label.reset_size()
+	label.pivot_offset = label.size * 0.5
+	label.rotation = deg_to_rad(randf_range(-7.0, 7.0))
+
+	## Perspective cue the Label3D version got for free: a label over a distant
+	## unit shrinks, one over a zoomed-in fight grows. Applied as a scale
+	## multiplier rather than a font_size, so the punch tween below stays a
+	## single property animation and no re-layout is needed. Sampled once at
+	## spawn — a popup only lives ~0.6s, so zooming mid-flight is not worth
+	## fighting the scale tween over.
+	var camera_scale := clampf(POPUP_REFERENCE_DISTANCE / maxf(camera.global_position.distance_to(world_pos), 0.001),
+			POPUP_SCALE_MIN, POPUP_SCALE_MAX)
+	label.scale = Vector2(0.35, 0.35) * camera_scale
+
+	var drift := Vector2(randf_range(-14.0, 14.0), -46.0)
+	var anchor := world_pos
+	var half := label.size * 0.5
+	## Unlike the command popup, which drifts from a screen position captured
+	## once, this re-projects its anchor every frame so the text stays over the
+	## thing it is labelling while the camera pans — a cursor popup is about a
+	## click that has already happened, but these label something in the world
+	## and visibly slide off it otherwise. Hence tween_method driving the drift
+	## as a 0..1 fraction rather than tweening `position` to a fixed target:
+	## same TRANS_QUAD/EASE_OUT curve, recomputed against the current view.
+	var follow := func(t: float) -> void:
+		## The label can be freed mid-flight when a later hit replaces this
+		## popup (see _show_damage_number). That kills the tween too, but a
+		## tween already mid-step still finishes the current call, and a freed
+		## Object reads back as Nil rather than erroring on the check itself.
+		if not is_instance_valid(label):
+			return
+		if camera.is_position_behind(anchor):
+			label.visible = false
+			return
+		label.visible = true
+		label.position = camera.unproject_position(anchor) - half + drift * t
+	follow.call(0.0)
+
 	var tween := create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(label, "position:y", label.position.y + 1.2, 0.9) \
+	tween.tween_property(label, "scale", Vector2.ONE * camera_scale, 0.22) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_method(follow, 0.0, 1.0, 0.62) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "modulate:a", 0.0, 0.9).set_delay(0.3)
+	tween.tween_property(label, "modulate:a", 0.0, 0.28).set_delay(0.34)
 	tween.set_parallel(false)
 	tween.tween_callback(label.queue_free)
+	## Only needed by callers that may free the label before the tween ends —
+	## without killing it first, its tween_method keeps calling follow on a
+	## freed label and its final tween_callback calls queue_free on one.
+	label.set_meta(POPUP_TWEEN_META, tween)
+	return label
 
 ## Hand-placed buildings (currently just Objective guards' buildings) never
 ## go through _spawn_building_from_data below, so without this their
 ## item_completed/destroyed signals have no listener and producing a unit
 ## silently does nothing. Called by objective.gd once per building at _ready.
+## The unit equivalent of register_objective_building below: an Objective's
+## guards are hand-placed in its .tscn rather than going through
+## _spawn_unit_from_data, so nothing had ever connected their signals — hitting
+## one produced no damage number, and on a client it neither animated nor drew
+## the arrows it was shooting. Called by objective.gd.
+##
+## Deliberately a complete mirror of the connections in _spawn_unit_from_data
+## rather than only the ones a guard demonstrably needs today. The two lists
+## drifting apart is what caused this in the first place, and a guard does not
+## stay a guard: capturing an objective hands it to a player (see
+## Objective._capture), after which it takes orders like any other unit —
+## order_completed in particular is what advances a shift-queued order chain,
+## so without it a captured guard would run the first order of a queue and
+## silently drop the rest.
+func register_objective_unit(unit: Unit) -> void:
+	unit.animation_changed.connect(_on_unit_animation_changed.bind(unit))
+	unit.projectile_fired.connect(_on_unit_projectile_fired.bind(unit))
+	unit.damaged.connect(_relay_damage_number.bind(unit))
+	unit.resource_deposited.connect(_on_unit_resource_deposited.bind(unit))
+	unit.resource_harvested.connect(_on_unit_resource_harvested)
+	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
+
 func register_objective_building(building: ProductionBuilding) -> void:
 	building.item_completed.connect(_on_building_item_completed.bind(building))
 	building.destroyed.connect(_on_building_destroyed.bind(building))

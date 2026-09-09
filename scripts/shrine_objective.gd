@@ -79,6 +79,10 @@ func _apply_monster(index: int) -> void:
 	guard.owner_peer_id = 0
 	guard.team_tint = Color(0.5, 0.5, 0.5)
 	$Guards.add_child(guard)
+	## No-op on the host, where this runs before Objective._ready's own pass —
+	## see register_guard. Needed on a client, where the answer that creates
+	## this guard arrives long after _ready has been and gone.
+	register_guard(guard)
 
 ## --- Client-side request/retry (see MONSTER_REQUEST_RETRY_SEC) ---
 

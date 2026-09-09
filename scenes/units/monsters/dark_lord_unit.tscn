@@ -3,23 +3,17 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://dqr2prd6077l0" path="res://assets/art/MiniBigMonsters/Outline/MiniDarkLord-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="4_food"]
-[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 
-[sub_resource type="Resource" id="ResourceCost_dark_lord_food"]
+[sub_resource type="Resource" id="ResourceCost_dark_lord_favour"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_food")
-amount = 180
-
-[sub_resource type="Resource" id="ResourceCost_dark_lord_gold"]
-script = ExtResource("3_cost_script")
-resource_type = ExtResource("5_gold")
-amount = 200
+resource_type = ExtResource("4_favour")
+amount = 55
 
 [node name="DarkLord" instance=ExtResource("1_unit")]
 display_name = "Dark Lord"
 move_speed = 2.6
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_dark_lord_food"), SubResource("ResourceCost_dark_lord_gold")])
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_dark_lord_favour")])
 population_cost = 4
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(40, 32)

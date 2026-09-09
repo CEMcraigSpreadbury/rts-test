@@ -4,6 +4,10 @@ extends Resource
 ## Create new resource types by duplicating a .tres of this in the editor.
 
 @export var display_name: String = "Wood"
+## Tint of the "+N" popup when a villager delivers this resource (and of
+## the Favour popup over a held objective). Nothing else reads it, so
+## pick it to stay legible over sunlit terrain rather than to match the
+## resource's art.
 @export var display_color: Color = Color(0.55, 0.35, 0.2)
 @export var gather_amount_per_tick: int = 1
 @export var gather_interval: float = 1.0

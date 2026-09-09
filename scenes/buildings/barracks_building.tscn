@@ -174,6 +174,8 @@ pixel_size = 0.2
 billboard = 1
 texture_filter = 0
 texture = ExtResource("6_bar_tex")
+no_depth_test = true
+render_priority = 20
 
 [node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=1126691683]
 transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
@@ -183,6 +185,8 @@ pixel_size = 0.2
 billboard = 1
 texture_filter = 0
 texture = ExtResource("6_bar_tex")
+no_depth_test = true
+render_priority = 21
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=872243082]
 replication_config = SubResource("SceneReplicationConfig_building")

@@ -28,6 +28,7 @@ properties/1/replication_mode = 1
 transform = Transform3D(0.99999994, 0, 0, 0, 1, 0, 0, 0, 0.99999994, 0, 0, 0)
 script = ExtResource("1_objective_script")
 wander_radius = 5.0
+favour_per_second = 1.0
 
 [node name="Guards" type="Node3D" parent="." unique_id=1646110423]
 
