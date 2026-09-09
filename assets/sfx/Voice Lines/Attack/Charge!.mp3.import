@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bqnelfb4igfgn"
+path="res://.godot/imported/Charge!.mp3-b42c1e87f154b3fb91db37e2a0b63706.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Voice Lines/Attack/Charge!.mp3"
+dest_files=["res://.godot/imported/Charge!.mp3-b42c1e87f154b3fb91db37e2a0b63706.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

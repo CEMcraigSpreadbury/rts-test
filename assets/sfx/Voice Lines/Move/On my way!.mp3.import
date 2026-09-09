@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cbni0oey04mv0"
+path="res://.godot/imported/On my way!.mp3-5a9bd395503b402716f445c1106ffad4.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Voice Lines/Move/On my way!.mp3"
+dest_files=["res://.godot/imported/On my way!.mp3-5a9bd395503b402716f445c1106ffad4.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

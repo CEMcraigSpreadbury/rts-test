@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://1p4dom8sm5ue"
+path="res://.godot/imported/They'll fall.mp3-2e31ac7ae8d3e22d22f0bac13d5b7816.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Voice Lines/Attack/They'll fall.mp3"
+dest_files=["res://.godot/imported/They'll fall.mp3-2e31ac7ae8d3e22d22f0bac13d5b7816.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

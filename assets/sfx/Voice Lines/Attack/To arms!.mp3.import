@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://f234kflniek"
+path="res://.godot/imported/To arms!.mp3-d0b5f4b1b13f2a56094297ab86bbcf0f.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Voice Lines/Attack/To arms!.mp3"
+dest_files=["res://.godot/imported/To arms!.mp3-d0b5f4b1b13f2a56094297ab86bbcf0f.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
