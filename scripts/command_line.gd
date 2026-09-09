@@ -8,7 +8,7 @@ extends Resource
 ## wrong voice under them, and nothing errored. See main.gd's
 ## _spawn_command_popup / COMMAND_POPUP_COLORS.
 
-## Shown in the popup at the cursor. A line with no text is skipped, so a
+## Shown in the popup at the ordered spot. A line with no text is skipped, so a
 ## half-filled array in the inspector is harmless.
 @export var text: String = ""
 ## Played when this exact line is picked. Optional — a line with no clip yet

@@ -53,8 +53,8 @@ const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill
 ## popups below and the pinned world popups (damage, resources, Favour).
 const GAME_FONT: Font = preload("res://assets/fonts/MedievalSharp-Book.ttf")
 
-## Tint per command kind for the popup that jumps out of the cursor when an
-## order is issued. The lines themselves are inspector-authored — see
+## Tint per command kind for the popup that jumps out of the ordered spot when
+## an order is issued. The lines themselves are inspector-authored — see
 ## move_command_lines and friends below.
 const COMMAND_POPUP_COLORS: Dictionary = {
 	"move": Color(1.0, 0.98, 0.86),
@@ -63,6 +63,9 @@ const COMMAND_POPUP_COLORS: Dictionary = {
 	"build": Color(1.0, 0.82, 0.38),
 }
 const COMMAND_POPUP_FONT_SIZE: int = 22
+## Lifts the command line off the clicked ground so it reads as a callout
+## rather than as text lying on the terrain.
+const COMMAND_POPUP_HEIGHT: float = 0.6
 
 ## Same list (and order) as lobby.tscn's Lobby.available_factions — that
 ## shared order is what a "faction_index" in Network.players refers to.
@@ -199,12 +202,23 @@ var _last_command_line: Dictionary = {}
 ## for the aggregation window above. See _show_damage_feedback.
 var _damage_aggregates: Dictionary = {}
 
-## Local-only cursor "juice" — a random line for the command kind that jumps
-## out of the mouse position, drifts up and fades. Peers never see this (it is
+## Local-only "juice" — a random line for the command kind that jumps out of
+## the ordered spot, drifts up and fades. Peers never see this (it is
 ## deliberately not part of any command RPC): it is feedback about *this*
 ## player's click, not about what the units end up doing.
-func _spawn_command_popup(kind: String) -> void:
+##
+## Pinned to world_pos (the clicked ground/target, or the placed building)
+## rather than to the screen position of the cursor: the camera can be panning
+## while the line is still on screen — edge scroll, or a middle-drag started
+## right after the click — and a screen-anchored line then slides away from the
+## spot it is talking about. Follows _spawn_pinned_popup's re-projection.
+func _spawn_command_popup(kind: String, world_pos: Vector3) -> void:
 	if ui_root == null:
+		return
+	## Same behind-camera rejection as _spawn_pinned_popup: a point behind the
+	## camera unprojects to a plausible-looking on-screen position, so an
+	## order issued and then spun away from would pop up in mid-view.
+	if camera.is_position_behind(world_pos):
 		return
 	## Blank entries are skipped rather than picked and shown empty, so a
 	## part-filled array in the inspector never produces an invisible popup.
@@ -246,24 +260,39 @@ func _spawn_command_popup(kind: String) -> void:
 	ui_root.add_child(label)
 
 	## reset_size() forces the layout now instead of next frame — without it
-	## size is still zero here, so centring on the cursor and the centre pivot
+	## size is still zero here, so centring on the anchor and the centre pivot
 	## the scale punch needs would both be computed from nothing and the first
 	## frame would pop in offset.
 	label.reset_size()
-	var start := get_viewport().get_mouse_position() - label.size * 0.5 + Vector2(0.0, -20.0)
-	label.position = start
 	label.pivot_offset = label.size * 0.5
 	label.scale = Vector2(0.35, 0.35)
 	label.rotation = deg_to_rad(randf_range(-7.0, 7.0))
 
 	var drift := Vector2(randf_range(-14.0, 14.0), -46.0)
+	var anchor := world_pos + Vector3(0.0, COMMAND_POPUP_HEIGHT, 0.0)
+	## Offset kept from the old cursor-anchored version: the line sits above the
+	## ordered spot rather than on it, so it never covers what was clicked.
+	var half := label.size * 0.5 + Vector2(0.0, 20.0)
+	## Re-projected every frame (as a 0..1 drift fraction) instead of tweening
+	## `position` to a fixed screen target — see _spawn_pinned_popup, which
+	## does the same for the world numbers.
+	var follow := func(t: float) -> void:
+		if not is_instance_valid(label):
+			return
+		if camera.is_position_behind(anchor):
+			label.visible = false
+			return
+		label.visible = true
+		label.position = camera.unproject_position(anchor) - half + drift * t
+	follow.call(0.0)
+
 	var tween := create_tween()
 	tween.set_parallel(true)
 	## TRANS_BACK/EASE_OUT overshoots past full size and settles back — that
 	## overshoot is the "jump"; a plain linear grow reads as a fade-in instead.
 	tween.tween_property(label, "scale", Vector2.ONE, 0.22) \
 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.tween_property(label, "position", start + drift, 0.6) \
+	tween.tween_method(follow, 0.0, 1.0, 0.6) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(label, "modulate:a", 0.0, 0.28).set_delay(0.34)
 	tween.set_parallel(false)
@@ -2035,7 +2064,7 @@ func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, false)
-	_spawn_command_popup(_popup_kind_for_order(result))
+	_spawn_command_popup(_popup_kind_for_order(result), result.position)
 	for unit in selected_units:
 		if append:
 			_add_path_marker(unit, result.position)
@@ -2060,7 +2089,7 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, true)
-	_spawn_command_popup("attack")
+	_spawn_command_popup("attack", result.position)
 	for unit in selected_units:
 		if append:
 			_add_path_marker(unit, result.position)
@@ -2962,7 +2991,7 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 				unit_paths.append(unit.get_path())
 			_rpc_issue_patrol.rpc_id(1, unit_paths, result.position, _patrol_started_this_session)
 			_play_command_sound()
-			_spawn_command_popup("patrol")
+			_spawn_command_popup("patrol", result.position)
 			_patrol_started_this_session = true
 			if not event.shift_pressed:
 				pending_order_mode = ""
@@ -4099,9 +4128,10 @@ func _confirm_placement() -> void:
 	var target_path := _placement_target.get_path() if _placement_target else NodePath()
 	var placed_type := placing_type
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
-	_rpc_request_build.rpc_id(1, type_index, placement_ghost.global_position, target_path, _pending_builder_paths, shift_held)
+	var build_position := placement_ghost.global_position
+	_rpc_request_build.rpc_id(1, type_index, build_position, target_path, _pending_builder_paths, shift_held)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
-	_spawn_command_popup("build")
+	_spawn_command_popup("build", build_position)
 
 	## Holding Shift keeps the same builders and stays in placement mode
 	## (re-arming the same building type) so the next click queues another
@@ -4611,7 +4641,9 @@ func _confirm_wall_placement() -> void:
 		kinds.append(piece["kind"])
 	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
-	_spawn_command_popup("build")
+	## Last piece rather than the first: that is where the drag ended, so it is
+	## where the player is actually looking when the line pops.
+	_spawn_command_popup("build", positions[positions.size() - 1])
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
@@ -4789,9 +4821,10 @@ func _confirm_gate_placement() -> void:
 	var my_building_types: Array[BuildingType] = _my_faction().building_types
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _gate_target.get_path()
+	var gate_position := _gate_target.global_position
 	_rpc_request_build_gate.rpc_id(1, type_index, target_path, _pending_builder_paths)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
-	_spawn_command_popup("build")
+	_spawn_command_popup("build", gate_position)
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
