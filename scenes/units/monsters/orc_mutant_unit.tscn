@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cn7w47uhifoeu" path="res://assets/art/MiniBigMonsters/Outline/MiniOrcMutant-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 
 [sub_resource type="Resource" id="ResourceCost_orc_mutant_favour"]
 script = ExtResource("3_cost_script")
@@ -11,6 +12,10 @@ resource_type = ExtResource("4_favour")
 amount = 40
 
 [node name="OrcMutant" instance=ExtResource("1_unit")]
+move_command_lines = Array[ExtResource("109_command_line")]([])
+attack_command_lines = Array[ExtResource("109_command_line")]([])
+patrol_command_lines = Array[ExtResource("109_command_line")]([])
+build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Orc Mutant"
 move_speed = 2.5
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_orc_mutant_favour")])

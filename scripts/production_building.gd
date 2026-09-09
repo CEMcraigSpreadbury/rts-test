@@ -15,7 +15,7 @@ signal construction_finished
 signal destroyed
 ## Relayed by main.gd for a floating damage-number popup, same reasoning as
 ## Unit.damaged — take_damage() only ever runs on the host.
-signal damaged(amount: int)
+signal damaged(amount: int, attacker_path: NodePath, fatal: bool)
 ## Purely cosmetic (see Unit.projectile_fired) — real damage lands later, off
 ## _pending_projectile_hits, entirely independent of this signal/its visual.
 signal projectile_fired(target: Node3D)
@@ -389,7 +389,14 @@ func time_remaining() -> float:
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or is_destroyed:
 		return
-	damaged.emit(amount)
+	## Same shape as Unit.take_damage — see the signal declaration above. A
+	## building never recoils (it has no sprite to shove), but the attacker
+	## still earns its kill hitstop for levelling one.
+	var fatal: bool = current_health - amount <= 0
+	var attacker_path: NodePath = NodePath()
+	if attacker != null and is_instance_valid(attacker) and attacker.is_inside_tree():
+		attacker_path = attacker.get_path()
+	damaged.emit(amount, attacker_path, fatal)
 	current_health = maxi(current_health - amount, 0)
 	health_fraction = float(current_health) / float(maxi(max_health, 1))
 	if current_health <= 0:

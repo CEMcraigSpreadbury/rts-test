@@ -76,6 +76,17 @@ const BUILD_STUCK_TIMEOUT: float = 4.0
 const BUILD_STUCK_MOVE_EPSILON: float = 0.3
 ## How often an attack-moving/patrolling unit checks for nearby enemies to engage.
 const ENEMY_SCAN_INTERVAL: float = 0.25
+## How often a unit closing on a live target re-paths to where that target
+## actually is now. Without this the nav destination is only ever the spot the
+## target occupied when the chase started, so a unit walks to a stale position,
+## finishes navigation, and only then notices the target has moved on — most
+## visible on Objective guards, which chase in that stop-start way while the
+## unit that aggro'd them keeps walking.
+const CHASE_REPATH_INTERVAL: float = 0.2
+## How far a target has to have drifted from the point we last pathed to before
+## a repath is worth the cost — a target shuffling inside avoidance shouldn't
+## reset the path every interval.
+const CHASE_REPATH_EPSILON: float = 0.5
 ## How long a wandering unit pauses at the end of each leg, randomised per
 ## leg so a group of guards doesn't move in lockstep.
 const WANDER_PAUSE_MIN: float = 1.0
@@ -123,7 +134,11 @@ signal projectile_fired(target: Node3D)
 ## Relayed the same way (see main.gd) for a floating damage-number popup —
 ## take_damage() only ever runs on the host, so without relaying this every
 ## other peer would never see the number at all.
-signal damaged(amount: int)
+## `attacker_path` is empty when nothing identifiable landed the hit, and
+## `fatal` says whether this is the blow that kills — see take_damage, and
+## main.gd, which relays both to drive the recoil direction and the attacker's
+## kill hitstop on every peer.
+signal damaged(amount: int, attacker_path: NodePath, fatal: bool)
 ## Relayed the same way, for a floating "+N" resource popup. Carries the
 ## resource's display_color directly (rather than the ResourceType resource
 ## itself) since that's all the popup needs and it's trivially RPC-safe.
@@ -262,6 +277,23 @@ func _update_team_tint_visual() -> void:
 @export var on_stop_sound_effects: Array[AudioStream] = []
 @export var on_gather_sound_effects: Array[AudioStream] = []
 
+@export_group("Command Lines")
+## What this unit type shouts back when the local player gives it an order —
+## the words and the clip together, one list per command kind (keys match
+## main.gd's _spawn_command_popup `kind`). Per unit type rather than one
+## global pool on Main, because a villager, a knight and a hydra issuing the
+## identical human "Moving!" was the single most obviously wrong thing about
+## the order feedback.
+##
+## Empty means SILENT, not "fall back to a default": the monsters and beastmen
+## have no lines yet, and a fallback would put human speech back in their
+## mouths, which is the exact bug this replaced. Authoring a "GRRR" line with
+## a matching clip is what gives one a voice.
+@export var move_command_lines: Array[CommandLine] = []
+@export var attack_command_lines: Array[CommandLine] = []
+@export var patrol_command_lines: Array[CommandLine] = []
+@export var build_command_lines: Array[CommandLine] = []
+
 @export_group("Monarch")
 ## Empty means this unit type can never be promoted. Non-empty defines what a
 ## promoted unit of this type can do — set directly on the unit scene, same
@@ -303,6 +335,18 @@ func _update_team_tint_visual() -> void:
 ## selecting player's own machine, and never relayed.
 func play_select_sound() -> void:
 	AudioUtils.play_random(command_audio_player, on_select_sound_effects)
+
+## This unit type's authored lines for `kind`, or an empty list if it has
+## none (see the Command Lines group — empty means silent). A match rather
+## than a Dictionary because the arrays are @export vars, which can't be
+## referenced from a const.
+func command_lines_for(kind: String) -> Array[CommandLine]:
+	match kind:
+		"move": return move_command_lines
+		"attack": return attack_command_lines
+		"patrol": return patrol_command_lines
+		"build": return build_command_lines
+	return []
 
 func play_order_sound(kind: OrderSoundKind) -> void:
 	var player = _order_sound_player(kind)
@@ -360,6 +404,46 @@ var _fill_base_scale_x: float = 1.0
 
 var _flash_tween: Tween
 
+## Three separate tweens, one per sprite property, deliberately: a unit being
+## hit mid-swing has to be able to flash, recoil and squash all at once. They
+## only ever conflict within a property — a hit recoil cancelling an in-flight
+## attack lunge, say — and there the newest event simply wins, since all of
+## them ease back to the same authored base.
+var _sprite_move_tween: Tween
+var _sprite_scale_tween: Tween
+
+## Captured from the scene rather than assumed, same reasoning as
+## _fill_base_scale_x: the authored offset (the sprite sits above the unit's
+## feet) lives in the scene file, and every motion below is an offset from it.
+var _sprite_base_position: Vector3 = Vector3.ZERO
+var _sprite_base_scale: Vector3 = Vector3.ONE
+
+## Attack lunge. The windup pulls back away from the target before the sprite
+## drives forward through it — melee at RTS camera height is only a few dozen
+## pixels tall, and without the anticipation beat the swing reads as the sprite
+## flickering rather than as a blow being thrown.
+const ATTACK_WINDUP_DISTANCE: float = 0.09
+const ATTACK_WINDUP_DURATION: float = 0.06
+const ATTACK_LUNGE_DISTANCE: float = 0.16
+const ATTACK_LUNGE_DURATION: float = 0.07
+const ATTACK_RECOVER_DURATION: float = 0.18
+
+## Hit recoil. Deliberately smaller than the lunge: the unit taking the blow
+## should look shoved, not launched, and an over-large nudge on a tightly
+## packed battle line reads as the whole formation jittering.
+const HIT_RECOIL_DISTANCE: float = 0.11
+const HIT_RECOIL_DURATION: float = 0.05
+const HIT_RECOVER_DURATION: float = 0.2
+const HIT_SQUASH_SCALE: Vector3 = Vector3(1.16, 0.84, 1.16)
+const HIT_SQUASH_DURATION: float = 0.28
+
+## Hitstop on the killing blow — the attacker's own animation freezes for a
+## beat so a kill lands harder than an ordinary hit. Per-sprite rather than
+## Engine.time_scale, which would desync every other peer's simulation.
+const HITSTOP_DURATION: float = 0.07
+
+var _hitstop_tween: Tween
+
 ## Called by main.gd when relaying the damaged signal (see there — take_damage
 ## only ever runs on the host, so this needs relaying to show on every peer,
 ## same as the floating damage number it's paired with). Flashes to white and
@@ -371,6 +455,76 @@ func play_hit_flash() -> void:
 	sprite.modulate = Color.WHITE
 	_flash_tween = create_tween()
 	_flash_tween.tween_property(sprite, "modulate", _resting_modulate(), 0.15)
+
+## The full reaction to taking a hit: flash, a shove directly away from
+## whatever landed it, and a squash that settles elastically. `from_position`
+## is the attacker's position; passing this unit's own position (what main.gd
+## does when the attacker is gone or unknown) means "no direction", and the
+## recoil is skipped so the unit doesn't lurch off in an arbitrary direction.
+func play_hit_reaction(from_position: Vector3) -> void:
+	play_hit_flash()
+	_play_hit_squash()
+	var away := global_position - from_position
+	away.y = 0.0
+	if away.length_squared() <= 0.0001:
+		return
+	## The sprite is a child of a unit that rotates to face its own target, so a
+	## world-space direction has to come back into the sprite's local space or
+	## the recoil would point somewhere different depending on which way the
+	## unit happens to be turned. Y rotation only, so the basis inverse is exact.
+	var local_away: Vector3 = global_transform.basis.inverse() * away.normalized()
+	var base := _sprite_base_position
+	_restart_sprite_move_tween()
+	_sprite_move_tween.tween_property(
+			sprite, "position", base + local_away * HIT_RECOIL_DISTANCE, HIT_RECOIL_DURATION
+	) 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_sprite_move_tween.tween_property(sprite, "position", base, HIT_RECOVER_DURATION) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _play_hit_squash() -> void:
+	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
+		_sprite_scale_tween.kill()
+	sprite.scale = _sprite_base_scale * HIT_SQUASH_SCALE
+	_sprite_scale_tween = create_tween()
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, HIT_SQUASH_DURATION) 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+## Windup-then-drive-forward on the sprite, along the unit's own facing (local
+## +Z — see _process, which reads the same forward vector off rotation.y to
+## decide sprite flipping). Public because remote peers never run
+## _play_attack_swing: they're handed the bare animation name over the wire and
+## main.gd calls this alongside it. Facing is replicated, so every peer derives
+## the same direction without anything extra going over the network.
+func play_attack_lunge() -> void:
+	var base := _sprite_base_position
+	_restart_sprite_move_tween()
+	_sprite_move_tween.tween_property(
+			sprite, "position", base - Vector3(0.0, 0.0, ATTACK_WINDUP_DISTANCE), ATTACK_WINDUP_DURATION
+	) 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	## Eased IN so the sprite accelerates through the contact point rather than
+	## arriving already slowing down.
+	_sprite_move_tween.tween_property(
+			sprite, "position", base + Vector3(0.0, 0.0, ATTACK_LUNGE_DISTANCE), ATTACK_LUNGE_DURATION
+	) 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_sprite_move_tween.tween_property(sprite, "position", base, ATTACK_RECOVER_DURATION) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## Freezes this unit's animation for a beat after it lands a killing blow.
+## speed_scale rather than pause() so the clip resumes from where it stopped,
+## and the restore is a tween callback so it dies with the node if this unit is
+## freed mid-hitstop instead of leaving a frozen sprite behind.
+func play_hitstop() -> void:
+	if _hitstop_tween and _hitstop_tween.is_valid():
+		_hitstop_tween.kill()
+	sprite.speed_scale = 0.0
+	_hitstop_tween = create_tween()
+	_hitstop_tween.tween_interval(HITSTOP_DURATION)
+	_hitstop_tween.tween_callback(func() -> void: sprite.speed_scale = 1.0)
+
+## Both sprite motions (attack lunge and hit recoil) drive the same property,
+## so they share one tween — whichever fires last takes over, from wherever the
+## sprite currently is, and still ends at the authored base.
+func _restart_sprite_move_tween() -> void:
+	if _sprite_move_tween and _sprite_move_tween.is_valid():
+		_sprite_move_tween.kill()
+	_sprite_move_tween = create_tween()
 
 ## -1 = no override, move at this unit's own move_speed. Set only by a
 ## multi-unit formation move (main.gd:_rpc_issue_command/_slowest_move_speed)
@@ -569,6 +723,10 @@ var leash_radius: float = 0.0
 ## Counts down while attack-moving/patrolling; scanning for enemies every frame
 ## would be an unthrottled O(units x units) group scan, so this paces it instead.
 var _enemy_scan_timer: float = 0.0
+## Paces the chase repath in _tick_chase, and the target position that repath
+## last pathed to (compared against CHASE_REPATH_EPSILON).
+var _chase_repath_timer: float = 0.0
+var _chase_target_position: Vector3 = Vector3.ZERO
 ## Ranged units only: {"time_remaining": float, "target": Node3D, "damage": int}
 ## per shot currently in flight — see _tick_attacking's projectile_scene branch.
 var _pending_projectile_hits: Array[Dictionary] = []
@@ -592,6 +750,8 @@ func _ready() -> void:
 	status_current_health = max_health
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
+	_sprite_base_position = sprite.position
+	_sprite_base_scale = sprite.scale
 	if sprite_sheet:
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, {
 			"idle": {"row": idle_row, "frames": idle_frame_count, "fps": 5.0, "loop": true},
@@ -973,7 +1133,15 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	var armor: int = CombatUtils.nearby_aura_armor_bonus(get_tree(), self) \
 			+ UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category)
 	amount = maxi(amount - armor, 1)
-	damaged.emit(amount)
+	## Fatality is decided here, before the health subtraction below, purely so
+	## it can ride along with the signal: main.gd relays this to every peer and
+	## uses it to hitstop the attacker on a killing blow, and by the time the
+	## relay lands there is nothing left to ask.
+	var fatal: bool = status_current_health - amount <= 0
+	var attacker_path: NodePath = NodePath()
+	if attacker != null and is_instance_valid(attacker) and attacker.is_inside_tree():
+		attacker_path = attacker.get_path()
+	damaged.emit(amount, attacker_path, fatal)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die()
@@ -1053,6 +1221,7 @@ func _physics_process(delta: float) -> void:
 		if nav_agent.is_navigation_finished():
 			_start_attacking()
 		else:
+			_tick_chase(delta)
 			_tick_approach_threats(delta)
 	elif status_activity == Activity.TO_BUILD_SITE:
 		if nav_agent.is_navigation_finished():
@@ -1376,6 +1545,7 @@ func _set_animation(anim_name: String) -> void:
 func _play_attack_swing() -> void:
 	sprite.play("attack")
 	animation_changed.emit("attack")
+	play_attack_lunge()
 
 ## "attack" is non-looping; once a swing finishes, settle back to idle until
 ## the next hit fires. This runs on every peer (not just the authority) since
@@ -1501,7 +1671,33 @@ func _head_to_target() -> void:
 		return
 	status_activity = Activity.TO_TARGET
 	nav_agent.target_desired_distance = _effective_attack_range()
-	move_to(attack_target.global_position)
+	_chase_repath_timer = CHASE_REPATH_INTERVAL
+	_chase_target_position = attack_target.global_position
+	move_to(_chase_target_position)
+
+## Keeps the nav destination on the target while closing, so a chase follows
+## the target's current position rather than the one it held when the chase
+## started. Buildings never move, so this only runs for unit targets.
+func _tick_chase(delta: float) -> void:
+	if not _is_target_alive(attack_target) or attack_target is ProductionBuilding:
+		return
+	_chase_repath_timer -= delta
+	if _chase_repath_timer > 0.0:
+		return
+	_chase_repath_timer = CHASE_REPATH_INTERVAL
+	## Same leash as _tick_attacking: now that a chase actually follows a moving
+	## target, a leashed guard would otherwise be dragged off its post for good
+	## by anything that keeps running, since it never gets into attack range for
+	## the check there to fire.
+	if leash_radius > 0.0 and global_position.distance_to(leash_origin.global_position) > leash_radius:
+		attack_target = null
+		_advance_patrol()
+		return
+	var current: Vector3 = attack_target.global_position
+	if _chase_target_position.distance_to(current) < CHASE_REPATH_EPSILON:
+		return
+	_chase_target_position = current
+	move_to(current)
 
 func _start_attacking() -> void:
 	if not _is_target_alive(attack_target):

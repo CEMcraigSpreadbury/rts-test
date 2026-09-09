@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CommandLine" load_steps=3 format=3]
+
+[ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="1_script"]
+[ext_resource type="AudioStream" uid="uid://ce5iuvpwf8a2f" path="res://assets/sfx/Voice Lines/Attack/Attack!.mp3" id="2_voice"]
+
+[resource]
+script = ExtResource("1_script")
+text = "Attack!!"
+voice = ExtResource("2_voice")

@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="CommandLine" load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+text = "On watch!"

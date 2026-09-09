@@ -17,6 +17,25 @@
 [ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/07_decline_1.wav" id="99_sfx_decline1"]
 [ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/07_decline_2.wav" id="100_sfx_decline2"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Managing/Item_Pick.wav" id="101_sfx_pick"]
+[ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
+[ext_resource type="Resource" path="res://resources/command_lines/move_moving.tres" id="110_cl_move_moving"]
+[ext_resource type="Resource" path="res://resources/command_lines/move_on_it.tres" id="110_cl_move_on_it"]
+[ext_resource type="Resource" path="res://resources/command_lines/move_on_my_way.tres" id="110_cl_move_on_my_way"]
+[ext_resource type="Resource" path="res://resources/command_lines/move_right_away.tres" id="110_cl_move_right_away"]
+[ext_resource type="Resource" path="res://resources/command_lines/move_at_once.tres" id="110_cl_move_at_once"]
+[ext_resource type="Resource" path="res://resources/command_lines/attack_attack.tres" id="110_cl_attack_attack"]
+[ext_resource type="Resource" path="res://resources/command_lines/attack_charge.tres" id="110_cl_attack_charge"]
+[ext_resource type="Resource" path="res://resources/command_lines/attack_for_glory.tres" id="110_cl_attack_for_glory"]
+[ext_resource type="Resource" path="res://resources/command_lines/attack_to_arms.tres" id="110_cl_attack_to_arms"]
+[ext_resource type="Resource" path="res://resources/command_lines/attack_theyll_fall.tres" id="110_cl_attack_theyll_fall"]
+[ext_resource type="Resource" path="res://resources/command_lines/patrol_patrolling.tres" id="110_cl_patrol_patrolling"]
+[ext_resource type="Resource" path="res://resources/command_lines/patrol_on_watch.tres" id="110_cl_patrol_on_watch"]
+[ext_resource type="Resource" path="res://resources/command_lines/patrol_eyes_open.tres" id="110_cl_patrol_eyes_open"]
+[ext_resource type="Resource" path="res://resources/command_lines/patrol_hold_line.tres" id="110_cl_patrol_hold_line"]
+[ext_resource type="Resource" path="res://resources/command_lines/build_building.tres" id="110_cl_build_building"]
+[ext_resource type="Resource" path="res://resources/command_lines/build_raise_it.tres" id="110_cl_build_raise_it"]
+[ext_resource type="Resource" path="res://resources/command_lines/build_consider_done.tres" id="110_cl_build_consider_done"]
+[ext_resource type="Resource" path="res://resources/command_lines/build_good_spot.tres" id="110_cl_build_good_spot"]
 
 [sub_resource type="Resource" id="ResourceCost_villager"]
 script = ExtResource("3_cost_script")
@@ -98,6 +117,10 @@ on_patrol_sound_effects = Array[AudioStream]([ExtResource("95_sfx_cancel1"), Ext
 on_build_sound_effects = Array[AudioStream]([ExtResource("97_sfx_bstart1"), ExtResource("98_sfx_bstart2")])
 on_stop_sound_effects = Array[AudioStream]([ExtResource("99_sfx_decline1"), ExtResource("100_sfx_decline2")])
 on_gather_sound_effects = Array[AudioStream]([ExtResource("101_sfx_pick")])
+move_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_cl_move_moving"), ExtResource("110_cl_move_on_it"), ExtResource("110_cl_move_on_my_way"), ExtResource("110_cl_move_right_away"), ExtResource("110_cl_move_at_once")])
+attack_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_cl_attack_attack"), ExtResource("110_cl_attack_charge"), ExtResource("110_cl_attack_for_glory"), ExtResource("110_cl_attack_to_arms"), ExtResource("110_cl_attack_theyll_fall")])
+patrol_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_cl_patrol_patrolling"), ExtResource("110_cl_patrol_on_watch"), ExtResource("110_cl_patrol_eyes_open"), ExtResource("110_cl_patrol_hold_line")])
+build_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_cl_build_building"), ExtResource("110_cl_build_raise_it"), ExtResource("110_cl_build_consider_done"), ExtResource("110_cl_build_good_spot")])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1669979845]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)

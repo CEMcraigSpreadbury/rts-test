@@ -130,16 +130,6 @@ const COMMAND_POPUP_HEIGHT: float = 0.6
 @export var on_rally_set_sound_effects: Array[AudioStream] = []
 
 
-## The lines a unit can shout back when an order is issued, one list per
-## command kind (keys match _spawn_command_popup's `kind`). Each entry pairs
-## the text with its own voice clip, so adding or reordering lines can't
-## desync the two — see CommandLine. Entries with no text are skipped and
-## entries with no clip pop silently, so these can be filled in gradually.
-@export var move_command_lines: Array[CommandLine] = []
-@export var attack_command_lines: Array[CommandLine] = []
-@export var patrol_command_lines: Array[CommandLine] = []
-@export var build_command_lines: Array[CommandLine] = []
-
 @onready var ui_root: Node = $UI
 @onready var minimap: Control = $UI/BottomBar/MinimapFrame/Minimap
 
@@ -183,19 +173,44 @@ func _play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 
 const PATH_MARKER_COLOR: Color = Color(0.45, 0.75, 1.0, 0.9)
 
-## The authored lines for `kind`, or an empty list if it has none. Kept as a
-## match rather than a Dictionary because the arrays are @export vars, which
-## can't be referenced from a const.
-func _command_lines_for(kind: String) -> Array[CommandLine]:
-	match kind:
-		"move": return move_command_lines
-		"attack": return attack_command_lines
-		"patrol": return patrol_command_lines
-		"build": return build_command_lines
-	return []
+## The unit whose voice answers for a whole selection. One line per order, not
+## one per unit — same representative convention as _play_random_select_sound
+## and _play_order_sound_once, which is what keeps a 20-unit move order from
+## reading as one clip getting louder. Random rather than selected_units[0] so
+## a mixed group doesn't always answer in the same unit's voice.
+func _command_speaker() -> Unit:
+	var speakers: Array[Unit] = []
+	for unit in selected_units:
+		if is_instance_valid(unit) and not unit.command_lines_for("move").is_empty():
+			speakers.append(unit)
+	## Nobody in the selection has authored lines (an all-monster group, say) —
+	## fall back to the plain selection so the caller still gets a valid unit
+	## and the per-kind lookup can decide it has nothing to say.
+	if speakers.is_empty():
+		if selected_units.is_empty():
+			return null
+		return selected_units[randi() % selected_units.size()]
+	return speakers[randi() % speakers.size()]
 
-## The CommandLine most recently played for each command kind, so the next
-## pick for that kind can exclude it. See _spawn_command_popup.
+## Build orders answer in a builder's voice, not the selection's: the builders
+## are resolved separately (_pending_builder_paths) and a placement can be
+## confirmed with the selection already changed. Falls back to the selection
+## when no builder path resolves.
+func _builder_speaker() -> Unit:
+	var builders: Array[Unit] = []
+	for path in _pending_builder_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit != null:
+			builders.append(unit)
+	if builders.is_empty():
+		return _command_speaker()
+	return builders[randi() % builders.size()]
+
+## The CommandLine most recently played for each (unit type, command kind), so
+## the next pick for that pair can exclude it. Keyed by scene path as well as
+## kind: keying by kind alone would let an archer's last line suppress a
+## villager's identical-text line for no audible reason. See
+## _spawn_command_popup.
 var _last_command_line: Dictionary = {}
 
 ## Damaged node instance_id -> {"total": int, "label": Label, "started": float}
@@ -212,8 +227,11 @@ var _damage_aggregates: Dictionary = {}
 ## while the line is still on screen — edge scroll, or a middle-drag started
 ## right after the click — and a screen-anchored line then slides away from the
 ## spot it is talking about. Follows _spawn_pinned_popup's re-projection.
-func _spawn_command_popup(kind: String, world_pos: Vector3) -> void:
-	if ui_root == null:
+## `speaker` is the unit answering for the selection (see _command_speaker) —
+## the words and the clip both come from its own authored pool, so a villager,
+## a knight and a hydra no longer share one human voice.
+func _spawn_command_popup(kind: String, world_pos: Vector3, speaker: Unit) -> void:
+	if ui_root == null or speaker == null or not is_instance_valid(speaker):
 		return
 	## Same behind-camera rejection as _spawn_pinned_popup: a point behind the
 	## camera unprojects to a plausible-looking on-screen position, so an
@@ -223,7 +241,7 @@ func _spawn_command_popup(kind: String, world_pos: Vector3) -> void:
 	## Blank entries are skipped rather than picked and shown empty, so a
 	## part-filled array in the inspector never produces an invisible popup.
 	var choices: Array[CommandLine] = []
-	for line in _command_lines_for(kind):
+	for line in speaker.command_lines_for(kind):
 		if line != null and not line.text.is_empty():
 			choices.append(line)
 	if choices.is_empty():
@@ -233,8 +251,9 @@ func _spawn_command_popup(kind: String, world_pos: Vector3) -> void:
 	## because text and voice are picked together as one CommandLine: hearing
 	## (and reading) the identical line on two consecutive clicks is the most
 	## noticeable way a small pool of lines sounds wrong.
+	var repeat_key := "%s|%s" % [speaker.scene_file_path, kind]
 	if choices.size() > 1:
-		var last: CommandLine = _last_command_line.get(kind, null)
+		var last: CommandLine = _last_command_line.get(repeat_key, null)
 		var unrepeated: Array[CommandLine] = []
 		for line in choices:
 			if line != last:
@@ -243,7 +262,7 @@ func _spawn_command_popup(kind: String, world_pos: Vector3) -> void:
 			choices = unrepeated
 
 	var chosen: CommandLine = choices[randi() % choices.size()]
-	_last_command_line[kind] = chosen
+	_last_command_line[repeat_key] = chosen
 	if chosen.voice != null and _voice_audio_player != null:
 		_voice_audio_player.stream = chosen.voice
 		_voice_audio_player.play()
@@ -844,6 +863,11 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 	var unit := get_node_or_null(unit_path) as Unit
 	if unit:
 		unit.sprite.play(anim_name)
+		## The attack lunge is driven off this same relay rather than a channel
+		## of its own — the host's _play_attack_swing pairs the two locally, and
+		## the direction is derived from replicated facing on each peer.
+		if anim_name == "attack":
+			unit.play_attack_lunge()
 
 ## Order-dispatch functions below only ever run on the host (inside its RPC
 ## handlers), so — same reasoning as animation_changed above — playing the
@@ -964,31 +988,48 @@ func _spawn_building_projectile_visual(shooter: ProductionBuilding, target: Node
 ## take_damage() and Unit._deposit_and_continue() are authority-gated), so —
 ## same reasoning as animation/projectile relaying above — the host spawns its
 ## own local popup immediately and relays to every other peer to do the same.
-func _relay_damage_number(amount: int, node: Node3D) -> void:
-	_show_damage_feedback(node, amount)
+func _relay_damage_number(amount: int, attacker_path: NodePath, fatal: bool, node: Node3D) -> void:
+	_show_damage_feedback(node, amount, attacker_path, fatal)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_damage_number.rpc(node.get_path(), amount)
+		_rpc_damage_number.rpc(node.get_path(), amount, attacker_path, fatal)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_damage_number(node_path: NodePath, amount: int) -> void:
+func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePath, fatal: bool) -> void:
 	var node := get_node_or_null(node_path) as Node3D
 	if node:
-		_show_damage_feedback(node, amount)
+		_show_damage_feedback(node, amount, attacker_path, fatal)
 
-## Floating number for anything damageable; the hit flash only applies to
-## Unit (buildings have no sprite to flash).
-func _show_damage_feedback(node: Node3D, amount: int) -> void:
+## Floating number for anything damageable; the hit reaction (flash, recoil,
+## squash) only applies to Unit, and buildings get their own flash/squash
+## instead — they have no sprite to shove around.
+##
+## `attacker_path` and `fatal` come straight off the damaged signal (see
+## Unit.take_damage). The attacker is looked up per-peer rather than having its
+## position sent, so a hit always recoils away from where that peer actually
+## sees the attacker standing.
+func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, fatal: bool) -> void:
 	## get() rather than node.owner_peer_id: this takes a plain Node3D (Unit
 	## and ProductionBuilding both land here), and a missing property comes
 	## back null, which simply compares unequal.
 	var mine: bool = node.get("owner_peer_id") == multiplayer.get_unique_id()
 	_show_damage_number(node, amount, mine)
 	_spawn_impact_burst(node.global_position + Vector3(0, 0.9, 0))
+	var attacker: Node3D = null
+	if not attacker_path.is_empty():
+		attacker = get_node_or_null(attacker_path) as Node3D
 	if node is Unit:
-		node.play_hit_flash()
+		## Falling back to the victim's own position means "no direction" to
+		## play_hit_reaction, which then skips the recoil rather than shoving the
+		## unit somewhere arbitrary.
+		var from_position: Vector3 = node.global_position
+		if attacker != null:
+			from_position = attacker.global_position
+		node.play_hit_reaction(from_position)
 	elif node is ProductionBuilding:
 		node.play_hit_flash()
 		node.play_squash()
+	if fatal and attacker is Unit:
+		attacker.play_hitstop()
 	_maybe_alert_under_attack(node)
 
 ## Sums hits on one target inside DAMAGE_AGGREGATE_WINDOW into a single popup,
@@ -2064,7 +2105,7 @@ func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, false, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, false)
-	_spawn_command_popup(_popup_kind_for_order(result), result.position)
+	_spawn_command_popup(_popup_kind_for_order(result), result.position, _command_speaker())
 	for unit in selected_units:
 		if append:
 			_add_path_marker(unit, result.position)
@@ -2089,7 +2130,7 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	_rpc_issue_command.rpc_id(1, unit_paths, target_path, result.position, true, append, current_formation_type)
 	_play_command_sound()
 	_play_command_feedback(result.position, true)
-	_spawn_command_popup("attack", result.position)
+	_spawn_command_popup("attack", result.position, _command_speaker())
 	for unit in selected_units:
 		if append:
 			_add_path_marker(unit, result.position)
@@ -2991,7 +3032,7 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 				unit_paths.append(unit.get_path())
 			_rpc_issue_patrol.rpc_id(1, unit_paths, result.position, _patrol_started_this_session)
 			_play_command_sound()
-			_spawn_command_popup("patrol", result.position)
+			_spawn_command_popup("patrol", result.position, _command_speaker())
 			_patrol_started_this_session = true
 			if not event.shift_pressed:
 				pending_order_mode = ""
@@ -4131,7 +4172,7 @@ func _confirm_placement() -> void:
 	var build_position := placement_ghost.global_position
 	_rpc_request_build.rpc_id(1, type_index, build_position, target_path, _pending_builder_paths, shift_held)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
-	_spawn_command_popup("build", build_position)
+	_spawn_command_popup("build", build_position, _builder_speaker())
 
 	## Holding Shift keeps the same builders and stays in placement mode
 	## (re-arming the same building type) so the next click queues another
@@ -4643,7 +4684,7 @@ func _confirm_wall_placement() -> void:
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
 	## Last piece rather than the first: that is where the drag ended, so it is
 	## where the player is actually looking when the line pops.
-	_spawn_command_popup("build", positions[positions.size() - 1])
+	_spawn_command_popup("build", positions[positions.size() - 1], _builder_speaker())
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
@@ -4824,7 +4865,7 @@ func _confirm_gate_placement() -> void:
 	var gate_position := _gate_target.global_position
 	_rpc_request_build_gate.rpc_id(1, type_index, target_path, _pending_builder_paths)
 	AudioUtils.play_random(command_audio_player, on_building_placed_sound_effects)
-	_spawn_command_popup("build", gate_position)
+	_spawn_command_popup("build", gate_position, _builder_speaker())
 
 	for path in _pending_builder_paths:
 		var builder := get_node_or_null(path) as Unit
