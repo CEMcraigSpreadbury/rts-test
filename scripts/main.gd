@@ -190,6 +190,10 @@ func _command_lines_for(kind: String) -> Array[CommandLine]:
 		"build": return build_command_lines
 	return []
 
+## The CommandLine most recently played for each command kind, so the next
+## pick for that kind can exclude it. See _spawn_command_popup.
+var _last_command_line: Dictionary = {}
+
 ## Local-only cursor "juice" — a random line for the command kind that jumps
 ## out of the mouse position, drifts up and fades. Peers never see this (it is
 ## deliberately not part of any command RPC): it is feedback about *this*
@@ -206,7 +210,21 @@ func _spawn_command_popup(kind: String) -> void:
 	if choices.is_empty():
 		return
 
+	## Same no-repeat rule as AudioUtils.play_random, tracked per kind here
+	## because text and voice are picked together as one CommandLine: hearing
+	## (and reading) the identical line on two consecutive clicks is the most
+	## noticeable way a small pool of lines sounds wrong.
+	if choices.size() > 1:
+		var last: CommandLine = _last_command_line.get(kind, null)
+		var unrepeated: Array[CommandLine] = []
+		for line in choices:
+			if line != last:
+				unrepeated.append(line)
+		if not unrepeated.is_empty():
+			choices = unrepeated
+
 	var chosen: CommandLine = choices[randi() % choices.size()]
+	_last_command_line[kind] = chosen
 	if chosen.voice != null and _voice_audio_player != null:
 		_voice_audio_player.stream = chosen.voice
 		_voice_audio_player.play()
@@ -759,7 +777,7 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 ## it locally, or forwards it to the single peer that does.
 func _play_unit_order_sound(unit: Unit, kind: Unit.OrderSoundKind) -> void:
 	if unit.owner_peer_id == _my_peer_id():
-		unit.play_order_sound(kind)
+		_play_order_sound_once(unit, kind)
 	elif multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_rpc_unit_order_sound.rpc_id(unit.owner_peer_id, unit.get_path(), kind)
 
@@ -767,7 +785,24 @@ func _play_unit_order_sound(unit: Unit, kind: Unit.OrderSoundKind) -> void:
 func _rpc_unit_order_sound(unit_path: NodePath, kind: Unit.OrderSoundKind) -> void:
 	var unit := get_node_or_null(unit_path) as Unit
 	if unit:
-		unit.play_order_sound(kind)
+		_play_order_sound_once(unit, kind)
+
+## The frame each order sound kind was last played on. One acknowledgment per
+## kind per frame, not one per unit: a batch order used to fire an identical
+## clip from every unit in the selection at once, which doesn't read as a
+## chorus, it reads as one line getting louder the bigger the group is. Same
+## one-representative convention as _play_random_select_sound. A whole batch
+## is dispatched inside a single RPC handler (so, one frame), and keying by
+## kind rather than globally keeps a mixed right-click — some units gathering,
+## some attacking — sounding like both orders instead of only the first.
+var _order_sound_frames: Dictionary = {}
+
+func _play_order_sound_once(unit: Unit, kind: Unit.OrderSoundKind) -> void:
+	var frame := Engine.get_process_frames()
+	if _order_sound_frames.get(kind, -1) == frame:
+		return
+	_order_sound_frames[kind] = frame
+	unit.play_order_sound(kind)
 
 ## projectile_fired only ever fires on the host's own copy (only the host runs
 ## combat logic — see Unit._physics_process), so the host spawns its own local
