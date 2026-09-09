@@ -53,16 +53,9 @@ const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill
 ## command popups below.
 const GAME_FONT: Font = preload("res://assets/fonts/MedievalSharp-Book.ttf")
 
-## Purely local, never networked — a short shout that pops out of the cursor
-## when an order is issued, so a command reads as acknowledged immediately,
-## before the units have had time to visibly react. One line picked at random
-## per command kind; keys match _spawn_command_popup's `kind` argument.
-const COMMAND_POPUP_MESSAGES: Dictionary = {
-	"move": ["Moving!", "On it!", "On my way!", "Right away!", "At once!"],
-	"attack": ["Attack!!", "Charge!", "For glory!", "To arms!", "They'll fall!"],
-	"patrol": ["Patrolling!", "On watch!", "Eyes open!", "We'll hold the line!"],
-	"build": ["Building!", "Let's raise it!", "Consider it done!", "Good spot!"],
-}
+## Tint per command kind for the popup that jumps out of the cursor when an
+## order is issued. The lines themselves are inspector-authored — see
+## move_command_lines and friends below.
 const COMMAND_POPUP_COLORS: Dictionary = {
 	"move": Color(1.0, 0.98, 0.86),
 	"attack": Color(1.0, 0.42, 0.32),
@@ -132,17 +125,16 @@ const COMMAND_POPUP_FONT_SIZE: int = 22
 ## Played for the owner when they plant a rally banner.
 @export var on_rally_set_sound_effects: Array[AudioStream] = []
 
-## Voice lines for the command popups, index-matched to the message lists
-## in COMMAND_POPUP_MESSAGES: element N here is the recording of line N
-## there, so attack_voice_lines[0] is the clip for "Attack!!". A short
-## array (or an empty slot in one) just means that line pops silently, so
-## these can be filled in as recordings arrive rather than all at once.
-## Reordering or adding to COMMAND_POPUP_MESSAGES means reordering these to
-## match — the pairing is by position, nothing checks it.
-@export var move_voice_lines: Array[AudioStream] = []
-@export var attack_voice_lines: Array[AudioStream] = []
-@export var patrol_voice_lines: Array[AudioStream] = []
-@export var build_voice_lines: Array[AudioStream] = []
+
+## The lines a unit can shout back when an order is issued, one list per
+## command kind (keys match _spawn_command_popup's `kind`). Each entry pairs
+## the text with its own voice clip, so adding or reordering lines can't
+## desync the two — see CommandLine. Entries with no text are skipped and
+## entries with no clip pop silently, so these can be filled in gradually.
+@export var move_command_lines: Array[CommandLine] = []
+@export var attack_command_lines: Array[CommandLine] = []
+@export var patrol_command_lines: Array[CommandLine] = []
+@export var build_command_lines: Array[CommandLine] = []
 
 @onready var ui_root: Node = $UI
 @onready var minimap: Control = $UI/BottomBar/MinimapFrame/Minimap
@@ -187,40 +179,40 @@ func _play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 
 const PATH_MARKER_COLOR: Color = Color(0.45, 0.75, 1.0, 0.9)
 
-## The recordings for `kind`, or an empty list if it has none yet. Kept as a
+## The authored lines for `kind`, or an empty list if it has none. Kept as a
 ## match rather than a Dictionary because the arrays are @export vars, which
 ## can't be referenced from a const.
-func _voice_lines_for(kind: String) -> Array[AudioStream]:
+func _command_lines_for(kind: String) -> Array[CommandLine]:
 	match kind:
-		"move": return move_voice_lines
-		"attack": return attack_voice_lines
-		"patrol": return patrol_voice_lines
-		"build": return build_voice_lines
+		"move": return move_command_lines
+		"attack": return attack_command_lines
+		"patrol": return patrol_command_lines
+		"build": return build_command_lines
 	return []
-
-## Plays the clip recorded for one specific popup line. Silently does nothing
-## if that line has no recording yet, so half-filled arrays are fine.
-func _play_command_voice_line(kind: String, index: int) -> void:
-	var lines := _voice_lines_for(kind)
-	if _voice_audio_player == null or index < 0 or index >= lines.size() or lines[index] == null:
-		return
-	_voice_audio_player.stream = lines[index]
-	_voice_audio_player.play()
 
 ## Local-only cursor "juice" — a random line for the command kind that jumps
 ## out of the mouse position, drifts up and fades. Peers never see this (it is
 ## deliberately not part of any command RPC): it is feedback about *this*
 ## player's click, not about what the units end up doing.
 func _spawn_command_popup(kind: String) -> void:
-	var messages: Array = COMMAND_POPUP_MESSAGES.get(kind, [])
-	if messages.is_empty() or ui_root == null:
+	if ui_root == null:
+		return
+	## Blank entries are skipped rather than picked and shown empty, so a
+	## part-filled array in the inspector never produces an invisible popup.
+	var choices: Array[CommandLine] = []
+	for line in _command_lines_for(kind):
+		if line != null and not line.text.is_empty():
+			choices.append(line)
+	if choices.is_empty():
 		return
 
-	var index := randi() % messages.size()
-	_play_command_voice_line(kind, index)
+	var chosen: CommandLine = choices[randi() % choices.size()]
+	if chosen.voice != null and _voice_audio_player != null:
+		_voice_audio_player.stream = chosen.voice
+		_voice_audio_player.play()
 
 	var label := Label.new()
-	label.text = messages[index]
+	label.text = chosen.text
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_font_override("font", GAME_FONT)
 	label.add_theme_font_size_override("font_size", COMMAND_POPUP_FONT_SIZE)
