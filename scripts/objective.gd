@@ -4,10 +4,10 @@ class_name Objective
 ## How long the capture zone must be held uncontested (see _physics_process)
 ## before ownership changes.
 @export var capture_duration: float = 30.0
-## Guards patrol a square loop of this radius around the objective's origin;
-## they'll break off a chase and return once dragged past
-## patrol_radius * LEASH_MULTIPLIER (see Unit.leash_radius).
-@export var patrol_radius: float = 4.0
+## Guards wander about within this radius of the objective's origin; they'll
+## break off a chase and return once dragged past
+## wander_radius * LEASH_MULTIPLIER (see Unit.leash_radius).
+@export var wander_radius: float = 4.0
 
 const LEASH_MULTIPLIER: float = 2.5
 
@@ -43,17 +43,10 @@ func _ready() -> void:
 		unit.owner_peer_id = 0
 		unit.team_tint = Color(0.5, 0.5, 0.5)
 		unit.leash_origin = self
-		unit.leash_radius = patrol_radius * LEASH_MULTIPLIER
-		unit.command_patrol(_patrol_loop())
+		unit.leash_radius = wander_radius * LEASH_MULTIPLIER
+		unit.command_wander(self, wander_radius)
 	for building in buildings.get_children():
 		building.owner_peer_id = 0
-
-func _patrol_loop() -> Array[Vector3]:
-	var points: Array[Vector3] = []
-	for i in 4:
-		var angle := TAU * i / 4.0
-		points.append(global_position + Vector3(cos(angle), 0.0, sin(angle)) * patrol_radius)
-	return points
 
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
@@ -99,6 +92,11 @@ func _capture(new_owner: int) -> void:
 		unit.team_tint = tint
 		unit.leash_origin = null
 		unit.leash_radius = 0.0
+		## Drops the guard order entirely (wander included) — otherwise a guard
+		## caught mid-wander-pause would sit in Activity.IDLE under a
+		## Command.PATROL that nothing advances any more, which also suppresses
+		## the idle standing-guard scan (Command.NONE only).
+		unit.command_stop()
 		Population.reserve(new_owner, unit.population_cost)
 	for building in buildings.get_children():
 		building.owner_peer_id = new_owner

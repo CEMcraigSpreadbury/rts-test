@@ -66,6 +66,7 @@ costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_wallgate"
 can_rally = false
 max_health = 120
 construction_sink_depth = 1.9
+passage_width = 1.4
 on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 
 [node name="PostA" type="MeshInstance3D" parent="."]
@@ -92,11 +93,17 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.85, 0.95, 0)
 shape = SubResource("BoxShape3D_post_b")
 
 [node name="CollisionLintel" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0)
 shape = SubResource("BoxShape3D_lintel")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
-radius = 0.3
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 0, 0)
+radius = 0.2
+height = 1.9
+
+[node name="NavigationObstacle3D2" type="NavigationObstacle3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.85, 0, 0)
+radius = 0.2
 height = 1.9
 
 [node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="."]

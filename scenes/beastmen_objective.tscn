@@ -28,7 +28,7 @@ properties/1/replication_mode = 1
 
 [node name="BeastmenObjective" type="Node3D"]
 script = ExtResource("1_objective_script")
-patrol_radius = 5.0
+wander_radius = 5.0
 
 [node name="Guards" type="Node3D" parent="."]
 

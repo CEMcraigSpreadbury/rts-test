@@ -76,6 +76,13 @@ const BUILD_STUCK_TIMEOUT: float = 4.0
 const BUILD_STUCK_MOVE_EPSILON: float = 0.3
 ## How often an attack-moving/patrolling unit checks for nearby enemies to engage.
 const ENEMY_SCAN_INTERVAL: float = 0.25
+## How long a wandering unit pauses at the end of each leg, randomised per
+## leg so a group of guards doesn't move in lockstep.
+const WANDER_PAUSE_MIN: float = 1.0
+const WANDER_PAUSE_MAX: float = 3.0
+## Fraction of wander_radius a wander leg must at least cover, so legs are
+## actual walks rather than a shuffle in place.
+const WANDER_MIN_LEG_FRACTION: float = 0.35
 ## Multiplier applied when an attacker's damage_type matches its target's
 ## weak_to — see take_damage().
 const WEAKNESS_DAMAGE_MULTIPLIER: float = 1.5
@@ -485,6 +492,15 @@ var _build_stuck_check_pos: Vector3 = Vector3.ZERO
 var _dying: bool = false
 var patrol_points: Array[Vector3] = []
 var patrol_index: int = 0
+## Wander mode (see command_wander) — objective guards mill about near their
+## building instead of walking a fixed loop. Runs as Command.PATROL so all the
+## engage/resume handling applies unchanged; the only difference is that each
+## leg picks a fresh random point near wander_origin rather than stepping
+## through patrol_points. 0.0 = normal patrol.
+var wander_origin: Node3D = null
+var wander_radius: float = 0.0
+## Counts down while a wandering unit is standing still between legs.
+var _wander_pause_timer: float = 0.0
 ## Shift-queued follow-on orders — see main.gd's _rpc_issue_command/
 ## _rpc_request_build (append param) and _on_unit_order_completed. Each
 ## entry is a plain Dictionary (target_path/world_pos/attack_move_fallback/
@@ -622,6 +638,21 @@ func _update_avoidance_team() -> void:
 func move_to(target_position: Vector3) -> void:
 	nav_agent.target_position = target_position
 
+## Re-runs the path query against whatever the navmesh looks like right now,
+## without disturbing where this unit was already heading. Called by
+## NavigationBlockers after it rebakes the region around a building that was
+## just placed or destroyed, so a unit mid-walk stops following a route that
+## no longer exists. Assigning target_position is the hook for this:
+## NavigationAgent3D deliberately never early-outs on an unchanged value.
+func repath() -> void:
+	## nav_agent is @onready, and group membership starts one notification
+	## earlier than _ready — a bake landing in that window would otherwise
+	## reach a unit that hasn't resolved it yet.
+	if nav_agent == null or status_activity == Activity.DEAD:
+		return
+	var target: Vector3 = nav_agent.target_position
+	nav_agent.target_position = target
+
 func command_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD:
 		return
@@ -662,6 +693,14 @@ func set_funnel_waypoint(point: Vector3, forward: Vector3) -> void:
 	_funnel_timer = 0.0
 	_funnel_active = true
 	nav_agent.target_position = point
+
+## Read-only view of the funnel state for the host-side reformation pass
+## (main.gd:_update_reformation): a group that is currently threading a
+## chokepoint must not have its slots re-solved underneath it, or units
+## mid-gap get sent straight at a far-side slot through the wall they were
+## being funnelled around. Reformation defers until nobody is funnelling.
+func is_funnelling() -> bool:
+	return _funnel_active
 
 func _funnel_can_arm() -> bool:
 	return status_activity == Activity.MOVING \
@@ -764,6 +803,8 @@ func command_patrol(points: Array[Vector3]) -> void:
 	_clear_formation_cohesion()
 	patrol_points = points
 	patrol_index = 0
+	wander_origin = null
+	wander_radius = 0.0
 	status_activity = Activity.MOVING
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(patrol_points[0])
@@ -774,6 +815,25 @@ func command_patrol(points: Array[Vector3]) -> void:
 func command_patrol_add_waypoint(point: Vector3) -> void:
 	if status_command == Command.PATROL:
 		patrol_points.append(point)
+
+## Mills about within radius of origin, engaging anything that comes near and
+## drifting back to another random nearby point once the fight ends. Used by
+## Objective for its guards (see Objective._ready).
+func command_wander(origin: Node3D, radius: float) -> void:
+	if status_activity == Activity.DEAD or not can_fight or origin == null or radius <= 0.0:
+		return
+	_leave_build_site()
+	_leave_gather_site()
+	status_command = Command.PATROL
+	attack_target = null
+	assault_active = false
+	formation_speed = -1.0
+	_clear_formation_cohesion()
+	patrol_points.clear()
+	patrol_index = 0
+	wander_origin = origin
+	wander_radius = radius
+	_begin_wander_leg()
 
 func command_stop() -> void:
 	if status_activity == Activity.DEAD:
@@ -787,6 +847,8 @@ func command_stop() -> void:
 	formation_speed = -1.0
 	_clear_formation_cohesion()
 	patrol_points.clear()
+	wander_origin = null
+	wander_radius = 0.0
 	nav_agent.target_position = global_position
 
 ## --- Building ---
@@ -1023,6 +1085,8 @@ func _physics_process(delta: float) -> void:
 				if enemy:
 					attack_target = enemy
 					_head_to_target()
+	elif status_activity == Activity.IDLE and status_command == Command.PATROL and wander_radius > 0.0:
+		_tick_wander_pause(delta)
 	## Standing guard: a unit with nothing else to do still watches for enemies
 	## wandering into range, instead of only ever reacting once it's actually
 	## hit. Without this, an idle unit (e.g. a ranged Archer) just stands there
@@ -1140,6 +1204,18 @@ func _update_cohesion(delta: float, base_speed: float) -> void:
 			## effective_speed already stacks formation_speed x cohesion scale)
 			## indefinitely while it's stuck.
 			if other._cohesion_stalled:
+				continue
+			## Only compare against groupmates walking the SAME leg. Progress is
+			## a fraction of whatever leg a unit is currently on, and a funnel
+			## splits the group across two of them (see set_funnel_waypoint): a
+			## unit still heading for the gap is 90% through its leg while one
+			## just released onto its final slot is at 0% of a brand new one.
+			## Mixing the two collapses the average for everyone still queueing
+			## at the gap, which reads as a huge lead and throttles the back of
+			## the column to COHESION_MIN_SPEED_SCALE at exactly the moment it
+			## should be streaming through. Each side of the funnel therefore
+			## paces itself against its own half.
+			if other._funnel_active != _funnel_active:
 				continue
 			total_progress += other._formation_progress()
 			count += 1
@@ -1600,6 +1676,18 @@ func _find_new_target_or_idle() -> void:
 ## can be appended mid-loop (command_patrol_add_waypoint), which this picks up
 ## naturally since patrol_points.size() is read fresh each call.
 func _advance_patrol() -> void:
+	if wander_radius > 0.0 and is_instance_valid(wander_origin):
+		## Straight back to a new leg when this came from a fight that dragged
+		## the unit off its post (see the leash check in _tick_attacking) —
+		## pausing here would leave it loitering wherever the chase ended.
+		if global_position.distance_to(wander_origin.global_position) > wander_radius:
+			_begin_wander_leg()
+			return
+		## Otherwise stand still for a beat before drifting off again; the
+		## pause is ticked (and scanned through) by _tick_wander_pause.
+		status_activity = Activity.IDLE
+		_wander_pause_timer = randf_range(WANDER_PAUSE_MIN, WANDER_PAUSE_MAX)
+		return
 	if patrol_points.is_empty():
 		status_command = Command.NONE
 		status_activity = Activity.IDLE
@@ -1608,6 +1696,35 @@ func _advance_patrol() -> void:
 	status_activity = Activity.MOVING
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(patrol_points[patrol_index])
+
+## Walks to a fresh random point within wander_radius of wander_origin.
+func _begin_wander_leg() -> void:
+	status_activity = Activity.MOVING
+	var angle := randf() * TAU
+	var distance := randf_range(wander_radius * WANDER_MIN_LEG_FRACTION, wander_radius)
+	var point := wander_origin.global_position + Vector3(cos(angle), 0.0, sin(angle)) * distance
+	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
+	move_to(point)
+
+## Standing between wander legs: still Command.PATROL, so the idle
+## standing-guard scan in _physics_process (which only covers Command.NONE)
+## doesn't apply — this keeps watching for enemies the same way the moving
+## half of a patrol does.
+func _tick_wander_pause(delta: float) -> void:
+	_enemy_scan_timer -= delta
+	if _enemy_scan_timer <= 0.0:
+		_enemy_scan_timer = ENEMY_SCAN_INTERVAL
+		var enemy := _find_nearest_enemy_in_range(aggro_range)
+		if enemy:
+			attack_target = enemy
+			_head_to_target()
+			return
+	_wander_pause_timer -= delta
+	if _wander_pause_timer <= 0.0:
+		if is_instance_valid(wander_origin):
+			_begin_wander_leg()
+		else:
+			status_command = Command.NONE
 
 ## Target priority for a unit under a standing attack-move order:
 ##   1. anything already inside its own aggro bubble (self-defense, and what it

@@ -71,6 +71,19 @@ const MAX_QUEUE_SIZE: int = 7
 @export var can_promote_monarch: bool = false
 ## How far the model sinks into the ground as it's destroyed.
 @export var construction_sink_depth: float = 3.0
+## >0 marks this building as a walkable OPENING rather than a solid obstacle,
+## and is the clear width (meters) of that opening. The passage is centred on
+## this node's own origin and runs along its local Z; the structure itself sits
+## to either side on local X. Only wall_gate.tscn sets it (1.4 — its two posts
+## sit at x=+/-0.85 and are 0.3 wide, so the clear span between their inner
+## faces is 1.7 - 0.3 = 1.4). Read host-side by main.gd's _find_funnel_point.
+## An opening's NavigationObstacle3D footprints must sit on the structure to
+## either side of it, never in the opening itself: RVO keeps every unit
+## agent-radius clear of an obstacle centre, so an obstacle parked in a doorway
+## makes that doorway unusable no matter how wide it physically is (wall_gate
+## carried exactly that bug — one radius-0.3 obstacle at the node origin —
+## until this was added, and it is why it now has one small obstacle per post).
+@export var passage_width: float = 0.0
 ## Set (via spawn data, resolved per-peer from a NodePath since Gatherables
 ## aren't networked nodes) when this building was placed via requires_deposit
 ## (e.g. a Mine on a Gold Deposit). Its collision commonly overlaps the
@@ -455,9 +468,26 @@ func accepts_dropoff(type: ResourceType) -> bool:
 ## How far NavigationObstacle3D avoidance keeps agents pushed back from this
 ## building's center; units attacking a building need to account for this so
 ## they don't try to stand somewhere avoidance will never let them reach.
+##
+## Covers EVERY obstacle the building has, offset included, not just one named
+## node: a structure whose footprint is described by several off-centre
+## obstacles (wall_gate's two posts at x = +/-0.85, say) is as wide as its
+## furthest obstacle edge, and reading a single one's radius would report a
+## 2m-wide gate as a 0.2m pebble — which then under-reports it to the corridor
+## scan in main.gd's _find_funnel_point and lets builders and attackers walk far
+## closer to it than avoidance will ever actually permit.
 func get_footprint_radius() -> float:
-	var obstacle: NavigationObstacle3D = get_node_or_null("NavigationObstacle3D")
-	return obstacle.radius if obstacle else 0.0
+	var radius: float = 0.0
+	for child in get_children():
+		var obstacle := child as NavigationObstacle3D
+		if obstacle == null:
+			continue
+		## Flattened: only the horizontal reach matters to anything that consumes
+		## this, and an obstacle raised or sunk on Y is no wider for it.
+		var offset: Vector3 = obstacle.position
+		offset.y = 0.0
+		radius = maxf(radius, offset.length() + obstacle.radius)
+	return radius
 
 func _begin_destruction() -> void:
 	is_destroyed = true

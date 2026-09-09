@@ -24,6 +24,11 @@ const UNIT_BUILD_KEY: Key = KEY_B
 const FORMATION_BOX_KEY: Key = KEY_F1
 const FORMATION_LINE_KEY: Key = KEY_F2
 const FORMATION_STAGGERED_KEY: Key = KEY_F3
+## Re-form: re-solves the current selection's formation shape around where the
+## group is standing right now and walks them into it — the on-demand half of
+## reformation (the other half, closing ranks when a member dies mid-move, is
+## automatic; see _update_reformation). F4 continues the F1-F3 shape row.
+const FORMATION_REFORM_KEY: Key = KEY_F4
 ## Assigned by position in a Monarch's monarch_abilities, same convention as
 ## PRODUCIBLE_HOTKEYS/BUILDING_HOTKEYS below — a passive ability still claims
 ## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
@@ -225,6 +230,13 @@ var selected_units: Array[Unit] = []
 ## sent along with each move order's RPC so the host (the only side that
 ## simulates movement) knows which shape to arrange the group's slots into.
 var current_formation_type: Formation.Type = Formation.DEFAULT_TYPE
+## Host-only reformation bookkeeping — one record per in-flight multi-unit
+## formation move (see _register_formation/_update_reformation). Records are
+## created when a move is dispatched, polled once a frame to notice members
+## dropping out (death, or being pulled into a fight), and dropped as soon as
+## fewer than two members are still walking this order. Never networked and
+## never touched on a client: only the host ever solves or issues slots.
+var _active_formations: Array[Dictionary] = []
 var selected_building: ProductionBuilding = null
 ## Left-click-selected resource node (tree/berry bush/gold deposit/farm),
 ## shown read-only in the info panel with its remaining amount — mutually
@@ -433,6 +445,11 @@ func _ready() -> void:
 	if multiplayer.is_server():
 		_spawn_all_players()
 
+	## After _spawn_all_players(), so the starting bases are carved by the
+	## very first bake instead of triggering a second one a poll later. A
+	## joining client has none of that yet and picks them up as they replicate.
+	_start_navigation_blockers()
+
 	_build_impact_effect_resources()
 	chat_input.text_submitted.connect(_on_chat_submitted)
 	minimap.ping_requested.connect(_on_minimap_ping_requested)
@@ -499,6 +516,22 @@ func _my_faction() -> Faction:
 	if not faction_by_peer.has(id):
 		faction_by_peer[id] = _faction_for_peer(id)
 	return faction_by_peer[id]
+
+## --- Navigation ---
+
+## Runs on every peer, not just the host: the navmesh is what every local
+## NavigationAgent3D plans against, and buildings replicate to everyone, so
+## each peer keeps its own copy carved. Created in code rather than authored
+## into main.tscn — it needs no configuration beyond the region it watches,
+## and main.tscn is already enormous.
+func _start_navigation_blockers() -> void:
+	var region := get_node_or_null(^"NavigationRegion3D") as NavigationRegion3D
+	if region == null:
+		return
+	var blockers := NavigationBlockers.new()
+	blockers.name = "NavigationBlockers"
+	add_child(blockers)
+	blockers.setup(region)
 
 ## --- Player / unit / building spawning (host only) ---
 
@@ -1146,6 +1179,7 @@ func _process(delta: float) -> void:
 			_update_placement_ghost()
 	_update_hover_ring()
 	_update_path_markers()
+	_update_reformation(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over:
@@ -1252,6 +1286,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		elif event.keycode == FORMATION_STAGGERED_KEY:
 			_set_formation_type(Formation.Type.STAGGERED)
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == FORMATION_REFORM_KEY:
+			_issue_reform_order()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_MOVE_KEY:
@@ -1668,7 +1706,14 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 	## common case: open ground, or a single/small group) leaves dispatch
 	## exactly as it was. Host-side and one-shot, same as the formation shape
 	## itself — see _find_funnel_point.
-	var funnel := _find_funnel_point(units, _group_centroid(units), world_pos, formation_positions)
+	##
+	## Computed lazily, at the first unit that actually gets an immediate
+	## ground-move dispatch: the analysis costs a navmesh path query plus a pass
+	## over every building, and a gather/attack/build order (target_node set —
+	## those ignore world_pos entirely) or a wholly shift-queued one would throw
+	## the answer away.
+	var funnel: Dictionary = {}
+	var funnel_resolved: bool = target_node != null
 	## Capping the whole group to its slowest member's speed is what actually
 	## keeps a mixed-speed selection's formation shape intact throughout the
 	## move — the nearest-slot assignment above already gets everyone to the
@@ -1707,8 +1752,19 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 			## itself a no-op unless the dispatch above actually resulted in a
 			## move/attack-move (a gather/attack/build target ignores the slot
 			## position entirely, so it has no funnel leg to run).
+			if not funnel_resolved:
+				funnel_resolved = true
+				funnel = _find_funnel_point(units, _group_centroid(units), world_pos, formation_positions)
 			if not funnel.is_empty():
 				_apply_funnel(unit, funnel)
+	## Reformation bookkeeping: remember this group's destination and shape so
+	## the host can close ranks around whoever is still walking it when members
+	## die en route (see _update_reformation). Registered from the units'
+	## post-dispatch state rather than blindly from `units` — a shift-queued
+	## member hasn't started this leg yet, and a gather/attack/build target
+	## ignores formation slots entirely, so neither belongs in a record whose
+	## whole job is re-solving move slots.
+	_register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback)
 
 ## Arranges units into the given Formation.Type shape, oriented to face the
 ## direction of travel — front rank/slot arrives exactly at target_pos,
@@ -1820,6 +1876,30 @@ const CHOKE_EXIT_AHEAD: float = 3.5
 ## tight, which the formation shape itself has to deal with.
 const CHOKE_MIN_DISTANCE_FROM_GROUP: float = 5.0
 const CHOKE_MIN_DISTANCE_FROM_TARGET: float = 4.0
+## Radius of the NavigationObstacle3D a passage's flanking structure carries per
+## side (0.2 per post on wall_gate.tscn). It isn't the physical geometry that
+## decides whether a unit fits through an opening — RVO steers off obstacle
+## centres, so each side effectively reaches this far in on top of its own
+## agent-radius standoff.
+const CHOKE_PASSAGE_SIDE_RADIUS: float = 0.2
+## Narrowest opening worth funnelling a group at. An agent needs its own radius
+## plus the flanking obstacle's on BOTH sides before any of it is walkable, so a
+## bare agent diameter is nominal rather than protective — a 1.0m opening would
+## clear that and still be impassable. Conservative by a little: the obstacles
+## sit at the post CENTRES, slightly outside the clear span passage_width
+## measures, so real clearance is marginally better than this assumes. A
+## passage below it isn't skipped, it stops counting as a doorway and falls
+## through to the footprint scan as the blocker it effectively is.
+const CHOKE_MIN_PASSAGE_WIDTH: float = (Unit.FORMATION_BASE_RADIUS + CHOKE_PASSAGE_SIDE_RADIUS) * 2.0
+## How closely a passage's own axis has to agree with the group's direction of
+## travel (|dot|, so either facing counts) before it's accepted. A gate set in a
+## wall running alongside the route isn't on the way to anywhere — without this,
+## one up to CHOKE_PROBE_HALF_WIDTH off-route would short-circuit the scan and
+## drag the formation sideways through a doorway nobody needed. 0.5 is a 60
+## degree cone, so an angled but sensible approach still qualifies while a
+## near-parallel one (where the through-direction's sign is arbitrary anyway,
+## and the waypoint could land on the wrong side of the wall) is rejected.
+const CHOKE_PASSAGE_AXIS_DOT: float = 0.5
 ## Slack added to the formation's raw slot spread to get the width it actually
 ## needs to pass somewhere — roughly one unit's body diameter (the physical
 ## CapsuleShape3D radius on scenes/units/unit.tscn is 0.4), since the spread is
@@ -1832,19 +1912,30 @@ const CHOKE_UNIT_WIDTH: float = 1.0
 ## before dispersing to its own slot (see Unit.set_funnel_waypoint), otherwise
 ## an empty Dictionary and the order dispatches exactly as it always has.
 ##
-## Why geometry and not the navmesh: buildings in this project never carve the
-## baked NavigationRegion3D (they're NavigationObstacle3D footprints, i.e. pure
-## runtime RVO avoidance — nothing rebakes at runtime), so a navmesh query knows
-## nothing about the wall the player just built and would happily report a route
-## straight through a gate's posts as wide open. The navmesh path is still used
-## as the route's *shape* (so terrain detours are followed), but the corridor
+## Why geometry and not the navmesh: NavigationBlockers does carve buildings
+## out of the region, so the route below already goes *around* them — but a
+## navmesh path is a corridor of arbitrary width reduced to a center line, and
+## nothing in it says whether the gap it threads is a wide street or a gate
+## barely wider than one unit. The navmesh path is used as the route's *shape*
+## (so terrain and building detours are both followed), while the corridor
 ## width along it is measured against the actual building footprints.
 ##
-## Cost: one path query plus one pass over the building list, on a move order
-## only. No per-frame work and no raycasts.
+## Cost: one path query plus one pass over the building list, and only on an
+## order that could actually use the answer. No per-frame work and no raycasts.
 func _find_funnel_point(units: Array[Unit], centroid: Vector3, target_pos: Vector3, slots: Array[Vector3]) -> Dictionary:
 	if units.size() < CHOKE_MIN_UNITS:
 		return {}
+	## Cheap rejections first — everything past this point costs a navmesh path
+	## query and a pass over every building on the map, so a formation narrow
+	## enough to fit through any gap worth funnelling toward, or a map with
+	## nothing built on it, bails before paying for either.
+	var required_width := _formation_required_width(slots, centroid, target_pos)
+	if required_width < CHOKE_MIN_GAP + CHOKE_WIDTH_MARGIN:
+		return {}
+	var buildings := get_tree().get_nodes_in_group("buildings")
+	if buildings.is_empty():
+		return {}
+
 	var route := _route_polyline(units[0], centroid, target_pos)
 	if route.size() < 2:
 		return {}
@@ -1858,44 +1949,107 @@ func _find_funnel_point(units: Array[Unit], centroid: Vector3, target_pos: Vecto
 	if total_length < CHOKE_MIN_DISTANCE_FROM_GROUP + CHOKE_MIN_DISTANCE_FROM_TARGET:
 		return {}
 
-	var required_width := _formation_required_width(slots, centroid, target_pos)
-	if required_width <= CHOKE_MIN_GAP:
-		return {}
-
 	var bin_count: int = maxi(1, ceili(total_length / CHOKE_BIN_SIZE))
-	## Free space remaining on each side of the route center line, per bin.
-	## Starts "unconstrained" and is whittled down by each building that reaches
-	## into the corridor.
-	var left_free: Array[float] = []
+	## Free space remaining on each side of the route center line, per bin, named
+	## for the side of the direction of travel they actually describe (`right` is
+	## Vector3(forward.z, 0, -forward.x), the same axis the formation shape is
+	## built against). Starts "unconstrained" and is whittled down by each
+	## building that reaches into the corridor.
 	var right_free: Array[float] = []
+	var left_free: Array[float] = []
 	for i in bin_count:
-		left_free.append(CHOKE_PROBE_HALF_WIDTH)
 		right_free.append(CHOKE_PROBE_HALF_WIDTH)
+		left_free.append(CHOKE_PROBE_HALF_WIDTH)
 
-	for node in get_tree().get_nodes_in_group("buildings"):
+	## Nearest walkable opening found on the route, if any — see
+	## ProductionBuilding.passage_width and _passage_funnel.
+	var best_passage: Dictionary = {}
+
+	for node in buildings:
 		var building := node as Node3D
 		if building == null or not is_instance_valid(building):
 			continue
-		if building is ProductionBuilding and building.is_destroyed:
+		var production := building as ProductionBuilding
+		if production != null and production.is_destroyed:
 			continue
+		var hit := _project_onto_route(route, cumulative, building.global_position)
+		var arc: float = hit["arc"]
+		var lateral: float = hit["lateral_distance"]
+
+		## A gate is a HOLE in a wall, not a blocker, and its footprint describes
+		## the structure to either side of that hole rather than the hole itself
+		## (wall_gate carries one small obstacle per post, at x = +/-0.85). Run
+		## through the obstacle branch below it would read as a solid lump across
+		## the very spot units are meant to walk through. Gates are therefore
+		## their own kind of candidate: an opening of known width, centred on the
+		## node origin.
+		##
+		## Two things demote one back to an ordinary obstacle rather than skipping
+		## it — in both cases it really is blocking the corridor, and the scan
+		## should see it as such:
+		##   - still under construction (sunk into the ground by
+		##     construction_sink_depth, so there's no doorway there yet);
+		##   - too narrow for anything to fit through (see
+		##     CHOKE_MIN_PASSAGE_WIDTH).
+		var passage_width: float = production.passage_width if production != null else 0.0
+		if production != null and production.is_under_construction:
+			passage_width = 0.0
+		if passage_width < CHOKE_MIN_PASSAGE_WIDTH:
+			passage_width = 0.0
+		if passage_width > 0.0:
+			## Wide enough that the formation doesn't have to change shape for
+			## it: not a chokepoint at all, and not a blocker either, so it
+			## contributes nothing either way.
+			if passage_width + CHOKE_WIDTH_MARGIN > required_width:
+				continue
+			if lateral > CHOKE_PROBE_HALF_WIDTH:
+				continue
+			if arc < CHOKE_MIN_DISTANCE_FROM_GROUP or arc > total_length - CHOKE_MIN_DISTANCE_FROM_TARGET:
+				continue
+			## The opening has to actually point the way the group is going. Its
+			## axis is the gate's local Z (the structure sits either side of it on
+			## local X), flipped where needed so it runs with the route rather
+			## than against it.
+			var route_forward: Vector3 = _route_point_at(route, cumulative, arc)["forward"]
+			var through: Vector3 = building.global_transform.basis.z
+			through.y = 0.0
+			if through.length_squared() < 0.0001:
+				continue
+			through = through.normalized()
+			var alignment: float = through.dot(route_forward)
+			if absf(alignment) < CHOKE_PASSAGE_AXIS_DOT:
+				continue
+			if alignment < 0.0:
+				through = -through
+			## Nearest to the route line wins: with several gates in one wall, the
+			## one the group is already walking at is the one it should use.
+			if best_passage.is_empty() or lateral < float(best_passage["lateral_distance"]):
+				best_passage = {"node": building, "lateral_distance": lateral, "through": through}
+			continue
+
 		var radius: float = building.get_footprint_radius() if building.has_method("get_footprint_radius") else 0.0
 		if radius <= 0.0:
 			continue
-		var hit := _project_onto_route(route, cumulative, building.global_position)
-		var free: float = hit["lateral_distance"] - radius
+		var free: float = lateral - radius
 		if free > CHOKE_PROBE_HALF_WIDTH:
 			continue
 		free = maxf(free, 0.0)
 		## A building of radius r constricts the corridor over the whole stretch
 		## of route it sits alongside, not just the single point it projects to.
-		var arc: float = hit["arc"]
 		var first_bin: int = clampi(int(floor((arc - radius) / CHOKE_BIN_SIZE)), 0, bin_count - 1)
 		var last_bin: int = clampi(int(floor((arc + radius) / CHOKE_BIN_SIZE)), 0, bin_count - 1)
 		for b in range(first_bin, last_bin + 1):
 			if hit["lateral_sign"] >= 0.0:
-				left_free[b] = minf(left_free[b], free)
-			else:
 				right_free[b] = minf(right_free[b], free)
+			else:
+				left_free[b] = minf(left_free[b], free)
+
+	## An actual gate on the route beats anything the footprint scan could infer
+	## from the wall around it: its width and centre are known exactly rather
+	## than measured off neighbouring pieces, and that wall would otherwise
+	## register as an impassable stretch and be thrown away below.
+	if not best_passage.is_empty():
+		return _passage_funnel(best_passage)
 
 	var best_bin: int = -1
 	var best_gap: float = INF
@@ -1904,12 +2058,12 @@ func _find_funnel_point(units: Array[Unit], centroid: Vector3, target_pos: Vecto
 		## beside the route is something to walk around, not something to funnel
 		## through, and treating it as one edge of a "gap" whose other edge is
 		## open ground would fire on any building the group happens to pass.
-		if left_free[b] >= CHOKE_PROBE_HALF_WIDTH or right_free[b] >= CHOKE_PROBE_HALF_WIDTH:
+		if right_free[b] >= CHOKE_PROBE_HALF_WIDTH or left_free[b] >= CHOKE_PROBE_HALF_WIDTH:
 			continue
 		var arc: float = (b + 0.5) * CHOKE_BIN_SIZE
 		if arc < CHOKE_MIN_DISTANCE_FROM_GROUP or arc > total_length - CHOKE_MIN_DISTANCE_FROM_TARGET:
 			continue
-		var gap: float = left_free[b] + right_free[b]
+		var gap: float = right_free[b] + left_free[b]
 		if gap < best_gap:
 			best_gap = gap
 			best_bin = b
@@ -1920,18 +2074,35 @@ func _find_funnel_point(units: Array[Unit], centroid: Vector3, target_pos: Vecto
 	var at := _route_point_at(route, cumulative, arc_at_gap)
 	var forward: Vector3 = at["forward"]
 	var right := Vector3(forward.z, 0.0, -forward.x)
-	## The route's own center line isn't necessarily the gap's center (a gate can
-	## sit off to one side of it) — recenter on the free span actually measured.
-	var gap_center: Vector3 = at["position"] + right * ((left_free[best_bin] - right_free[best_bin]) * 0.5)
+	## The route center line isn't necessarily the gap's center (the gap can sit
+	## off to one side of it) — recenter on the free span actually measured,
+	## which runs from -left_free to +right_free along `right`.
+	var gap_center: Vector3 = at["position"] + right * ((right_free[best_bin] - left_free[best_bin]) * 0.5)
 	return {
 		"gap": gap_center,
 		"point": gap_center + forward * CHOKE_EXIT_AHEAD,
 		"forward": forward,
 	}
 
-## Navmesh path when there is one (so the route follows terrain rather than
-## cutting through it), straight line otherwise. Only ever the *shape* of the
-## route — see _find_funnel_point on why width can't come from the navmesh.
+## Funnel data for a walkable opening (see ProductionBuilding.passage_width).
+## Both the gap centre and the direction through it come from the gate's own
+## transform rather than from the route: the doorway is centred on the node
+## origin and runs along its local Z (already resolved and direction-checked by
+## the caller), so a gate approached at an angle still gets a waypoint squarely
+## in front of its opening instead of one nudged toward a post.
+func _passage_funnel(passage: Dictionary) -> Dictionary:
+	var gate: Node3D = passage["node"]
+	var through: Vector3 = passage["through"]
+	return {
+		"gap": gate.global_position,
+		"point": gate.global_position + through * CHOKE_EXIT_AHEAD,
+		"forward": through,
+	}
+
+## Navmesh path when there is one (so the route follows terrain and built-up
+## ground rather than cutting through them), straight line otherwise. Only
+## ever the *shape* of the route — see _find_funnel_point on why the corridor
+## width can't come from the navmesh.
 func _route_polyline(unit: Unit, from: Vector3, to: Vector3) -> PackedVector3Array:
 	var map: RID = unit.nav_agent.get_navigation_map()
 	if map.is_valid():
@@ -2025,6 +2196,228 @@ func _slowest_move_speed(units: Array[Unit]) -> float:
 	for unit in units:
 		slowest = minf(slowest, unit.move_speed)
 	return slowest
+
+## ---------------------------------------------------------------------------
+## Reformation
+##
+## A formation is solved once, at order time (_formation_positions). Without
+## anything else that layout is frozen for the whole journey: if four of a
+## twelve-unit box die on the way, the eight survivors keep walking to their
+## original twelve-slot layout and arrive as a block with four holes in it,
+## and a group scattered by a fight or an obstacle never pulls itself back
+## together. The two entry points below fix exactly that and nothing else —
+## they re-solve and re-issue slots, and never change how a shape is generated
+## (Formation), how cohesion paces it (Unit._update_cohesion) or how the
+## funnel threads it (_find_funnel_point):
+##   — automatic: _update_reformation polls each live formation record for
+##     members dropping out and closes ranks around the survivors;
+##   — explicit: _issue_reform_order (FORMATION_REFORM_KEY) re-tightens the
+##     current selection around its own centroid.
+## Both are host-side. The explicit one is a plain RPC to the server exactly
+## like a move order; no formation state is ever predicted or solved client-side.
+## ---------------------------------------------------------------------------
+
+## How long a record waits after noticing it lost members before re-solving.
+## Deaths cluster — a volley of arrows or an area ability takes several units
+## out of one group in the same frame or across a handful of frames — and
+## re-solving per death would issue a full re-path per casualty for what the
+## player reads as a single event. Waiting a beat batches the whole burst into
+## one re-solve, and re-arming the timer on each further loss means a group
+## being steadily ground down re-forms once when the bleeding stops rather
+## than continuously mid-fight.
+const REFORM_DEBOUNCE: float = 0.4
+## Retry delay when a re-solve is due but the group is mid-chokepoint. Slots
+## must not move while units are threading a gap (see Unit.is_funnelling), so
+## the re-solve waits for the last member through — Unit's own FUNNEL_TIMEOUT
+## guarantees that always eventually happens.
+const REFORM_FUNNEL_RETRY: float = 0.3
+## Facing an explicit re-form falls back to when the group has no usable
+## average heading (see _group_facing).
+const REFORM_DEFAULT_FORWARD: Vector3 = Vector3.FORWARD
+
+## Starts tracking a dispatched multi-unit formation move. `group` is the exact
+## array instance handed to those units as their cohesion group — it doubles as
+## this order's identity token, since a unit later given any other order gets a
+## different (or empty) formation_group, which is what _formation_record_members
+## uses to tell "still walking this order" from "has moved on". Single-unit and
+## non-formation dispatches carry an empty group and are never tracked.
+func _register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool) -> void:
+	if not multiplayer.is_server() or group.size() < 2:
+		return
+	var members := _formation_record_members(group)
+	if members.size() < 2:
+		return
+	## No need to hunt down an older record these units were in: they are
+	## carrying this new group array now, so they no longer read as live
+	## members of it and the next poll retires it on its own.
+	_active_formations.append({
+		"group": group,
+		"target": target_pos,
+		"type": formation_type,
+		"attack_move": attack_move,
+		"count": members.size(),
+		"timer": 0.0,
+		"dirty": false,
+	})
+
+## The members of `group` still actually walking this order: alive, still on a
+## move/attack-move command, and still carrying this exact group array. A unit
+## that died, was given a new order, or peeled off into a fight drops out here
+## — which is both how ranks-closing notices a loss and how a record eventually
+## retires itself.
+func _formation_record_members(group: Array[Unit]) -> Array[Unit]:
+	var members: Array[Unit] = []
+	for unit in group:
+		if unit == null or not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if unit.status_command != Unit.Command.MOVE and unit.status_command != Unit.Command.ATTACK_MOVE:
+			continue
+		if not is_same(unit.formation_group, group):
+			continue
+		members.append(unit)
+	return members
+
+## Polled once a frame on the host. Notices a record losing members (the common
+## cause being death mid-move, but a unit yanked into a fight or given a fresh
+## order counts the same way), waits out REFORM_DEBOUNCE so a burst of losses
+## collapses into a single re-solve, then re-solves the shape for whoever is
+## left — closing the holes the dead units' slots would otherwise leave.
+## Polling membership rather than hooking each individual death is what keeps
+## this one batched check no matter how many units die at once, and it also
+## covers hand-placed units that never went through the spawner's signal wiring.
+func _update_reformation(delta: float) -> void:
+	if not multiplayer.is_server() or _active_formations.is_empty():
+		return
+	for i in range(_active_formations.size() - 1, -1, -1):
+		var record: Dictionary = _active_formations[i]
+		var group: Array[Unit] = record["group"]
+		var members := _formation_record_members(group)
+		## Nothing left to hold a shape: everyone arrived, died, or moved on.
+		if members.size() < 2:
+			_active_formations.remove_at(i)
+			continue
+		if members.size() < int(record["count"]):
+			record["count"] = members.size()
+			record["dirty"] = true
+			record["timer"] = REFORM_DEBOUNCE
+		if not record["dirty"]:
+			continue
+		record["timer"] = float(record["timer"]) - delta
+		if record["timer"] > 0.0:
+			continue
+		## Never re-solve slots out from under a group that is mid-gap: a
+		## funnelled unit is deliberately steered at a shared waypoint with its
+		## real slot parked away until it's through, and re-issuing here would
+		## send it straight at a far-side slot through whatever it was being
+		## funnelled around. Retried, not dropped — the group re-forms as soon
+		## as the last member clears the gap.
+		if _any_funnelling(members):
+			record["timer"] = REFORM_FUNNEL_RETRY
+			continue
+		record["dirty"] = false
+		_reform_group(members, record["target"], record["type"], record["attack_move"])
+		## The re-issue hands the survivors a new group array as their cohesion
+		## group, so the record has to follow it or every member would read as
+		## "moved on" on the very next poll.
+		record["group"] = members
+
+func _any_funnelling(units: Array[Unit]) -> bool:
+	for unit in units:
+		if unit.is_funnelling():
+			return true
+	return false
+
+## Re-issues a formation move for `units`, re-solved for their current count.
+## Goes through command_move/command_attack_move directly rather than
+## _dispatch_smart_command: there is no target node to re-resolve (a gather/
+## attack/build order never had formation slots to begin with), and this is a
+## continuation of an order the player already gave, so it deliberately plays
+## no order sound and never touches order_queue — anything shift-queued behind
+## this leg still runs when this leg completes. command_move re-baselines
+## cohesion for the new leg on its own (Unit._set_formation_cohesion), which is
+## exactly what a re-solved slot needs, and clears any stale funnel with it.
+func _reform_group(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward_override: Vector3 = Vector3.ZERO) -> void:
+	var slots: Array[Vector3] = _formation_positions(units, target_pos, formation_type) if forward_override == Vector3.ZERO \
+			else _reform_positions(units, target_pos, formation_type, forward_override)
+	var speed := _slowest_move_speed(units)
+	for i in units.size():
+		if attack_move:
+			units[i].command_attack_move(slots[i], speed, units)
+		else:
+			units[i].command_move(slots[i], speed, units)
+
+## Same slot solve as _formation_positions, but with the group's facing supplied
+## rather than derived from (target - centroid): an explicit re-form is centered
+## on the group's own centroid, so there is no direction of travel to derive a
+## facing from and every re-form would otherwise come out pointing the same
+## arbitrary way (see _group_forward's degenerate case).
+func _reform_positions(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, forward: Vector3) -> Array[Vector3]:
+	if units.is_empty():
+		return []
+	if units.size() == 1:
+		return [target_pos]
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	var formation := Formation.new(units, formation_type)
+	return _assign_slots_to_units(units, formation.get_slot_positions(target_pos, forward, right))
+
+## The group's average heading, taken from the direction each unit is actually
+## facing (units rotate toward their movement direction, so after a move or a
+## fight this is where they were last heading/looking). Averaged as vectors
+## rather than angles so opposing headings cancel instead of averaging into a
+## meaningless midpoint — a group facing every which way after a brawl falls
+## back to the default instead of inheriting one member's spin.
+func _group_facing(units: Array[Unit]) -> Vector3:
+	var facing := Vector3.ZERO
+	for unit in units:
+		facing += Vector3(sin(unit.rotation.y), 0.0, cos(unit.rotation.y))
+	facing.y = 0.0
+	return facing.normalized() if facing.length_squared() > 0.0001 else REFORM_DEFAULT_FORWARD
+
+## Explicit re-form (FORMATION_REFORM_KEY): pulls a selection that combat, an
+## obstacle or a chokepoint has smeared into a blob back into its formation
+## shape, in place. Client-local only as far as the RPC — same shape as every
+## other order here, the host does the solving.
+func _issue_reform_order() -> void:
+	_prune_selected_units()
+	if selected_units.size() < 2:
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+		_clear_path_markers(unit)
+	_rpc_issue_reform.rpc_id(1, unit_paths, current_formation_type)
+	_play_command_sound()
+
+## Host-side half of the explicit re-form. Centered on the group's own centroid
+## and oriented to its own average facing, so the block forms up where it
+## already is and pointing where it already points instead of marching off to a
+## destination — the player asked for tidier ranks, not a move order. Registered
+## as a formation record like any other formation move, so ranks still close if
+## someone dies while forming up.
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_issue_reform(unit_paths: Array[NodePath], formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var units: Array[Unit] = []
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit != null and unit.owner_peer_id == sender_id and unit.status_activity != Unit.Activity.DEAD:
+			units.append(unit)
+	if units.size() < 2:
+		return
+	## A group still threading a gap is already deliberately in single file;
+	## re-forming it mid-gap would fight the funnel, so the request is dropped
+	## rather than queued — the player can simply press it again once through.
+	if _any_funnelling(units):
+		return
+
+	var centroid := _group_centroid(units)
+	_reform_group(units, centroid, formation_type, false, _group_facing(units))
+	_register_formation(units, centroid, formation_type, false)
 
 ## Fires whenever a unit's current command runs its own natural course (a
 ## move arrives, a fight runs out of enemies, a build finishes) — see

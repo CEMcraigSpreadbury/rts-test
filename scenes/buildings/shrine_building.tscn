@@ -1,0 +1,218 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="2_item_script"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="3_bar_tex"]
+[ext_resource type="PackedScene" uid="uid://8vu8jhcyc8kb" path="res://assets/art/Models/Shrine/shrine.glb" id="4_model"]
+[ext_resource type="AudioStream" uid="uid://b8hfdcngfe20q" path="res://assets/sfx/Facilities/Barracks_1.wav" id="8_sfx_a"]
+[ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_sfx_b"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/black_dragon_unit.tscn" id="10_black_dragon"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/dark_lord_unit.tscn" id="10_dark_lord"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/giant_bear_unit.tscn" id="10_giant_bear"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/hydra_unit.tscn" id="10_hydra"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/orc_mutant_unit.tscn" id="10_orc_mutant"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/phoenix_unit.tscn" id="10_phoenix"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/skeleton_dragon_unit.tscn" id="10_skeleton_dragon"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/yeti_unit.tscn" id="10_yeti"]
+
+[sub_resource type="Resource" id="ProducibleItem_black_dragon"]
+script = ExtResource("2_item_script")
+item_name = "Black Dragon"
+build_time = 48.0
+unit_scene = ExtResource("10_black_dragon")
+
+[sub_resource type="Resource" id="ProducibleItem_dark_lord"]
+script = ExtResource("2_item_script")
+item_name = "Dark Lord"
+build_time = 45.0
+unit_scene = ExtResource("10_dark_lord")
+
+[sub_resource type="Resource" id="ProducibleItem_giant_bear"]
+script = ExtResource("2_item_script")
+item_name = "Giant Bear"
+build_time = 40.0
+unit_scene = ExtResource("10_giant_bear")
+
+[sub_resource type="Resource" id="ProducibleItem_hydra"]
+script = ExtResource("2_item_script")
+item_name = "Hydra"
+build_time = 45.0
+unit_scene = ExtResource("10_hydra")
+
+[sub_resource type="Resource" id="ProducibleItem_orc_mutant"]
+script = ExtResource("2_item_script")
+item_name = "Orc Mutant"
+build_time = 40.0
+unit_scene = ExtResource("10_orc_mutant")
+
+[sub_resource type="Resource" id="ProducibleItem_phoenix"]
+script = ExtResource("2_item_script")
+item_name = "Phoenix"
+build_time = 44.0
+unit_scene = ExtResource("10_phoenix")
+
+[sub_resource type="Resource" id="ProducibleItem_skeleton_dragon"]
+script = ExtResource("2_item_script")
+item_name = "Skeleton Dragon"
+build_time = 48.0
+unit_scene = ExtResource("10_skeleton_dragon")
+
+[sub_resource type="Resource" id="ProducibleItem_yeti"]
+script = ExtResource("2_item_script")
+item_name = "Yeti"
+build_time = 42.0
+unit_scene = ExtResource("10_yeti")
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(3.2, 2.2, 3.4)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
+emission_shape = 1
+emission_sphere_radius = 1.7
+direction = Vector3(0, 1, 0)
+spread = 60.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+scale_min = 0.5
+scale_max = 1.5
+color = Color(0.4, 0.3, 0.2, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_debris"]
+shading_mode = 0
+albedo_color = Color(0.4, 0.3, 0.2, 1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_debris"]
+material = SubResource("StandardMaterial3D_debris")
+size = Vector2(0.15, 0.15)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_construction"]
+emission_shape = 1
+emission_sphere_radius = 1.8
+direction = Vector3(0, 1, 0)
+spread = 40.0
+initial_velocity_min = 0.3
+initial_velocity_max = 0.8
+gravity = Vector3(0, 0.3, 0)
+scale_min = 0.6
+scale_max = 1.2
+color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="QuadMesh" id="QuadMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+size = Vector2(0.2, 0.2)
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:is_under_construction")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+properties/2/path = NodePath(".:construction_progress")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:synced_queue_size")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:synced_time_remaining")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+properties/5/path = NodePath(".:synced_current_item_name")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:health_fraction")
+properties/6/spawn = true
+properties/6/replication_mode = 1
+properties/7/path = NodePath(".:synced_builder_count")
+properties/7/spawn = true
+properties/7/replication_mode = 2
+properties/8/path = NodePath(".:synced_current_item_progress")
+properties/8/spawn = true
+properties/8/replication_mode = 1
+properties/9/path = NodePath(".:can_promote_monarch")
+properties/9/spawn = true
+properties/9/replication_mode = 2
+properties/10/path = NodePath(".:owner_peer_id")
+properties/10/spawn = true
+properties/10/replication_mode = 2
+properties/11/path = NodePath(".:team_tint")
+properties/11/spawn = true
+properties/11/replication_mode = 2
+properties/12/path = NodePath(".:synced_queue_counts")
+properties/12/spawn = true
+properties/12/replication_mode = 2
+
+[node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
+script = ExtResource("1_building_script")
+building_name = "Shrine"
+producibles = Array[ExtResource("2_item_script")]([SubResource("ProducibleItem_black_dragon"), SubResource("ProducibleItem_dark_lord"), SubResource("ProducibleItem_giant_bear"), SubResource("ProducibleItem_hydra"), SubResource("ProducibleItem_orc_mutant"), SubResource("ProducibleItem_phoenix"), SubResource("ProducibleItem_skeleton_dragon"), SubResource("ProducibleItem_yeti")])
+vision_range = 14.0
+on_select_sound_effects = Array[AudioStream]([ExtResource("8_sfx_a"), ExtResource("9_sfx_b")])
+max_health = 220
+
+[node name="Shrine" parent="." instance=ExtResource("4_model")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+radius = 2.1
+height = 2.2
+
+[node name="SpawnPoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 2.9)
+
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="."]
+bus = &"SFX"
+
+[node name="PlacementBurst" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+emitting = false
+amount = 24
+lifetime = 0.6
+one_shot = true
+explosiveness = 1.0
+randomness = 0.3
+process_material = SubResource("ParticleProcessMaterial_placement")
+draw_pass_1 = SubResource("QuadMesh_debris")
+
+[node name="ConstructionDust" type="GPUParticles3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+emitting = false
+amount = 48
+lifetime = 1.4
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_construction")
+draw_pass_1 = SubResource("QuadMesh_dust")
+
+[node name="HealthBar" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
+visible = false
+
+[node name="Background" type="Sprite3D" parent="HealthBar"]
+transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
+cast_shadow = 0
+modulate = Color(0.1, 0.1, 0.1, 0.85)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("3_bar_tex")
+
+[node name="Fill" type="Sprite3D" parent="HealthBar"]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+cast_shadow = 0
+modulate = Color(0.25, 0.9, 0.3, 1)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("3_bar_tex")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_building")
