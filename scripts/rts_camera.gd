@@ -20,18 +20,14 @@ extends Node3D
 @export var max_zoom: float = 22.0
 @export var pitch_degrees: float = 30.0
 @export var field_of_view: float = 45.0
-## near_blur/far_blur must each stay larger than the matching transition width
-## (near_transition/far_transition below) — otherwise the transition ramp
-## overshoots past the focus pivot onto the wrong side of it, so the two blur
-## ramps overlap right on the pivot instead of leaving it sharp, blurring the
-## screen center instead of the foreground/background either side of it. All
-## four of these are scaled together by field_of_view (see _fov_blur_scale)
-## so that invariant — and the sharp zone's on-screen proportion — holds at
-## any FOV, not just the 45° they're tuned for.
-@export var near_blur: float = 3.5
-@export var far_blur: float = 6.0
-@export var near_transition: float = 2.5
-@export var far_transition: float = 4.0
+## Depth-of-field focus band in screen space, as fractions of the screen height
+## measured from the top edge (0 = top, 1 = bottom). Ground between these two
+## lines stays sharp; blur ramps in above/below over focus_ramp more of the
+## screen. Converted to depths from the actual pitch/FOV/zoom (see
+## _ground_depth_at), so the band keeps the same on-screen size at any zoom.
+@export_range(0.0, 1.0) var focus_band_top: float = 0.2
+@export_range(0.0, 1.0) var focus_band_bottom: float = 0.8
+@export_range(0.01, 1.0) var focus_ramp: float = 0.15
 
 @onready var yaw: Node3D = $Yaw
 @onready var pitch: Node3D = $Yaw/Pitch
@@ -182,15 +178,17 @@ func _update_pan(input_dir: Vector2, delta: float) -> void:
 
 	global_position += _pan_velocity * delta + drag_step
 
-## near_blur/far_blur are tuned for the default 45° field_of_view. A wider FOV
-## shows a larger span of depth in the same frame, so that same fixed-size
-## sharp zone covers a smaller fraction of the screen — something dead-center
-## that used to sit comfortably inside it can end up just outside. Scaling by
-## tan(fov/2) (normalized to 1.0 at 45°) keeps the sharp zone roughly the same
-## proportion of the screen at any field_of_view.
-func _fov_blur_scale() -> float:
-	const REFERENCE_FOV_TAN_HALF: float = 0.41421356 # tan(45deg / 2)
-	return tan(deg_to_rad(field_of_view) * 0.5) / REFERENCE_FOV_TAN_HALF
+## View-space depth of the ground (at pivot height) seen through the given
+## screen row (0 = top edge, 1 = bottom edge). Rows that look at or above the
+## horizon never hit the ground, so they're clamped to the camera's far plane.
+func _ground_depth_at(screen_y: float) -> float:
+	var pitch_rad := deg_to_rad(pitch_degrees)
+	var height := zoom_distance * sin(pitch_rad)
+	var ray_offset := atan((screen_y * 2.0 - 1.0) * tan(deg_to_rad(field_of_view) * 0.5))
+	var ray_dip := pitch_rad + ray_offset
+	if ray_dip <= deg_to_rad(1.0):
+		return camera.far
+	return minf(height * cos(ray_offset) / sin(ray_dip), camera.far)
 
 ## Eases zoom_distance toward the wheel's target. exp() rather than a plain
 ## lerp so the approach rate is the same regardless of framerate.
@@ -207,12 +205,17 @@ func _update_zoom_smoothing(delta: float) -> void:
 
 func _update_zoom() -> void:
 	camera.position.z = zoom_distance
-	## Keeps the depth-of-field focus band centered on the pivot (where units
-	## sit) as the player zooms, for a tilt-shift/diorama look at any zoom level.
+	## Re-fits the depth-of-field band to the screen-space focus lines as the
+	## player zooms, for a tilt-shift/diorama look at any zoom level. Godot's
+	## blur starts at each distance and reaches full strength one transition
+	## further out (toward the camera for near, away for far).
 	var attributes := camera.attributes as CameraAttributesPractical
 	if attributes:
-		var scale := _fov_blur_scale()
-		attributes.dof_blur_near_distance = zoom_distance - near_blur * scale
-		attributes.dof_blur_far_distance = zoom_distance + far_blur * scale
-		attributes.dof_blur_near_transition = near_transition * scale
-		attributes.dof_blur_far_transition = far_transition * scale
+		var far_start := _ground_depth_at(focus_band_top)
+		var far_full := _ground_depth_at(maxf(focus_band_top - focus_ramp, 0.0))
+		var near_start := _ground_depth_at(focus_band_bottom)
+		var near_full := _ground_depth_at(minf(focus_band_bottom + focus_ramp, 1.0))
+		attributes.dof_blur_far_distance = far_start
+		attributes.dof_blur_far_transition = maxf(far_full - far_start, 0.01)
+		attributes.dof_blur_near_distance = near_start
+		attributes.dof_blur_near_transition = maxf(near_start - near_full, 0.01)

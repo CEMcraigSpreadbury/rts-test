@@ -225,11 +225,16 @@ func _world_to_cell(world_pos: Vector3) -> Vector2i:
 	var v := (world_pos.z - map_origin.y) / map_size.y
 	return Vector2i(int(u * grid_resolution), int(v * grid_resolution))
 
+## Half strength, not merely non-zero — the outermost fringe of a stamp is
+## still near-black on the terrain, so props there would otherwise pop in
+## fully drawn over what still looks like unexplored ground.
+const EXPLORED_THRESHOLD: int = 128
+
 func is_explored_at(world_pos: Vector3) -> bool:
 	var c := _world_to_cell(world_pos)
 	if c.x < 0 or c.x >= grid_resolution or c.y < 0 or c.y >= grid_resolution:
 		return false
-	return explored[c.y * grid_resolution + c.x] != 0
+	return explored[c.y * grid_resolution + c.x] >= EXPLORED_THRESHOLD
 
 ## Writes a smoothstep falloff (255 deep inside the circle, fading to 0 over
 ## the outer ~15% of the radius) rather than a hard 1/0 cutoff, so the grid

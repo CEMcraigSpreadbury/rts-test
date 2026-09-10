@@ -3,8 +3,6 @@
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/options_menu.tscn" id="2_options"]
 [ext_resource type="Texture2D" path="res://assets/ui/theme/divider.tres" id="3_divider"]
-[ext_resource type="Script" path="res://scripts/map_info.gd" id="4_map_info_script"]
-[ext_resource type="Resource" path="res://resources/maps/main_map.tres" id="5_main_map"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -14,7 +12,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_script")
-available_maps = Array[ExtResource("4_map_info_script")]([ExtResource("5_main_map")])
 
 [node name="Background" type="ColorRect" parent="."]
 layout_mode = 1

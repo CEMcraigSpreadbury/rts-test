@@ -2,8 +2,7 @@ extends Control
 
 const LOBBY_SCENE_PATH: String = "res://scenes/lobby.tscn"
 
-## Same list (and order) as lobby.tscn's available_maps.
-@export var available_maps: Array[MapInfo] = []
+var available_maps: Array[MapInfo] = MapInfo.list_all()
 
 @onready var menu: VBoxContainer = $Menu
 @onready var map_select: VBoxContainer = $MapSelect

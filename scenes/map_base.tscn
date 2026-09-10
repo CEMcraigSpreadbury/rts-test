@@ -1,0 +1,595 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_fk3n2"]
+[ext_resource type="Script" path="res://scripts/faction.gd" id="2_ger18"]
+[ext_resource type="Resource" path="res://resources/factions/faction_one.tres" id="3_mrodp"]
+[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/05_hover.wav" id="4_xrok2"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Start_1.wav" id="5_vxmhd"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Start_2.wav" id="6_7uhv8"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Complete_1.wav" id="7_7lkwq"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Complete_2.wav" id="8_hgas2"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Denied.wav" id="9_culs1"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Market_2.wav" id="10_68px0"]
+[ext_resource type="Script" path="res://scripts/music_player.gd" id="11_ahdgl"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Music/Early/Castle Courtyard Bloom.mp3" id="12_8ikes"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Music/Early/Spring Begins.mp3" id="13_7vi2c"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Music/Mid/A Battle Cometh.mp3" id="14_wjqro"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Music/Mid/Bastion at Dawn.mp3" id="15_iog2k"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Music/End/Iron Banner.mp3" id="16_dcn27"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Music/End/Triumphant March.mp3" id="17_nafme"]
+[ext_resource type="Script" path="res://scripts/ambience_player.gd" id="18_1uxtg"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="19_5lcou"]
+[ext_resource type="Script" path="res://scripts/light_follow_camera_yaw.gd" id="20_dtl52"]
+[ext_resource type="Shader" path="res://shaders/cloud_shadows.gdshader" id="21_lsodw"]
+[ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="22_80dis"]
+[ext_resource type="Script" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
+[ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/bar_band.png" id="24_i2k1h"]
+[ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/panel_stone.png" id="25_lrrmx"]
+[ext_resource type="Script" path="res://scripts/minimap.gd" id="26_vqeq8"]
+[ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/panel_gold.png" id="27_1mebi"]
+[ext_resource type="Texture2D" path="res://assets/ui/HUD/elements/square_frame_gold_2.png" id="28_wabaf"]
+[ext_resource type="Texture2D" path="res://assets/ui/HUD/elements/ornate_divider_gold_a.png" id="29_dk18d"]
+[ext_resource type="Texture2D" path="res://assets/ui/HUD/elements/lion_shield_badge.png" id="30_7taj2"]
+[ext_resource type="Texture2D" path="res://assets/ui/theme/divider.tres" id="31_nrmib"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+sky_top_color = Color(0.35, 0.5, 0.75, 1)
+sky_horizon_color = Color(0.75, 0.8, 0.85, 1)
+ground_bottom_color = Color(0.3, 0.28, 0.25, 1)
+ground_horizon_color = Color(0.75, 0.8, 0.85, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+background_energy_multiplier = 2.2
+sky = SubResource("Sky_1")
+ambient_light_source = 3
+ambient_light_energy = 0.4
+tonemap_mode = 3
+tonemap_exposure = 0.8
+ssao_enabled = true
+ssao_radius = 2.0
+ssao_intensity = 8.0
+glow_enabled = true
+glow_strength = 0.65
+glow_bloom = 0.3
+glow_hdr_threshold = 0.95
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.08
+volumetric_fog_albedo = Color(1, 1, 0.8392157, 1)
+volumetric_fog_anisotropy = 0.4
+volumetric_fog_length = 6.0
+volumetric_fog_ambient_inject = 0.05
+volumetric_fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_brightness = 1.1
+adjustment_saturation = 1.25
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_cloud_shadows"]
+size = Vector2(140, 140)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_cloud_shadows"]
+render_priority = 0
+shader = ExtResource("21_lsodw")
+shader_parameter/noise_scale = 0.015
+shader_parameter/detail_scale = 0.15
+shader_parameter/detail_strength = 1.0
+shader_parameter/scroll_speed = Vector2(0.06, -0.01)
+shader_parameter/coverage = 0.6000000285
+shader_parameter/cloud_color = Color(0.95686275, 0.92941177, 0.9098039, 1)
+shader_parameter/visible_opacity = 0.1210000057475
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
+emission_shape = 3
+emission_box_extents = Vector3(30, 4, 30)
+direction = Vector3(0, 1, 0)
+spread = 180.0
+initial_velocity_min = 0.05
+initial_velocity_max = 0.2
+angular_velocity_min = -20.0
+angular_velocity_max = 20.0
+orbit_velocity_min = 0.02
+orbit_velocity_max = 0.08
+gravity = Vector3(0, 0, 0)
+scale_min = 0.4
+color = Color(1, 0.95, 0.8, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.95, 0.8, 0.35)
+
+[sub_resource type="SphereMesh" id="SphereMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+radius = 0.04
+height = 0.08
+radial_segments = 6
+rings = 3
+
+[node name="Main" type="Node3D" unique_id=2055692591]
+script = ExtResource("1_fk3n2")
+available_factions = Array[ExtResource("2_ger18")]([ExtResource("3_mrodp")])
+on_command_sound_effects = Array[AudioStream]([ExtResource("4_xrok2")])
+on_building_placed_sound_effects = Array[AudioStream]([ExtResource("5_vxmhd"), ExtResource("6_7uhv8")])
+on_building_completed_sound_effects = Array[AudioStream]([ExtResource("7_7lkwq"), ExtResource("8_hgas2")])
+on_placement_blocked_sound_effects = Array[AudioStream]([ExtResource("9_culs1")])
+on_rally_set_sound_effects = Array[AudioStream]([ExtResource("10_68px0")])
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="." unique_id=1401837780]
+bus = &"Music"
+script = ExtResource("11_ahdgl")
+early_game_music = Array[AudioStream]([ExtResource("12_8ikes"), ExtResource("13_7vi2c")])
+mid_game_music = Array[AudioStream]([ExtResource("14_wjqro"), ExtResource("15_iog2k")])
+end_game_music = Array[AudioStream]([ExtResource("16_dcn27"), ExtResource("17_nafme")])
+
+[node name="AmbiencePlayer" type="AudioStreamPlayer" parent="." unique_id=1401837790]
+bus = &"Ambience"
+script = ExtResource("18_1uxtg")
+ambience_sounds = Array[AudioStream]([ExtResource("19_5lcou")])
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=690982779]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=620721382]
+transform = Transform3D(-0.60680544, -0.6088908, 0.51092005, -4.031998e-09, 0.6427878, 0.76604426, -0.7948505, 0.4648399, -0.39004737, 0, 12, 0)
+light_color = Color(1, 0.93, 0.8, 1)
+light_energy = 1.35
+shadow_enabled = true
+script = ExtResource("20_dtl52")
+camera_yaw_path = NodePath("../CameraRig/Yaw")
+yaw_offset_degrees = 55.0
+
+[node name="FillLight" type="DirectionalLight3D" parent="." unique_id=1505165951]
+transform = Transform3D(-0.70710677, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.70710677, 0.45451945, -0.5416752, 0, 8, 0)
+light_color = Color(0.45, 0.65, 0.95, 1)
+light_energy = 0.45
+light_volumetric_fog_energy = 1.5
+
+[node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1365774680]
+
+[node name="CloudShadowLayer" type="MeshInstance3D" parent="." unique_id=1401837760]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13986206, 40, 0.079452515)
+cast_shadow = 2
+gi_mode = 0
+mesh = SubResource("PlaneMesh_cloud_shadows")
+surface_material_override/0 = SubResource("ShaderMaterial_cloud_shadows")
+
+[node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("22_80dis")]
+pitch_degrees = 35.0
+field_of_view = 50.0
+
+[node name="ForestDust" type="GPUParticles3D" parent="." unique_id=1933763604]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+amount = 200
+lifetime = 8.0
+visibility_aabb = AABB(-34, -6, -34, 68, 12, 68)
+process_material = SubResource("ParticleProcessMaterial_dust")
+draw_pass_1 = SubResource("SphereMesh_dust")
+
+[node name="FogOfWar" type="Node3D" parent="." unique_id=1933763603]
+script = ExtResource("23_fvor6")
+map_origin = Vector2(-84, -75)
+map_size = Vector2(168, 150)
+terrain_mesh_path = NodePath("../NavigationRegion3D/TileMapLayer3D_Baked")
+
+[node name="PlayerSpawnPoints" type="Node3D" parent="." unique_id=453093757]
+
+[node name="Buildings" type="Node3D" parent="." unique_id=1722222]
+
+[node name="BuildingSpawner" type="MultiplayerSpawner" parent="." unique_id=1019600693]
+spawn_path = NodePath("../Buildings")
+
+[node name="ResourceNodes" type="Node3D" parent="." unique_id=1084375618]
+
+[node name="Units" type="Node3D" parent="." unique_id=2068655962]
+
+[node name="UnitSpawner" type="MultiplayerSpawner" parent="." unique_id=1345839027]
+spawn_path = NodePath("../Units")
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=221909256]
+
+[node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="UI" unique_id=1401837770]
+bus = &"SFX"
+
+[node name="SelectionBox" type="ColorRect" parent="UI" unique_id=1631016065]
+visible = false
+mouse_filter = 2
+color = Color(0.3, 0.8, 1, 0.25)
+
+[node name="ResourceLabel" type="RichTextLabel" parent="UI" unique_id=233185810]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 620.0
+offset_bottom = 44.0
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+bbcode_enabled = true
+text = "Wood: 0"
+scroll_active = false
+
+[node name="FormationLabel" type="Label" parent="UI" unique_id=1631016066]
+offset_left = 16.0
+offset_top = 48.0
+offset_right = 300.0
+offset_bottom = 72.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+text = "Formation: Box"
+
+[node name="BottomBar" type="Control" parent="UI" unique_id=1763954]
+texture_filter = 2
+layout_mode = 3
+anchor_left = 0.14
+anchor_top = 1.0
+anchor_right = 0.86
+anchor_bottom = 1.0
+offset_top = -186.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Band" type="NinePatchRect" parent="UI/BottomBar" unique_id=1827303254]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -4.0
+offset_bottom = 6.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("24_i2k1h")
+patch_margin_left = 27
+patch_margin_top = 28
+patch_margin_right = 26
+patch_margin_bottom = 22
+axis_stretch_horizontal = 2
+axis_stretch_vertical = 2
+
+[node name="MinimapFrame" type="NinePatchRect" parent="UI/BottomBar" unique_id=1354559317]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 186.0
+offset_bottom = -8.0
+grow_vertical = 2
+texture = ExtResource("25_lrrmx")
+patch_margin_left = 26
+patch_margin_top = 22
+patch_margin_right = 27
+patch_margin_bottom = 24
+axis_stretch_horizontal = 2
+axis_stretch_vertical = 2
+
+[node name="Minimap" type="Control" parent="UI/BottomBar/MinimapFrame" unique_id=860019162]
+clip_contents = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = 21.0
+offset_right = -24.0
+offset_bottom = -13.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("26_vqeq8")
+
+[node name="UtilityButtons" type="VBoxContainer" parent="UI/BottomBar" unique_id=351962982]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_left = 190.0
+offset_top = 12.0
+offset_right = 222.0
+offset_bottom = -12.0
+grow_vertical = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="IdleButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=605278022]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+tooltip_text = "Select next idle villager"
+theme_type_variation = &"SquareButton"
+text = "I"
+
+[node name="FormationBoxButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=609675057]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+tooltip_text = "Box formation (F1)"
+theme_type_variation = &"SquareButton"
+text = "1"
+
+[node name="FormationLineButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=2084477781]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+tooltip_text = "Line formation (F2)"
+theme_type_variation = &"SquareButton"
+text = "2"
+
+[node name="FormationStaggeredButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=1775017322]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+tooltip_text = "Staggered formation (F3)"
+theme_type_variation = &"SquareButton"
+text = "3"
+
+[node name="InfoPanel" type="NinePatchRect" parent="UI/BottomBar" unique_id=1790145163]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 336.0
+offset_top = 8.0
+offset_right = -244.0
+offset_bottom = -8.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("27_1mebi")
+patch_margin_left = 36
+patch_margin_top = 26
+patch_margin_right = 34
+patch_margin_bottom = 26
+axis_stretch_horizontal = 2
+axis_stretch_vertical = 2
+
+[node name="PortraitFrame" type="TextureRect" parent="UI/BottomBar/InfoPanel" unique_id=434533756]
+visible = false
+layout_mode = 1
+offset_left = -108.0
+offset_top = 8.0
+offset_right = -16.0
+offset_bottom = 100.0
+mouse_filter = 2
+texture = ExtResource("28_wabaf")
+expand_mode = 1
+
+[node name="Portrait" type="ColorRect" parent="UI/BottomBar/InfoPanel/PortraitFrame" unique_id=1144832001]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.16, 0.17, 0.2, 1)
+
+[node name="PortraitHealthLabel" type="Label" parent="UI/BottomBar/InfoPanel" unique_id=1344886619]
+visible = false
+layout_mode = 1
+offset_left = -112.0
+offset_top = 104.0
+offset_right = -12.0
+offset_bottom = 126.0
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.42, 0.85, 0.35, 1)
+horizontal_alignment = 1
+
+[node name="Margin" type="MarginContainer" parent="UI/BottomBar/InfoPanel" unique_id=2083440396]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = 22.0
+offset_right = -30.0
+offset_bottom = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin" unique_id=763120765]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="BuildingNameLabel" type="Label" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=554400450]
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+text = "Building"
+
+[node name="TitleDivider" type="TextureRect" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=1771542111]
+visible = false
+custom_minimum_size = Vector2(0, 6)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+texture = ExtResource("29_dk18d")
+expand_mode = 1
+
+[node name="InfoContainer" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=2088732847]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ActionPanel" type="NinePatchRect" parent="UI/BottomBar" unique_id=1264307044]
+layout_mode = 1
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -236.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = -8.0
+grow_horizontal = 0
+grow_vertical = 2
+texture = ExtResource("27_1mebi")
+patch_margin_left = 36
+patch_margin_top = 26
+patch_margin_right = 34
+patch_margin_bottom = 26
+axis_stretch_horizontal = 2
+axis_stretch_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/BottomBar/ActionPanel" unique_id=1171046271]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = 22.0
+offset_right = -30.0
+offset_bottom = -22.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/BottomBar/ActionPanel/Margin" unique_id=1045780220]
+layout_mode = 2
+theme_override_constants/separation = 2
+alignment = 1
+
+[node name="Grid" type="GridContainer" parent="UI/BottomBar/ActionPanel/Margin/VBox" unique_id=242851631]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+columns = 4
+
+[node name="LionBadge" type="TextureRect" parent="UI/BottomBar" unique_id=438641404]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -42.0
+offset_top = -36.0
+offset_right = 42.0
+offset_bottom = 36.0
+grow_horizontal = 2
+mouse_filter = 2
+texture = ExtResource("30_7taj2")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ChatLog" type="RichTextLabel" parent="UI/BottomBar" unique_id=742747127]
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -555.0
+offset_top = -175.0
+offset_right = -143.0
+offset_bottom = -51.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(1, 1, 1, 1)
+scroll_following = true
+
+[node name="ChatInput" type="LineEdit" parent="UI/BottomBar" unique_id=1666054379]
+visible = false
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -564.0
+offset_top = -47.0
+offset_right = -84.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+placeholder_text = "Enter to send — try: cmd add wood 10"
+
+[node name="GameOverPanel" type="PanelContainer" parent="UI" unique_id=830488843]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -140.0
+offset_top = -70.0
+offset_right = 140.0
+offset_bottom = 70.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/GameOverPanel" unique_id=2129327244]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel/Margin" unique_id=2129327243]
+layout_mode = 2
+alignment = 1
+
+[node name="ResultLabel" type="Label" parent="UI/GameOverPanel/Margin/VBox" unique_id=1328889564]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Game Over"
+horizontal_alignment = 1
+
+[node name="TitleDivider" type="TextureRect" parent="UI/GameOverPanel/Margin/VBox" unique_id=842270089]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+texture = ExtResource("31_nrmib")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ReturnButton" type="Button" parent="UI/GameOverPanel/Margin/VBox" unique_id=304735568]
+layout_mode = 2
+text = "Return to Main Menu"
+
+[node name="PauseMenu" type="PanelContainer" parent="UI" unique_id=1401837800]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -110.0
+offset_right = 160.0
+offset_bottom = 110.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="UI/PauseMenu" unique_id=1401837801]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="UI/PauseMenu/Margin" unique_id=1401837802]
+layout_mode = 2
+alignment = 1
+
+[node name="Title" type="Label" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837803]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Paused"
+horizontal_alignment = 1
+
+[node name="TitleDivider" type="TextureRect" parent="UI/PauseMenu/Margin/VBox" unique_id=770555220]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+texture = ExtResource("31_nrmib")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ResumeButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837816]
+layout_mode = 2
+text = "Resume"
+
+[node name="OptionsButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837818]
+layout_mode = 2
+text = "Options"
+
+[node name="LeaveButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837817]
+layout_mode = 2
+text = "Leave Match"

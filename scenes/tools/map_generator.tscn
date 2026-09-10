@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://bfdbhrbcms2ik"]
+
+[ext_resource type="Script" uid="uid://clihxex5g10pr" path="res://scripts/tools/map_generator.gd" id="1_map_generator"]
+
+[node name="MapGenerator" type="Node3D" unique_id=654162614]
+script = ExtResource("1_map_generator")
+map_name = "Trial Forest"
+map_seed = 557929
+map_size = 144
+shrines_per_player = 2
+paths_to_centre = false
+forest_clusters_per_player = 15
+overwrite_existing = true

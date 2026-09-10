@@ -1,12 +1,16 @@
 shader_type spatial;
-// depth_test_disabled matters now that this also runs as a next_pass on the
-// terrain's own material (see fog_of_war.gd/main.tscn): rendering identical
-// geometry at identical depth right after the base pass makes a normal depth
-// test flicker (z-fighting) since neither fragment reliably wins. This pass
-// is meant to always draw on top of whatever's beneath it regardless, so
-// skipping the depth test entirely avoids the comparison instead of trying
-// to win it.
-render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, depth_test_disabled;
+// This runs as a next_pass on the terrain's own material (see fog_of_war.gd),
+// so it renders identical geometry at identical depth right after the base
+// pass — a plain depth test would z-fight. It used to disable the depth test
+// entirely, but then fogged terrain BEHIND a tree/building painted over it
+// too, while any part poking past the terrain's silhouette (treetops against
+// the sky at the map edge) stayed uncovered. Instead vertex() pulls each
+// vertex a hair toward the camera along its own view ray: same screen
+// position, marginally nearer depth, so it beats the terrain it sits on but
+// still loses to anything genuinely in front of it.
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never;
+
+const float DEPTH_PULL = 0.998;
 
 // Sampled by world-space XZ position rather than mesh UVs, so the overlay
 // always lines up with FogOfWar's grid regardless of how the plane mesh's
@@ -29,6 +33,9 @@ varying vec3 world_pos;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec4 view_pos = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
+	view_pos.xyz *= DEPTH_PULL;
+	POSITION = PROJECTION_MATRIX * view_pos;
 }
 
 void fragment() {

@@ -19,9 +19,8 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 ## Same list (and order) as main.tscn's Main.available_factions — that shared
 ## order is what a "faction_index" in Network.players actually refers to.
 @export var available_factions: Array[Faction] = []
-## Same list (and order) as main_menu.tscn's available_maps — Network.map_index
-## is an index into it.
-@export var available_maps: Array[MapInfo] = []
+## Network.map_index is an index into this (see MapInfo.list_all).
+var available_maps: Array[MapInfo] = MapInfo.list_all()
 
 func _ready() -> void:
 	for map in available_maps:

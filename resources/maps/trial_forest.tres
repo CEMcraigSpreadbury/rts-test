@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="MapInfo" format=3 uid="uid://bwrp3xayrb448"]
+
+[ext_resource type="Script" uid="uid://cy6qtp2uryluf" path="res://scripts/map_info.gd" id="1_eyhoc"]
+
+[resource]
+script = ExtResource("1_eyhoc")
+map_name = "Trial Forest"
+scene_path = "res://scenes/maps/trial_forest.tscn"
+max_players = 2

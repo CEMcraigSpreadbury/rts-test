@@ -202,6 +202,11 @@ func _ready() -> void:
 	building_spawner.spawned.connect(_on_building_spawned_for_camera)
 	if multiplayer.is_server():
 		_spawn_all_players()
+		## MultiplayerSpawner.spawned only fires on remote peers, so the host
+		## (and single player) centres on its own base here instead.
+		if town_centers.has(my_peer_id()):
+			_camera_centered_on_spawn = true
+			_center_camera_on([town_centers[my_peer_id()]])
 
 	## After _spawn_all_players(), so the starting bases are carved by the
 	## very first bake instead of triggering a second one a poll later. A

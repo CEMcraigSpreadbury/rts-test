@@ -33,6 +33,11 @@ const MONSTER_REQUEST_RETRY_SEC: float = 0.5
 ## the two, not a cold scene load.
 const MONSTER_REQUEST_MAX_ATTEMPTS: int = 20
 
+## Shrines sharing a non-empty group train the same monster in a match — the
+## map generator gives each player's copy of a shrine the same group, so no
+## one ends up with a stronger monster on their doorstep.
+@export var roll_group: StringName = &""
+
 ## Index into the Shrine's original producibles list, -1 until rolled/received.
 var monster_index: int = -1
 
@@ -43,10 +48,22 @@ func _ready() -> void:
 	## Has to run before super._ready(), which is what puts the guard on
 	## patrol and leashes it — by then the guard needs to already exist.
 	if multiplayer.is_server():
-		_apply_monster(randi() % _shrine().producibles.size())
+		_apply_monster(_roll_monster())
 	super._ready()
 	if not multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_start_monster_requests()
+
+## Host only. Shared rolls live on the match scene, so they reset every match.
+func _roll_monster() -> int:
+	var count: int = _shrine().producibles.size()
+	if roll_group == &"":
+		return randi() % count
+	var main := get_tree().current_scene
+	var rolls: Dictionary = main.get_meta(&"shrine_rolls", {})
+	if not rolls.has(roll_group):
+		rolls[roll_group] = randi() % count
+		main.set_meta(&"shrine_rolls", rolls)
+	return rolls[roll_group]
 
 ## Reached via get_node rather than @onready: @onready assignments are injected
 ## into the _ready of the script that declares them, so anything this class

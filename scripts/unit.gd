@@ -792,6 +792,10 @@ func _ready() -> void:
 	nav_agent.radius = FORMATION_BASE_RADIUS
 	nav_agent.avoidance_priority = 1.0
 	nav_agent.max_speed = move_speed
+	## The agent's target defaults to the world origin, which repath() would
+	## otherwise re-issue after the first navmesh rebake — sending every idle
+	## unit walking to the middle of the map.
+	nav_agent.target_position = global_position
 	_update_avoidance_team()
 
 	## Puppets (non-authority peers) never call set_velocity(), but avoidance

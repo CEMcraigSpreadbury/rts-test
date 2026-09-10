@@ -1,6 +1,6 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://fjbl5xhrvk7l"]
 
-[ext_resource type="Script" path="res://scripts/rts_camera.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://bx7vm4x148db" path="res://scripts/rts_camera.gd" id="1_script"]
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_dof"]
 dof_blur_far_enabled = true
@@ -11,16 +11,18 @@ dof_blur_near_distance = 14.5
 dof_blur_near_transition = 2.5
 dof_blur_amount = 0.08
 
-[node name="CameraRig" type="Node3D"]
+[node name="CameraRig" type="Node3D" unique_id=102834305]
 script = ExtResource("1_script")
+max_zoom = 30.0
+focus_band_top = 0.3
+focus_band_bottom = 0.7
 
-[node name="Yaw" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+[node name="Yaw" type="Node3D" parent="." unique_id=1896002052]
 
-[node name="Pitch" type="Node3D" parent="Yaw"]
+[node name="Pitch" type="Node3D" parent="Yaw" unique_id=612210961]
 
-[node name="Camera3D" type="Camera3D" parent="Yaw/Pitch"]
+[node name="Camera3D" type="Camera3D" parent="Yaw/Pitch" unique_id=1241131137]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 18)
+attributes = SubResource("CameraAttributesPractical_dof")
 current = true
 fov = 45.0
-attributes = SubResource("CameraAttributesPractical_dof")
