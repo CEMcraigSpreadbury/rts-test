@@ -185,7 +185,11 @@ func _update_vision_sources() -> void:
 		if _vision_count >= MAX_VISION_SOURCES:
 			break
 		var building := node as ProductionBuilding
-		if building and building.owner_peer_id == my_peer and not building.is_destroyed:
+		## Under-construction sites grant no vision at all — otherwise a player
+		## could scatter cheap unbuilt foundations across the map and scout it
+		## for free, without ever paying a builder's time to finish one.
+		var is_mine_and_alive: bool = building and building.owner_peer_id == my_peer and not building.is_destroyed
+		if is_mine_and_alive and not building.is_under_construction:
 			_vision_positions[_vision_count] = Vector2(building.global_position.x, building.global_position.z)
 			_vision_radii[_vision_count] = building.vision_range
 			_vision_count += 1

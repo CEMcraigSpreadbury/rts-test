@@ -198,8 +198,5 @@ func _on_start_pressed() -> void:
 	if not Network.all_players_ready():
 		return
 	Network.mark_steam_lobby_in_progress()
-	_start_game.rpc()
-
-@rpc("authority", "call_local", "reliable")
-func _start_game() -> void:
-	get_tree().change_scene_to_file(MAIN_SCENE_PATH)
+	start_button.disabled = true
+	SceneLoader.start_match(MAIN_SCENE_PATH)

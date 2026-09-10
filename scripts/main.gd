@@ -1480,7 +1480,7 @@ func _rpc_game_over(winner_peer_id: int) -> void:
 
 func _on_return_to_lobby_pressed() -> void:
 	Network.leave_game()
-	get_tree().change_scene_to_file("res://scenes/lobby.tscn")
+	SceneLoader.change_scene("res://scenes/lobby.tscn")
 
 ## Built in code rather than added to main.tscn, same reasoning as the wall
 ## drag label above — this is small and only needs to exist at all

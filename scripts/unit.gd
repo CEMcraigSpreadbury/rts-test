@@ -446,6 +446,24 @@ const HITSTOP_DURATION: float = 0.07
 
 var _hitstop_tween: Tween
 
+## Death knockback: the corpse is launched away from the killing blow and
+## bounces to a stop before the death clip plays. Bounce durations follow
+## real projectile time for each height under DEATH_BOUNCE_GRAVITY, and the
+## horizontal speed bleeds off each bounce so it skids to a halt rather than
+## stopping dead at the end of the last hop.
+const DEATH_KNOCKBACK_DISTANCE: float = 1.4
+const DEATH_BOUNCE_HEIGHTS := [0.75, 0.32, 0.13, 0.05]
+const DEATH_BOUNCE_GRAVITY: float = 22.0
+const DEATH_BOUNCE_SPEED_DECAY: float = 0.6
+const DEATH_LAUNCH_STRETCH_SCALE: Vector3 = Vector3(0.8, 1.25, 0.8)
+const DEATH_LAND_SQUASH_SCALE: Vector3 = Vector3(1.35, 0.65, 1.35)
+const DEATH_LAND_SQUASH_DURATION: float = 0.25
+
+## Set locally on every peer by the death RPC. Hit reactions and lunges can
+## still arrive over the wire after it, and both drive the same sprite
+## properties the knockback does.
+var _death_playing: bool = false
+
 ## Called by main.gd when relaying the damaged signal (see there — take_damage
 ## only ever runs on the host, so this needs relaying to show on every peer,
 ## same as the floating damage number it's paired with). Flashes to white and
@@ -464,6 +482,8 @@ func play_hit_flash() -> void:
 ## does when the attacker is gone or unknown) means "no direction", and the
 ## recoil is skipped so the unit doesn't lurch off in an arbitrary direction.
 func play_hit_reaction(from_position: Vector3) -> void:
+	if _death_playing:
+		return
 	play_hit_flash()
 	_play_hit_squash()
 	var away := global_position - from_position
@@ -496,6 +516,8 @@ func _play_hit_squash() -> void:
 ## main.gd calls this alongside it. Facing is replicated, so every peer derives
 ## the same direction without anything extra going over the network.
 func play_attack_lunge() -> void:
+	if _death_playing:
+		return
 	var base := _sprite_base_position
 	_restart_sprite_move_tween()
 	_sprite_move_tween.tween_property(
@@ -1146,7 +1168,7 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	damaged.emit(amount, attacker_path, fatal)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
-		_die()
+		_die(attacker)
 		return
 
 	if can_fight and attacker != null and is_instance_valid(attacker):
@@ -1996,7 +2018,7 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 			nearest_dist = dist
 	return nearest
 
-func _die() -> void:
+func _die(attacker: Node3D = null) -> void:
 	if _dying:
 		return
 	_dying = true
@@ -2010,19 +2032,84 @@ func _die() -> void:
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
 	Population.release(owner_peer_id, population_cost)
 
+	## Decided here on the host and sent as a world-space direction, so every
+	## peer launches the corpse the same way even if the attacker has already
+	## been freed by the time the RPC lands. With no known attacker it flies
+	## backward off its own facing, which is usually toward whatever hit it.
+	var away := Vector3.ZERO
+	if attacker != null and is_instance_valid(attacker):
+		away = global_position - attacker.global_position
+		away.y = 0.0
+	if away.length_squared() <= 0.0001:
+		away = -Vector3(sin(rotation.y), 0.0, cos(rotation.y))
+
 	## A unit spawned at runtime through UnitSpawner is auto-despawned on
 	## every client the moment the host frees it — but a hand-placed unit
 	## (e.g. an Objective's guards, present in the scene file itself rather
 	## than spawned) has no spawner tracking it, so nothing ever tells
 	## clients to remove it. This RPC covers both cases identically: it plays
 	## the death animation and frees the node on every peer, not just here.
-	_play_death_and_remove.rpc()
+	_play_death_and_remove.rpc(away.normalized())
 
 @rpc("authority", "call_local", "reliable")
-func _play_death_and_remove() -> void:
-	if sprite.sprite_frames and sprite.sprite_frames.has_animation("death"):
-		_set_animation("death")
+func _play_death_and_remove(away: Vector3) -> void:
+	_death_playing = true
+	var has_death_anim: bool = sprite.sprite_frames and sprite.sprite_frames.has_animation("death")
+	## Held on the clip's first frame through the flight; played directly
+	## rather than via _set_animation, since every peer runs this RPC itself
+	## and doesn't need the host relaying it.
+	if has_death_anim:
+		sprite.play("death")
+		sprite.pause()
+	await _play_death_knockback(away).finished
+	if has_death_anim:
+		sprite.play()
 		var frame_count: int = sprite.sprite_frames.get_frame_count("death")
 		var fps: float = sprite.sprite_frames.get_animation_speed("death")
 		await get_tree().create_timer(frame_count / maxf(fps, 1.0)).timeout
 	queue_free()
+
+## Runs on the sprite only, like the hit recoil — the body itself stays put, so
+## there's nothing to fight the MultiplayerSynchronizer and every peer can play
+## it locally from the direction the RPC handed over.
+func _play_death_knockback(away: Vector3) -> Tween:
+	if _sprite_move_tween and _sprite_move_tween.is_valid():
+		_sprite_move_tween.kill()
+	## Same Y-rotation-only reasoning as play_hit_reaction.
+	var local_away: Vector3 = global_transform.basis.inverse() * away
+	var base := _sprite_base_position
+
+	var durations: Array[float] = []
+	var weights: Array[float] = []
+	var total_weight := 0.0
+	for i in DEATH_BOUNCE_HEIGHTS.size():
+		var t := 2.0 * sqrt(2.0 * DEATH_BOUNCE_HEIGHTS[i] / DEATH_BOUNCE_GRAVITY)
+		var w := t * pow(DEATH_BOUNCE_SPEED_DECAY, i)
+		durations.append(t)
+		weights.append(w)
+		total_weight += w
+
+	_death_squash(DEATH_LAUNCH_STRETCH_SCALE, 1.0)
+	var tween := create_tween()
+	var travelled := 0.0
+	for i in durations.size():
+		var height: float = DEATH_BOUNCE_HEIGHTS[i]
+		var from_offset := local_away * travelled
+		travelled += DEATH_KNOCKBACK_DISTANCE * weights[i] / total_weight
+		var to_offset := local_away * travelled
+		tween.tween_method(func(p: float) -> void:
+			sprite.position = base + from_offset.lerp(to_offset, p) \
+					+ Vector3.UP * height * 4.0 * p * (1.0 - p)
+		, 0.0, 1.0, durations[i])
+		tween.tween_callback(_death_squash.bind(DEATH_LAND_SQUASH_SCALE, height / DEATH_BOUNCE_HEIGHTS[0]))
+	return tween
+
+## Snaps toward `target_scale` by `strength` (0 = none, 1 = full) and wobbles
+## back elastically, so later, smaller bounces land softer than the first.
+func _death_squash(target_scale: Vector3, strength: float) -> void:
+	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
+		_sprite_scale_tween.kill()
+	sprite.scale = _sprite_base_scale * Vector3.ONE.lerp(target_scale, strength)
+	_sprite_scale_tween = create_tween()
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, DEATH_LAND_SQUASH_DURATION) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)

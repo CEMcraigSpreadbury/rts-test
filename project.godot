@@ -24,6 +24,7 @@ Settings="*res://scripts/settings.gd"
 UnitUpgrades="*res://scripts/unit_upgrades.gd"
 Steamworks="*res://scripts/steamworks.gd"
 UiDebugEditor="*res://scripts/ui_debug_editor.gd"
+SceneLoader="*res://scripts/scene_loader.gd"
 
 [debug]
 
