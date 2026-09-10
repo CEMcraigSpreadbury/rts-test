@@ -112,11 +112,26 @@ func _end_stroke() -> void:
 	ur.add_do_method(self, "_restore_transforms", _stroke_target, after)
 	ur.add_undo_method(self, "_restore_transforms", _stroke_target, before)
 	ur.commit_action(false)
+	_save_if_external(_stroke_target)
 	_stroke_target = null
 
 ## Also the do/undo callback pushed onto the UndoRedo stack above.
 func _restore_transforms(target: MultiMeshInstance3D, transforms: Array) -> void:
 	_apply_transforms(target, transforms)
+	_save_if_external(target)
+
+## A MultiMesh saved as its own .res (e.g. scenes/main_grass/) isn't written
+## back when the scene is saved, since editing instance transforms in code
+## never marks the resource as edited — so it's flushed to disk once per
+## stroke/undo/redo instead. Inline sub-resources (path contains "::") are
+## left to the normal scene save.
+func _save_if_external(target: MultiMeshInstance3D) -> void:
+	if target == null or target.multimesh == null:
+		return
+	var path := target.multimesh.resource_path
+	if path.is_empty() or path.contains("::"):
+		return
+	ResourceSaver.save(target.multimesh, path, ResourceSaver.FLAG_COMPRESS)
 
 ## --- Painting ---
 
