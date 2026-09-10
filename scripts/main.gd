@@ -381,12 +381,12 @@ func _update_path_markers() -> void:
 @onready var game_over_label: Label = $UI/GameOverPanel/Margin/VBox/ResultLabel
 
 ## Local-only overlay (see Settings autoload) — does not pause the match for
-## anyone else, just gates this peer's own input and shows volume sliders.
+## anyone else, just gates this peer's own input. Options swaps it for the
+## same OptionsMenu the main menu uses, instanced in _ready().
 @onready var pause_menu: PanelContainer = $UI/PauseMenu
-@onready var master_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/MasterRow/Slider
-@onready var music_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/MusicRow/Slider
-@onready var ambience_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/AmbienceRow/Slider
-@onready var sfx_volume_slider: HSlider = $UI/PauseMenu/Margin/VBox/SfxRow/Slider
+const OPTIONS_MENU_SCENE: PackedScene = preload("res://scenes/options_menu.tscn")
+const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
+var _options_menu: OptionsMenu
 
 var selected_units: Array[Unit] = []
 ## Client-local formation shape choice — which Formation.Type the next move/
@@ -684,7 +684,7 @@ func _ready() -> void:
 	UiDebugEditor.register_editable_root(ui_root, "main")
 
 	game_over_panel.visible = false
-	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_on_return_to_lobby_pressed)
+	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_return_to_main_menu)
 
 	Network.player_disconnected.connect(_on_network_player_disconnected)
 	Network.server_disconnected.connect(_on_network_server_disconnected)
@@ -712,22 +712,26 @@ func _ready() -> void:
 	ui_root.add_child(_wall_drag_label)
 
 	pause_menu.visible = false
-	master_volume_slider.value = Settings.volumes["Master"] * 100.0
-	music_volume_slider.value = Settings.volumes["Music"] * 100.0
-	ambience_volume_slider.value = Settings.volumes["Ambience"] * 100.0
-	sfx_volume_slider.value = Settings.volumes["SFX"] * 100.0
-	master_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("Master", v / 100.0))
-	music_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("Music", v / 100.0))
-	ambience_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("Ambience", v / 100.0))
-	sfx_volume_slider.value_changed.connect(func(v): Settings.set_bus_volume("SFX", v / 100.0))
 	$UI/PauseMenu/Margin/VBox/ResumeButton.pressed.connect(_close_pause_menu)
-	$UI/PauseMenu/Margin/VBox/LeaveButton.pressed.connect(_on_return_to_lobby_pressed)
+	$UI/PauseMenu/Margin/VBox/OptionsButton.pressed.connect(_open_options_menu)
+	$UI/PauseMenu/Margin/VBox/LeaveButton.pressed.connect(_return_to_main_menu)
+	_options_menu = OPTIONS_MENU_SCENE.instantiate()
+	_options_menu.visible = false
+	_options_menu.closed.connect(_open_pause_menu)
+	ui_root.add_child(_options_menu)
 
 func _open_pause_menu() -> void:
 	pause_menu.visible = true
 
 func _close_pause_menu() -> void:
 	pause_menu.visible = false
+
+func _open_options_menu() -> void:
+	pause_menu.visible = false
+	_options_menu.open()
+
+func _is_pause_menu_open() -> bool:
+	return pause_menu.visible or _options_menu.visible
 
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
@@ -1043,7 +1047,7 @@ func _show_damage_number(node: Node3D, amount: int, mine: bool) -> void:
 	## own: FogOfWar already decides this per node, and it uses different rules
 	## for units (in vision now) and buildings (explored once, remembered), so
 	## re-deriving it here could only ever disagree with what the player sees.
-	if not node.is_visible_in_tree():
+	if not node.is_visible_in_tree() or not Settings.get_value(&"damage_numbers"):
 		return
 	var id := node.get_instance_id()
 	var now := Time.get_ticks_msec() / 1000.0
@@ -1478,9 +1482,9 @@ func _rpc_game_over(winner_peer_id: int) -> void:
 	else:
 		game_over_label.text = "Defeat"
 
-func _on_return_to_lobby_pressed() -> void:
+func _return_to_main_menu() -> void:
 	Network.leave_game()
-	SceneLoader.change_scene("res://scenes/lobby.tscn")
+	SceneLoader.change_scene(MAIN_MENU_SCENE_PATH)
 
 ## Built in code rather than added to main.tscn, same reasoning as the wall
 ## drag label above — this is small and only needs to exist at all
@@ -1511,8 +1515,8 @@ func _build_opponent_left_panel() -> void:
 	vbox.add_child(_opponent_left_label)
 
 	var return_button := Button.new()
-	return_button.text = "Return to Lobby"
-	return_button.pressed.connect(_on_return_to_lobby_pressed)
+	return_button.text = "Return to Main Menu"
+	return_button.pressed.connect(_return_to_main_menu)
 	vbox.add_child(return_button)
 
 	ui_root.add_child(_opponent_left_panel)
@@ -1641,7 +1645,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_close_pause_menu()
 		get_viewport().set_input_as_handled()
 		return
-	if pause_menu.visible:
+	if _is_pause_menu_open():
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1690,22 +1694,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_BACKSPACE:
+	if Settings.is_action_key_event(event, &"last_attack"):
 		_jump_to_last_attack()
 		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_PERIOD:
+	if Settings.is_action_key_event(event, &"idle_villager"):
 		_select_next_idle_villager()
 		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_COMMA:
+	if Settings.is_action_key_event(event, &"select_military"):
 		_select_all_military()
 		get_viewport().set_input_as_handled()
 		return
 
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_SPACE:
+	if Settings.is_action_key_event(event, &"center_selection"):
 		if not selected_units.is_empty():
 			_center_camera_on(selected_units)
 		elif selected_building != null and is_instance_valid(selected_building):

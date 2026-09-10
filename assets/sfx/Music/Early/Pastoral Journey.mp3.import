@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://bx3gumjsc5m58"
+path="res://.godot/imported/Pastoral Journey.mp3-65c74aa165b409bef0b584a774df4a54.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Early/Pastoral Journey.mp3"
+dest_files=["res://.godot/imported/Pastoral Journey.mp3-65c74aa165b409bef0b584a774df4a54.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

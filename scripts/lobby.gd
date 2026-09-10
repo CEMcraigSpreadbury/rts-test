@@ -14,6 +14,7 @@ extends Control
 @onready var disconnect_button: Button = $VBox/DisconnectButton
 
 const MAIN_SCENE_PATH: String = "res://scenes/main.tscn"
+const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 
 ## Same list (and order) as main.tscn's Main.available_factions — that shared
 ## order is what a "faction_index" in Network.players actually refers to.
@@ -28,6 +29,7 @@ func _ready() -> void:
 	join_button.pressed.connect(_on_join_pressed)
 	start_button.pressed.connect(_on_start_pressed)
 	disconnect_button.pressed.connect(_on_disconnect_pressed)
+	$VBox/BackButton.pressed.connect(_on_back_pressed)
 	start_button.visible = false
 	invite_button.visible = false
 	disconnect_button.visible = false
@@ -78,6 +80,11 @@ func _on_cancel_search_pressed() -> void:
 func _on_disconnect_pressed() -> void:
 	Network.leave_game()
 	_reset_to_idle("Not connected.")
+
+func _on_back_pressed() -> void:
+	Network.cancel_quick_play()
+	Network.leave_game()
+	SceneLoader.change_scene(MAIN_MENU_SCENE_PATH)
 
 func _reset_to_idle(message: String) -> void:
 	searching_label.get_parent().visible = false

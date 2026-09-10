@@ -54,7 +54,20 @@ func _ready() -> void:
 	_zoom_target = zoom_distance
 	pitch.rotation_degrees.x = -pitch_degrees
 	camera.fov = field_of_view
+	_apply_settings(&"")
+	Settings.changed.connect(_apply_settings)
 	_update_zoom()
+
+## The player's options menu choices override the exported defaults above.
+func _apply_settings(_key: StringName) -> void:
+	edge_pan_enabled = Settings.get_value(&"edge_pan")
+	pan_speed = Settings.get_value(&"pan_speed")
+	zoom_speed = Settings.get_value(&"zoom_speed")
+	var attributes := camera.attributes as CameraAttributesPractical
+	if attributes:
+		var dof: bool = Settings.get_value(&"depth_of_field")
+		attributes.dof_blur_near_enabled = dof
+		attributes.dof_blur_far_enabled = dof
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -113,17 +126,17 @@ func _process(delta: float) -> void:
 		_update_pan(input_dir, delta)
 		return
 
-	if Input.is_key_pressed(KEY_W):
+	if Settings.is_action_key_pressed(&"camera_up"):
 		input_dir.y -= 1
-	if Input.is_key_pressed(KEY_S):
+	if Settings.is_action_key_pressed(&"camera_down"):
 		input_dir.y += 1
-	if Input.is_key_pressed(KEY_A):
+	if Settings.is_action_key_pressed(&"camera_left"):
 		input_dir.x -= 1
-	if Input.is_key_pressed(KEY_D):
+	if Settings.is_action_key_pressed(&"camera_right"):
 		input_dir.x += 1
-	if Input.is_key_pressed(KEY_Q):
+	if Settings.is_action_key_pressed(&"camera_rotate_left"):
 		yaw.rotation.y += rotate_speed * delta
-	if Input.is_key_pressed(KEY_E):
+	if Settings.is_action_key_pressed(&"camera_rotate_right"):
 		yaw.rotation.y -= rotate_speed * delta
 
 	if edge_pan_enabled and input_dir.length_squared() < 0.0001:

@@ -228,6 +228,13 @@ func leave_game() -> void:
 		multiplayer.multiplayer_peer = null
 	players.clear()
 
+## Single Player: the same state as running main.tscn straight from the editor
+## — an offline peer that is its own host with no one else connected, so
+## main.gd's _spawn_all_players() spawns just the local base.
+func start_offline() -> void:
+	leave_game()
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+
 func is_host() -> bool:
 	return multiplayer.multiplayer_peer != null and multiplayer.is_server()
 

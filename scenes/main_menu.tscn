@@ -1,0 +1,79 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/options_menu.tscn" id="2_options"]
+[ext_resource type="Texture2D" path="res://assets/ui/theme/divider.tres" id="3_divider"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.07, 0.055, 0.045, 1)
+
+[node name="Menu" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -160.0
+offset_top = -170.0
+offset_right = 160.0
+offset_bottom = 170.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 14
+alignment = 1
+
+[node name="Title" type="Label" parent="Menu"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "RTS Test"
+horizontal_alignment = 1
+
+[node name="TitleDivider" type="TextureRect" parent="Menu"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+texture = ExtResource("3_divider")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="SinglePlayerButton" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "Single Player"
+
+[node name="MultiplayerButton" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "Multiplayer"
+
+[node name="OptionsButton" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "Options"
+
+[node name="ExitButton" type="Button" parent="Menu"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+text = "Exit"
+
+[node name="OptionsMenu" parent="." instance=ExtResource("2_options")]
+visible = false
+layout_mode = 1
