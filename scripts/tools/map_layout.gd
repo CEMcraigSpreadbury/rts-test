@@ -30,6 +30,8 @@ var ramp_length: int
 var level := PackedInt32Array()
 var ramp_dir := PackedInt32Array()
 var ramp_step := PackedInt32Array()
+## Surface height a ramp climbs from (0 for ground ramps, higher for tiers).
+var ramp_base := PackedInt32Array()
 var playable := PackedByteArray()
 var dirt := PackedByteArray()
 var grass := PackedByteArray()
@@ -83,6 +85,8 @@ func generate() -> bool:
 	ramp_dir.fill(-1)
 	ramp_step.resize(cells)
 	ramp_step.fill(0)
+	ramp_base.resize(cells)
+	ramp_base.fill(0)
 	playable.resize(cells)
 	for z in size:
 		for x in size:
@@ -163,10 +167,10 @@ func edge_height(c: Vector2i, dir_index: int) -> float:
 		return float(level[i])
 	var slope: float = float(height) / ramp_length
 	if dir_index == d:
-		return ramp_step[i] * slope
+		return ramp_base[i] + ramp_step[i] * slope
 	if dir_index == (d + 2) % 4:
-		return (ramp_step[i] + 1) * slope
-	return (ramp_step[i] + 0.5) * slope
+		return ramp_base[i] + (ramp_step[i] + 1) * slope
+	return ramp_base[i] + (ramp_step[i] + 0.5) * slope
 
 func surface_height(p: Vector2) -> float:
 	var c: Vector2i = cell_at(p)
@@ -177,7 +181,7 @@ func surface_height(p: Vector2) -> float:
 		return float(level[i])
 	var d: Vector2 = Vector2(DIRS[ramp_dir[i]])
 	var slope: float = float(height) / ramp_length
-	return (ramp_step[i] + 0.5) * slope - (p - cell_centre(c)).dot(d) * slope
+	return ramp_base[i] + (ramp_step[i] + 0.5) * slope - (p - cell_centre(c)).dot(d) * slope
 
 func _rotate_cell(c: Vector2i, k: int) -> Vector2i:
 	return cell_at(rot(cell_centre(c), k))
@@ -204,8 +208,13 @@ func _place_bases() -> void:
 
 ## --- Objectives & plateaus (template frame) ---
 
+## Width of the ledge a lower tier keeps around the tier above it: room for
+## that tier's inset ramp, its landing, and a little walking space.
+func _tier_ring() -> float:
+	return ramp_length + 3.0
+
 func _objective_plateau_half() -> float:
-	return _gen.objective_clear_radius + ramp_length + 1.5
+	return _gen.objective_clear_radius + ramp_length + 1.5 + (_gen.objective_plateau_tiers - 1) * _tier_ring()
 
 func _plan_objectives() -> void:
 	var scenes: Array[PackedScene] = []
@@ -270,12 +279,12 @@ func _plan_plateaus() -> void:
 	if _gen.objectives_on_plateaus:
 		var h: float = _objective_plateau_half()
 		for site in _objective_sites:
-			var plateau := {centre = site.pos, half = Vector2(h, h), radius = 3.0, symmetric = site.symmetric}
+			var plateau := {centre = site.pos, half = Vector2(h, h), radius = 3.0, symmetric = site.symmetric, tiers = _gen.objective_plateau_tiers}
 			if site.symmetric:
 				plateau.half = Vector2(h, h) * 1.05
 				plateau.radius = plateau.half.x
 			_plateaus.append(plateau)
-	var min_half: float = maxf(_gen.plateau_half_size.x, ramp_length + 3.0)
+	var min_half: float = maxf(_gen.plateau_half_size.x, ramp_length + 3.0 + (_gen.plateau_tiers - 1) * _tier_ring())
 	var max_half: float = maxf(_gen.plateau_half_size.y, min_half)
 	for n in _gen.plateaus_per_player:
 		var placed: bool = false
@@ -293,7 +302,7 @@ func _plan_plateaus() -> void:
 				continue
 			if _self_copies_too_close(p, reach * 2.0 + 6.0):
 				continue
-			_plateaus.append({centre = p, half = extents, radius = minf(extents.x, extents.y) * _rng.randf_range(0.2, 0.6), symmetric = false})
+			_plateaus.append({centre = p, half = extents, radius = minf(extents.x, extents.y) * _rng.randf_range(0.2, 0.6), symmetric = false, tiers = _gen.plateau_tiers})
 			placed = true
 			break
 		if not placed:
@@ -331,35 +340,79 @@ func _rasterize_plateaus() -> void:
 					if playable[index(c)] == 0:
 						continue
 					var q: Vector2 = (cell_centre(c) - centre).rotated(-_grid_aligned_angle(k))
-					if _in_rounded_rect(q, plateau.half, plateau.radius):
-						level[index(c)] = height
+					for t in range(plateau.tiers - 1, -1, -1):
+						var extents: Vector2 = plateau.half - Vector2.ONE * _tier_ring() * t
+						var radius: float = extents.x if plateau.symmetric else plateau.radius
+						if extents.x > 0.0 and extents.y > 0.0 and _in_rounded_rect(q, extents, radius):
+							level[index(c)] = maxi(level[index(c)], (t + 1) * height)
+							break
 
-## Closing then opening with a cross-shaped element: removes one-tile slivers
-## and one-tile notches, both of which make ugly paper-thin cliffs.
+## Each tier is smoothed on its own (closing then opening with a cross-shaped
+## element removes one-tile slivers and notches, which make paper-thin
+## cliffs), then kept at least a few cells inside the tier below.
 func _clean_plateaus() -> void:
-	_morph(true)
-	_morph(false)
-	_morph(false)
-	_morph(true)
+	var top_tier: int = 0
+	for value in level:
+		top_tier = maxi(top_tier, floori(float(value) / height))
+	var masks: Array[PackedByteArray] = []
+	for t in range(1, top_tier + 1):
+		var mask := PackedByteArray()
+		mask.resize(level.size())
+		for i in level.size():
+			mask[i] = 1 if level[i] >= t * height and playable[i] == 1 else 0
+		mask = _morph(_morph(_morph(_morph(mask, true), false), false), true)
+		if not masks.is_empty():
+			var inside: PackedInt32Array = _distance_inside(masks[masks.size() - 1])
+			for i in mask.size():
+				if inside[i] < 3:
+					mask[i] = 0
+			mask = _morph(_morph(mask, false), true)
+		masks.append(mask)
 	for i in level.size():
-		if playable[i] == 0:
-			level[i] = 0
+		var tiers: int = 0
+		for mask in masks:
+			tiers += mask[i]
+		level[i] = tiers * height
 
-func _morph(dilate: bool) -> void:
-	var source: PackedInt32Array = level.duplicate()
+func _morph(source: PackedByteArray, dilate: bool) -> PackedByteArray:
+	var result: PackedByteArray = source.duplicate()
 	for z in size:
 		for x in size:
 			var c := Vector2i(x, z)
 			var hits: int = 0
 			for d in DIRS:
 				var n: Vector2i = c + d
-				if in_bounds(n) and source[index(n)] > 0:
+				if in_bounds(n) and source[index(n)] == 1:
 					hits += 1
 			var i: int = index(c)
-			if dilate and source[i] == 0 and hits >= 3:
-				level[i] = height
-			elif not dilate and source[i] > 0 and hits < 2:
-				level[i] = 0
+			if dilate and source[i] == 0 and hits >= 3 and playable[i] == 1:
+				result[i] = 1
+			elif not dilate and source[i] == 1 and hits < 2:
+				result[i] = 0
+	return result
+
+## Cells inside `mask`, measured in steps to the nearest cell outside it.
+func _distance_inside(mask: PackedByteArray) -> PackedInt32Array:
+	var distance := PackedInt32Array()
+	distance.resize(mask.size())
+	distance.fill(1 << 20)
+	var frontier: Array[Vector2i] = []
+	for z in size:
+		for x in size:
+			var c := Vector2i(x, z)
+			if mask[index(c)] == 0:
+				distance[index(c)] = 0
+				frontier.append(c)
+	var head: int = 0
+	while head < frontier.size():
+		var c: Vector2i = frontier[head]
+		head += 1
+		for d in DIRS:
+			var n: Vector2i = c + d
+			if in_bounds(n) and distance[index(n)] > distance[index(c)] + 1:
+				distance[index(n)] = distance[index(c)] + 1
+				frontier.append(n)
+	return distance
 
 ## --- Ramps ---
 
@@ -368,20 +421,26 @@ func _snap_dir(v: Vector2) -> int:
 		return 1 if v.x > 0.0 else 3
 	return 2 if v.y > 0.0 else 0
 
+## Each tier's ramps turn a quarter (or, on the centre, half a slice) from
+## the tier below, so climbing means walking round the ledge in between.
 func _place_ramps() -> void:
 	for plateau in _plateaus:
 		var centre: Vector2 = plateau.centre
-		for v in _ramp_directions(plateau):
-			var ramp0: Dictionary = _find_ramp(centre, _snap_dir(v))
-			for k in players:
-				var ramp: Dictionary = {}
-				if k == 0:
-					ramp = ramp0
-				elif _exact_grid_symmetry and not ramp0.is_empty():
-					ramp = _rotated_ramp(ramp0, k)
-				else:
-					ramp = _find_ramp(centre if plateau.symmetric else rot(centre, k), _snap_dir(rot(v, k)))
-				_commit_ramp(ramp, k, plateau.symmetric)
+		var turn: float = _step * 0.5 if plateau.symmetric else PI * 0.5
+		for t in plateau.tiers:
+			var from: int = t * height
+			for base_dir in _ramp_directions(plateau):
+				var v: Vector2 = base_dir.rotated(turn * t)
+				var ramp0: Dictionary = _find_ramp(centre, _snap_dir(v), from)
+				for k in players:
+					var ramp: Dictionary = {}
+					if k == 0:
+						ramp = ramp0
+					elif _exact_grid_symmetry and not ramp0.is_empty():
+						ramp = _rotated_ramp(ramp0, k)
+					else:
+						ramp = _find_ramp(centre if plateau.symmetric else rot(centre, k), _snap_dir(rot(v, k)), from)
+					_commit_ramp(ramp, k, plateau.symmetric)
 
 ## Template-frame directions each plateau's ramps descend toward: the first
 ## faces the nearest base (or, for the centre, one ramp per player).
@@ -405,27 +464,28 @@ func _ramp_directions(plateau: Dictionary) -> Array[Vector2]:
 			result.append(v)
 	return result
 
-func _find_ramp(centre: Vector2, d: int) -> Dictionary:
+func _find_ramp(centre: Vector2, d: int, from: int) -> Dictionary:
+	var to: int = from + height
 	var start: Vector2i = cell_at(centre)
-	if not in_bounds(start) or level[index(start)] == 0:
+	if not in_bounds(start) or level[index(start)] < to:
 		return {}
 	var step: Vector2i = DIRS[d]
 	var boundary: Vector2i = start
-	while in_bounds(boundary + step) and level[index(boundary + step)] > 0:
+	while in_bounds(boundary + step) and level[index(boundary + step)] >= to:
 		boundary += step
 	var perp: Vector2i = DIRS[(d + 1) % 4]
 	for offset in [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]:
 		var foot: Vector2i = boundary + perp * offset
-		while in_bounds(foot) and level[index(foot)] > 0 and in_bounds(foot + step) and level[index(foot + step)] > 0:
+		while in_bounds(foot) and level[index(foot)] >= to and in_bounds(foot + step) and level[index(foot + step)] >= to:
 			foot += step
-		var ramp := {foot = foot, dir = d}
+		var ramp := {foot = foot, dir = d, from = from}
 		if _ramp_valid(ramp):
 			return ramp
 	return {}
 
 func _rotated_ramp(ramp: Dictionary, k: int) -> Dictionary:
 	var quarter: int = k * int(4.0 / players)
-	return {foot = _rotate_cell(ramp.foot, k), dir = (int(ramp.dir) + quarter) % 4}
+	return {foot = _rotate_cell(ramp.foot, k), dir = (int(ramp.dir) + quarter) % 4, from = ramp.from}
 
 func _ramp_cells(ramp: Dictionary) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
@@ -447,9 +507,9 @@ func _ramp_valid(ramp: Dictionary) -> bool:
 			var c: Vector2i = ramp.foot + perp * s - step * i
 			if not is_playable_cell(c):
 				return false
-			var inside_plateau: bool = level[index(c)] > 0 and not is_ramp(c)
+			var inside_plateau: bool = level[index(c)] == int(ramp.from) + height and not is_ramp(c)
 			if i < 0:
-				if not edge and (level[index(c)] != 0 or is_ramp(c)):
+				if not edge and (level[index(c)] != ramp.from or is_ramp(c)):
 					return false
 			elif i < ramp_length:
 				if not inside_plateau:
@@ -466,6 +526,7 @@ func _commit_ramp(ramp: Dictionary, copy: int, on_centre: bool) -> void:
 	for c in _ramp_cells(ramp):
 		ramp_dir[index(c)] = ramp.dir
 		ramp_step[index(c)] = i % ramp_length
+		ramp_base[index(c)] = ramp.from
 		i += 1
 	var step: Vector2 = Vector2(DIRS[ramp.dir])
 	var foot: Vector2 = cell_centre(ramp.foot)
@@ -856,7 +917,7 @@ func _plan_paths() -> void:
 	var base0: Vector2 = base_centres[0]
 	var target: Vector2 = Vector2.ZERO
 	for ramp in _ramps:
-		if ramp.on_centre and ramp.entrance.distance_to(base0) < target.distance_to(base0):
+		if ramp.on_centre and ramp.from == 0 and ramp.entrance.distance_to(base0) < target.distance_to(base0):
 			target = ramp.entrance
 	_paths.append({a = base0, b = target, width = _gen.path_width, symmetric = false})
 
@@ -865,7 +926,7 @@ func _plan_decals() -> void:
 	_dirt_shapes.append({a = base0, b = base0, width = _gen.base_clear_radius * 1.5, symmetric = false})
 	_dirt_shapes.append_array(_paths)
 	for ramp in _ramps:
-		if ramp.copy == 0:
+		if ramp.copy == 0 and ramp.from == 0:
 			_dirt_shapes.append({a = ramp.entrance, b = ramp.entrance, width = _gen.ramp_width + 2.0, symmetric = false})
 	for site in _objective_sites:
 		if level[index(cell_at(site.pos))] == 0:

@@ -106,6 +106,13 @@ func _setup_terrain_fog_material() -> ShaderMaterial:
 	var terrain_material: Material = get_node(terrain_mesh_path).get_active_material(0)
 	var fog_material := ShaderMaterial.new()
 	fog_material.shader = preload("res://shaders/fog_of_war.gdshader")
+	var base := terrain_material as BaseMaterial3D
+	if base and base.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR and base.albedo_texture:
+		fog_material.set_shader_parameter("use_alpha_clip", true)
+		fog_material.set_shader_parameter("terrain_albedo", base.albedo_texture)
+		fog_material.set_shader_parameter("terrain_uv_scale", base.uv1_scale)
+		fog_material.set_shader_parameter("terrain_uv_offset", base.uv1_offset)
+		fog_material.set_shader_parameter("alpha_clip_threshold", base.alpha_scissor_threshold)
 	terrain_material.next_pass = fog_material
 	return fog_material
 

@@ -42,12 +42,14 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_range(0, 4) var shrines_per_player: int = 0
 @export var centre_site: CentreSite = CentreSite.SHRINE
 @export var objectives_on_plateaus: bool = true
+@export_range(1, 3) var objective_plateau_tiers: int = 1
 @export_range(4.0, 12.0, 0.5) var objective_clear_radius: float = 7.0
 @export_range(10.0, 80.0, 1.0) var objective_min_base_distance: float = 30.0
 
 @export_group("Terrain")
 @export_range(1, 4) var plateau_height: int = 2
 @export_range(0, 6) var plateaus_per_player: int = 1
+@export_range(1, 3) var plateau_tiers: int = 1
 @export var plateau_half_size: Vector2 = Vector2(6.0, 10.0)
 @export_range(1, 4) var ramps_per_plateau: int = 2
 @export_range(1, 7, 2) var ramp_width: int = 3

@@ -69,9 +69,11 @@ const CIRCLE_SEGMENTS: int = 12
 ## above the floor span it is supposed to remove. Downwards only — extending a
 ## carve *upwards* is what would wrongly seal a gateway.
 const CARVE_FLOOR_MARGIN: float = 0.5
-## Fallback clearance if the authored navmesh reports no agent radius;
-## FORMATION_BASE_RADIUS in unit.gd is 0.45 and the physical capsule is 0.4.
-const FALLBACK_CLEARANCE: float = 0.3
+## Minimum clearance carved around every footprint — the radius of the unit's
+## physical capsule in scenes/units/unit.tscn. Anything less and the navmesh
+## keeps gaps a unit can't physically fit through (two trunks 0.7m apart in a
+## generated forest), so paths send units into them and they wedge there.
+const UNIT_BODY_RADIUS: float = 0.4
 
 var _region: NavigationRegion3D = null
 ## Pristine terrain-only source geometry, snapshotted once (see class docs),
@@ -83,7 +85,7 @@ var _base_faces := PackedVector3Array()
 ## walkable area a little further each time. Building footprints get that
 ## clearance applied explicitly instead, in _add_body_obstructions().
 var _bake_template: NavigationMesh = null
-var _clearance: float = FALLBACK_CLEARANCE
+var _clearance: float = UNIT_BODY_RADIUS
 var _poll_timer: float = 0.0
 var _blocker_signature: int = 0
 var _bake_in_flight: bool = false
@@ -98,7 +100,7 @@ func setup(region: NavigationRegion3D) -> void:
 		## rather than replacing it with an empty mesh.
 		set_process(false)
 		return
-	_clearance = authored.agent_radius if authored.agent_radius > 0.0 else FALLBACK_CLEARANCE
+	_clearance = maxf(authored.agent_radius, UNIT_BODY_RADIUS)
 	_bake_template = authored.duplicate()
 	_bake_template.agent_radius = 0.0
 	_snapshot_base_geometry(authored)

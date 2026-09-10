@@ -46,7 +46,7 @@ static func build_tile_data(layout: MapLayout, gen: MapGenerator, terrain: TileM
 			var i: int = layout.index(c)
 			var centre: Vector2 = layout.cell_centre(c)
 			if layout.ramp_dir[i] >= 0:
-				var mid: float = (layout.ramp_step[i] + 0.5) * slope
+				var mid: float = layout.ramp_base[i] + (layout.ramp_step[i] + 0.5) * slope
 				writer.add(Vector3(centre.x - 0.5, snappedf(mid, 0.1) - 0.5, centre.y - 0.5), FLOOR, _pick(gen.ramp_tiles, rng),
 					_ramp_transform(centre, mid, layout.ramp_dir[i], slope))
 			elif layout.level[i] > 0:
@@ -84,7 +84,7 @@ static func _add_walls(writer: _TileWriter, layout: MapLayout, c: Vector2i, gen:
 		var neighbour_edge: float = layout.edge_height(n, (d + 2) % 4)
 		if neighbour_edge >= top - 0.01:
 			continue
-		var bottom: int = 0 if layout.ramp_dir[layout.index(n)] >= 0 else floori(neighbour_edge)
+		var bottom: int = layout.ramp_base[layout.index(n)] if layout.ramp_dir[layout.index(n)] >= 0 else floori(neighbour_edge)
 		var offset := Vector2(MapLayout.DIRS[d]) * 0.5
 		for k in range(bottom, top):
 			writer.add(Vector3(centre.x + offset.x - 0.5, k, centre.y + offset.y - 0.5), WALL_FOR_DIR[d], _pick(gen.cliff_tiles, rng))
@@ -143,7 +143,7 @@ static func bake_navigation_mesh(layout: MapLayout) -> NavigationMesh:
 	var nav_mesh := NavigationMesh.new()
 	nav_mesh.cell_size = 0.25
 	nav_mesh.cell_height = 0.01
-	nav_mesh.agent_radius = 0.3
+	nav_mesh.agent_radius = NavigationBlockers.UNIT_BODY_RADIUS
 	NavigationServer3D.bake_from_source_geometry_data(nav_mesh, geometry)
 	return nav_mesh
 

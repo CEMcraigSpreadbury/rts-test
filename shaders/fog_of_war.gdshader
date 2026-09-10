@@ -29,9 +29,21 @@ uniform vec2 vision_positions[MAX_VISION_SOURCES];
 uniform float vision_radii[MAX_VISION_SOURCES];
 uniform int vision_count;
 
+// Mirrors the terrain material's own alpha scissor. Tiles stack (e.g. a sand
+// tile with ragged cut-out edges laid over grass), and without this the fog
+// covered the WHOLE quad of every layer — so the cut-out parts of the upper
+// tile got fogged on top of the already-fogged tile below, showing up as
+// darker squares around every overlay tile wherever fog was partial.
+uniform sampler2D terrain_albedo : source_color, filter_nearest;
+uniform vec3 terrain_uv_scale = vec3(1.0);
+uniform vec3 terrain_uv_offset = vec3(0.0);
+uniform bool use_alpha_clip = false;
+uniform float alpha_clip_threshold = 0.5;
+
 varying vec3 world_pos;
 
 void vertex() {
+	UV = UV * terrain_uv_scale.xy + terrain_uv_offset.xy;
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec4 view_pos = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	view_pos.xyz *= DEPTH_PULL;
@@ -39,6 +51,10 @@ void vertex() {
 }
 
 void fragment() {
+	if (use_alpha_clip && texture(terrain_albedo, UV).a < alpha_clip_threshold) {
+		discard;
+	}
+
 	vec2 uv = (world_pos.xz - map_origin) / map_size;
 	vec4 fog = texture(fog_tex, uv);
 
