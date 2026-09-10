@@ -21,7 +21,7 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 			continue
 		## A plain Command.MOVE is a deliberate player order (e.g. retreating);
 		## pulling that unit into a neighbor's fight would silently override it.
-		if ally.status_command == Unit.Command.MOVE:
+		if ally.status_command == Unit.Command.MOVE or ally.status_command == Unit.Command.CAST:
 			continue
 		if ally.global_position.distance_to(from_position) <= ally.aggro_range:
 			ally.command_attack(attacker)

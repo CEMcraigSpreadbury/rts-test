@@ -28,19 +28,52 @@ var _active_formations: Array[Dictionary] = []
 ## units to whichever slot their index happened to land on regardless of
 ## where they actually are, causing them to needlessly cross paths to swap
 ## places with each other.
-func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> Array[Vector3]:
+##
+## `forward_override` supplies the group's facing instead of deriving it from
+## (target - centroid) — an explicit re-form is centred on the group's own
+## centroid, and a dragged formation (see Main's right-drag) was told its facing
+## by the player, so neither has a direction of travel worth deriving one from.
+## `front_width` is a dragged front-rank width, see Formation.front_width.
+func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type = Formation.DEFAULT_TYPE, forward_override: Vector3 = Vector3.ZERO, front_width: float = -1.0) -> Array[Vector3]:
 	if units.is_empty():
 		return []
 	if units.size() == 1:
 		return [target_pos]
 
-	var forward := _group_forward(group_centroid(units), target_pos)
+	var forward := forward_override if forward_override != Vector3.ZERO else _group_forward(group_centroid(units), target_pos)
 	var right := Vector3(forward.z, 0.0, -forward.x)
 
-	var formation := Formation.new(units, formation_type)
+	var formation := Formation.new(units, formation_type, front_width)
 	var slots := formation.get_slot_positions(target_pos, forward, right)
 
 	return _assign_slots_to_units(units, slots)
+
+## The facing a dragged formation takes: square to the drag line, and pointing
+## away from wherever the group currently stands — so ranks trail back toward
+## the side the group arrives from and the front rank lands on the line itself,
+## whichever end the player started dragging from. Client-side (it drives the
+## preview decals) and sent with the order, so the host builds exactly the
+## shape the player saw instead of re-deriving it from its own unit positions.
+func drag_facing(units: Array[Unit], line_start: Vector3, line_end: Vector3) -> Vector3:
+	var along := line_end - line_start
+	along.y = 0.0
+	if along.length_squared() < 0.0001:
+		return _group_forward(group_centroid(units), line_start)
+	along = along.normalized()
+	var facing := Vector3(-along.z, 0.0, along.x)
+	var midpoint := (line_start + line_end) * 0.5
+	var to_line := midpoint - group_centroid(units)
+	to_line.y = 0.0
+	return -facing if to_line.dot(facing) < 0.0 else facing
+
+## Slot layout for a dragged formation, in shape order rather than assigned to
+## units — only for drawing the preview; the order itself goes through
+## formation_positions on the host with the same inputs.
+func drag_preview_slots(units: Array[Unit], line_start: Vector3, line_end: Vector3, facing: Vector3) -> Array[Vector3]:
+	var midpoint := (line_start + line_end) * 0.5
+	var right := Vector3(facing.z, 0.0, -facing.x)
+	var formation := Formation.new(units, Formation.DEFAULT_TYPE, _flat_distance(line_start, line_end))
+	return formation.get_slot_positions(midpoint, facing, right)
 
 func group_centroid(units: Array[Unit]) -> Vector3:
 	var centroid := Vector3.ZERO
@@ -487,7 +520,10 @@ const REFORM_DEFAULT_FORWARD: Vector3 = Vector3.FORWARD
 ## different (or empty) formation_group, which is what _formation_record_members
 ## uses to tell "still walking this order" from "has moved on". Single-unit and
 ## non-formation dispatches carry an empty group and are never tracked.
-func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool) -> void:
+## `forward`/`front_width` are kept for a dragged formation (or an explicit
+## re-form's facing) so closing ranks keeps the shape the player laid out
+## rather than falling back to the default one.
+func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward: Vector3 = Vector3.ZERO, front_width: float = -1.0) -> void:
 	if not multiplayer.is_server() or group.size() < 2:
 		return
 	var members := _formation_record_members(group)
@@ -501,6 +537,8 @@ func register_formation(group: Array[Unit], target_pos: Vector3, formation_type:
 		"target": target_pos,
 		"type": formation_type,
 		"attack_move": attack_move,
+		"forward": forward,
+		"front_width": front_width,
 		"count": members.size(),
 		"timer": 0.0,
 		"dirty": false,
@@ -561,7 +599,7 @@ func update_reformation(delta: float) -> void:
 			record["timer"] = REFORM_FUNNEL_RETRY
 			continue
 		record["dirty"] = false
-		reform_group(members, record["target"], record["type"], record["attack_move"])
+		reform_group(members, record["target"], record["type"], record["attack_move"], record["forward"], record["front_width"])
 		## The re-issue hands the survivors a new group array as their cohesion
 		## group, so the record has to follow it or every member would read as
 		## "moved on" on the very next poll.
@@ -582,29 +620,14 @@ func any_funnelling(units: Array[Unit]) -> bool:
 ## this leg still runs when this leg completes. command_move re-baselines
 ## cohesion for the new leg on its own (Unit._set_formation_cohesion), which is
 ## exactly what a re-solved slot needs, and clears any stale funnel with it.
-func reform_group(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward_override: Vector3 = Vector3.ZERO) -> void:
-	var slots: Array[Vector3] = formation_positions(units, target_pos, formation_type) if forward_override == Vector3.ZERO \
-			else _reform_positions(units, target_pos, formation_type, forward_override)
+func reform_group(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward_override: Vector3 = Vector3.ZERO, front_width: float = -1.0) -> void:
+	var slots := formation_positions(units, target_pos, formation_type, forward_override, front_width)
 	var speed := slowest_move_speed(units)
 	for i in units.size():
 		if attack_move:
 			units[i].command_attack_move(slots[i], speed, units)
 		else:
 			units[i].command_move(slots[i], speed, units)
-
-## Same slot solve as formation_positions, but with the group's facing supplied
-## rather than derived from (target - centroid): an explicit re-form is centered
-## on the group's own centroid, so there is no direction of travel to derive a
-## facing from and every re-form would otherwise come out pointing the same
-## arbitrary way (see _group_forward's degenerate case).
-func _reform_positions(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, forward: Vector3) -> Array[Vector3]:
-	if units.is_empty():
-		return []
-	if units.size() == 1:
-		return [target_pos]
-	var right := Vector3(forward.z, 0.0, -forward.x)
-	var formation := Formation.new(units, formation_type)
-	return _assign_slots_to_units(units, formation.get_slot_positions(target_pos, forward, right))
 
 ## The group's average heading, taken from the direction each unit is actually
 ## facing (units rotate toward their movement direction, so after a move or a

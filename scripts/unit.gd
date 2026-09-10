@@ -106,9 +106,10 @@ const ASSAULT_AREA_RADIUS: float = 12.0
 ## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
 ## hold (resource->dropoff->resource / target->next target / stay building
 ## until done) until interrupted or exhausted.
-enum Command { NONE, MOVE, GATHER, ATTACK, BUILD, ATTACK_MOVE, PATROL }
+## CAST is one-shot like Move: walk into an ability's range, cast, go idle.
+enum Command { NONE, MOVE, GATHER, ATTACK, BUILD, ATTACK_MOVE, PATROL, CAST }
 ## The current step within a command, e.g. Gather cycles TO_RESOURCE -> GATHERING -> TO_DROPOFF.
-enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD }
+enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD, TO_CAST }
 ## Rock-paper-scissors combat: NONE means "no special type" (deals no bonus,
 ## takes no bonus). MAGIC has no attacker yet — reserved for future spellcasters.
 enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC }
@@ -154,6 +155,10 @@ signal resource_harvested(node: Gatherable)
 ## fired on an explicit stop or death — those are interruptions, not
 ## completions, and clear order_queue instead of advancing it.
 signal order_completed
+## Host-only, fired the moment an activated ability actually goes off (after
+## any walk into range). main.gd relays the cooldown to the owner's HUD and the
+## impact visual to every peer. `ability_index` indexes get_abilities().
+signal ability_cast(ability_index: int, target_pos: Vector3)
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -295,6 +300,12 @@ func _update_team_tint_visual() -> void:
 @export var attack_command_lines: Array[CommandLine] = []
 @export var patrol_command_lines: Array[CommandLine] = []
 @export var build_command_lines: Array[CommandLine] = []
+
+@export_group("Abilities")
+## Abilities this unit type always has, promoted or not — e.g. each Shrine
+## monster's area attack. Listed ahead of monarch_abilities on the command
+## card and in ability indices (see get_abilities).
+@export var abilities: Array[Ability] = []
 
 @export_group("Monarch")
 ## Empty means this unit type can never be promoted. Non-empty defines what a
@@ -765,10 +776,32 @@ var incoming_damage: int = 0
 ## order — only Stop or another command calls it off.
 var assault_center: Vector3 = Vector3.ZERO
 var assault_active: bool = false
-## Host-only: ability index (within monarch_abilities) -> Time.get_ticks_msec()
-## when it's usable again. Not synced — only the host ever checks cooldowns,
-## in the RPC handler that validates an activation request.
+## Host-only: ability index (within get_abilities()) -> Time.get_ticks_msec()
+## when it's usable again. Not synced — only the host ever enforces cooldowns.
 var _ability_ready_at_ms: Dictionary = {}
+## The owner's local copy of the same thing, on the owner's own clock — set
+## by main.gd's cooldown relay (via start_local_cooldown) and read only by the
+## HUD button. The duration is kept alongside so the button's sweep knows how
+## far through the cooldown it is.
+var local_ability_ready_at_ms: Dictionary = {}
+var _local_ability_cooldown_ms: Dictionary = {}
+## Host-only Command.CAST state: which ability, aimed where, and how long the
+## walk into range has been going (see _tick_cast_approach).
+var _cast_ability_index: int = -1
+var _cast_target: Vector3 = Vector3.ZERO
+var _cast_approach_time: float = 0.0
+## A freshly issued move_to() can read as navigation-finished for a frame or
+## two before its path exists (see _on_velocity_computed), so a cast approach
+## doesn't give up on an unreachable target until this long has passed.
+const CAST_GIVE_UP_GRACE: float = 0.3
+
+## Host-only status effects applied by area abilities (see apply_ability_hit).
+## Each DoT entry is {"dps": int, "ticks_left": int, "tick_timer": float,
+## "source": Node3D}; overlapping DoTs stack, slow and stun just extend.
+var _dots: Array[Dictionary] = []
+var _slow_fraction: float = 0.0
+var _slow_remaining: float = 0.0
+var _stun_remaining: float = 0.0
 
 func _ready() -> void:
 	status_current_health = max_health
@@ -1146,6 +1179,175 @@ func execute_teleport_ability(ability: Ability, target_pos: Vector3) -> void:
 		## was heading from its old position.
 		ally.nav_agent.target_position = ally.global_position
 
+## --- Abilities ---
+
+## Everything this unit can currently use, in command-card order: its own
+## abilities first, then its Monarch ones once promoted. Indices into this list
+## are what the HUD, hotkeys, cooldowns and the activation RPC all refer to —
+## innate abilities come first so promotion never shifts their indices.
+func get_abilities() -> Array[Ability]:
+	if not is_monarch or monarch_abilities.is_empty():
+		return abilities
+	var all: Array[Ability] = abilities.duplicate()
+	all.append_array(monarch_abilities)
+	return all
+
+func get_ability(index: int) -> Ability:
+	var list := get_abilities()
+	return list[index] if index >= 0 and index < list.size() else null
+
+## Host-side authority.
+func is_ability_ready(index: int) -> bool:
+	return Time.get_ticks_msec() >= int(_ability_ready_at_ms.get(index, 0))
+
+## Owner-side estimate, for the HUD only.
+func is_ability_ready_locally(index: int) -> bool:
+	return Time.get_ticks_msec() >= int(local_ability_ready_at_ms.get(index, 0))
+
+func start_local_cooldown(index: int, cooldown: float) -> void:
+	_local_ability_cooldown_ms[index] = int(cooldown * 1000.0)
+	local_ability_ready_at_ms[index] = Time.get_ticks_msec() + _local_ability_cooldown_ms[index]
+
+## 1.0 the moment the ability is cast, falling to 0.0 as it comes back.
+func local_cooldown_remaining_fraction(index: int) -> float:
+	var duration: int = _local_ability_cooldown_ms.get(index, 0)
+	if duration <= 0:
+		return 0.0
+	var left: int = int(local_ability_ready_at_ms.get(index, 0)) - Time.get_ticks_msec()
+	return clampf(float(left) / float(duration), 0.0, 1.0)
+
+## Host-only, called from main.gd's validated activation RPC. Walks until
+## target_pos is within the ability's activation_range, then casts (see
+## _tick_cast_approach / _perform_cast).
+func command_cast_ability(ability_index: int, target_pos: Vector3) -> void:
+	var ability := get_ability(ability_index)
+	if status_activity == Activity.DEAD or ability == null or not ability.is_activated():
+		return
+	_leave_build_site()
+	_leave_gather_site()
+	status_command = Command.CAST
+	status_activity = Activity.TO_CAST
+	attack_target = null
+	assault_active = false
+	formation_speed = -1.0
+	_clear_formation_cohesion()
+	_cast_ability_index = ability_index
+	_cast_target = target_pos
+	_cast_approach_time = 0.0
+	if _flat_distance(global_position, target_pos) <= ability.activation_range:
+		_perform_cast()
+		return
+	## Aim a little short of the range edge so arriving always lands inside it.
+	nav_agent.target_desired_distance = maxf(ability.activation_range * 0.9, MOVE_ARRIVAL_DISTANCE)
+	move_to(target_pos)
+
+func _tick_cast_approach(delta: float) -> void:
+	var ability := get_ability(_cast_ability_index)
+	if ability == null:
+		_end_cast_command()
+		return
+	if _flat_distance(global_position, _cast_target) <= ability.activation_range:
+		_perform_cast()
+		return
+	_cast_approach_time += delta
+	## Navigation ended short of range: the target point can't be reached
+	## (a cliff, the far side of a wall), so give up rather than stand forever.
+	if nav_agent.is_navigation_finished() and _cast_approach_time > CAST_GIVE_UP_GRACE:
+		_end_cast_command()
+
+func _perform_cast() -> void:
+	var index := _cast_ability_index
+	var ability := get_ability(index)
+	var target := _cast_target
+	nav_agent.target_position = global_position
+	## Rechecked here rather than trusted from request time — the walk into
+	## range can take a while, and resources can be spent meanwhile.
+	if ability == null or not is_ability_ready(index) or not ResourceStockpile.can_afford(owner_peer_id, ability.costs):
+		_end_cast_command()
+		return
+	ResourceStockpile.spend(owner_peer_id, ability.costs)
+	_ability_ready_at_ms[index] = Time.get_ticks_msec() + int(ability.cooldown * 1000.0)
+
+	var to_target := target - global_position
+	to_target.y = 0.0
+	if to_target.length_squared() > 0.0001:
+		rotation.y = atan2(to_target.x, to_target.z)
+	if sprite.sprite_frames:
+		_play_attack_swing()
+
+	match ability.kind:
+		Ability.Kind.ACTIVATED_TARGET_POINT:
+			execute_teleport_ability(ability, target)
+		Ability.Kind.ACTIVATED_AREA:
+			_execute_area_ability(ability, target)
+	ability_cast.emit(index, target)
+	_end_cast_command()
+
+func _end_cast_command() -> void:
+	_cast_ability_index = -1
+	status_command = Command.NONE
+	status_activity = Activity.IDLE
+	order_completed.emit()
+
+## Hits every living enemy unit inside the area — buildings and allies are
+## never affected. Targets are gathered before any damage is applied, since a
+## kill frees nodes out of the "units" group mid-iteration.
+func _execute_area_ability(ability: Ability, target: Vector3) -> void:
+	var victims: Array[Unit] = []
+	for node in get_tree().get_nodes_in_group("units"):
+		var other := node as Unit
+		if other == null or other == self or other.owner_peer_id == owner_peer_id or not _is_target_alive(other):
+			continue
+		if _flat_distance(target, other.global_position) <= ability.area_radius:
+			victims.append(other)
+	for victim in victims:
+		if is_instance_valid(victim):
+			victim.apply_ability_hit(ability, self)
+
+## Host-only. The upfront hit, then whatever lingering effects the ability
+## carries. `source` is who to credit for the damage — untyped for the same
+## freed-object reason as _is_target_alive, since a DoT can outlive its caster.
+func apply_ability_hit(ability: Ability, source) -> void:
+	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
+		return
+	if ability.area_damage > 0:
+		take_damage(ability.area_damage, source if is_instance_valid(source) else null)
+	if status_activity == Activity.DEAD:
+		return
+	if ability.dot_damage_per_second > 0 and ability.dot_duration > 0.0:
+		_dots.append({
+			"dps": ability.dot_damage_per_second,
+			"ticks_left": maxi(roundi(ability.dot_duration), 1),
+			"tick_timer": 1.0,
+			"source": source,
+		})
+	if ability.slow_fraction > 0.0 and ability.slow_duration > 0.0:
+		_slow_fraction = maxf(_slow_fraction if _slow_remaining > 0.0 else 0.0, ability.slow_fraction)
+		_slow_remaining = maxf(_slow_remaining, ability.slow_duration)
+	if ability.stun_duration > 0.0:
+		_stun_remaining = maxf(_stun_remaining, ability.stun_duration)
+
+func _tick_status_effects(delta: float) -> void:
+	_stun_remaining = maxf(_stun_remaining - delta, 0.0)
+	_slow_remaining = maxf(_slow_remaining - delta, 0.0)
+	for i in range(_dots.size() - 1, -1, -1):
+		var dot: Dictionary = _dots[i]
+		dot["tick_timer"] -= delta
+		if dot["tick_timer"] > 0.0:
+			continue
+		dot["tick_timer"] += 1.0
+		dot["ticks_left"] -= 1
+		if dot["ticks_left"] <= 0:
+			_dots.remove_at(i)
+		var source = dot["source"]
+		take_damage(dot["dps"], source if is_instance_valid(source) else null)
+		if status_activity == Activity.DEAD:
+			_dots.clear()
+			return
+
+func _slow_multiplier() -> float:
+	return 1.0 - _slow_fraction if _slow_remaining > 0.0 else 1.0
+
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
@@ -1188,7 +1390,9 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		## unit out of a losing fight) — auto-retaliating here would silently
 		## override that order the moment the attacker lands one more hit
 		## before the unit escapes range, undoing the retreat entirely.
-		elif status_command != Command.ATTACK and status_command != Command.MOVE:
+		## Command.CAST is the same kind of deliberate order: a monster walking
+		## in to cast shouldn't be talked out of it by the first thing to hit it.
+		elif status_command != Command.ATTACK and status_command != Command.MOVE and status_command != Command.CAST:
 			## keep_assault: being shot at while marching on an assault target
 			## makes this unit fight back, but must not quietly cancel the
 			## standing order to take the place it was sent to.
@@ -1214,6 +1418,24 @@ func _physics_process(delta: float) -> void:
 		velocity.y -= GRAVITY * delta
 	else:
 		velocity.y = 0.0
+
+	_tick_status_effects(delta)
+	if status_activity == Activity.DEAD:
+		return
+
+	## Stunned: frozen in place, every timer (attack, gather, cast approach)
+	## paused, but the current order survives and resumes once it wears off.
+	if _stun_remaining > 0.0:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		## Avoidance keeps re-emitting the last requested velocity (see
+		## _on_velocity_computed), which would otherwise keep walking the unit.
+		nav_agent.set_velocity(Vector3.ZERO)
+		## Those activities ignore the avoidance callback and so never get its
+		## move_and_slide(); everything else gets one from the callback.
+		if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING:
+			move_and_slide()
+		return
 
 	if status_activity == Activity.GATHERING:
 		velocity.x = 0.0
@@ -1256,6 +1478,8 @@ func _physics_process(delta: float) -> void:
 			_start_building()
 		else:
 			_tick_build_approach(delta)
+	elif status_activity == Activity.TO_CAST:
+		_tick_cast_approach(delta)
 	elif status_activity == Activity.MOVING and (status_command == Command.ATTACK_MOVE or status_command == Command.PATROL):
 		_enemy_scan_timer -= delta
 		if _enemy_scan_timer <= 0.0:
@@ -1318,7 +1542,7 @@ func _physics_process(delta: float) -> void:
 	## unit's own move_speed even if it somehow got set wrong.
 	var effective_speed: float = minf(formation_speed, move_speed) if formation_speed > 0.0 else move_speed
 	_update_cohesion(delta, effective_speed)
-	effective_speed *= _cohesion_speed_scale
+	effective_speed *= _cohesion_speed_scale * _slow_multiplier()
 	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	nav_agent.set_velocity(desired_velocity)

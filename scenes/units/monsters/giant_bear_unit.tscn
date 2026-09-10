@@ -5,11 +5,23 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
+[ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 
 [sub_resource type="Resource" id="ResourceCost_giant_bear_favour"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_favour")
 amount = 40
+
+[sub_resource type="Resource" id="Ability_giant_bear"]
+script = ExtResource("5_ability_script")
+ability_name = "Ground Slam"
+kind = 2
+activation_range = 6.0
+cooldown = 16.0
+area_radius = 2.5
+area_damage = 20
+stun_duration = 2.0
+effect_color = Color(0.75, 0.55, 0.3, 1)
 
 [node name="GiantBear" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -40,6 +52,7 @@ attack_cooldown = 1.6
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0
+abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_giant_bear")])
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.25, 0, 0, 0, 1.25, 0, 0, 0, 1.25, 0, 0.93, 0)

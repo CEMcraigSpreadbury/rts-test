@@ -87,6 +87,21 @@ Promotion** checked (see `docs/creating-an-upgrade.md`) — the ability list
 here only decides *what a promoted unit of this type can do*, not *whether*
 promotion is available yet.
 
+**Abilities** group (just above Monarch): abilities this unit type always has,
+no promotion needed — every Shrine monster has one. For a clickable area
+attack, add an `Ability` with **Kind: Activated Area** and fill in the
+**Activated** group (range, cooldown, optional costs) and the **Area Effect**
+group (radius, instant damage, damage over time, slow, stun, and the colour
+used for the targeting decal and impact). Any `*_unit.tscn` in
+`scenes/units/monsters/` has a working example. Abilities get hotkeys R/T/Y/U
+in list order, and a unit's own abilities come before its Monarch ones.
+Clicking a target out of range makes the unit walk until it's in range, then
+cast.
+
+`cmd spawn <name> [count]` in chat spawns this unit at the cursor for testing.
+`<name>` is the scene file name without `_unit.tscn`, for example
+`cmd spawn giant_bear 2`.
+
 ## 9. Offer it on a building
 
 A unit sitting only in `scenes/units/` is never produced by anyone — add a

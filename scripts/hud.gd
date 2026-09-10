@@ -57,8 +57,16 @@ var _info_built_under_construction: bool = false
 ## frame in _refresh_building_info() from ProductionBuilding.synced_queue_counts.
 var _info_producible_badges: Dictionary = {}
 var _info_stats_label: Label = null
-## Parallel to selected_units when more than one is selected.
+## Parallel to _info_portrait_units when more than one is selected.
 var _info_unit_portrait_bars: Array[ProgressBar] = []
+## The multi-selection in portrait-grid order — monsters first, so they aren't
+## lost past SELECTION_PORTRAIT_LIMIT behind a crowd of regular units.
+var _info_portrait_units: Array[Unit] = []
+## {"button": Button, "unit": Unit, "index": int, "sweep": ColorRect} per
+## activated-ability button currently on the command card — see
+## _refresh_ability_buttons.
+var _ability_buttons: Array[Dictionary] = []
+const COOLDOWN_SWEEP_SHADER: Shader = preload("res://shaders/cooldown_sweep.gdshader")
 var _info_resource_label: Label = null
 
 ## resource_label shows every resource total plus population on one line;
@@ -273,6 +281,7 @@ func refresh_command_panel() -> void:
 		child.queue_free()
 	_info_stats_label = null
 	_info_unit_portrait_bars.clear()
+	_info_portrait_units.clear()
 	_info_resource_label = null
 	_last_command_panel_units = main.selected_units.duplicate()
 	showing_build_submenu = false
@@ -519,8 +528,17 @@ func _build_unit_info() -> void:
 	portrait_grid.add_theme_constant_override("v_separation", 5)
 	## Two rows' worth is all the info panel has room for; the name label above
 	## already reports the true count when the selection runs past that.
-	for i in mini(main.selected_units.size(), SELECTION_PORTRAIT_LIMIT):
-		var unit := main.selected_units[i]
+	## Monsters are the only units with innate abilities (Unit.abilities).
+	## Stable partition rather than sort_custom, which isn't stable and would
+	## shuffle units within each group.
+	for unit in main.selected_units:
+		if not unit.abilities.is_empty():
+			_info_portrait_units.append(unit)
+	for unit in main.selected_units:
+		if unit.abilities.is_empty():
+			_info_portrait_units.append(unit)
+	_info_portrait_units.resize(mini(_info_portrait_units.size(), SELECTION_PORTRAIT_LIMIT))
+	for unit in _info_portrait_units:
 		var cell := VBoxContainer.new()
 		cell.add_theme_constant_override("separation", 3)
 		var portrait := Button.new()
@@ -545,6 +563,7 @@ func _build_unit_info() -> void:
 	info_panel_content.add_child(portrait_grid)
 
 func _refresh_unit_info_values() -> void:
+	_refresh_ability_buttons()
 	if main.selected_units.size() == 1:
 		var unit := main.selected_units[0]
 		portrait_health_label.text = "%d / %d" % [unit.status_current_health, unit.max_health]
@@ -552,8 +571,8 @@ func _refresh_unit_info_values() -> void:
 			_info_stats_label.text = _format_unit_stats(unit)
 		return
 	for i in _info_unit_portrait_bars.size():
-		if i < main.selected_units.size() and is_instance_valid(main.selected_units[i]):
-			var unit := main.selected_units[i]
+		if is_instance_valid(_info_portrait_units[i]):
+			var unit := _info_portrait_units[i]
 			_info_unit_portrait_bars[i].value = float(unit.status_current_health) / float(maxi(unit.max_health, 1))
 
 ## Health already reads out under the portrait, and the info panel is only as
@@ -577,27 +596,58 @@ func _populate_unit_command_buttons() -> void:
 	if main.any_selected_can_build():
 		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_BUILD_KEY), "Build", null, open_build_submenu))
 
-	## Promotion and Monarch abilities only make sense for a single selected
-	## unit — a group promote/activate has no sensible target.
+	## Promotion and abilities only make sense for a single selected unit — a
+	## group promote/activate has no sensible target.
+	_ability_buttons.clear()
 	if main.selected_units.size() == 1:
 		var unit := main.selected_units[0]
-		if unit.is_monarch:
-			for i in unit.monarch_abilities.size():
-				var ability: Ability = unit.monarch_abilities[i]
-				var hotkey_label: String = OS.get_keycode_string(Main.MONARCH_ABILITY_HOTKEYS[i]) if i < Main.MONARCH_ABILITY_HOTKEYS.size() else "?"
-				var tooltip: String = "%s\n%s" % [ability.ability_name, ability.description] if ability.description != "" else ability.ability_name
-				if ability.kind == Ability.Kind.PASSIVE_AURA:
-					## Shown for visibility (so a player can see what their
-					## Monarch grants) but never actionable — it just works
-					## continuously, there's nothing to click.
-					var button := _make_command_button(hotkey_label, tooltip, ability.icon, func(): pass)
-					button.disabled = true
-					buttons.append(button)
-				else:
-					buttons.append(_make_command_button(hotkey_label, tooltip, ability.icon, main.arm_monarch_ability.bind(unit, i)))
-		elif unit.can_fight and not unit.monarch_abilities.is_empty() and main.player_has_monarch_unlocked(unit.owner_peer_id):
+		var unit_abilities: Array[Ability] = unit.get_abilities()
+		for i in unit_abilities.size():
+			var ability: Ability = unit_abilities[i]
+			var hotkey_label: String = OS.get_keycode_string(Main.ABILITY_HOTKEYS[i]) if i < Main.ABILITY_HOTKEYS.size() else "?"
+			var tooltip: String = "%s\n%s" % [ability.ability_name, ability.description] if ability.description != "" else ability.ability_name
+			if not ability.is_activated():
+				## Shown for visibility (so a player can see what their
+				## Monarch grants) but never actionable — it just works
+				## continuously, there's nothing to click.
+				var button := _make_command_button(hotkey_label, tooltip, ability.icon, func(): pass)
+				button.disabled = true
+				buttons.append(button)
+			else:
+				var button := _make_command_button(hotkey_label, tooltip, ability.icon, main.arm_ability.bind(unit, i))
+				_ability_buttons.append({"button": button, "unit": unit, "index": i, "sweep": _add_cooldown_sweep(button)})
+				buttons.append(button)
+		if not unit.is_monarch and unit.can_fight and not unit.monarch_abilities.is_empty() and main.player_has_monarch_unlocked(unit.owner_peer_id):
 			buttons.append(_make_command_button("Promote", "Promote to Monarch", null, main.issue_promote_order.bind(unit)))
+	_refresh_ability_buttons()
 	_fill_action_panel_grid(buttons)
+
+## Greys out an activated ability's button and winds its cooldown sweep down
+## while it's cooling — ticked every frame from _refresh_unit_info_values.
+func _refresh_ability_buttons() -> void:
+	for entry in _ability_buttons:
+		var button: Button = entry["button"]
+		if not is_instance_valid(button) or not is_instance_valid(entry["unit"]):
+			continue
+		var remaining: float = entry["unit"].local_cooldown_remaining_fraction(entry["index"])
+		button.disabled = not entry["unit"].is_ability_ready_locally(entry["index"])
+		var sweep: ColorRect = entry["sweep"]
+		sweep.visible = remaining > 0.0
+		(sweep.material as ShaderMaterial).set_shader_parameter(&"remaining", remaining)
+
+## Full-size overlay on top of the button (children draw over their parent),
+## ignoring the mouse so clicks still reach the button underneath. Each gets
+## its own material since `remaining` differs per button.
+func _add_cooldown_sweep(button: Button) -> ColorRect:
+	var sweep := ColorRect.new()
+	sweep.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sweep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var material := ShaderMaterial.new()
+	material.shader = COOLDOWN_SWEEP_SHADER
+	sweep.material = material
+	sweep.visible = false
+	button.add_child(sweep)
+	return sweep
 
 func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if main.selected_building == building:

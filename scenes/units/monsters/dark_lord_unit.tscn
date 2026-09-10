@@ -5,11 +5,22 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
+[ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 
 [sub_resource type="Resource" id="ResourceCost_dark_lord_favour"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_favour")
 amount = 55
+
+[sub_resource type="Resource" id="Ability_dark_lord"]
+script = ExtResource("5_ability_script")
+ability_name = "Shadow Nova"
+kind = 2
+activation_range = 9.0
+cooldown = 22.0
+area_radius = 3.5
+area_damage = 45
+effect_color = Color(0.6, 0.2, 0.9, 1)
 
 [node name="DarkLord" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -40,6 +51,7 @@ attack_cooldown = 1.4
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0
+abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_dark_lord")])
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.25, 0, 0, 0, 1.25, 0, 0, 0, 1.25, 0, 0.93, 0)

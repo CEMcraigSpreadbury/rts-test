@@ -37,8 +37,10 @@ func send_line(peer_id: int, line: String) -> void:
 
 ## --- Chat / debug console ---
 ## Type a normal message to broadcast it to everyone, or "cmd ..." for a
-## debug command (currently: "cmd add <resource> <amount>" grants yourself
-## that resource without playing, e.g. "cmd add wood 10").
+## debug command:
+##   "cmd add <resource> <amount>" grants yourself that resource, e.g. "cmd add wood 10".
+##   "cmd spawn <unit|monster> [count]" spawns units you own at the mouse
+##   cursor, e.g. "cmd spawn soldier 3"; "monster" picks a random one each.
 
 func open_chat_input() -> void:
 	_chat_input.visible = true
@@ -63,10 +65,13 @@ func _on_chat_submitted(text: String) -> void:
 	var trimmed := text.strip_edges()
 	if trimmed.is_empty():
 		return
-	_rpc_submit_chat.rpc_id(1, trimmed)
+	## Where the mouse is pointing on the ground, captured here because only
+	## the typing player's machine knows it — "cmd spawn" drops units there.
+	var cursor_hit: Dictionary = main.raycast(main.get_viewport().get_mouse_position())
+	_rpc_submit_chat.rpc_id(1, trimmed, cursor_hit.get("position", Vector3.ZERO), not cursor_hit.is_empty())
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_submit_chat(text: String) -> void:
+func _rpc_submit_chat(text: String, cursor_pos: Vector3, has_cursor: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -74,11 +79,11 @@ func _rpc_submit_chat(text: String) -> void:
 		sender_id = main.my_peer_id()
 
 	if text.begins_with("cmd "):
-		_execute_debug_command(sender_id, text.substr(4))
+		_execute_debug_command(sender_id, text.substr(4), cursor_pos, has_cursor)
 	else:
 		_rpc_display_chat.rpc("Player %d: %s" % [sender_id, text])
 
-func _execute_debug_command(sender_id: int, args_string: String) -> void:
+func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vector3, has_cursor: bool) -> void:
 	var parts: PackedStringArray = args_string.strip_edges().split(" ", false)
 	if parts.is_empty():
 		return
@@ -95,10 +100,105 @@ func _execute_debug_command(sender_id: int, args_string: String) -> void:
 			var amount: int = int(parts[2])
 			ResourceStockpile.add(sender_id, resource_type, amount)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] +%d %s" % [amount, resource_type.display_name])
+		"spawn":
+			if parts.size() < 2:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] usage: cmd spawn <unit|monster> [count]")
+				return
+			var count: int = clampi(int(parts[2]) if parts.size() >= 3 else 1, 1, MAX_DEBUG_SPAWN)
+			var wants_random_monster: bool = parts[1].to_lower() in ["monster", "monsters"]
+			var scene_path: String = "" if wants_random_monster else _find_unit_scene_path(parts[1])
+			if not wants_random_monster and scene_path.is_empty():
+				_rpc_display_chat.rpc_id(sender_id, "[debug] unknown unit '%s' (known: monster, %s)" % [parts[1], ", ".join(_unit_scene_catalog().keys())])
+				return
+			var center: Vector3 = cursor_pos if has_cursor else _fallback_spawn_center(sender_id)
+			var spawned_names: Array[String] = []
+			for i in count:
+				var path: String = _random_monster_scene_path() if wants_random_monster else scene_path
+				if path.is_empty():
+					break
+				spawned_names.append(_spawn_debug_unit(sender_id, path, center + _spawn_offset(i)).display_name)
+			_rpc_display_chat.rpc_id(sender_id, "[debug] spawned %s" % ", ".join(spawned_names))
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count]")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
+
+## --- "cmd spawn" ---
+
+## Guards against a typo like "cmd spawn soldier 3000" stalling the host.
+const MAX_DEBUG_SPAWN: int = 50
+const UNIT_SCENE_DIR: String = "res://scenes/units/"
+const MONSTER_SCENE_DIR: String = "res://scenes/units/monsters/"
+## Spacing between debug-spawned units: comfortably wider than two avoidance
+## radii, so a batch doesn't spawn overlapping (see the spawn jitter note in
+## Main._on_building_item_completed for what overlapping spawns do).
+const DEBUG_SPAWN_SPACING: float = 1.1
+
+## Spawn name ("soldier", "black_dragon", ...) -> scene path, read off the unit
+## scene files themselves so a newly added unit is spawnable with no changes
+## here. The shared base scene unit.tscn is the Villager.
+var _unit_scenes: Dictionary = {}
+var _monster_scene_paths: Array[String] = []
+
+func _unit_scene_catalog() -> Dictionary:
+	if _unit_scenes.is_empty():
+		for dir in [UNIT_SCENE_DIR, MONSTER_SCENE_DIR]:
+			for path in _scene_paths_in(dir):
+				var key: String = path.get_file().get_basename().trim_suffix("_unit")
+				_unit_scenes["villager" if key == "unit" else key] = path
+				if dir == MONSTER_SCENE_DIR:
+					_monster_scene_paths.append(path)
+	return _unit_scenes
+
+## Exported builds list "x.tscn.remap" rather than "x.tscn"; load() takes the
+## original name either way.
+func _scene_paths_in(dir: String) -> Array[String]:
+	var paths: Array[String] = []
+	for file in DirAccess.get_files_at(dir):
+		file = file.trim_suffix(".remap")
+		if file.get_extension() == "tscn":
+			paths.append(dir + file)
+	return paths
+
+## Case, spaces and underscores are ignored, so "blackdragon", "Black_Dragon"
+## and "black_dragon" all match.
+func _find_unit_scene_path(unit_name: String) -> String:
+	var wanted: String = unit_name.to_lower().replace("_", "").replace(" ", "")
+	var catalog := _unit_scene_catalog()
+	for key in catalog:
+		if key.replace("_", "") == wanted:
+			return catalog[key]
+	return ""
+
+func _random_monster_scene_path() -> String:
+	_unit_scene_catalog()
+	return _monster_scene_paths.pick_random() if not _monster_scene_paths.is_empty() else ""
+
+## The cursor wasn't over the ground (e.g. over the HUD), so fall back to a spot
+## just in front of the sender's Town Center.
+func _fallback_spawn_center(peer_id: int) -> Vector3:
+	var town_center: Node3D = main.town_centers.get(peer_id)
+	return town_center.global_position + Vector3(0.0, 0.0, 5.0) if town_center else Vector3.ZERO
+
+## Sunflower spiral: the first unit lands exactly on the cursor and each next
+## one a little further out, packing a batch of any size into a tidy blob.
+func _spawn_offset(index: int) -> Vector3:
+	var radius: float = DEBUG_SPAWN_SPACING * sqrt(float(index))
+	var angle: float = float(index) * 2.39996
+	return Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+
+## Same path as a starting unit (see Main._spawn_player_base): population is
+## reserved by hand since the unit never went through a production queue, and
+## Unit._die releases it again.
+func _spawn_debug_unit(peer_id: int, scene_path: String, position: Vector3) -> Unit:
+	var unit: Unit = main.unit_spawner.spawn({
+		"scene_path": scene_path,
+		"peer_id": peer_id,
+		"tint": main.get_team_tint(peer_id),
+		"position": position,
+	})
+	Population.reserve(peer_id, unit.population_cost)
+	return unit
 
 func _find_resource_type_by_name(resource_name: String) -> ResourceType:
 	for resource_type in Main.DEBUG_RESOURCE_TYPES:

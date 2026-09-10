@@ -39,10 +39,10 @@ const FORMATION_STAGGERED_KEY: Key = KEY_F3
 ## reformation (the other half, closing ranks when a member dies mid-move, is
 ## automatic; see update_reformation). F4 continues the F1-F3 shape row.
 const FORMATION_REFORM_KEY: Key = KEY_F4
-## Assigned by position in a Monarch's monarch_abilities, same convention as
+## Assigned by position in Unit.get_abilities(), same convention as
 ## PRODUCIBLE_HOTKEYS/BUILDING_HOTKEYS below — a passive ability still claims
 ## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
-const MONARCH_ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
+const ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
 const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_G, KEY_O]
 ## Same list (and order) as lobby.tscn's Lobby.available_factions — that
@@ -135,11 +135,11 @@ var pending_order_mode: String = ""
 ## True once the first click of the current patrol-targeting session has been
 ## sent, so later shift-clicks append a waypoint instead of starting a new patrol.
 var _patrol_started_this_session: bool = false
-## Armed by pressing a Monarch's activated-ability button; consumed by the
-## next left-click, same as pending_order_mode == "move"/"attack", but needs
-## its own state since the ability only ever targets its own Monarch unit,
-## not the whole current selection. {"unit": Unit, "ability_index": int} or {}.
-var _armed_monarch_ability: Dictionary = {}
+## Armed by pressing a unit's activated-ability button; consumed by the next
+## left-click, same as pending_order_mode == "move"/"attack", but needs its
+## own state since the ability belongs to one unit, not the whole current
+## selection. {"unit": Unit, "ability_index": int} or {}.
+var _armed_ability: Dictionary = {}
 ## Purely local UI state: which units/buildings belong to each numbered
 ## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
 var control_groups: Dictionary = {}
@@ -150,6 +150,25 @@ var control_groups: Dictionary = {}
 var _active_group_number: int = -1
 
 const CLICK_DRAG_THRESHOLD: float = 6.0
+
+## Right-drag formation (Total War style): with units selected, pressing right
+## orders nothing yet. Releasing without moving far is the usual right-click
+## order; dragging lays the front rank out along the drag line, previewed with
+## a ghost decal per slot, and releasing sends the group there in that shape.
+## Wider than CLICK_DRAG_THRESHOLD so a slightly shaky right-click doesn't
+## turn into a one-unit-wide column.
+const FORMATION_DRAG_THRESHOLD: float = 14.0
+## The drag line is raycast against everything except units (layer 3, value 4
+## — see collision_layer on scenes/units/unit.tscn): the cursor sweeps across
+## the very units being ordered, and hitting their capsules would make the line
+## jump up and sideways every time it crossed one.
+const FORMATION_DRAG_RAY_MASK: int = 0xFFFFFFFF & ~4
+var _formation_drag_pressed: bool = false
+var _formation_drag_active: bool = false
+var _formation_drag_start_screen: Vector2 = Vector2.ZERO
+var _formation_drag_start_world: Vector3 = Vector3.ZERO
+var _formation_drag_end_world: Vector3 = Vector3.ZERO
+var _formation_drag_facing: Vector3 = Vector3.ZERO
 
 ## The last Unit/ProductionBuilding/Gatherable single-left-clicked (own or
 ## not) — keeps the hover ring showing on it even when the mouse moves away,
@@ -402,6 +421,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
 	unit.resource_harvested.connect(feedback.on_unit_resource_harvested)
 	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
+	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
 	return unit
 
 ## Hand-placed buildings (currently just Objective guards' buildings) never
@@ -429,6 +449,7 @@ func register_objective_unit(unit: Unit) -> void:
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
 	unit.resource_harvested.connect(feedback.on_unit_resource_harvested)
 	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
+	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
 
 ## Objective Favour income "+N" — called by objective.gd (via current_scene,
 ## so it has to stay reachable on Main); the popup itself is WorldFeedback's.
@@ -641,7 +662,9 @@ func _process(delta: float) -> void:
 	hud.update(delta)
 	placement.update()
 	feedback.update_hover_ring()
+	feedback.update_ability_target_decal()
 	feedback.update_path_markers()
+	_poll_formation_drag()
 	group_movement.update_reformation(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -681,6 +704,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if pending_order_mode != "":
 		_handle_pending_order_input(event)
+		return
+
+	if _formation_drag_pressed and event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_cancel_formation_drag()
+		get_viewport().set_input_as_handled()
 		return
 
 	## Fallback: nothing above claimed this Escape (not chatting, not
@@ -775,12 +803,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			hud.open_build_submenu()
 			get_viewport().set_input_as_handled()
 			return
-		elif selected_units.size() == 1 and selected_units[0].is_monarch:
-			var ability_index: int = MONARCH_ABILITY_HOTKEYS.find(event.keycode)
-			var unit := selected_units[0]
-			if ability_index != -1 and ability_index < unit.monarch_abilities.size() \
-					and unit.monarch_abilities[ability_index].kind == Ability.Kind.ACTIVATED_TARGET_POINT:
-				arm_monarch_ability(unit, ability_index)
+		elif selected_units.size() == 1 and ABILITY_HOTKEYS.has(event.keycode):
+			var unit: Unit = selected_units[0]
+			var ability_index: int = ABILITY_HOTKEYS.find(event.keycode)
+			var ability: Ability = unit.get_ability(ability_index)
+			if ability != null and ability.is_activated() and unit.owner_peer_id == my_peer_id():
+				arm_ability(unit, ability_index)
 				get_viewport().set_input_as_handled()
 				return
 
@@ -794,21 +822,100 @@ func _unhandled_input(event: InputEvent) -> void:
 				dragging = false
 				selection_box.visible = false
 				_finish_selection(drag_start, event.position, _pending_double_click)
-		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			if can_command_building(selected_building) and selected_building.can_rally:
-				_set_rally_point(event.position)
-			else:
-				_issue_move_order(event.position, event.shift_pressed)
-	elif event is InputEventMouseMotion and dragging:
-		if drag_start.distance_to(event.position) > CLICK_DRAG_THRESHOLD:
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			if event.pressed:
+				if can_command_building(selected_building) and selected_building.can_rally:
+					_set_rally_point(event.position)
+				else:
+					_begin_formation_drag(event.position)
+			elif _formation_drag_pressed:
+				_finish_formation_drag(event.shift_pressed)
+	elif event is InputEventMouseMotion:
+		if dragging and drag_start.distance_to(event.position) > CLICK_DRAG_THRESHOLD:
 			selection_box.visible = true
 			_update_selection_box(event.position)
+		if _formation_drag_pressed:
+			_update_formation_drag(event.position)
 
 func _update_selection_box(current_pos: Vector2) -> void:
 	var top_left := Vector2(min(drag_start.x, current_pos.x), min(drag_start.y, current_pos.y))
 	var size := (current_pos - drag_start).abs()
 	selection_box.position = top_left
 	selection_box.size = size
+
+## --- Right-drag formation (see FORMATION_DRAG_THRESHOLD) ---
+
+func _begin_formation_drag(screen_pos: Vector2) -> void:
+	prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var hit := raycast(screen_pos, FORMATION_DRAG_RAY_MASK)
+	if hit.is_empty():
+		return
+	_formation_drag_pressed = true
+	_formation_drag_active = false
+	_formation_drag_start_screen = screen_pos
+	_formation_drag_start_world = hit.position
+	_formation_drag_end_world = hit.position
+
+func _update_formation_drag(screen_pos: Vector2) -> void:
+	if not _formation_drag_active:
+		if screen_pos.distance_to(_formation_drag_start_screen) < FORMATION_DRAG_THRESHOLD:
+			return
+		_formation_drag_active = true
+	prune_selected_units()
+	if selected_units.is_empty():
+		_cancel_formation_drag()
+		return
+	## Off the edge of the map: hold the last good line rather than dropping it.
+	var hit := raycast(screen_pos, FORMATION_DRAG_RAY_MASK)
+	if not hit.is_empty():
+		_formation_drag_end_world = hit.position
+	_formation_drag_facing = group_movement.drag_facing(selected_units, _formation_drag_start_world, _formation_drag_end_world)
+	feedback.show_formation_preview(group_movement.drag_preview_slots(
+			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing))
+
+## Never dragged far enough: exactly the right-click order the press used to
+## issue on its own, from where the button went down.
+func _finish_formation_drag(append: bool) -> void:
+	if _formation_drag_active:
+		_issue_formation_drag_order(append)
+	else:
+		_issue_move_order(_formation_drag_start_screen, append)
+	_cancel_formation_drag()
+
+func _cancel_formation_drag() -> void:
+	_formation_drag_pressed = false
+	_formation_drag_active = false
+	feedback.hide_formation_preview()
+
+## The release can go missing — let go over the HUD and the GUI eats it, or
+## something else (chat, placement, an armed order) claims input mid-drag — so
+## the button's real state is polled as a backstop instead of trusting the
+## release event alone, which would otherwise leave the preview stuck on screen.
+func _poll_formation_drag() -> void:
+	if not _formation_drag_pressed or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		return
+	if game_over or _is_pause_menu_open() or chat.is_input_open() or placement.is_placing():
+		_cancel_formation_drag()
+	else:
+		_finish_formation_drag(Input.is_key_pressed(KEY_SHIFT))
+
+func _issue_formation_drag_order(append: bool) -> void:
+	prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+	var midpoint := (_formation_drag_start_world + _formation_drag_end_world) * 0.5
+	var front_width := Vector2(_formation_drag_end_world.x - _formation_drag_start_world.x,
+			_formation_drag_end_world.z - _formation_drag_start_world.z).length()
+	_rpc_issue_command.rpc_id(1, unit_paths, NodePath(), midpoint, false, append, current_formation_type, front_width, _formation_drag_facing)
+	play_command_sound()
+	feedback.play_command_feedback(midpoint, false)
+	feedback.spawn_command_popup("move", midpoint, feedback.command_speaker())
+	_update_order_path_markers(midpoint, append)
 
 ## Units can die (and be freed) between selection and the next click/order, so
 ## any stored reference must be validity-checked before use, not just trusted.
@@ -1049,11 +1156,11 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 				selected_units.append(child)
 	_play_random_select_sound(selected_units)
 
-func raycast(screen_pos: Vector2) -> Dictionary:
+func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionary:
 	var space_state := get_world_3d().direct_space_state
 	var from := camera.project_ray_origin(screen_pos)
 	var to := from + camera.project_ray_normal(screen_pos) * 1000.0
-	var query := PhysicsRayQueryParameters3D.create(from, to)
+	var query := PhysicsRayQueryParameters3D.create(from, to, collision_mask)
 	return space_state.intersect_ray(query)
 
 ## Gatherable / enemy Unit / enemy-or-under-construction-or-deposit-linked
@@ -1117,9 +1224,14 @@ func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	play_command_sound()
 	feedback.play_command_feedback(result.position, false)
 	feedback.spawn_command_popup(_popup_kind_for_order(result), result.position, feedback.command_speaker())
+	_update_order_path_markers(result.position, append)
+
+## A shift-queued order adds a waypoint marker per unit; a fresh one replaces
+## whatever queue they were showing.
+func _update_order_path_markers(world_pos: Vector3, append: bool) -> void:
 	for unit in selected_units:
 		if append:
-			feedback.add_path_marker(unit, result.position)
+			feedback.add_path_marker(unit, world_pos)
 		else:
 			feedback.clear_path_markers(unit)
 
@@ -1142,11 +1254,7 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	play_command_sound()
 	feedback.play_command_feedback(result.position, true)
 	feedback.spawn_command_popup("attack", result.position, feedback.command_speaker())
-	for unit in selected_units:
-		if append:
-			feedback.add_path_marker(unit, result.position)
-		else:
-			feedback.clear_path_markers(unit)
+	_update_order_path_markers(result.position, append)
 
 func issue_stop_order() -> void:
 	prune_selected_units()
@@ -1159,13 +1267,20 @@ func issue_stop_order() -> void:
 	_rpc_issue_stop.rpc_id(1, unit_paths)
 	play_command_sound()
 
+## front_width/facing: a right-drag formation (see _issue_formation_drag_order)
+## — the front-rank width the player dragged out and the facing the preview
+## was drawn with, so the host builds exactly the shape that was shown.
+## Negative/zero for an ordinary click order.
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> void:
+func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool, formation_type: Formation.Type = Formation.DEFAULT_TYPE, front_width: float = -1.0, facing: Vector3 = Vector3.ZERO) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	## Client-supplied, so flattened and renormalized rather than trusted as-is.
+	facing.y = 0.0
+	facing = facing.normalized() if facing.length_squared() > 0.0001 else Vector3.ZERO
 
 	var target_node: Node = get_node_or_null(target_path) if target_path != NodePath() else null
 
@@ -1175,7 +1290,7 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
 
-	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type)
+	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type, facing, front_width)
 	## Chokepoint funnelling: if the route to the destination has to thread
 	## something narrower than this formation is wide (a gate, a slot between
 	## buildings), every unit heads for a shared waypoint just past that gap
@@ -1243,7 +1358,7 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 	## member hasn't started this leg yet, and a gather/attack/build target
 	## ignores formation slots entirely, so neither belongs in a record whose
 	## whole job is re-solving move slots.
-	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback)
+	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback, facing, front_width)
 
 ## Explicit re-form (FORMATION_REFORM_KEY): pulls a selection that combat, an
 ## obstacle or a chokepoint has smeared into a blob back into its formation
@@ -1288,8 +1403,9 @@ func _rpc_issue_reform(unit_paths: Array[NodePath], formation_type: Formation.Ty
 		return
 
 	var centroid := group_movement.group_centroid(units)
-	group_movement.reform_group(units, centroid, formation_type, false, group_movement.group_facing(units))
-	group_movement.register_formation(units, centroid, formation_type, false)
+	var facing := group_movement.group_facing(units)
+	group_movement.reform_group(units, centroid, formation_type, false, facing)
+	group_movement.register_formation(units, centroid, formation_type, false, facing)
 
 ## Fires whenever a unit's current command runs its own natural course (a
 ## move arrives, a fight runs out of enemies, a build finishes) — see
@@ -1392,29 +1508,30 @@ func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
 func _handle_pending_order_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		pending_order_mode = ""
-		_armed_monarch_ability = {}
+		_armed_ability = {}
 		return
 	if not (event is InputEventMouseButton and event.pressed):
 		return
 	if event.button_index == MOUSE_BUTTON_RIGHT:
 		pending_order_mode = ""
-		_armed_monarch_ability = {}
+		_armed_ability = {}
 		return
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
 
 	match pending_order_mode:
-		"monarch_ability":
+		"ability":
 			var result := raycast(event.position)
 			pending_order_mode = ""
-			if result.is_empty() or _armed_monarch_ability.is_empty():
-				_armed_monarch_ability = {}
+			if result.is_empty() or _armed_ability.is_empty():
+				_armed_ability = {}
 				return
-			var unit: Unit = _armed_monarch_ability["unit"]
+			var unit: Unit = _armed_ability["unit"]
 			if is_instance_valid(unit):
-				_rpc_request_monarch_ability.rpc_id(1, unit.get_path(), _armed_monarch_ability["ability_index"], result.position)
+				_rpc_request_ability.rpc_id(1, unit.get_path(), _armed_ability["ability_index"], result.position)
 				play_command_sound()
-			_armed_monarch_ability = {}
+				feedback.clear_path_markers(unit)
+			_armed_ability = {}
 		"move":
 			_issue_move_order(event.position, event.shift_pressed)
 			if not event.shift_pressed:
@@ -1514,10 +1631,28 @@ func issue_promote_order(unit: Unit) -> void:
 	_rpc_request_promote_monarch.rpc_id(1, unit.get_path())
 	play_command_sound()
 
-func arm_monarch_ability(unit: Unit, ability_index: int) -> void:
-	_armed_monarch_ability = {"unit": unit, "ability_index": ability_index}
-	pending_order_mode = "monarch_ability"
+## Refuses (silently — the HUD button is already greyed out) while the
+## ability is still cooling down, rather than arming a click the host would
+## only reject.
+func arm_ability(unit: Unit, ability_index: int) -> void:
+	if not is_instance_valid(unit) or not unit.is_ability_ready_locally(ability_index):
+		return
+	_armed_ability = {"unit": unit, "ability_index": ability_index}
+	pending_order_mode = "ability"
 	play_command_sound()
+
+## The ability the next left-click will cast, or null — read every frame by
+## WorldFeedback to draw the targeting decal. Drops the arming if its unit
+## died or was deselected in the meantime.
+func get_armed_ability() -> Ability:
+	if pending_order_mode != "ability" or _armed_ability.is_empty():
+		return null
+	var unit = _armed_ability["unit"]
+	if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD or not selected_units.has(unit):
+		pending_order_mode = ""
+		_armed_ability = {}
+		return null
+	return unit.get_ability(_armed_ability["ability_index"])
 
 func on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
 	var item := building.producibles[item_index]
@@ -1583,8 +1718,11 @@ func _rpc_request_promote_monarch(unit_path: NodePath) -> void:
 	ResourceStockpile.spend(sender_id, unit.monarch_promotion_costs)
 	unit.promote_to_monarch()
 
+## Validation only — range isn't checked here, since an out-of-range target
+## just makes the unit walk until it's in range (see Unit.command_cast_ability).
+## Cooldown and cost are checked again at the moment of casting.
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_monarch_ability(unit_path: NodePath, ability_index: int, target_pos: Vector3) -> void:
+func _rpc_request_ability(unit_path: NodePath, ability_index: int, target_pos: Vector3) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -1592,23 +1730,37 @@ func _rpc_request_monarch_ability(unit_path: NodePath, ability_index: int, targe
 		sender_id = my_peer_id()
 
 	var unit := get_node_or_null(unit_path) as Unit
-	if unit == null or unit.owner_peer_id != sender_id or not unit.is_monarch:
+	if unit == null or unit.owner_peer_id != sender_id:
 		return
-	if ability_index < 0 or ability_index >= unit.monarch_abilities.size():
-		return
-	var ability: Ability = unit.monarch_abilities[ability_index]
-	if ability.kind != Ability.Kind.ACTIVATED_TARGET_POINT:
-		return
-	var ready_at: int = unit._ability_ready_at_ms.get(ability_index, 0)
-	if Time.get_ticks_msec() < ready_at:
-		return
-	if unit.global_position.distance_to(target_pos) > ability.activation_range:
+	var ability: Ability = unit.get_ability(ability_index)
+	if ability == null or not ability.is_activated() or not unit.is_ability_ready(ability_index):
 		return
 	if not ResourceStockpile.can_afford(sender_id, ability.costs):
 		return
-	ResourceStockpile.spend(sender_id, ability.costs)
-	unit._ability_ready_at_ms[ability_index] = Time.get_ticks_msec() + int(ability.cooldown * 1000.0)
-	unit.execute_teleport_ability(ability, target_pos)
+	unit.clear_order_queue()
+	unit.command_cast_ability(ability_index, target_pos)
+
+## Host-only (Unit.ability_cast only fires there). Tells the owner when the
+## ability comes back so their HUD can grey it out, and shows the impact to
+## everyone.
+func _on_unit_ability_cast(ability_index: int, target_pos: Vector3, unit: Unit) -> void:
+	var ability: Ability = unit.get_ability(ability_index)
+	if ability == null:
+		return
+	## Peer 0 is "neutral", not a real peer — rpc_id(0) would broadcast.
+	if unit.owner_peer_id > 0:
+		_rpc_ability_cooldown_started.rpc_id(unit.owner_peer_id, unit.get_path(), ability_index, ability.cooldown)
+	if ability.kind == Ability.Kind.ACTIVATED_AREA:
+		feedback.relay_ability_effect(target_pos, ability.area_radius, ability.effect_color, ability.effect_duration, ability.effect_particle_lifetime)
+		feedback.relay_impact_shake(target_pos, 0.35)
+
+## Stamped on the receiver's own clock, so it never depends on host and client
+## agreeing on Time.get_ticks_msec().
+@rpc("authority", "call_local", "reliable")
+func _rpc_ability_cooldown_started(unit_path: NodePath, ability_index: int, cooldown: float) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit != null:
+		unit.start_local_cooldown(ability_index, cooldown)
 
 ## --- Rally points ---
 

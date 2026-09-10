@@ -1016,3 +1016,161 @@ func play_ping_effect(world_pos: Vector3) -> void:
 	tween.tween_property(mat, "albedo_color:a", 0.0, 1.2)
 	tween.set_parallel(false)
 	tween.tween_callback(ring.queue_free)
+
+## --- Ability targeting and impact ---
+
+## Tall enough that the projection still reaches the ground on a slope or a
+## ridge edge, short enough not to paint the underside of anything overhead.
+const ABILITY_DECAL_HEIGHT: float = 6.0
+const ABILITY_TARGET_DECAL_ALPHA: float = 0.5
+
+## Shared by the targeting decal and every impact flash (each tints it through
+## its own Decal.modulate), so it's generated once, on first use.
+var _ability_circle_texture: ImageTexture = null
+var _ability_circle_emission_texture: ImageTexture = null
+var _ability_target_decal: Decal = null
+
+## Follows the mouse while an ability is armed (see Main.get_armed_ability),
+## sized to what the cast will actually cover.
+func update_ability_target_decal() -> void:
+	var ability: Ability = main.get_armed_ability()
+	var hit: Dictionary = {}
+	if ability != null and not main.chat.is_input_open() and not main.game_over:
+		hit = main.raycast(get_viewport().get_mouse_position())
+	if hit.is_empty():
+		if _ability_target_decal:
+			_ability_target_decal.visible = false
+		return
+	if _ability_target_decal == null:
+		_ability_target_decal = _make_ability_decal()
+		add_child(_ability_target_decal)
+	var radius: float = ability.area_radius if ability.kind == Ability.Kind.ACTIVATED_AREA else ability.affected_ally_radius
+	_ability_target_decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
+	_ability_target_decal.modulate = Color(ability.effect_color, ABILITY_TARGET_DECAL_ALPHA)
+	_ability_target_decal.global_position = hit.position
+	_ability_target_decal.visible = true
+
+## Host-side entry point (see Main._on_unit_ability_cast), relayed like
+## relay_impact_shake since the cast itself only happens on the host.
+## `duration`/`particle_lifetime` are the ability's effect_duration and
+## effect_particle_lifetime — passed as plain floats since the RPC can't carry
+## the Ability resource itself.
+func relay_ability_effect(world_pos: Vector3, radius: float, color: Color, duration: float, particle_lifetime: float) -> void:
+	_play_ability_effect(world_pos, radius, color, duration, particle_lifetime)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_ability_effect.rpc(world_pos, radius, color, duration, particle_lifetime)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_ability_effect(world_pos: Vector3, radius: float, color: Color, duration: float, particle_lifetime: float) -> void:
+	_play_ability_effect(world_pos, radius, color, duration, particle_lifetime)
+
+## A flash of the same disc the targeting decal showed, snapping out to full
+## size, holding, then fading, plus a ring of sparks in the ability's colour.
+## Skipped under fog, where it would give away a fight the viewer can't see.
+func _play_ability_effect(world_pos: Vector3, radius: float, color: Color, duration: float, particle_lifetime: float) -> void:
+	if not main.fog_of_war.is_visible_at(world_pos):
+		return
+	var decal := _make_ability_decal()
+	decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
+	decal.modulate = Color(color, 0.95)
+	add_child(decal)
+	decal.global_position = world_pos
+	decal.scale = Vector3(0.3, 1.0, 0.3)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(decal, "scale", Vector3.ONE, 0.2) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(decal, "modulate:a", 0.0, duration * 0.5) \
+			.set_delay(duration * 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.set_parallel(false)
+	tween.tween_callback(decal.queue_free)
+
+	var sparks := ParticleProcessMaterial.new()
+	sparks.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	sparks.emission_ring_axis = Vector3(0, 1, 0)
+	sparks.emission_ring_radius = radius * 0.85
+	sparks.emission_ring_inner_radius = radius * 0.2
+	sparks.emission_ring_height = 0.1
+	sparks.direction = Vector3(0, 1, 0)
+	sparks.spread = 30.0
+	sparks.initial_velocity_min = 1.5
+	sparks.initial_velocity_max = 4.0
+	sparks.gravity = Vector3(0, -4.0, 0)
+	sparks.damping_min = 0.5
+	sparks.damping_max = 1.5
+	sparks.scale_min = 1.2
+	sparks.scale_max = 2.4
+	## Fades each spark out over its life rather than it blinking out at the
+	## end, which a long effect_particle_lifetime would make very noticeable.
+	var fade := Gradient.new()
+	fade.set_color(0, color)
+	fade.set_color(1, Color(color, 0.0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	sparks.color_ramp = ramp
+	_spawn_burst(sparks, world_pos + Vector3(0, RALLY_DUST_HEIGHT, 0), int(clampf(radius * 14.0, 20.0, 80.0)), particle_lifetime)
+
+## --- Formation drag preview ---
+
+## One ghost disc per slot while the player right-drags a formation (see
+## Main._update_formation_drag). Sized to a unit's footprint (0.4 capsule, see
+## scenes/units/unit.tscn) with a little room around it, so a tight block of
+## discs reads as how tight the finished formation will actually stand.
+const FORMATION_PREVIEW_DISC_SIZE: float = 1.0
+const FORMATION_PREVIEW_COLOR: Color = Color(1.0, 1.0, 1.0, 0.45)
+
+## Pooled rather than rebuilt per mouse-motion event — a drag fires dozens of
+## those a second, and the slot count only changes when the selection does.
+var _formation_preview_decals: Array[Decal] = []
+
+func show_formation_preview(slots: Array[Vector3]) -> void:
+	while _formation_preview_decals.size() < slots.size():
+		var decal := _make_ability_decal()
+		decal.size = Vector3(FORMATION_PREVIEW_DISC_SIZE, ABILITY_DECAL_HEIGHT, FORMATION_PREVIEW_DISC_SIZE)
+		decal.modulate = FORMATION_PREVIEW_COLOR
+		add_child(decal)
+		_formation_preview_decals.append(decal)
+	for i in _formation_preview_decals.size():
+		var decal := _formation_preview_decals[i]
+		decal.visible = i < slots.size()
+		if decal.visible:
+			decal.global_position = slots[i]
+
+func hide_formation_preview() -> void:
+	for decal in _formation_preview_decals:
+		decal.visible = false
+
+func _make_ability_decal() -> Decal:
+	var decal := Decal.new()
+	_build_ability_circle_textures()
+	decal.texture_albedo = _ability_circle_texture
+	## Emission too, so the circle reads the same in a shadowed valley as in
+	## full sun rather than vanishing into dark terrain.
+	decal.texture_emission = _ability_circle_emission_texture
+	decal.emission_energy = 0.6
+	decal.upper_fade = 0.15
+	decal.lower_fade = 0.15
+	return decal
+
+## A faint filled disc with a solid rim, white so Decal.modulate can colour it.
+## Decal emission is added across the whole projection box and ignores alpha,
+## so it gets its own copy with the alpha baked into the colour — black (no
+## glow) outside the circle — or the decal lights up as a square.
+func _build_ability_circle_textures() -> void:
+	if _ability_circle_texture:
+		return
+	const SIZE: int = 256
+	const FILL_ALPHA: float = 0.3
+	var albedo := Image.create_empty(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var emission := Image.create_empty(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var center := Vector2(SIZE, SIZE) * 0.5
+	for y in SIZE:
+		for x in SIZE:
+			var d: float = (Vector2(x + 0.5, y + 0.5) - center).length() / (SIZE * 0.5)
+			var alpha: float = lerpf(FILL_ALPHA, 1.0, smoothstep(0.86, 0.94, d)) * (1.0 - smoothstep(0.96, 1.0, d))
+			albedo.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+			emission.set_pixel(x, y, Color(alpha, alpha, alpha, 1.0))
+	albedo.generate_mipmaps()
+	emission.generate_mipmaps()
+	_ability_circle_texture = ImageTexture.create_from_image(albedo)
+	_ability_circle_emission_texture = ImageTexture.create_from_image(emission)
