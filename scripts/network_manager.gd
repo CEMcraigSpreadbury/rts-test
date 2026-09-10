@@ -17,6 +17,9 @@ signal player_disconnected(peer_id: int, player_data: Dictionary)
 ## Fired when a player's own entry in `players` changes in place (faction_index
 ## or ready) — lets the lobby refresh one row instead of the whole list.
 signal player_updated(peer_id: int)
+## Fired when the lobby's chosen map changes (host picked one, or a client
+## learned the host's pick).
+signal map_changed(index: int)
 signal connection_failed
 signal connected_to_server
 signal server_disconnected
@@ -53,6 +56,8 @@ const TEAM_COLOR_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 
 ## peer_id -> { "name": String, "color": Color, "faction_index": int, "ready": bool }
 var players: Dictionary = {}
+## Index into the lobby's available_maps. Host-owned, like color assignment.
+var map_index: int = 0
 
 ## 0 when not hosting/in a Steam lobby.
 var _steam_lobby_id: int = 0
@@ -253,6 +258,7 @@ func _on_peer_connected(id: int) -> void:
 		players[id]["color"] = _first_free_color()
 		_sync_player_list.rpc_id(id, players)
 		_rpc_color_changed.rpc(id, players[id]["color"])
+		_rpc_map_changed.rpc_id(id, map_index)
 	player_connected.emit(id)
 
 func _on_peer_disconnected(id: int) -> void:
@@ -405,6 +411,24 @@ func _rpc_color_changed(peer_id: int, color: Color) -> void:
 	if players.has(peer_id):
 		players[peer_id]["color"] = color
 	player_updated.emit(peer_id)
+
+## --- Map selection (lobby only) ---
+##
+## Only the host picks; clients just mirror it. Also callable before hosting
+## or joining at all, so the lobby's picker is usable from the start.
+
+func set_map(index: int) -> void:
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return
+	map_index = index
+	map_changed.emit(index)
+	if is_host():
+		_rpc_map_changed.rpc(index)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_map_changed(index: int) -> void:
+	map_index = index
+	map_changed.emit(index)
 
 ## --- Ready-up (lobby only) ---
 ##

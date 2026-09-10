@@ -9,18 +9,26 @@ extends Control
 @onready var host_button: Button = $VBox/ConnectRow/HostButton
 @onready var join_button: Button = $VBox/ConnectRow/JoinButton
 @onready var status_label: Label = $VBox/StatusLabel
+@onready var map_option: OptionButton = $VBox/MapOption
 @onready var player_list: VBoxContainer = $VBox/PlayerList
 @onready var start_button: Button = $VBox/StartButton
 @onready var disconnect_button: Button = $VBox/DisconnectButton
 
-const MAIN_SCENE_PATH: String = "res://scenes/main.tscn"
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 
 ## Same list (and order) as main.tscn's Main.available_factions — that shared
 ## order is what a "faction_index" in Network.players actually refers to.
 @export var available_factions: Array[Faction] = []
+## Same list (and order) as main_menu.tscn's available_maps — Network.map_index
+## is an index into it.
+@export var available_maps: Array[MapInfo] = []
 
 func _ready() -> void:
+	for map in available_maps:
+		map_option.add_item(map.map_name)
+	map_option.item_selected.connect(Network.set_map)
+	Network.map_changed.connect(_refresh_map_option.unbind(1))
+	_refresh_map_option()
 	quick_play_button.pressed.connect(_on_quick_play_pressed)
 	host_steam_button.pressed.connect(_on_host_steam_pressed)
 	invite_button.pressed.connect(Network.invite_friend)
@@ -123,6 +131,7 @@ func _on_join_pressed() -> void:
 		return
 	status_label.text = "Connecting to %s..." % address_edit.text
 	_set_connect_controls_enabled(false)
+	_refresh_map_option()
 
 func _on_connected() -> void:
 	status_label.text = "Connected."
@@ -141,7 +150,16 @@ func _set_connect_controls_enabled(enabled: bool) -> void:
 	host_steam_button.disabled = not enabled or not Steamworks.is_available
 	disconnect_button.visible = not enabled
 
+## Only the host (or someone not yet connected, who'll become one by hosting)
+## gets to pick — a joined client just sees the host's choice.
+func _refresh_map_option() -> void:
+	if available_maps.is_empty():
+		return
+	map_option.select(clampi(Network.map_index, 0, available_maps.size() - 1))
+	map_option.disabled = multiplayer.multiplayer_peer != null and not Network.is_host()
+
 func _refresh_player_list(_peer_id: int = -1) -> void:
+	_refresh_map_option()
 	for child in player_list.get_children():
 		child.queue_free()
 	for id in Network.players:
@@ -204,6 +222,9 @@ func _on_start_pressed() -> void:
 		return
 	if not Network.all_players_ready():
 		return
+	if available_maps.is_empty():
+		return
 	Network.mark_steam_lobby_in_progress()
 	start_button.disabled = true
-	SceneLoader.start_match(MAIN_SCENE_PATH)
+	map_option.disabled = true
+	SceneLoader.start_match(available_maps[clampi(Network.map_index, 0, available_maps.size() - 1)].scene_path)

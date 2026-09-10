@@ -4,6 +4,8 @@
 [ext_resource type="Script" path="res://scripts/faction.gd" id="2_faction_script"]
 [ext_resource type="Resource" path="res://resources/factions/faction_one.tres" id="3_faction_one"]
 [ext_resource type="Resource" path="res://resources/factions/faction_two.tres" id="4_faction_two"]
+[ext_resource type="Script" path="res://scripts/map_info.gd" id="5_map_info_script"]
+[ext_resource type="Resource" path="res://resources/maps/main_map.tres" id="6_main_map"]
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -12,6 +14,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1_script")
 available_factions = Array[ExtResource("2_faction_script")]([ExtResource("3_faction_one")])
+available_maps = Array[ExtResource("5_map_info_script")]([ExtResource("6_main_map")])
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -90,6 +93,9 @@ text = "Join"
 [node name="StatusLabel" type="Label" parent="VBox"]
 layout_mode = 2
 text = "Not connected."
+
+[node name="MapOption" type="OptionButton" parent="VBox"]
+layout_mode = 2
 
 [node name="PlayerList" type="VBoxContainer" parent="VBox"]
 layout_mode = 2
