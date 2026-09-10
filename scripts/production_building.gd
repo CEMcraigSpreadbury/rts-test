@@ -378,6 +378,22 @@ func enqueue(item: ProducibleItem) -> bool:
 	queue_changed.emit()
 	return true
 
+## Undoes enqueue() for the item at `index` (0 is the one in progress): full
+## refund, and any population it had reserved is freed back up.
+func cancel_at(index: int) -> bool:
+	if is_destroyed or index < 0 or index >= queue.size():
+		return false
+	var item: ProducibleItem = queue[index]
+	queue.remove_at(index)
+	if index == 0:
+		build_timer = 0.0
+	for cost in item.get_costs():
+		ResourceStockpile.add(owner_peer_id, cost.resource_type, cost.amount)
+	if item.kind == ProducibleItem.Kind.UNIT:
+		Population.release(owner_peer_id, item.get_population_cost())
+	queue_changed.emit()
+	return true
+
 func time_remaining() -> float:
 	if queue.is_empty():
 		return 0.0

@@ -3402,6 +3402,12 @@ func _build_building_info(building: ProductionBuilding) -> void:
 	if not _can_command_building(building):
 		return
 
+	_info_progress_bar.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT \
+				and building.synced_queue_size > 0:
+			_cancel_production(building, 0)
+	)
+
 	_info_empty_label = Label.new()
 	_info_empty_label.text = "Queue: empty"
 	info_panel_content.add_child(_info_empty_label)
@@ -3450,10 +3456,13 @@ func _refresh_building_info() -> void:
 		for child in _info_slot_row.get_children():
 			child.queue_free()
 		for i in queued_behind:
-			var slot := TextureRect.new()
+			var slot := TextureButton.new()
 			slot.custom_minimum_size = Vector2(24, 24)
-			slot.texture = QUEUE_SLOT_TEXTURE
-			slot.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			slot.texture_normal = QUEUE_SLOT_TEXTURE
+			slot.ignore_texture_size = true
+			slot.stretch_mode = TextureButton.STRETCH_SCALE
+			slot.focus_mode = Control.FOCUS_NONE
+			slot.pressed.connect(_cancel_production.bind(building, i + 1))
 			_info_slot_row.add_child(slot)
 
 	_refresh_producible_badges(building)
@@ -3643,6 +3652,25 @@ func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
 	if item_index < 0 or item_index >= building.producibles.size():
 		return
 	building.enqueue(building.producibles[item_index])
+
+## queue_index 0 is the item in progress (the progress bar); 1+ are the slots
+## queued behind it, in order.
+func _cancel_production(building: ProductionBuilding, queue_index: int) -> void:
+	_rpc_cancel_production.rpc_id(1, building.get_path(), queue_index)
+	_play_command_sound()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_cancel_production(building_path: NodePath, queue_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = _my_peer_id()
+
+	var building := get_node_or_null(building_path) as ProductionBuilding
+	if building == null or building.owner_peer_id != sender_id:
+		return
+	building.cancel_at(queue_index)
 
 ## --- Monarch promotion / abilities ---
 
