@@ -98,6 +98,26 @@ in list order, and a unit's own abilities come before its Monarch ones.
 Clicking a target out of range makes the unit walk until it's in range, then
 cast.
 
+How an area ability looks:
+- **Cast Row / Cast Frame Count / Cast FPS** (Sprite Sheet group, on the
+  unit): the clip played when it casts. On the MiniBigMonsters sheets that's
+  row 4, the long special attack (row 3 on the Phoenix). With 0 frames the
+  ordinary attack swing plays instead.
+- **Cast** group (on the Ability): **Cast Windup** is how far into that clip
+  the ability actually goes off, so match it to the frame where the monster
+  breathes, throws or slams. **Cast Effect** is an optional flash at the mouth,
+  and **Launch Offset** says where the mouth is (forward, up).
+- **Projectile** group: **None** lands on the target straight away, **Flying**
+  sends the projectile through the air, and **Ground Wave** erupts it along the
+  ground from caster to target. Damage lands when the projectile arrives.
+- **Impact** group: a burst at the target, plus **Impact Scatter Count**
+  smaller ones spread across the radius.
+
+Each effect is a `SpriteEffect` (`scripts/sprite_effect.gd`): a sheet, frame
+size, row, first frame, frame count, fps, scale and tint. Turn on **Orient To
+Direction** for breath and bolts that should point where they're going. The
+effect sheets live in `assets/art/MiniBigMonsters/`.
+
 `cmd spawn <name> [count]` in chat spawns this unit at the cursor for testing.
 `<name>` is the scene file name without `_unit.tscn`, for example
 `cmd spawn giant_bear 2`.

@@ -422,6 +422,8 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.resource_harvested.connect(feedback.on_unit_resource_harvested)
 	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
 	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
+	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
+	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
 	return unit
 
 ## Hand-placed buildings (currently just Objective guards' buildings) never
@@ -450,6 +452,8 @@ func register_objective_unit(unit: Unit) -> void:
 	unit.resource_harvested.connect(feedback.on_unit_resource_harvested)
 	unit.order_completed.connect(_on_unit_order_completed.bind(unit))
 	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
+	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
+	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
 
 ## Objective Favour income "+N" — called by objective.gd (via current_scene,
 ## so it has to stay reachable on Main); the popup itself is WorldFeedback's.
@@ -1741,9 +1745,10 @@ func _rpc_request_ability(unit_path: NodePath, ability_index: int, target_pos: V
 	unit.command_cast_ability(ability_index, target_pos)
 
 ## Host-only (Unit.ability_cast only fires there). Tells the owner when the
-## ability comes back so their HUD can grey it out, and shows the impact to
-## everyone.
-func _on_unit_ability_cast(ability_index: int, target_pos: Vector3, unit: Unit) -> void:
+## ability comes back so their HUD can grey it out, and shows everyone the
+## caster winding up. The projectile and impact follow later, off
+## Unit.ability_launched (see WorldFeedback.relay_ability_launch).
+func _on_unit_ability_cast(ability_index: int, _target_pos: Vector3, unit: Unit) -> void:
 	var ability: Ability = unit.get_ability(ability_index)
 	if ability == null:
 		return
@@ -1751,8 +1756,7 @@ func _on_unit_ability_cast(ability_index: int, target_pos: Vector3, unit: Unit) 
 	if unit.owner_peer_id > 0:
 		_rpc_ability_cooldown_started.rpc_id(unit.owner_peer_id, unit.get_path(), ability_index, ability.cooldown)
 	if ability.kind == Ability.Kind.ACTIVATED_AREA:
-		feedback.relay_ability_effect(target_pos, ability.area_radius, ability.effect_color, ability.effect_duration, ability.effect_particle_lifetime)
-		feedback.relay_impact_shake(target_pos, 0.35)
+		feedback.relay_cast_windup(unit, ability_index)
 
 ## Stamped on the receiver's own clock, so it never depends on host and client
 ## agreeing on Time.get_ticks_msec().

@@ -1050,19 +1050,271 @@ func update_ability_target_decal() -> void:
 	_ability_target_decal.global_position = hit.position
 	_ability_target_decal.visible = true
 
-## Host-side entry point (see Main._on_unit_ability_cast), relayed like
-## relay_impact_shake since the cast itself only happens on the host.
-## `duration`/`particle_lifetime` are the ability's effect_duration and
-## effect_particle_lifetime — passed as plain floats since the RPC can't carry
-## the Ability resource itself.
-func relay_ability_effect(world_pos: Vector3, radius: float, color: Color, duration: float, particle_lifetime: float) -> void:
-	_play_ability_effect(world_pos, radius, color, duration, particle_lifetime)
+## The RPCs below carry the caster's path plus an ability index rather than
+## the Ability itself (a resource can't cross the wire); each peer looks the
+## same Ability up off its own copy of the unit. Casts and launches only happen
+## on the host, so — same as damage numbers — the host plays its own copy and
+## relays to everyone else.
+
+## Charge-up at the caster for the length of the ability's windup — sparks in
+## the ability's colour drawn in toward the launch point, and a glow under the
+## caster's feet. Tells the target something is coming before it lands.
+func relay_cast_windup(unit: Unit, ability_index: int) -> void:
+	_play_cast_windup(unit, ability_index)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_ability_effect.rpc(world_pos, radius, color, duration, particle_lifetime)
+		_rpc_cast_windup.rpc(unit.get_path(), ability_index)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_ability_effect(world_pos: Vector3, radius: float, color: Color, duration: float, particle_lifetime: float) -> void:
-	_play_ability_effect(world_pos, radius, color, duration, particle_lifetime)
+func _rpc_cast_windup(unit_path: NodePath, ability_index: int) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		_play_cast_windup(unit, ability_index)
+
+func _play_cast_windup(unit: Unit, ability_index: int) -> void:
+	var ability := unit.get_ability(ability_index)
+	if ability == null or ability.cast_windup <= 0.0 or not unit.is_visible_in_tree():
+		return
+	var gather := ParticleProcessMaterial.new()
+	gather.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	gather.emission_sphere_radius = 0.7
+	gather.radial_velocity_min = -2.2
+	gather.radial_velocity_max = -1.4
+	gather.gravity = Vector3.ZERO
+	gather.scale_min = 0.8
+	gather.scale_max = 1.6
+	var fade := Gradient.new()
+	fade.set_color(0, Color(ability.effect_color, 0.0))
+	fade.add_point(0.3, ability.effect_color)
+	fade.set_color(fade.get_point_count() - 1, Color(ability.effect_color.lightened(0.5), 0.0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	gather.color_ramp = ramp
+	var particles := GPUParticles3D.new()
+	particles.amount = 18
+	particles.lifetime = 0.35
+	particles.local_coords = true
+	particles.process_material = gather
+	particles.draw_pass_1 = _impact_mesh
+	unit.add_child(particles)
+	particles.global_position = unit.get_ability_launch_position(ability)
+	particles.emitting = true
+
+	var glow := _make_ability_decal()
+	glow.size = Vector3(2.0, ABILITY_DECAL_HEIGHT, 2.0)
+	glow.modulate = Color(ability.effect_color, 0.0)
+	unit.add_child(glow)
+	glow.position = Vector3.ZERO
+	## Bound to the particles, which are freed last, so the tween outlives the
+	## glow it frees partway through.
+	var tween := particles.create_tween()
+	tween.tween_property(glow, "modulate:a", 0.8, ability.cast_windup) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void: particles.emitting = false)
+	tween.tween_property(glow, "modulate:a", 0.0, 0.25)
+	tween.tween_callback(glow.queue_free)
+	## Particles already in the air finish their short life before going.
+	tween.tween_interval(particles.lifetime)
+	tween.tween_callback(particles.queue_free)
+
+## Host-side entry point, off Unit.ability_launched. `from_pos` is sent as-is
+## rather than re-derived on each peer so the visual starts where the host's
+## damage timer measured from, even if the caster has since turned.
+func relay_ability_launch(ability_index: int, from_pos: Vector3, target_pos: Vector3, unit: Unit) -> void:
+	_play_ability_launch(unit, ability_index, from_pos, target_pos)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_ability_launch.rpc(unit.get_path(), ability_index, from_pos, target_pos)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_ability_launch(unit_path: NodePath, ability_index: int, from_pos: Vector3, target_pos: Vector3) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		_play_ability_launch(unit, ability_index, from_pos, target_pos)
+
+## Cast flash at the caster, then whatever carries the ability to the target,
+## then the impact — all timed off Unit.ability_travel_time, the same number
+## the host's damage timer uses, so the explosion and the damage land together.
+func _play_ability_launch(unit: Unit, ability_index: int, from_pos: Vector3, target_pos: Vector3) -> void:
+	var ability := unit.get_ability(ability_index)
+	if ability == null:
+		return
+	var direction := target_pos - from_pos
+	direction.y = 0.0
+	if ability.cast_effect and main.fog_of_war.is_visible_at(from_pos):
+		## An oriented effect (a breath plume) is pushed out by half its width
+		## so it starts at the mouth rather than being centred on it.
+		var push: float = ability.cast_effect.world_width() * 0.5 if ability.cast_effect.orient_to_direction else 0.0
+		_spawn_sprite_effect(ability.cast_effect, from_pos + direction.normalized() * push, direction)
+	var travel: float = Unit.ability_travel_time(ability, from_pos, target_pos)
+	match ability.projectile_style:
+		Ability.ProjectileStyle.FLYING:
+			_fly_ability_projectile(ability, from_pos, target_pos, travel)
+		Ability.ProjectileStyle.GROUND_WAVE:
+			_run_ground_wave(ability, unit.global_position, target_pos, travel)
+	if travel <= 0.0:
+		_play_ability_impact(ability, target_pos)
+	else:
+		get_tree().create_timer(travel).timeout.connect(_play_ability_impact.bind(ability, target_pos))
+
+func _fly_ability_projectile(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float) -> void:
+	if ability.projectile_effect == null or travel <= 0.0:
+		return
+	var end_pos: Vector3 = target_pos + Vector3.UP * (ability.projectile_effect.world_height() * 0.5)
+	var sprite := _make_effect_sprite(ability.projectile_effect)
+	sprite.play(SpriteEffect.LOOP)
+	add_child(sprite)
+	sprite.global_position = from_pos
+	var trail: GPUParticles3D = null
+	if ability.projectile_trail:
+		trail = _make_projectile_trail(ability.effect_color)
+		add_child(trail)
+		trail.global_position = from_pos
+	var arc: float = ability.projectile_arc_height
+	var previous := [from_pos]
+	var fly := func(t: float) -> void:
+		var pos: Vector3 = from_pos.lerp(end_pos, t) + Vector3.UP * arc * sin(t * PI)
+		sprite.global_position = pos
+		sprite.visible = main.fog_of_war.is_visible_at(pos)
+		if trail:
+			trail.global_position = pos
+			trail.emitting = sprite.visible
+		if ability.projectile_effect.orient_to_direction:
+			_orient_to_screen_direction(sprite, pos, pos - previous[0])
+		previous[0] = pos
+	fly.call(0.0)
+	var tween := sprite.create_tween()
+	tween.tween_method(fly, 0.0, 1.0, travel)
+	if trail:
+		## Left behind rather than freed with the sprite, so its last sparks
+		## finish fading instead of vanishing mid-air on impact.
+		tween.tween_callback(func() -> void:
+			trail.emitting = false
+			get_tree().create_timer(trail.lifetime).timeout.connect(trail.queue_free))
+	tween.tween_callback(sprite.queue_free)
+
+## Eruptions marching along the ground from the caster to the target, one
+## every wave_spacing, reaching the target exactly when the impact does.
+func _run_ground_wave(ability: Ability, from_ground: Vector3, target_pos: Vector3, travel: float) -> void:
+	if ability.projectile_effect == null or travel <= 0.0:
+		return
+	var flat := Vector2(target_pos.x - from_ground.x, target_pos.z - from_ground.z)
+	var steps := int(flat.length() / maxf(ability.wave_spacing, 0.1))
+	## The last step would sit on the target itself, where the impact goes.
+	for i in range(1, steps):
+		var t := float(i) / steps
+		var pos := from_ground.lerp(target_pos, t)
+		get_tree().create_timer(travel * t).timeout.connect(_spawn_ground_effect.bind(ability.projectile_effect, pos, 0.85))
+
+func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:
+	_play_ability_effect(target_pos, ability.area_radius, ability.effect_color, ability.effect_duration, ability.effect_particle_lifetime)
+	## Local, not relayed: every peer reaches this on its own timer.
+	if ability.impact_shake > 0.0:
+		main.camera_rig.shake_at(target_pos, ability.impact_shake)
+	if ability.impact_effect == null:
+		return
+	_spawn_ground_effect(ability.impact_effect, target_pos, 1.0)
+	for i in ability.impact_scatter_count:
+		## sqrt keeps the scatter even across the disc instead of bunching
+		## toward the middle.
+		var angle := randf() * TAU
+		var distance := sqrt(randf()) * ability.area_radius * 0.85
+		var pos := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * distance
+		var delay := randf_range(0.03, 0.25)
+		get_tree().create_timer(delay).timeout.connect(_spawn_ground_effect.bind(ability.impact_effect, pos, randf_range(0.55, 0.8)))
+
+## Victim-side burning/slowed/stunned, relayed off Unit.status_applied (the
+## effects themselves only run on the host).
+func relay_status_effects(dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color, unit: Unit) -> void:
+	unit.show_status_effects(dot_seconds, slow_seconds, stun_seconds, color)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_status_effects.rpc(unit.get_path(), dot_seconds, slow_seconds, stun_seconds, color)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_status_effects(unit_path: NodePath, dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		unit.show_status_effects(dot_seconds, slow_seconds, stun_seconds, color)
+
+## --- Sprite effects ---
+
+## One-shot flipbook sitting on the ground at `ground_pos`, lifted so the
+## bottom of the frame rests on the ground rather than its middle.
+func _spawn_ground_effect(effect: SpriteEffect, ground_pos: Vector3, extra_scale: float) -> void:
+	var pos: Vector3 = ground_pos + Vector3.UP * (effect.world_height(extra_scale) * 0.5 + effect.height_offset)
+	if not main.fog_of_war.is_visible_at(pos):
+		return
+	_spawn_sprite_effect(effect, pos, Vector3.ZERO, extra_scale)
+
+## One-shot flipbook centred on `world_pos`, freed when the clip ends.
+## `direction` only matters for an effect that orients to it.
+func _spawn_sprite_effect(effect: SpriteEffect, world_pos: Vector3, direction: Vector3, extra_scale: float = 1.0) -> void:
+	var sprite := _make_effect_sprite(effect, extra_scale)
+	add_child(sprite)
+	sprite.global_position = world_pos
+	if effect.orient_to_direction:
+		_orient_to_screen_direction(sprite, world_pos, direction)
+	sprite.animation_finished.connect(sprite.queue_free)
+	sprite.play(SpriteEffect.ONCE)
+
+func _make_effect_sprite(effect: SpriteEffect, extra_scale: float = 1.0) -> AnimatedSprite3D:
+	var sprite := AnimatedSprite3D.new()
+	sprite.sprite_frames = effect.get_frames()
+	sprite.pixel_size = SpriteEffect.BASE_PIXEL_SIZE * effect.scale * extra_scale
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.shaded = not effect.unshaded
+	sprite.modulate = effect.tint
+	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	## Same trick as the command rings: draw after the grass in the transparent
+	## pass, so a ground burst isn't swallowed by the blades around it.
+	sprite.render_priority = 10
+	## Oriented sprites are turned by hand every frame to face the camera (see
+	## _orient_to_screen_direction) — a billboard would discard that rotation.
+	if not effect.orient_to_direction:
+		sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	return sprite
+
+## Faces the camera like a billboard, but rolled so the sheet's right-facing
+## art points along `world_dir` as it appears on screen. Mirrored instead of
+## rolled past vertical, so a breath aimed left isn't drawn upside down.
+func _orient_to_screen_direction(sprite: SpriteBase3D, world_pos: Vector3, world_dir: Vector3) -> void:
+	var camera: Camera3D = main.camera
+	if world_dir.length_squared() < 0.000001 or camera.is_position_behind(world_pos):
+		return
+	var a := camera.unproject_position(world_pos)
+	var b := camera.unproject_position(world_pos + world_dir.normalized())
+	## Screen y runs down; the roll is measured with y up.
+	var angle := atan2(-(b.y - a.y), b.x - a.x)
+	sprite.flip_h = absf(angle) > PI * 0.5
+	if sprite.flip_h:
+		angle = angle - PI if angle > 0.0 else angle + PI
+	sprite.global_basis = camera.global_basis * Basis(Vector3.BACK, angle)
+
+## Sparks shed behind a flying projectile — emitted in world space so they
+## hang in the air along its path.
+func _make_projectile_trail(color: Color) -> GPUParticles3D:
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = 0.12
+	process.direction = Vector3.UP
+	process.spread = 180.0
+	process.initial_velocity_min = 0.2
+	process.initial_velocity_max = 0.6
+	process.gravity = Vector3(0, -1.5, 0)
+	process.scale_min = 0.7
+	process.scale_max = 1.4
+	var fade := Gradient.new()
+	fade.set_color(0, color.lightened(0.3))
+	fade.set_color(1, Color(color, 0.0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	process.color_ramp = ramp
+	var trail := GPUParticles3D.new()
+	trail.amount = 28
+	trail.lifetime = 0.45
+	trail.local_coords = false
+	trail.process_material = process
+	trail.draw_pass_1 = _impact_mesh
+	trail.emitting = true
+	return trail
 
 ## A flash of the same disc the targeting decal showed, snapping out to full
 ## size, holding, then fading, plus a ring of sparks in the ability's colour.

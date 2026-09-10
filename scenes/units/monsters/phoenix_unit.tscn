@@ -6,11 +6,30 @@
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
+[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
+[ext_resource type="Texture2D" uid="uid://b7amoqcrdrtic" path="res://assets/art/MiniBigMonsters/Effect-Sheet.png" id="fx_effect"]
 
 [sub_resource type="Resource" id="ResourceCost_phoenix_favour"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_favour")
 amount = 55
+
+[sub_resource type="Resource" id="SpriteEffect_phoenix_projectile"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_effect")
+frame_size = Vector2i(32, 32)
+frame_count = 2
+fps = 10.0
+scale = 3.5
+
+[sub_resource type="Resource" id="SpriteEffect_phoenix_impact"]
+script = ExtResource("fx_script")
+sheet = ExtResource("2_sheet")
+frame_size = Vector2i(40, 32)
+row = 6
+frame_count = 5
+fps = 10.0
+scale = 1.4
 
 [sub_resource type="Resource" id="Ability_phoenix"]
 script = ExtResource("5_ability_script")
@@ -21,6 +40,15 @@ cooldown = 20.0
 area_radius = 4.0
 area_damage = 35
 effect_color = Color(1, 0.3, 0.15, 1)
+impact_shake = 0.4
+cast_windup = 0.45
+launch_offset = Vector2(0.6, 1.1)
+projectile_style = 1
+projectile_effect = SubResource("SpriteEffect_phoenix_projectile")
+projectile_speed = 12.0
+projectile_arc_height = 1.2
+impact_effect = SubResource("SpriteEffect_phoenix_impact")
+impact_scatter_count = 7
 
 [node name="Phoenix" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -42,6 +70,9 @@ death_row = 5
 death_frame_count = 8
 gather_row = 4
 gather_frame_count = 2
+cast_row = 3
+cast_frame_count = 11
+cast_fps = 12.0
 can_gather = false
 can_build = false
 max_health = 240

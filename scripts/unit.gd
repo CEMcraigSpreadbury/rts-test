@@ -109,7 +109,8 @@ const ASSAULT_AREA_RADIUS: float = 12.0
 ## CAST is one-shot like Move: walk into an ability's range, cast, go idle.
 enum Command { NONE, MOVE, GATHER, ATTACK, BUILD, ATTACK_MOVE, PATROL, CAST }
 ## The current step within a command, e.g. Gather cycles TO_RESOURCE -> GATHERING -> TO_DROPOFF.
-enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD, TO_CAST }
+## CASTING holds the unit still while its cast animation plays out (see _perform_cast).
+enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD, TO_CAST, CASTING }
 ## Rock-paper-scissors combat: NONE means "no special type" (deals no bonus,
 ## takes no bonus). MAGIC has no attacker yet — reserved for future spellcasters.
 enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC }
@@ -159,6 +160,14 @@ signal order_completed
 ## any walk into range). main.gd relays the cooldown to the owner's HUD and the
 ## impact visual to every peer. `ability_index` indexes get_abilities().
 signal ability_cast(ability_index: int, target_pos: Vector3)
+## Host-only, fired cast_windup seconds after ability_cast, when the ability
+## actually leaves the caster. main.gd relays it so every peer flies the same
+## projectile/wave and plays the impact when it lands; real damage is timed
+## independently on the host by _pending_ability_hits.
+signal ability_launched(ability_index: int, from_pos: Vector3, target_pos: Vector3)
+## Host-only, relayed by main.gd so every peer shows burning/slowed/stunned
+## on a unit hit by an area ability (the effects themselves are host-side).
+signal status_applied(dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color)
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -194,9 +203,12 @@ const _ENEMY_TINT_STRENGTH: float = 0.35
 ## purpose is telling enemies apart from a glance, not decorating your own
 ## army.
 func _resting_modulate() -> Color:
-	if owner_peer_id == multiplayer.get_unique_id():
-		return Color.WHITE
-	return Color.WHITE.lerp(team_tint, _ENEMY_TINT_STRENGTH)
+	var base := Color.WHITE
+	if owner_peer_id != multiplayer.get_unique_id():
+		base = Color.WHITE.lerp(team_tint, _ENEMY_TINT_STRENGTH)
+	if _status_tint_until_ms > Time.get_ticks_msec():
+		base *= Color.WHITE.lerp(_status_tint, _STATUS_TINT_STRENGTH)
+	return base
 
 ## Called from both team_tint's and owner_peer_id's setters (order of property
 ## application during scene instantiation isn't guaranteed) as well as
@@ -233,6 +245,11 @@ func _update_team_tint_visual() -> void:
 ## Only played by units with can_gather; harmless (just unused) otherwise.
 @export var gather_row: int = 2
 @export var gather_frame_count: int = 10
+## Played when this unit uses an activated ability — the monsters' special-
+## attack row. 0 frames = no cast clip; the ordinary attack swing stands in.
+@export var cast_row: int = 4
+@export var cast_frame_count: int = 0
+@export var cast_fps: float = 12.0
 
 @export_group("Gathering")
 @export var can_gather: bool = true
@@ -553,6 +570,126 @@ func play_hitstop() -> void:
 	_hitstop_tween.tween_interval(HITSTOP_DURATION)
 	_hitstop_tween.tween_callback(func() -> void: sprite.speed_scale = 1.0)
 
+## --- Status effect visuals ---
+## Purely local, on every peer (main.gd relays status_applied), mirroring the
+## host-only _dots/_slow_remaining/_stun_remaining that actually do the work.
+## Each is timed off its own expiry rather than reading those back, since they
+## only exist on the host.
+
+## How far a slowed unit's sprite is tinted toward the ability's colour.
+const _STATUS_TINT_STRENGTH: float = 0.55
+const STUN_STAR_COUNT: int = 3
+const STUN_STAR_HEIGHT: float = 1.9
+const STUN_STAR_RADIUS: float = 0.32
+const STUN_STAR_SPIN_SPEED: float = 5.0
+
+var _status_tint: Color = Color.WHITE
+var _status_tint_until_ms: int = 0
+var _dot_until_ms: int = 0
+var _stun_until_ms: int = 0
+var _dot_particles: GPUParticles3D = null
+var _stun_stars: Node3D = null
+
+static var _status_particle_mesh: QuadMesh = null
+static var _stun_star_mesh: QuadMesh = null
+
+func show_status_effects(dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color) -> void:
+	if _death_playing:
+		return
+	var now := Time.get_ticks_msec()
+	if slow_seconds > 0.0:
+		_status_tint = color
+		_status_tint_until_ms = maxi(_status_tint_until_ms, now + int(slow_seconds * 1000.0))
+		_update_team_tint_visual()
+	if dot_seconds > 0.0:
+		_dot_until_ms = maxi(_dot_until_ms, now + int(dot_seconds * 1000.0))
+		_ensure_dot_particles()
+		(_dot_particles.process_material as ParticleProcessMaterial).color = color
+		_dot_particles.emitting = true
+	if stun_seconds > 0.0:
+		_stun_until_ms = maxi(_stun_until_ms, now + int(stun_seconds * 1000.0))
+		_ensure_stun_stars()
+		_stun_stars.visible = true
+
+## Called every frame from _process; cheap when nothing is active.
+func _update_status_visuals(delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	if _status_tint_until_ms != 0 and now >= _status_tint_until_ms:
+		_status_tint_until_ms = 0
+		_update_team_tint_visual()
+	if _dot_particles and _dot_particles.emitting and (now >= _dot_until_ms or _death_playing):
+		_dot_particles.emitting = false
+	if _stun_stars and _stun_stars.visible:
+		if now >= _stun_until_ms or _death_playing:
+			_stun_stars.visible = false
+		else:
+			_stun_stars.rotation.y += STUN_STAR_SPIN_SPEED * delta
+
+## Embers/bubbles rising off the body for as long as a burn or poison lasts.
+## Local coords off so they trail behind a unit that walks out of the cloud.
+func _ensure_dot_particles() -> void:
+	if _dot_particles:
+		return
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	process.emission_sphere_radius = 0.35
+	process.direction = Vector3.UP
+	process.spread = 20.0
+	process.initial_velocity_min = 0.6
+	process.initial_velocity_max = 1.3
+	process.gravity = Vector3(0, 0.6, 0)
+	process.scale_min = 0.6
+	process.scale_max = 1.2
+	var fade := Gradient.new()
+	fade.set_color(0, Color.WHITE)
+	fade.set_color(1, Color(1, 1, 1, 0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	process.color_ramp = ramp
+	_dot_particles = GPUParticles3D.new()
+	_dot_particles.amount = 12
+	_dot_particles.lifetime = 0.7
+	_dot_particles.process_material = process
+	_dot_particles.draw_pass_1 = _status_quad_mesh()
+	_dot_particles.position = Vector3(0, 0.7, 0)
+	_dot_particles.emitting = false
+	add_child(_dot_particles)
+
+func _ensure_stun_stars() -> void:
+	if _stun_stars:
+		return
+	if _stun_star_mesh == null:
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		material.albedo_color = Color(1.0, 0.92, 0.35)
+		_stun_star_mesh = QuadMesh.new()
+		_stun_star_mesh.size = Vector2(0.13, 0.13)
+		_stun_star_mesh.material = material
+	_stun_stars = Node3D.new()
+	_stun_stars.position = Vector3(0, STUN_STAR_HEIGHT, 0)
+	for i in STUN_STAR_COUNT:
+		var star := MeshInstance3D.new()
+		star.mesh = _stun_star_mesh
+		star.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var angle := TAU * i / STUN_STAR_COUNT
+		star.position = Vector3(cos(angle), 0.0, sin(angle)) * STUN_STAR_RADIUS
+		_stun_stars.add_child(star)
+	add_child(_stun_stars)
+
+static func _status_quad_mesh() -> QuadMesh:
+	if _status_particle_mesh == null:
+		var material := StandardMaterial3D.new()
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.vertex_color_use_as_albedo = true
+		material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		material.billboard_keep_scale = true
+		_status_particle_mesh = QuadMesh.new()
+		_status_particle_mesh.size = Vector2(0.12, 0.12)
+		_status_particle_mesh.material = material
+	return _status_particle_mesh
+
 ## Both sprite motions (attack lunge and hit recoil) drive the same property,
 ## so they share one tween — whichever fires last takes over, from wherever the
 ## sprite currently is, and still ends at the authored base.
@@ -794,6 +931,20 @@ var _cast_approach_time: float = 0.0
 ## two before its path exists (see _on_velocity_computed), so a cast approach
 ## doesn't give up on an unreachable target until this long has passed.
 const CAST_GIVE_UP_GRACE: float = 0.3
+## Host-only. Abilities whose cast animation has started but that haven't
+## gone off yet: {"index": int, "ability": Ability, "target": Vector3,
+## "time_remaining": float}. Ticked independently of status_activity, so an
+## order given mid-windup walks the caster away without cancelling the
+## ability it has already paid for — see _tick_pending_casts.
+var _pending_casts: Array[Dictionary] = []
+## Host-only. Area abilities in flight: {"ability": Ability, "target": Vector3,
+## "time_remaining": float}. Like _pending_projectile_hits, keeps ticking after
+## the caster dies so a fireball already in the air still lands.
+var _pending_ability_hits: Array[Dictionary] = []
+## How long this unit stays in Activity.CASTING — the cast animation's length,
+## but never shorter than the windup, so it's still standing there facing the
+## target at the moment the ability actually goes off.
+var _casting_time_remaining: float = 0.0
 
 ## Host-only status effects applied by area abilities (see apply_ability_hit).
 ## Each DoT entry is {"dps": int, "ticks_left": int, "tick_timer": float,
@@ -810,13 +961,16 @@ func _ready() -> void:
 	_sprite_base_position = sprite.position
 	_sprite_base_scale = sprite.scale
 	if sprite_sheet:
-		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, {
+		var animations := {
 			"idle": {"row": idle_row, "frames": idle_frame_count, "fps": 5.0, "loop": true},
 			"walk": {"row": walk_row, "frames": walk_frame_count, "fps": 8.0, "loop": true},
 			"attack": {"row": attack_row, "frames": attack_frame_count, "fps": 10.0, "loop": false},
 			"death": {"row": death_row, "frames": death_frame_count, "fps": 8.0, "loop": false},
 			"gather": {"row": gather_row, "frames": gather_frame_count, "fps": 8.0, "loop": true},
-		})
+		}
+		if cast_frame_count > 0:
+			animations["cast"] = {"row": cast_row, "frames": cast_frame_count, "fps": cast_fps, "loop": false}
+		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, animations)
 		sprite.play("idle")
 	sprite.animation_finished.connect(_on_attack_animation_finished)
 	_update_team_tint_visual()
@@ -1272,22 +1426,87 @@ func _perform_cast() -> void:
 	to_target.y = 0.0
 	if to_target.length_squared() > 0.0001:
 		rotation.y = atan2(to_target.x, to_target.z)
+	var cast_length := 0.0
 	if sprite.sprite_frames:
-		_play_attack_swing()
-
-	match ability.kind:
-		Ability.Kind.ACTIVATED_TARGET_POINT:
-			execute_teleport_ability(ability, target)
-		Ability.Kind.ACTIVATED_AREA:
-			_execute_area_ability(ability, target)
+		cast_length = _play_cast_animation()
 	ability_cast.emit(index, target)
-	_end_cast_command()
+
+	## Teleport stays instant — its windup is meaningless (the caster is the
+	## thing that moves) and it has no projectile or impact to line up.
+	if ability.kind != Ability.Kind.ACTIVATED_AREA:
+		execute_teleport_ability(ability, target)
+		_end_cast_command()
+		return
+	_pending_casts.append({"index": index, "ability": ability, "target": target, "time_remaining": ability.cast_windup})
+	status_activity = Activity.CASTING
+	_casting_time_remaining = maxf(cast_length, ability.cast_windup)
+	velocity.x = 0.0
+	velocity.z = 0.0
+
+## Plays the special-attack clip if this unit has one, else the ordinary
+## swing. Returns how long it runs, which is how long CASTING holds the unit.
+func _play_cast_animation() -> float:
+	if not sprite.sprite_frames.has_animation("cast"):
+		_play_attack_swing()
+		return attack_frame_count / 10.0
+	sprite.play("cast")
+	animation_changed.emit("cast")
+	return cast_frame_count / maxf(cast_fps, 0.01)
+
+func _tick_casting(delta: float) -> void:
+	_casting_time_remaining -= delta
+	if _casting_time_remaining <= 0.0:
+		_end_cast_command()
 
 func _end_cast_command() -> void:
 	_cast_ability_index = -1
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
 	order_completed.emit()
+
+## Goes off whether or not the caster is still in CASTING (see _pending_casts),
+## but not once it's dead.
+func _tick_pending_casts(delta: float) -> void:
+	for i in range(_pending_casts.size() - 1, -1, -1):
+		var cast: Dictionary = _pending_casts[i]
+		cast["time_remaining"] -= delta
+		if cast["time_remaining"] > 0.0:
+			continue
+		_pending_casts.remove_at(i)
+		_launch_ability(cast["index"], cast["ability"], cast["target"])
+
+func _launch_ability(index: int, ability: Ability, target: Vector3) -> void:
+	var from := get_ability_launch_position(ability)
+	var travel := ability_travel_time(ability, from, target)
+	ability_launched.emit(index, from, target)
+	if travel <= 0.0:
+		_execute_area_ability(ability, target)
+		return
+	_pending_ability_hits.append({"ability": ability, "target": target, "time_remaining": travel})
+
+## Where an ability's cast effect and projectile start: launch_offset out
+## along this unit's current facing. Public so every peer derives the same
+## point from replicated position/rotation.
+func get_ability_launch_position(ability: Ability) -> Vector3:
+	var forward := Vector3(sin(rotation.y), 0.0, cos(rotation.y))
+	return global_position + forward * ability.launch_offset.x + Vector3.UP * ability.launch_offset.y
+
+## Shared by the host's damage timer and every peer's visual, so the impact
+## effect lands on the same beat as the damage.
+static func ability_travel_time(ability: Ability, from: Vector3, target: Vector3) -> float:
+	if ability.projectile_style == Ability.ProjectileStyle.NONE:
+		return 0.0
+	var distance := Vector2(from.x, from.z).distance_to(Vector2(target.x, target.z))
+	return distance / maxf(ability.projectile_speed, 0.01)
+
+func _tick_pending_ability_hits(delta: float) -> void:
+	for i in range(_pending_ability_hits.size() - 1, -1, -1):
+		var hit: Dictionary = _pending_ability_hits[i]
+		hit["time_remaining"] -= delta
+		if hit["time_remaining"] > 0.0:
+			continue
+		_pending_ability_hits.remove_at(i)
+		_execute_area_ability(hit["ability"], hit["target"])
 
 ## Hits every living enemy unit inside the area — buildings and allies are
 ## never affected. Targets are gathered before any damage is applied, since a
@@ -1326,6 +1545,10 @@ func apply_ability_hit(ability: Ability, source) -> void:
 		_slow_remaining = maxf(_slow_remaining, ability.slow_duration)
 	if ability.stun_duration > 0.0:
 		_stun_remaining = maxf(_stun_remaining, ability.stun_duration)
+	var dot_seconds: float = ability.dot_duration if ability.dot_damage_per_second > 0 else 0.0
+	var slow_seconds: float = ability.slow_duration if ability.slow_fraction > 0.0 else 0.0
+	if dot_seconds > 0.0 or slow_seconds > 0.0 or ability.stun_duration > 0.0:
+		status_applied.emit(dot_seconds, slow_seconds, ability.stun_duration, ability.effect_color)
 
 func _tick_status_effects(delta: float) -> void:
 	_stun_remaining = maxf(_stun_remaining - delta, 0.0)
@@ -1408,6 +1631,7 @@ func _physics_process(delta: float) -> void:
 	## Runs even if this unit just died — an arrow already in the air should
 	## still land rather than vanish because its shooter is gone.
 	_tick_pending_projectiles(delta)
+	_tick_pending_ability_hits(delta)
 
 	if status_activity == Activity.DEAD:
 		velocity = Vector3.ZERO
@@ -1422,6 +1646,10 @@ func _physics_process(delta: float) -> void:
 	_tick_status_effects(delta)
 	if status_activity == Activity.DEAD:
 		return
+	## Before the stun check, deliberately: a monster stunned mid-windup has
+	## already paid for and committed to the ability, and freezing the windup
+	## would let a stun silently swallow it if the order changed meanwhile.
+	_tick_pending_casts(delta)
 
 	## Stunned: frozen in place, every timer (attack, gather, cast approach)
 	## paused, but the current order survives and resumes once it wears off.
@@ -1433,8 +1661,15 @@ func _physics_process(delta: float) -> void:
 		nav_agent.set_velocity(Vector3.ZERO)
 		## Those activities ignore the avoidance callback and so never get its
 		## move_and_slide(); everything else gets one from the callback.
-		if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING:
+		if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.CASTING:
 			move_and_slide()
+		return
+
+	if status_activity == Activity.CASTING:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		_tick_casting(delta)
+		move_and_slide()
 		return
 
 	if status_activity == Activity.GATHERING:
@@ -1692,7 +1927,7 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## armed, even after we stop calling set_velocity() — so states that manage
 	## their own animation/velocity (and already call move_and_slide() themselves)
 	## must ignore these stale callbacks rather than have them stomp the animation.
-	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD:
+	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD or status_activity == Activity.CASTING:
 		return
 
 	velocity.x = safe_velocity.x
@@ -1751,8 +1986,9 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 ## networked value decided by whoever owns the unit — every peer (including
 ## the host) must derive it locally, every frame, from the unit's already-synced
 ## world rotation plus that peer's own current camera.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_update_health_bar_visual()
+	_update_status_visuals(delta)
 	## Driven off the sprite's own already-cross-peer-correct animation state
 	## (see _set_animation/animation_changed) rather than status_activity or
 	## raw velocity directly — those are only reliable on the authoritative
@@ -1803,7 +2039,7 @@ func _play_attack_swing() -> void:
 ## the next hit fires. This runs on every peer (not just the authority) since
 ## it just reacts to that peer's own local sprite finishing its own playback.
 func _on_attack_animation_finished() -> void:
-	if sprite.animation == "attack":
+	if sprite.animation == "attack" or sprite.animation == "cast":
 		_set_animation("idle")
 
 ## --- Gathering ---

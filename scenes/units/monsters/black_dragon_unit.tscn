@@ -6,11 +6,41 @@
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
+[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
+[ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
+[ext_resource type="Texture2D" uid="uid://wxx8hmcm6gkt" path="res://assets/art/MiniBigMonsters/Fire-Sheet.png" id="fx_fire"]
 
 [sub_resource type="Resource" id="ResourceCost_black_dragon_favour"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_favour")
 amount = 70
+
+[sub_resource type="Resource" id="SpriteEffect_black_dragon_cast"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_fire")
+frame_size = Vector2i(48, 32)
+frame_count = 9
+fps = 16.0
+scale = 1.0
+orient_to_direction = true
+
+[sub_resource type="Resource" id="SpriteEffect_black_dragon_projectile"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_fire")
+frame_size = Vector2i(48, 32)
+first_frame = 1
+frame_count = 3
+fps = 12.0
+scale = 0.8
+orient_to_direction = true
+
+[sub_resource type="Resource" id="SpriteEffect_black_dragon_impact"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_explosion")
+frame_size = Vector2i(48, 32)
+frame_count = 9
+fps = 14.0
+scale = 1.4
 
 [sub_resource type="Resource" id="Ability_black_dragon"]
 script = ExtResource("5_ability_script")
@@ -23,6 +53,16 @@ area_damage = 20
 dot_damage_per_second = 6
 dot_duration = 4.0
 effect_color = Color(1, 0.45, 0.1, 1)
+impact_shake = 0.4
+cast_windup = 0.3
+cast_effect = SubResource("SpriteEffect_black_dragon_cast")
+launch_offset = Vector2(1.1, 0.8)
+projectile_style = 1
+projectile_effect = SubResource("SpriteEffect_black_dragon_projectile")
+projectile_speed = 14.0
+projectile_arc_height = 0.3
+impact_effect = SubResource("SpriteEffect_black_dragon_impact")
+impact_scatter_count = 4
 
 [node name="BlackDragon" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -44,6 +84,9 @@ death_row = 6
 death_frame_count = 8
 gather_row = 2
 gather_frame_count = 4
+cast_row = 4
+cast_frame_count = 16
+cast_fps = 12.0
 can_gather = false
 can_build = false
 max_health = 300

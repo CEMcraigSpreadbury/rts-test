@@ -6,11 +6,30 @@
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
+[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
+[ext_resource type="Texture2D" uid="uid://c1w14k2e7mha" path="res://assets/art/MiniBigMonsters/Ice spikes 1-Sheet.png" id="fx_ice1"]
+[ext_resource type="Texture2D" uid="uid://qmuws1pb0hll" path="res://assets/art/MiniBigMonsters/Ice spikes 2-Sheet.png" id="fx_ice2"]
 
 [sub_resource type="Resource" id="ResourceCost_yeti_favour"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_favour")
 amount = 45
+
+[sub_resource type="Resource" id="SpriteEffect_yeti_projectile"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_ice1")
+frame_size = Vector2i(32, 32)
+frame_count = 11
+fps = 18.0
+scale = 0.9
+
+[sub_resource type="Resource" id="SpriteEffect_yeti_impact"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_ice2")
+frame_size = Vector2i(32, 32)
+frame_count = 11
+fps = 16.0
+scale = 1.5
 
 [sub_resource type="Resource" id="Ability_yeti"]
 script = ExtResource("5_ability_script")
@@ -23,6 +42,15 @@ area_damage = 15
 slow_fraction = 0.6
 slow_duration = 3.0
 effect_color = Color(0.55, 0.85, 1, 1)
+impact_shake = 0.45
+cast_windup = 0.35
+launch_offset = Vector2(0.4, 0.3)
+projectile_style = 2
+projectile_effect = SubResource("SpriteEffect_yeti_projectile")
+projectile_speed = 13.0
+wave_spacing = 0.8
+impact_effect = SubResource("SpriteEffect_yeti_impact")
+impact_scatter_count = 7
 
 [node name="Yeti" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -44,6 +72,9 @@ death_row = 6
 death_frame_count = 5
 gather_row = 2
 gather_frame_count = 3
+cast_row = 4
+cast_frame_count = 17
+cast_fps = 12.0
 can_gather = false
 can_build = false
 max_health = 340

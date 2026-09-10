@@ -6,11 +6,32 @@
 [ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
+[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
+[ext_resource type="Texture2D" uid="uid://c1w14k2e7mha" path="res://assets/art/MiniBigMonsters/Ice spikes 1-Sheet.png" id="fx_ice1"]
+[ext_resource type="Texture2D" uid="uid://qmuws1pb0hll" path="res://assets/art/MiniBigMonsters/Ice spikes 2-Sheet.png" id="fx_ice2"]
 
 [sub_resource type="Resource" id="ResourceCost_giant_bear_favour"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_favour")
 amount = 40
+
+[sub_resource type="Resource" id="SpriteEffect_giant_bear_projectile"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_ice2")
+frame_size = Vector2i(32, 32)
+frame_count = 11
+fps = 18.0
+scale = 0.9
+tint = Color(0.78, 0.56, 0.36, 1)
+
+[sub_resource type="Resource" id="SpriteEffect_giant_bear_impact"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_ice1")
+frame_size = Vector2i(32, 32)
+frame_count = 11
+fps = 16.0
+scale = 1.5
+tint = Color(0.78, 0.56, 0.36, 1)
 
 [sub_resource type="Resource" id="Ability_giant_bear"]
 script = ExtResource("5_ability_script")
@@ -22,6 +43,15 @@ area_radius = 2.5
 area_damage = 20
 stun_duration = 2.0
 effect_color = Color(0.75, 0.55, 0.3, 1)
+impact_shake = 0.5
+cast_windup = 0.3
+launch_offset = Vector2(0.6, 0.5)
+projectile_style = 2
+projectile_effect = SubResource("SpriteEffect_giant_bear_projectile")
+projectile_speed = 12.0
+wave_spacing = 0.8
+impact_effect = SubResource("SpriteEffect_giant_bear_impact")
+impact_scatter_count = 5
 
 [node name="GiantBear" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -43,6 +73,9 @@ death_row = 6
 death_frame_count = 5
 gather_row = 2
 gather_frame_count = 3
+cast_row = 4
+cast_frame_count = 6
+cast_fps = 8.0
 can_gather = false
 can_build = false
 max_health = 320
