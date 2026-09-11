@@ -7,3 +7,4 @@ script = ExtResource("1_eyhoc")
 map_name = "Trial Forest"
 scene_path = "res://scenes/maps/trial_forest.tscn"
 max_players = 2
+capture_points = 7

@@ -24,8 +24,6 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 
 @export_group("Player Bases")
 @export_range(5.0, 16.0, 0.5) var base_clear_radius: float = 7.0
-@export_range(0, 12) var base_berry_bushes: int = 5
-@export var base_berry_distance: Vector2 = Vector2(9.0, 12.0)
 @export_range(0, 4) var base_gold_mines: int = 1
 @export var base_gold_distance: Vector2 = Vector2(11.0, 14.0)
 @export_range(0, 120) var base_trees: int = 30
@@ -41,6 +39,7 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export var shrine_scene: PackedScene = preload("res://scenes/shrine_objective.tscn")
 @export_range(0, 4) var shrines_per_player: int = 0
 @export var centre_site: CentreSite = CentreSite.SHRINE
+@export_range(0.0, 10.0, 0.5) var centre_favour_per_second: float = 2.0
 @export var objectives_on_plateaus: bool = true
 @export_range(1, 3) var objective_plateau_tiers: int = 1
 @export_range(4.0, 12.0, 0.5) var objective_clear_radius: float = 7.0
@@ -67,8 +66,6 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 
 @export_group("Neutral Resources")
 @export_range(0, 4) var neutral_gold_per_player: int = 1
-@export_range(0, 4) var neutral_berry_patches_per_player: int = 1
-@export_range(2, 10) var neutral_berry_patch_size: int = 4
 
 @export_group("Decoration")
 @export_range(0, 300) var props_per_player: int = 40
@@ -94,7 +91,6 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_group("Scenes")
 @export var spawn_point_scene: PackedScene = preload("res://scenes/player_spawn_point.tscn")
 @export var tree_scene: PackedScene = preload("res://scenes/resource_nodes/gatherable.tscn")
-@export var berry_bush_scene: PackedScene = preload("res://scenes/resource_nodes/berry_bush.tscn")
 @export var gold_mine_scene: PackedScene = preload("res://scenes/resource_nodes/gold_deposit.tscn")
 
 @export_group("Tiles")
@@ -238,6 +234,7 @@ func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
 	info.map_name = map_name.strip_edges()
 	info.scene_path = scene_path
 	info.max_players = player_count
+	info.capture_points = layout.objects.filter(func(e): return e.kind == &"objective").size()
 	return _save_resource(info, info_path)
 
 ## Builds only what the map adds on top of map_base.tscn. The three shared

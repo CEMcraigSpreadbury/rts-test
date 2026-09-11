@@ -17,6 +17,8 @@ const ATTACK_PING_DURATION: float = 4.0
 ## warning reads as a repeated pulse rather than the single ripple a
 ## communication ping draws.
 const ATTACK_PING_PULSES: int = 3
+const OBJECTIVE_MARKER_RADIUS: float = 7.0
+const OBJECTIVE_FONT_SIZE: int = 11
 
 ## Right-click-to-ping: main.gd relays this out to every player (see
 ## show_ping()) once the host has confirmed it, so it's driven externally
@@ -103,6 +105,7 @@ func _draw() -> void:
 		if mine:
 			draw_arc(p, UNIT_DOT_RADIUS, 0.0, TAU, 10, OWN_OUTLINE_COLOR, 1.0)
 
+	_draw_objective_letters()
 	_draw_camera_frustum()
 	if _ping_time_left > 0.0:
 		var t: float = 1.0 - _ping_time_left / PING_DURATION
@@ -127,6 +130,22 @@ func _draw() -> void:
 			var acolor := ATTACK_PING_COLOR
 			acolor.a = (1.0 - pt * pt) * fade
 			draw_arc(_attack_ping_local_pos, lerpf(4.0, 26.0, pt), 0.0, TAU, 24, acolor, 3.0)
+
+## Every capture point's letter in its owner's colour, regardless of fog —
+## like Battlefield's map, where every flag is always marked. The Conquest
+## bar already tells everyone who holds what; this is just where.
+func _draw_objective_letters() -> void:
+	var font := get_theme_default_font()
+	for node in get_tree().get_nodes_in_group(&"objectives"):
+		var objective := node as Objective
+		if objective == null or objective.letter.is_empty():
+			continue
+		var p := _world_to_local(objective.global_position)
+		var tint: Color = objective.owner_tint().lightened(0.3) if objective.owner_peer_id > 0 else Color(0.85, 0.85, 0.85)
+		draw_circle(p, OBJECTIVE_MARKER_RADIUS, Color(0, 0, 0, 0.65))
+		draw_arc(p, OBJECTIVE_MARKER_RADIUS, 0.0, TAU, 16, tint, 1.5)
+		var baseline := p + Vector2(-OBJECTIVE_MARKER_RADIUS, OBJECTIVE_FONT_SIZE * 0.35)
+		draw_string(font, baseline, objective.letter, HORIZONTAL_ALIGNMENT_CENTER, OBJECTIVE_MARKER_RADIUS * 2.0, OBJECTIVE_FONT_SIZE, tint)
 
 ## Approximates what the main camera currently frames by ray-casting its four
 ## viewport corners onto the ground plane — gives a properly perspective-skewed

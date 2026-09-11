@@ -3,17 +3,24 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://chxl57qsmruhe" path="res://assets/art/MiniBigMonsters/Outline/MiniBlackDragon-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
+[ext_resource type="Texture2D" uid="uid://b2pxwkavg3umx" path="res://assets/art/MiniBigMonsters/Outline/MiniPhoenix-Sheet.png" id="fx_phoenix"]
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
 [ext_resource type="Texture2D" uid="uid://wxx8hmcm6gkt" path="res://assets/art/MiniBigMonsters/Fire-Sheet.png" id="fx_fire"]
 
-[sub_resource type="Resource" id="ResourceCost_black_dragon_favour"]
+[sub_resource type="Resource" id="ResourceCost_black_dragon_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 70
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_black_dragon_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_black_dragon_cast"]
 script = ExtResource("fx_script")
@@ -42,6 +49,15 @@ frame_count = 9
 fps = 14.0
 scale = 1.4
 
+[sub_resource type="Resource" id="SpriteEffect_black_dragon_linger"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_phoenix")
+frame_size = Vector2i(40, 32)
+row = 6
+frame_count = 4
+fps = 8.0
+scale = 0.9
+
 [sub_resource type="Resource" id="Ability_black_dragon"]
 script = ExtResource("5_ability_script")
 ability_name = "Fire Breath"
@@ -49,8 +65,8 @@ kind = 2
 activation_range = 8.0
 cooldown = 18.0
 area_radius = 3.0
-area_damage = 20
-dot_damage_per_second = 6
+area_damage = 12
+dot_damage_per_second = 3
 dot_duration = 4.0
 effect_color = Color(1, 0.45, 0.1, 1)
 impact_shake = 0.4
@@ -63,6 +79,10 @@ projectile_speed = 14.0
 projectile_arc_height = 0.3
 impact_effect = SubResource("SpriteEffect_black_dragon_impact")
 impact_scatter_count = 4
+linger_duration = 8.0
+linger_damage_per_second = 2
+linger_effect = SubResource("SpriteEffect_black_dragon_linger")
+linger_effect_count = 6
 
 [node name="BlackDragon" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -71,8 +91,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Black Dragon"
 move_speed = 2.4
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_black_dragon_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_black_dragon_gold"), SubResource("ResourceCost_black_dragon_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(64, 32)
 idle_frame_count = 6
@@ -89,10 +109,10 @@ cast_frame_count = 16
 cast_fps = 12.0
 can_gather = false
 can_build = false
-max_health = 300
-attack_damage = 46
+max_health = 780
+attack_damage = 17
 attack_range = 2.0
-attack_cooldown = 1.6
+attack_cooldown = 2.4
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

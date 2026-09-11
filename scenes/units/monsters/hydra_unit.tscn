@@ -3,17 +3,23 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://cru4gwm5ufokq" path="res://assets/art/MiniBigMonsters/Outline/MiniHydra-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
 [ext_resource type="Texture2D" uid="uid://bqxlsfqck1qhh" path="res://assets/art/MiniBigMonsters/Fire3-Sheet.png" id="fx_fire3"]
 
-[sub_resource type="Resource" id="ResourceCost_hydra_favour"]
+[sub_resource type="Resource" id="ResourceCost_hydra_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 55
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_hydra_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_hydra_cast"]
 script = ExtResource("fx_script")
@@ -50,8 +56,8 @@ kind = 2
 activation_range = 9.0
 cooldown = 18.0
 area_radius = 3.0
-area_damage = 10
-dot_damage_per_second = 5
+area_damage = 6
+dot_damage_per_second = 2
 dot_duration = 6.0
 effect_color = Color(0.45, 0.95, 0.2, 1)
 impact_shake = 0.35
@@ -64,6 +70,8 @@ projectile_speed = 11.0
 projectile_arc_height = 1.8
 impact_effect = SubResource("SpriteEffect_hydra_impact")
 impact_scatter_count = 4
+linger_duration = 10.0
+linger_damage_per_second = 2
 
 [node name="Hydra" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -72,8 +80,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Hydra"
 move_speed = 2.0
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_hydra_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_hydra_gold"), SubResource("ResourceCost_hydra_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(64, 32)
 idle_frame_count = 8
@@ -90,10 +98,10 @@ cast_frame_count = 11
 cast_fps = 12.0
 can_gather = false
 can_build = false
-max_health = 380
-attack_damage = 30
+max_health = 1000
+attack_damage = 11
 attack_range = 1.8
-attack_cooldown = 1.5
+attack_cooldown = 2.2
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

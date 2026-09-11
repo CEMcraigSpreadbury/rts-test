@@ -47,13 +47,19 @@ const MAX_QUEUE_SIZE: int = 7
 ## Added to the owner's population cap once construction finishes (or
 ## immediately for buildings placed pre-built, e.g. the starting Town
 ## Center), and removed again if this building is destroyed. 0 for buildings
-## that don't grant population room (Barracks, Farm).
+## that don't grant population room (Barracks, Stables).
 @export var population_capacity: int = 0
+## >0 caps how many units trained HERE each player may have alive at once,
+## counting ones still queued. Per player, not per building: whoever takes the
+## building over starts with their own full allowance, while units the last
+## owner trained here keep counting against that owner should they retake it.
+## The Shrine uses 2.
+@export var max_alive_units_per_owner: int = 0
 ## Which resources a gatherer may drop off here. Only read for buildings in
 ## the "dropoff_points" group (see Unit._nearest_dropoff) — empty means "every
-## type", which is what the Town Center wants; a Mill lists Food alone so wood
-## and gold still get hauled back to the Town Center rather than to whichever
-## Mill happens to be closer.
+## type", which is what the Town Center wants; a specialised drop-off lists
+## only its own types so everything else still gets hauled back to the Town
+## Center rather than to whichever drop-off happens to be closer.
 @export var dropoff_resource_types: Array[ResourceType] = []
 ## Set alongside owner_peer_id at spawn time. Drives the minimap dot color and
 ## the team_color.gdshader recolor of the model's blue parts (its flags,
@@ -122,9 +128,16 @@ var linked_deposit: Gatherable = null
 ## item_name -> how many of that item are currently in queue (including the
 ## one in progress) — drives the small count badge on each producible button.
 @export var synced_queue_counts: Dictionary = {}
+## Whether the current owner is at max_alive_units_per_owner — lets the
+## owner's command panel grey out its unit buttons.
+@export var synced_unit_limit_reached: bool = false
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
+## Host-only, and only filled when max_alive_units_per_owner > 0: peer_id ->
+## units this building trained for them. Untyped arrays because dead units get
+## freed, and a freed entry in an Array[Unit] errors on read.
+var _produced_units: Dictionary = {}
 ## Host-only: UPGRADE items already bought, so a one-time upgrade can't be
 ## queued twice — see the guard in enqueue().
 var _purchased_upgrades: Array[ProducibleItem] = []
@@ -156,6 +169,12 @@ var rally_target_path: NodePath = NodePath()
 
 var current_health: int = 1
 var is_destroyed: bool = false
+## Set on every peer by Objective._ready for the buildings it owns — capture
+## points are fought over by standing on them, never by razing them, so
+## nothing may damage or even target one. Client copies matter too: the
+## right-click popup/cursor read it (via can_be_attacked) to answer "move"
+## rather than "attack".
+var is_invulnerable: bool = false
 var _destroy_timer: float = 0.0
 var _destroy_start_y: float = 0.0
 
@@ -371,12 +390,37 @@ func enqueue(item: ProducibleItem) -> bool:
 	## the same amount when the resulting unit later dies.
 	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(owner_peer_id, item.get_population_cost()):
 		return false
+	if item.kind == ProducibleItem.Kind.UNIT and is_at_unit_limit(owner_peer_id):
+		return false
 	ResourceStockpile.spend(owner_peer_id, item.get_costs())
 	if item.kind == ProducibleItem.Kind.UNIT:
 		Population.reserve(owner_peer_id, item.get_population_cost())
 	queue.append(item)
 	queue_changed.emit()
 	return true
+
+## Host only. Called by main.gd for every unit this building finishes.
+func register_produced_unit(unit: Unit) -> void:
+	if max_alive_units_per_owner <= 0:
+		return
+	var list: Array = _produced_units.get(unit.owner_peer_id, [])
+	list.append(unit)
+	_produced_units[unit.owner_peer_id] = list
+
+## Host only. Living units trained here for `peer_id`, plus — if they're the
+## current owner — the units still in this building's queue.
+func is_at_unit_limit(peer_id: int) -> bool:
+	if max_alive_units_per_owner <= 0:
+		return false
+	var list: Array = _produced_units.get(peer_id, [])
+	list = list.filter(func(u): return is_instance_valid(u) and u.status_activity != Unit.Activity.DEAD)
+	_produced_units[peer_id] = list
+	var used: int = list.size()
+	if peer_id == owner_peer_id:
+		for queued_item in queue:
+			if queued_item.kind == ProducibleItem.Kind.UNIT:
+				used += 1
+	return used >= max_alive_units_per_owner
 
 ## Undoes enqueue() for the item at `index` (0 is the one in progress): full
 ## refund, and any population it had reserved is freed back up.
@@ -399,11 +443,17 @@ func time_remaining() -> float:
 		return 0.0
 	return maxf(queue[0].build_time - build_timer, 0.0)
 
+## The one question every "should I attack this building" check asks — unit
+## target scans, right-click orders, the attack cursor — so an invulnerable
+## building drops out of all of them at once.
+func can_be_attacked() -> bool:
+	return not is_destroyed and not is_invulnerable
+
 ## Most buildings can't fight back themselves, but any can call nearby units in
 ## to defend — a Watchtower-style attacker (attack_range > 0) additionally
 ## fights back on its own via _tick_tower_combat().
 func take_damage(amount: int, attacker: Node3D = null) -> void:
-	if not is_multiplayer_authority() or is_destroyed:
+	if not is_multiplayer_authority() or not can_be_attacked():
 		return
 	## Same shape as Unit.take_damage — see the signal declaration above. A
 	## building never recoils (it has no sprite to shove), but the attacker
@@ -580,6 +630,7 @@ func _process(delta: float) -> void:
 	for queued_item in queue:
 		counts[queued_item.item_name] = counts.get(queued_item.item_name, 0) + 1
 	synced_queue_counts = counts
+	synced_unit_limit_reached = is_at_unit_limit(owner_peer_id)
 
 func _update_health_bar_visual() -> void:
 	if not health_bar:

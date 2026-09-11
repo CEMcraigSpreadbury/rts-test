@@ -3,16 +3,22 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://dqr2prd6077l0" path="res://assets/art/MiniBigMonsters/Outline/MiniDarkLord-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://bgodqytsfivx2" path="res://assets/art/MiniBigMonsters/DarkFire-Sheet.png" id="fx_darkfire"]
 
-[sub_resource type="Resource" id="ResourceCost_dark_lord_favour"]
+[sub_resource type="Resource" id="ResourceCost_dark_lord_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 55
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_dark_lord_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_dark_lord_projectile"]
 script = ExtResource("fx_script")
@@ -30,6 +36,14 @@ frame_count = 5
 fps = 10.0
 scale = 1.8
 
+[sub_resource type="Resource" id="SpriteEffect_dark_lord_linger"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_darkfire")
+frame_size = Vector2i(32, 32)
+frame_count = 4
+fps = 10.0
+scale = 1.0
+
 [sub_resource type="Resource" id="Ability_dark_lord"]
 script = ExtResource("5_ability_script")
 ability_name = "Shadow Nova"
@@ -37,7 +51,7 @@ kind = 2
 activation_range = 9.0
 cooldown = 22.0
 area_radius = 3.5
-area_damage = 45
+area_damage = 16
 effect_color = Color(0.6, 0.2, 0.9, 1)
 impact_shake = 0.45
 cast_windup = 1.0
@@ -48,6 +62,10 @@ projectile_speed = 14.0
 wave_spacing = 0.9
 impact_effect = SubResource("SpriteEffect_dark_lord_impact")
 impact_scatter_count = 6
+linger_duration = 8.0
+linger_damage_per_second = 3
+linger_effect = SubResource("SpriteEffect_dark_lord_linger")
+linger_effect_count = 6
 
 [node name="DarkLord" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -56,8 +74,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Dark Lord"
 move_speed = 2.6
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_dark_lord_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_dark_lord_gold"), SubResource("ResourceCost_dark_lord_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(40, 32)
 idle_frame_count = 8
@@ -74,10 +92,10 @@ cast_frame_count = 20
 cast_fps = 14.0
 can_gather = false
 can_build = false
-max_health = 260
-attack_damage = 44
+max_health = 700
+attack_damage = 16
 attack_range = 1.8
-attack_cooldown = 1.4
+attack_cooldown = 2.2
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

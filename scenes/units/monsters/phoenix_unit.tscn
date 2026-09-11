@@ -3,16 +3,22 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://b2pxwkavg3umx" path="res://assets/art/MiniBigMonsters/Outline/MiniPhoenix-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://b7amoqcrdrtic" path="res://assets/art/MiniBigMonsters/Effect-Sheet.png" id="fx_effect"]
 
-[sub_resource type="Resource" id="ResourceCost_phoenix_favour"]
+[sub_resource type="Resource" id="ResourceCost_phoenix_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 55
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_phoenix_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_phoenix_projectile"]
 script = ExtResource("fx_script")
@@ -31,6 +37,15 @@ frame_count = 5
 fps = 10.0
 scale = 1.4
 
+[sub_resource type="Resource" id="SpriteEffect_phoenix_linger"]
+script = ExtResource("fx_script")
+sheet = ExtResource("2_sheet")
+frame_size = Vector2i(40, 32)
+row = 6
+frame_count = 4
+fps = 8.0
+scale = 0.9
+
 [sub_resource type="Resource" id="Ability_phoenix"]
 script = ExtResource("5_ability_script")
 ability_name = "Firestorm"
@@ -38,7 +53,7 @@ kind = 2
 activation_range = 10.0
 cooldown = 20.0
 area_radius = 4.0
-area_damage = 35
+area_damage = 14
 effect_color = Color(1, 0.3, 0.15, 1)
 impact_shake = 0.4
 cast_windup = 0.45
@@ -49,6 +64,10 @@ projectile_speed = 12.0
 projectile_arc_height = 1.2
 impact_effect = SubResource("SpriteEffect_phoenix_impact")
 impact_scatter_count = 7
+linger_duration = 8.0
+linger_damage_per_second = 3
+linger_effect = SubResource("SpriteEffect_phoenix_linger")
+linger_effect_count = 8
 
 [node name="Phoenix" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -57,8 +76,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Phoenix"
 move_speed = 2.8
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_phoenix_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_phoenix_gold"), SubResource("ResourceCost_phoenix_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(40, 32)
 idle_frame_count = 8
@@ -75,10 +94,10 @@ cast_frame_count = 11
 cast_fps = 12.0
 can_gather = false
 can_build = false
-max_health = 240
-attack_damage = 40
+max_health = 640
+attack_damage = 12
 attack_range = 1.8
-attack_cooldown = 1.2
+attack_cooldown = 1.8
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

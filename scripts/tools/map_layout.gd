@@ -14,9 +14,7 @@ extends RefCounted
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const TC_OFFSET: Vector2 = Vector2(-4.0, 4.0)
 const SPAWN_ATTEMPTS: int = 80
-const BERRY_SPACING: float = 1.9
 const GOLD_RADIUS: float = 1.7
-const BERRY_RADIUS: float = 0.9
 const PROP_RADIUS: float = 0.6
 const CLIFF_CLEARANCE_TREES: int = 3
 const CLIFF_CLEARANCE_OBJECTS: int = 2
@@ -228,7 +226,7 @@ func _plan_objectives() -> void:
 		MapGenerator.CentreSite.SHRINE:
 			centre_scene = _gen.shrine_scene
 	if centre_scene != null:
-		_objective_sites.append({pos = Vector2.ZERO, scene = centre_scene, symmetric = true, footprint = footprint, props = {}})
+		_objective_sites.append({pos = Vector2.ZERO, scene = centre_scene, symmetric = true, footprint = footprint, props = {favour_per_second = _gen.centre_favour_per_second}})
 	var requests: Array[Dictionary] = []
 	if not scenes.is_empty():
 		for j in _gen.objectives_per_player:
@@ -708,9 +706,6 @@ func _place_base_resources() -> void:
 	var gold_spec := {radius = GOLD_RADIUS, gap = 1.5, level = 0, cliff = CLIFF_CLEARANCE_OBJECTS, solid = true, avoid_paths = true}
 	for n in _gen.base_gold_mines:
 		_place_with_retries(&"gold", _gen.gold_mine_scene, func(): return [_around_base(_gen.base_gold_distance)], gold_spec)
-	if _gen.base_berry_bushes > 0:
-		var berry_spec := {radius = BERRY_RADIUS, gap = 1.0, level = 0, cliff = CLIFF_CLEARANCE_OBJECTS, solid = true, avoid_paths = true}
-		_place_with_retries(&"berry_bush", _gen.berry_bush_scene, func(): return _berry_patch(_around_base(_gen.base_berry_distance), _gen.base_berry_bushes), berry_spec)
 	if _gen.base_trees > 0:
 		var per_clump: int = maxi(1, int(float(_gen.base_trees) / _gen.base_tree_clumps))
 		for n in _gen.base_tree_clumps:
@@ -730,23 +725,6 @@ func _place_with_retries(kind: StringName, scene: PackedScene, candidates: Calla
 			return true
 	push_warning("MapGenerator: could not fit %s — try another seed or lower counts." % kind)
 	return false
-
-func _berry_patch(centre: Vector2, count: int) -> Array[Vector2]:
-	var offsets: Array[Vector2] = [Vector2.ZERO]
-	var ring: int = 1
-	while offsets.size() < count:
-		for i in 6 * ring:
-			var corner: int = floori(float(i) / ring)
-			var along: int = i % ring
-			var a := Vector2.from_angle(corner * TAU / 6.0) * ring
-			var b := Vector2.from_angle((corner + 1) * TAU / 6.0) * ring
-			offsets.append(a.lerp(b, float(along) / ring))
-		ring += 1
-	var spin: float = _rng.randf() * TAU
-	var points: Array[Vector2] = []
-	for i in count:
-		points.append(centre + offsets[i].rotated(spin) * BERRY_SPACING)
-	return points
 
 ## Grows an organic blob of trunk positions, then keeps whichever points are
 ## valid in every rotated copy.
@@ -776,9 +754,6 @@ func _place_neutral_resources() -> void:
 	var gold_spec := {radius = GOLD_RADIUS, gap = 2.0, level = 0, cliff = CLIFF_CLEARANCE_OBJECTS, solid = true, avoid_paths = true}
 	for n in _gen.neutral_gold_per_player:
 		_place_with_retries(&"gold", _gen.gold_mine_scene, func(): return [_neutral_point(keep_out)], gold_spec)
-	var berry_spec := {radius = BERRY_RADIUS, gap = 1.5, level = 0, cliff = CLIFF_CLEARANCE_OBJECTS, solid = true, avoid_paths = true}
-	for n in _gen.neutral_berry_patches_per_player:
-		_place_with_retries(&"berry_bush", _gen.berry_bush_scene, func(): return _berry_patch(_neutral_point(keep_out), _gen.neutral_berry_patch_size), berry_spec)
 
 func _neutral_point(keep_out: float) -> Vector2:
 	for attempt in 40:

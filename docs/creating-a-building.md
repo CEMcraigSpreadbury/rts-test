@@ -10,7 +10,7 @@ different scripts. So "creating a new building" almost always means
 writing new code.
 
 The one exception is a building with no production queue at all (a
-Farm-equivalent) — see Variation C.
+buildable resource) — see Variation C.
 
 ## 0. Duplicate an existing building scene
 
@@ -132,15 +132,15 @@ A `ProducibleItem` can instead (or additionally) set **Unlocks Monarch
 Promotion** to true — see `main.gd:_on_building_item_completed` for that
 effect's extension point if you need a genuinely new upgrade *kind* someday.
 
-## Variation C — non-queue building (Farm-style)
+## Variation C — non-queue building (buildable resource)
 
-Some buildings aren't `ProductionBuilding` at all — a Farm is just a
-`Gatherable` (`scripts/gatherable.gd`) that villagers gather from directly,
-with no construction queue or Producibles list. To make one of these:
+Some buildings needn't be a `ProductionBuilding` at all — a buildable
+resource is just a `Gatherable` (`scripts/gatherable.gd`) that villagers
+gather from directly, with no construction queue or Producibles list. To make
+one of these:
 
-1. Duplicate `scenes/resource_nodes/gold_deposit.tscn` or
-   `scenes/buildings/farm_building.tscn` instead of a `ProductionBuilding`
-   scene.
+1. Duplicate `scenes/resource_nodes/gold_deposit.tscn` instead of a
+   `ProductionBuilding` scene.
 2. Set **Costs**, **Resource Type**, **Amount Remaining**, **Gather Range**.
 3. Register it in a `Faction`'s **Building Types** the same as step 3 above —
    `BuildingType.scene` can point at a `Gatherable` just as well as a
@@ -186,7 +186,7 @@ objective. To add one:
 2. Set its **Producibles** as in Variation A/B — captured buildings train
    units or sell upgrades exactly like a normal one, gated by whoever's
    `owner_peer_id` the Objective assigns on capture.
-3. `Objective._ready()`/`_capture()` set `owner_peer_id`/`team_tint`
+3. `Objective._ready()`/`_set_owner()` set `owner_peer_id`/`team_tint`
    directly, and `main.gd:register_objective_building()` wires up the
    `item_completed`/`destroyed` signal connections that normal (player-built)
    buildings only ever get via the placement spawn path — this connection is
@@ -194,6 +194,10 @@ objective. To add one:
    `BuildingType`-registered one gets automatically, and `Objective._ready()`
    already calls it for every child under **Buildings**, so no per-building
    setup is needed beyond placing it there.
+4. Every building under **Buildings** is made invulnerable and untargetable
+   (`ProductionBuilding.is_invulnerable`, set by `Objective._ready()`) — an
+   objective is taken by standing on it, never by razing it — so its
+   **Max Health** is irrelevant here.
 
 ## Verify
 

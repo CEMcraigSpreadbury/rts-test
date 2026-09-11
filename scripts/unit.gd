@@ -1522,6 +1522,33 @@ func _execute_area_ability(ability: Ability, target: Vector3) -> void:
 	for victim in victims:
 		if is_instance_valid(victim):
 			victim.apply_ability_hit(ability, self)
+	if ability.linger_duration > 0.0:
+		AbilityZone.spawn(get_tree().current_scene, ability, target, owner_peer_id, self)
+
+## How long a zone's slow and burning visual outlast the tick that applied
+## them. A little over one tick (AbilityZone.TICK_INTERVAL), so they hold
+## steady while a unit stands in the zone and wear off shortly after it walks out.
+const ZONE_EFFECT_SECONDS: float = 1.25
+
+## Host-only, once per AbilityZone.TICK_INTERVAL while this unit stands in a
+## lingering zone. Deliberately not apply_ability_hit: re-running that every
+## tick would re-stack the DoT and chain the stun forever. The zone's own
+## damage stands in for the DoT, and only the slow is refreshed.
+func apply_zone_tick(ability: Ability, source) -> void:
+	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
+		return
+	if ability.linger_damage_per_second > 0:
+		take_damage(ability.linger_damage_per_second, source if is_instance_valid(source) else null)
+	if status_activity == Activity.DEAD:
+		return
+	var slow_seconds := 0.0
+	if ability.slow_fraction > 0.0:
+		slow_seconds = ZONE_EFFECT_SECONDS
+		_slow_fraction = maxf(_slow_fraction if _slow_remaining > 0.0 else 0.0, ability.slow_fraction)
+		_slow_remaining = maxf(_slow_remaining, slow_seconds)
+	var burn_seconds: float = ZONE_EFFECT_SECONDS if ability.linger_damage_per_second > 0 else 0.0
+	if burn_seconds > 0.0 or slow_seconds > 0.0:
+		status_applied.emit(burn_seconds, slow_seconds, 0.0, ability.effect_color)
 
 ## Host-only. The upfront hit, then whatever lingering effects the ability
 ## carries. `source` is who to credit for the damage — untyped for the same
@@ -2315,7 +2342,7 @@ func _is_target_alive(target) -> bool:
 	if target is Unit:
 		return target.status_activity != Activity.DEAD
 	if target is ProductionBuilding:
-		return not target.is_destroyed
+		return target.can_be_attacked()
 	return false
 
 func _find_new_target_or_idle() -> void:

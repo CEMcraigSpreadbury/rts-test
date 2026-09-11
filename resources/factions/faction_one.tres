@@ -6,7 +6,6 @@
 [ext_resource type="PackedScene" uid="uid://c33s6te3ne0b7" path="res://scenes/buildings/production_building.tscn" id="3_town_center"]
 [ext_resource type="PackedScene" uid="uid://csfhind83uvc1" path="res://scenes/buildings/barracks_building.tscn" id="4_barracks"]
 [ext_resource type="PackedScene" uid="uid://bdj2w2feks35t" path="res://scenes/buildings/house_building.tscn" id="5_house"]
-[ext_resource type="PackedScene" uid="uid://c0egasx03ggka" path="res://scenes/buildings/farm_building.tscn" id="6_farm"]
 [ext_resource type="PackedScene" uid="uid://bbmqgxak6tphl" path="res://scenes/buildings/mine_building.tscn" id="7_mine"]
 [ext_resource type="PackedScene" uid="uid://c10y275vh27ta" path="res://scenes/resource_nodes/gold_deposit.tscn" id="8_gold_deposit"]
 [ext_resource type="PackedScene" uid="uid://cn64mdp666snd" path="res://scenes/buildings/stables_building.tscn" id="9_stables"]
@@ -16,7 +15,6 @@
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_corner.tscn" id="13_wall_corner"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_gate.tscn" id="14_wall_gate"]
 [ext_resource type="PackedScene" uid="uid://hv63ugeypt36" path="res://scenes/buildings/watchtower_building.tscn" id="15_watchtower"]
-[ext_resource type="PackedScene" uid="uid://bq3vn7mladk18" path="res://scenes/buildings/mill_building.tscn" id="16_mill"]
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
@@ -37,14 +35,6 @@ script = ExtResource("2_building_type_script")
 building_name = "House"
 scene = ExtResource("5_house")
 footprint_radius = 1.6
-
-[sub_resource type="Resource" id="BuildingType_farm"]
-script = ExtResource("2_building_type_script")
-building_name = "Farm"
-scene = ExtResource("6_farm")
-footprint_radius = 1.8
-requires_nearby_host = true
-host_scene = ExtResource("16_mill")
 
 [sub_resource type="Resource" id="BuildingType_mine"]
 script = ExtResource("2_building_type_script")
@@ -92,16 +82,9 @@ scene = ExtResource("15_watchtower")
 footprint_radius = 1.3
 construction_time = 8.0
 
-[sub_resource type="Resource" id="BuildingType_mill"]
-script = ExtResource("2_building_type_script")
-building_name = "Mill"
-scene = ExtResource("16_mill")
-footprint_radius = 1.6
-construction_time = 8.0
-
 [resource]
 script = ExtResource("1_faction_script")
 faction_name = "Human"
-building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_farm"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_mill")])
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit")])

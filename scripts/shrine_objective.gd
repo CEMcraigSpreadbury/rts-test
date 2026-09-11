@@ -1,13 +1,14 @@
 extends Objective
 class_name ShrineObjective
-## An Objective guarded by a single big monster, whose Shrine can only
-## ever train that same monster. Which one it is gets rolled once per match.
+## An Objective guarded by a single big monster, whose Shrine offers a choice
+## of monster_choice_count different monsters (the guard is one of them).
+## Which ones get rolled once per match.
 ##
 ## The roll deliberately does NOT happen independently on each peer: the
-## Shrine's build menu labels its button from producibles[0] (see main.gd's
-## _show_build_menu), and enqueue orders travel as an index into that same
-## array, so two peers rolling separately would leave a client's button
-## naming a different monster than the one the host actually trains. The host
+## Shrine's build menu labels its buttons from producibles, and enqueue
+## orders travel as an index into that same array, so two peers rolling
+## separately would leave a client's buttons naming different monsters than
+## the ones the host actually trains. The host
 ## rolls, and every client asks it for the answer (see _rpc_request_monster) —
 ## a request rather than a broadcast because the host reaches main.tscn first
 ## (lobby.gd's _start_game is call_local, so clients change scene a round-trip
@@ -33,13 +34,17 @@ const MONSTER_REQUEST_RETRY_SEC: float = 0.5
 ## the two, not a cold scene load.
 const MONSTER_REQUEST_MAX_ATTEMPTS: int = 20
 
-## Shrines sharing a non-empty group train the same monster in a match — the
-## map generator gives each player's copy of a shrine the same group, so no
-## one ends up with a stronger monster on their doorstep.
+## Shrines sharing a non-empty group offer the same monsters (and the same
+## guard) in a match — the map generator gives each player's copy of a shrine
+## the same group, so no one ends up with a stronger pick on their doorstep.
 @export var roll_group: StringName = &""
+## How many different monsters this Shrine lets its owner choose between.
+@export var monster_choice_count: int = 3
 
-## Index into the Shrine's original producibles list, -1 until rolled/received.
-var monster_index: int = -1
+## Indices into the Shrine's original producibles list, empty until
+## rolled/received. guard_choice indexes into monster_indices.
+var monster_indices: PackedInt32Array = PackedInt32Array()
+var guard_choice: int = 0
 
 var _request_timer: Timer = null
 var _request_attempts: int = 0
@@ -48,22 +53,29 @@ func _ready() -> void:
 	## Has to run before super._ready(), which is what puts the guard on
 	## patrol and leashes it — by then the guard needs to already exist.
 	if multiplayer.is_server():
-		_apply_monster(_roll_monster())
+		var roll: Dictionary = _roll_monsters()
+		_apply_monsters(roll.indices, roll.guard)
 	super._ready()
 	if not multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_start_monster_requests()
 
 ## Host only. Shared rolls live on the match scene, so they reset every match.
-func _roll_monster() -> int:
-	var count: int = _shrine().producibles.size()
+func _roll_monsters() -> Dictionary:
 	if roll_group == &"":
-		return randi() % count
+		return _fresh_roll()
 	var main := get_tree().current_scene
 	var rolls: Dictionary = main.get_meta(&"shrine_rolls", {})
 	if not rolls.has(roll_group):
-		rolls[roll_group] = randi() % count
+		rolls[roll_group] = _fresh_roll()
 		main.set_meta(&"shrine_rolls", rolls)
 	return rolls[roll_group]
+
+func _fresh_roll() -> Dictionary:
+	var pool: Array = range(_shrine().producibles.size())
+	pool.shuffle()
+	var indices := PackedInt32Array(pool.slice(0, mini(monster_choice_count, pool.size())))
+	indices.sort()
+	return {indices = indices, guard = randi() % indices.size()}
 
 ## Reached via get_node rather than @onready: @onready assignments are injected
 ## into the _ready of the script that declares them, so anything this class
@@ -74,17 +86,19 @@ func _shrine() -> ProductionBuilding:
 
 ## Idempotent — a late answer arriving after an earlier one already landed
 ## must not leave this objective with two guards.
-func _apply_monster(index: int) -> void:
-	if monster_index != -1:
+func _apply_monsters(indices: PackedInt32Array, guard_index: int) -> void:
+	if not monster_indices.is_empty() or indices.is_empty():
 		return
-	monster_index = index
+	monster_indices = indices
+	guard_choice = guard_index
 	_stop_monster_requests()
 	var shrine := _shrine()
-	var item: ProducibleItem = shrine.producibles[index]
-	var only_producible: Array[ProducibleItem] = [item]
-	shrine.producibles = only_producible
+	var offered: Array[ProducibleItem] = []
+	for index in indices:
+		offered.append(shrine.producibles[index])
+	shrine.producibles = offered
 
-	var guard: Unit = item.unit_scene.instantiate()
+	var guard: Unit = offered[guard_index].unit_scene.instantiate()
 	guard.name = "Guard"
 	guard.position = GUARD_SPAWN_OFFSET
 	## Set before add_child for the same reason the hand-placed guards in the
@@ -138,10 +152,10 @@ func _rpc_request_monster() -> void:
 	## A request can legitimately land before the host has rolled (both peers
 	## race through their own _ready): answering -1 would be applied verbatim
 	## by the client. Staying silent instead lets its retry cover the gap.
-	if not multiplayer.is_server() or monster_index == -1:
+	if not multiplayer.is_server() or monster_indices.is_empty():
 		return
-	_rpc_set_monster.rpc_id(multiplayer.get_remote_sender_id(), monster_index)
+	_rpc_set_monsters.rpc_id(multiplayer.get_remote_sender_id(), monster_indices, guard_choice)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_set_monster(index: int) -> void:
-	_apply_monster(index)
+func _rpc_set_monsters(indices: PackedInt32Array, guard_index: int) -> void:
+	_apply_monsters(indices, guard_index)

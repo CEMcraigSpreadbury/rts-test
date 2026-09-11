@@ -56,6 +56,10 @@ var _info_built_under_construction: bool = false
 ## item_name -> its producible button's queued-count badge; updated every
 ## frame in _refresh_building_info() from ProductionBuilding.synced_queue_counts.
 var _info_producible_badges: Dictionary = {}
+## The selected building's UNIT buttons, greyed out alongside the badges above
+## while ProductionBuilding.synced_unit_limit_reached. Untyped: they're freed
+## whenever the panel rebuilds.
+var _info_unit_buttons: Array = []
 var _info_stats_label: Label = null
 ## Parallel to _info_portrait_units when more than one is selected.
 var _info_unit_portrait_bars: Array[ProgressBar] = []
@@ -149,6 +153,10 @@ func _on_population_changed(used: int, cap: int) -> void:
 func _update_resource_label() -> void:
 	var parts: Array[String] = []
 	for resource_type in Main.DEBUG_RESOURCE_TYPES:
+		## Favour is the Conquest score and nothing else: it's shown on the
+		## ConquestHud's score bars, never spent, so it has no place here.
+		if resource_type == Main.FAVOUR_RESOURCE:
+			continue
 		var shown: int = int(round(_resource_display_totals.get(resource_type.display_name, float(_resource_totals.get(resource_type.display_name, 0)))))
 		var text := "%s: %d" % [resource_type.display_name, shown]
 		if _resource_flash_on and _flashing_resource_names.has(resource_type.display_name):
@@ -240,6 +248,7 @@ func show_building(building: ProductionBuilding) -> void:
 
 	var buttons: Array[Control] = []
 	_info_producible_badges.clear()
+	_info_unit_buttons.clear()
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
 		if not _producible_is_visible(building, item):
@@ -252,6 +261,8 @@ func show_building(building: ProductionBuilding) -> void:
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item)]
 		var button := _make_command_button(hotkey, tooltip, item.icon, main.on_producible_button_pressed.bind(building, i))
 		_info_producible_badges[item.item_name] = _add_queue_count_badge(button)
+		if item.kind == ProducibleItem.Kind.UNIT:
+			_info_unit_buttons.append(button)
 		buttons.append(button)
 	_fill_action_panel_grid(buttons)
 
@@ -461,6 +472,8 @@ func _refresh_building_info() -> void:
 		_info_progress_bar.visible = false
 		return
 
+	_refresh_producible_badges(building)
+
 	if building.synced_queue_size <= 0:
 		_info_progress_bar.visible = false
 		_info_empty_label.visible = true
@@ -493,8 +506,6 @@ func _refresh_building_info() -> void:
 			slot.pressed.connect(main.cancel_production.bind(building, i + 1))
 			_info_slot_row.add_child(slot)
 
-	_refresh_producible_badges(building)
-
 func _refresh_producible_badges(building: ProductionBuilding) -> void:
 	for item_name in _info_producible_badges:
 		var badge: Label = _info_producible_badges[item_name]
@@ -502,6 +513,9 @@ func _refresh_producible_badges(building: ProductionBuilding) -> void:
 		badge.visible = count > 0
 		if count > 0:
 			badge.text = str(count)
+	for button in _info_unit_buttons:
+		if is_instance_valid(button):
+			button.disabled = building.synced_unit_limit_reached
 
 ## Builds either a single unit's stat readout or a grid of portrait+health
 ## widgets for a multi-unit selection — structural, called once per selection

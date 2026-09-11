@@ -41,6 +41,8 @@ func send_line(peer_id: int, line: String) -> void:
 ##   "cmd add <resource> <amount>" grants yourself that resource, e.g. "cmd add wood 10".
 ##   "cmd spawn <unit|monster> [count]" spawns units you own at the mouse
 ##   cursor, e.g. "cmd spawn soldier 3"; "monster" picks a random one each.
+##   Append "e" ("cmd spawn soldier 3e", "cmd spawn monster e") to spawn them
+##   as neutral enemies instead.
 
 func open_chat_input() -> void:
 	_chat_input.visible = true
@@ -102,9 +104,13 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 			_rpc_display_chat.rpc_id(sender_id, "[debug] +%d %s" % [amount, resource_type.display_name])
 		"spawn":
 			if parts.size() < 2:
-				_rpc_display_chat.rpc_id(sender_id, "[debug] usage: cmd spawn <unit|monster> [count]")
+				_rpc_display_chat.rpc_id(sender_id, "[debug] usage: cmd spawn <unit|monster> [count][e]")
 				return
-			var count: int = clampi(int(parts[2]) if parts.size() >= 3 else 1, 1, MAX_DEBUG_SPAWN)
+			## A trailing "e" ("3e", or a lone "e") spawns them as neutral enemies.
+			var count_arg: String = " ".join(parts.slice(2)).to_lower().replace(" ", "")
+			var as_enemy: bool = count_arg.ends_with("e")
+			count_arg = count_arg.trim_suffix("e")
+			var count: int = clampi(int(count_arg) if not count_arg.is_empty() else 1, 1, MAX_DEBUG_SPAWN)
 			var wants_random_monster: bool = parts[1].to_lower() in ["monster", "monsters"]
 			var scene_path: String = "" if wants_random_monster else _find_unit_scene_path(parts[1])
 			if not wants_random_monster and scene_path.is_empty():
@@ -116,10 +122,10 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 				var path: String = _random_monster_scene_path() if wants_random_monster else scene_path
 				if path.is_empty():
 					break
-				spawned_names.append(_spawn_debug_unit(sender_id, path, center + _spawn_offset(i)).display_name)
-			_rpc_display_chat.rpc_id(sender_id, "[debug] spawned %s" % ", ".join(spawned_names))
+				spawned_names.append(_spawn_debug_unit(0 if as_enemy else sender_id, path, center + _spawn_offset(i)).display_name)
+			_rpc_display_chat.rpc_id(sender_id, "[debug] spawned %s%s" % [", ".join(spawned_names), " (enemy)" if as_enemy else ""])
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count]")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e]")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
 
@@ -189,15 +195,17 @@ func _spawn_offset(index: int) -> Vector3:
 
 ## Same path as a starting unit (see Main._spawn_player_base): population is
 ## reserved by hand since the unit never went through a production queue, and
-## Unit._die releases it again.
+## Unit._die releases it again. Peer 0 is neutral, owned the same way as
+## objective guards (see Objective._setup_guard).
 func _spawn_debug_unit(peer_id: int, scene_path: String, position: Vector3) -> Unit:
 	var unit: Unit = main.unit_spawner.spawn({
 		"scene_path": scene_path,
 		"peer_id": peer_id,
-		"tint": main.get_team_tint(peer_id),
+		"tint": main.get_team_tint(peer_id) if peer_id > 0 else Objective.NEUTRAL_TINT,
 		"position": position,
 	})
-	Population.reserve(peer_id, unit.population_cost)
+	if peer_id > 0:
+		Population.reserve(peer_id, unit.population_cost)
 	return unit
 
 func _find_resource_type_by_name(resource_name: String) -> ResourceType:

@@ -146,10 +146,14 @@ properties/11/replication_mode = 2
 properties/12/path = NodePath(".:synced_queue_counts")
 properties/12/spawn = true
 properties/12/replication_mode = 2
+properties/13/path = NodePath(".:synced_unit_limit_reached")
+properties/13/spawn = true
+properties/13/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Shrine"
+max_alive_units_per_owner = 2
 producibles = Array[ExtResource("2_item_script")]([SubResource("ProducibleItem_black_dragon"), SubResource("ProducibleItem_dark_lord"), SubResource("ProducibleItem_giant_bear"), SubResource("ProducibleItem_hydra"), SubResource("ProducibleItem_orc_mutant"), SubResource("ProducibleItem_phoenix"), SubResource("ProducibleItem_skeleton_dragon"), SubResource("ProducibleItem_yeti")])
 vision_range = 14.0
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_sfx_a"), ExtResource("9_sfx_b")])

@@ -66,7 +66,6 @@
 [ext_resource type="PackedScene" uid="uid://brsv0midh8i3s" path="res://scenes/player_spawn_point.tscn" id="67_sd66k"]
 [ext_resource type="PackedScene" uid="uid://c10y275vh27ta" path="res://scenes/resource_nodes/gold_deposit.tscn" id="68_00ylq"]
 [ext_resource type="PackedScene" path="res://scenes/beastmen_objective.tscn" id="68_rwsog"]
-[ext_resource type="PackedScene" uid="uid://d28gqdk37dgpr" path="res://scenes/resource_nodes/berry_bush.tscn" id="69_545oa"]
 [ext_resource type="PackedScene" uid="uid://capdkcqswrjn6" path="res://scenes/resource_nodes/gatherable.tscn" id="70_y3lhy"]
 [ext_resource type="PackedScene" uid="uid://d187nt260um8i" path="res://scenes/shrine_objective.tscn" id="71_r31tv"]
 [ext_resource type="PackedScene" uid="uid://bqcpjbt78akqe" path="res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_2.glb" id="73_mky0y"]
@@ -384,36 +383,6 @@ transform = Transform3D(0.8579595, 0, -0.51371735, 0, 1, 0, 0.51371735, 0, 0.857
 [node name="Gold2" parent="ResourceNodes" unique_id=1880059072 instance=ExtResource("68_00ylq")]
 transform = Transform3D(-0.85795957, 0, 0.51371723, 0, 1, 0, -0.51371723, 0, -0.85795957, 29.43581, 0, -33.70469)
 
-[node name="BerryBush1" parent="ResourceNodes" unique_id=13507653 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.9208467, 0, 0.3899248, 0, 1, 0, -0.3899248, 0, 0.9208467, -31.663582, 0, 46.77839)
-
-[node name="BerryBush2" parent="ResourceNodes" unique_id=428476143 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.92084676, 0, -0.38992468, 0, 1, 0, 0.38992468, 0, -0.92084676, 31.663586, 0, -46.778385)
-
-[node name="BerryBush3" parent="ResourceNodes" unique_id=1387026440 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.49038747, 0, 0.87150455, 0, 1, 0, -0.87150455, 0, -0.49038747, -33.511417, 0, 46.336235)
-
-[node name="BerryBush4" parent="ResourceNodes" unique_id=183943892 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.49038762, 0, -0.8715044, 0, 1, 0, 0.8715044, 0, 0.49038762, 33.51142, 0, -46.33623)
-
-[node name="BerryBush5" parent="ResourceNodes" unique_id=765348609 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.9904048, 0, -0.13819699, 0, 1, 0, 0.13819699, 0, 0.9904048, -32.204582, 0, 44.95704)
-
-[node name="BerryBush6" parent="ResourceNodes" unique_id=122529606 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.9904048, 0, 0.13819684, 0, 1, 0, -0.13819684, 0, -0.9904048, 32.204586, 0, -44.957035)
-
-[node name="BerryBush7" parent="ResourceNodes" unique_id=1665520896 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.86242616, 0, -0.50618285, 0, 1, 0, 0.50618285, 0, 0.86242616, -30.356747, 0, 45.399193)
-
-[node name="BerryBush8" parent="ResourceNodes" unique_id=383277989 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.8624263, 0, 0.50618273, 0, 1, 0, -0.50618273, 0, -0.8624263, 30.35675, 0, -45.39919)
-
-[node name="BerryBush9" parent="ResourceNodes" unique_id=1076911886 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.812432, 0, 0.583056, 0, 1, 0, -0.583056, 0, 0.812432, -29.815746, 0, 47.220543)
-
-[node name="BerryBush10" parent="ResourceNodes" unique_id=2113477693 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.81243205, 0, -0.5830559, 0, 1, 0, 0.5830559, 0, -0.81243205, 29.81575, 0, -47.22054)
-
 [node name="Tree1" parent="ResourceNodes" unique_id=1047744373 instance=ExtResource("70_y3lhy")]
 transform = Transform3D(-0.9999967, 0, -0.0025545014, 0, 1, 0, 0.0025545014, 0, -0.9999967, -25.160725, 0, 29.30156)
 
@@ -653,30 +622,6 @@ transform = Transform3D(-0.4048461, 0, -0.91438484, 0, 1, 0, 0.91438484, 0, -0.4
 
 [node name="Gold4" parent="ResourceNodes" unique_id=121041322 instance=ExtResource("68_00ylq")]
 transform = Transform3D(0.40484616, 0, 0.9143848, 0, 1, 0, -0.9143848, 0, 0.40484616, -15.270651, 0, -30.295053)
-
-[node name="BerryBush11" parent="ResourceNodes" unique_id=1232800280 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.79087055, 0, -0.6119834, 0, 1, 0, 0.6119834, 0, -0.79087055, -23.164095, 0, -4.798279)
-
-[node name="BerryBush12" parent="ResourceNodes" unique_id=110194307 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.79087055, 0, 0.6119835, 0, 1, 0, -0.6119835, 0, 0.79087055, 23.164095, 0, 4.7982807)
-
-[node name="BerryBush13" parent="ResourceNodes" unique_id=462010206 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.26417118, 0, -0.9644758, 0, 1, 0, 0.9644758, 0, -0.26417118, -24.407475, 0, -3.3616142)
-
-[node name="BerryBush14" parent="ResourceNodes" unique_id=1830424345 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.26417115, 0, 0.9644758, 0, 1, 0, -0.9644758, 0, 0.26417115, 24.407475, 0, 3.3616164)
-
-[node name="BerryBush15" parent="ResourceNodes" unique_id=1407912863 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.99397206, 0, 0.10963355, 0, 1, 0, -0.10963355, 0, -0.99397206, -25.029974, 0, -5.156746)
-
-[node name="BerryBush16" parent="ResourceNodes" unique_id=256824209 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.99397206, 0, -0.10963351, 0, 1, 0, 0.10963351, 0, 0.99397206, 25.029974, 0, 5.1567483)
-
-[node name="BerryBush17" parent="ResourceNodes" unique_id=297805249 instance=ExtResource("69_545oa")]
-transform = Transform3D(-0.99938285, 0, -0.035127413, 0, 1, 0, 0.035127413, 0, -0.99938285, -23.786592, 0, -6.5934105)
-
-[node name="BerryBush18" parent="ResourceNodes" unique_id=601384848 instance=ExtResource("69_545oa")]
-transform = Transform3D(0.99938285, 0, 0.035127524, 0, 1, 0, -0.035127524, 0, 0.99938285, 23.786592, 0, 6.5934124)
 
 [node name="Tree79" parent="ResourceNodes" unique_id=528148968 instance=ExtResource("70_y3lhy")]
 transform = Transform3D(0.47500682, 0, -0.8799821, 0, 1, 0, 0.8799821, 0, 0.47500682, 25.302193, 0, 39.286594)
@@ -3364,6 +3309,7 @@ transform = Transform3D(-0.62423605, 0, -0.7812358, 0, 1, 0, 0.7812358, 0, -0.62
 
 [node name="Objective1" parent="Objectives" unique_id=1876716385 instance=ExtResource("71_r31tv")]
 transform = Transform3D(0.99999994, 0, 0, 0, 1, 0, 0, 0, 0.99999994, 0, 1, 0)
+favour_per_second = 2.0
 
 [node name="Objective2" parent="Objectives" unique_id=2075002521 instance=ExtResource("68_rwsog")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -46.83525, 1, -35.960377)

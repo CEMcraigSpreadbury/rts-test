@@ -2,8 +2,10 @@
 
 An Objective (`scripts/objective.gd` on `scenes/objective.tscn`) is a
 self-contained, neutral (peer `0`) cluster of guard units + production
-buildings that any player can capture by holding it uncontested for a set
-duration. Unlike a normal building, it is **not** registered on any
+buildings that any player can capture once its guards are dead, by standing
+combat units on it — Conquest-style: an owned point's flag is lowered to
+neutral, then the capturer's flag is raised. Its buildings can never be
+damaged or targeted. Unlike a normal building, it is **not** registered on any
 `Faction`/`BuildingType` — it's placed directly in the map scene, fully
 configured on the instance itself. Worked example: adding an "Orc Camp".
 
@@ -80,19 +82,30 @@ set both by hand to match:
 
 Select the **Objective** root node:
 
-- **Capture Duration** — seconds the zone must be held uncontested (attacking
-  units present, zero living defenders, and no second attacking player also
-  contesting it) before it flips ownership. Progress decays back down (never
-  instantly resets) if that condition breaks.
-- **Patrol Radius** — radius of the guards' square patrol loop around the
-  objective's origin. Guards leash-break-off and return to this loop if
-  dragged more than `patrol_radius * 2.5` away mid-fight (see
+- **Stage Duration** — seconds one combat unit takes to lower a flag to
+  neutral, or to raise one to full (so 2x this to flip an enemy point).
+  Workers never count.
+- **Capture Speed Per Extra Unit** / **Max Capture Speed** — each extra
+  combat unit adds to the speed multiplier, up to the cap (defaults: 1 unit
+  1x, 2 units 1.5x, 3+ units 2x). With opposing units on the point it's a
+  tug-of-war by head count: whoever outnumbers moves the flag at the speed
+  of the difference; equal numbers (or two+ challengers at once) freeze it
+  as **Contested**. A contested or draining point pays no Favour.
+- **Guard Respawn Delay** / **Guard Respawn Health** — a neutral point with
+  every guard dead and nobody standing on it respawns its original guards
+  after this many seconds, at this fraction of their health.
+- **Wander Radius** — radius the guards wander within around the
+  objective's origin. Guards leash-break-off and return if dragged more than
+  `wander_radius * 2.5` away mid-fight (see
   `Unit.leash_origin`/`leash_radius` — this is the one piece of unit-level
   state an Objective pokes directly that a normal building never touches).
+- **Favour Per Second** — paid to the owner while the point is held
+  (default `1`; a map's centre point is set to `2`). Favour is the Conquest
+  score and is never spent.
 
-Pick **Patrol Radius** noticeably smaller than the **CaptureZone** radius
-from step 3 — guards should be patrolling *inside* the area a capturing
-player needs to stand in, not wandering past its edge.
+Pick **Wander Radius** noticeably smaller than the **CaptureZone** radius
+from step 3 — guards should be wandering *inside* the area a capturing
+player needs to stand in, not past its edge.
 
 ## 5. Place it in the map
 
@@ -110,16 +123,19 @@ objectives so its capture zone and guard patrol loop don't overlap them.
 2. Approach with a single unit: guards should engage it, and if you retreat
    the damaged unit well outside the patrol loop, the guard should break off
    and return to patrolling instead of chasing indefinitely.
-3. Kill every guard, move units into the zone, confirm the disc fills
-   clockwise over **Capture Duration** seconds and decays back down if the
-   zone is emptied or a second player's units also enter (contested).
+3. Kill every guard, move one combat unit into the zone, confirm the disc
+   fills clockwise in your colour over **Stage Duration** seconds (faster
+   with more units) and sinks back down if the zone is emptied. A villager
+   alone does nothing.
 4. On capture: confirm the buildings are immediately selectable/usable by the
    capturing player (production menu opens, queuing works — including on a
-   client, not just the host) and any guard that survived the fight is now a
-   selectable, player-controlled unit instead of still patrolling.
-5. Undefend the captured objective and confirm a second player can retake it
-   the same way.
-6. Host + Join: confirm capture progress, guard ownership, and building
+   client, not just the host).
+5. Bring a second player's units onto the owned point: the owner's flag
+   lowers, the point goes neutral (anything queued is refunded to the old
+   owner), then fills in the attacker's colour. Equal numbers freeze it.
+6. Leave a neutral point empty for **Guard Respawn Delay** seconds and
+   confirm its guards come back at reduced health.
+7. Host + Join: confirm capture progress, guard ownership, and building
    ownership/tint all update identically on both the host and client screens
    (this depends on the Objective's own `MultiplayerSynchronizer` and the two
    `owner_peer_id`/`team_tint` sync properties every unit/building scene

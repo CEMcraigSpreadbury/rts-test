@@ -3,17 +3,23 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://dochf8rg3dc8l" path="res://assets/art/MiniBigMonsters/Outline/MiniGiantBear-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://c1w14k2e7mha" path="res://assets/art/MiniBigMonsters/Ice spikes 1-Sheet.png" id="fx_ice1"]
 [ext_resource type="Texture2D" uid="uid://qmuws1pb0hll" path="res://assets/art/MiniBigMonsters/Ice spikes 2-Sheet.png" id="fx_ice2"]
 
-[sub_resource type="Resource" id="ResourceCost_giant_bear_favour"]
+[sub_resource type="Resource" id="ResourceCost_giant_bear_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 40
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_giant_bear_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_giant_bear_projectile"]
 script = ExtResource("fx_script")
@@ -33,6 +39,16 @@ fps = 16.0
 scale = 1.5
 tint = Color(0.78, 0.56, 0.36, 1)
 
+[sub_resource type="Resource" id="SpriteEffect_giant_bear_linger"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_ice1")
+frame_size = Vector2i(32, 32)
+first_frame = 2
+frame_count = 5
+fps = 6.0
+scale = 1.0
+tint = Color(0.78, 0.56, 0.36, 1)
+
 [sub_resource type="Resource" id="Ability_giant_bear"]
 script = ExtResource("5_ability_script")
 ability_name = "Ground Slam"
@@ -40,7 +56,7 @@ kind = 2
 activation_range = 6.0
 cooldown = 16.0
 area_radius = 2.5
-area_damage = 20
+area_damage = 12
 stun_duration = 2.0
 effect_color = Color(0.75, 0.55, 0.3, 1)
 impact_shake = 0.5
@@ -52,6 +68,10 @@ projectile_speed = 12.0
 wave_spacing = 0.8
 impact_effect = SubResource("SpriteEffect_giant_bear_impact")
 impact_scatter_count = 5
+linger_duration = 6.0
+linger_damage_per_second = 2
+linger_effect = SubResource("SpriteEffect_giant_bear_linger")
+linger_effect_count = 5
 
 [node name="GiantBear" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -60,8 +80,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Giant Bear"
 move_speed = 2.4
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_giant_bear_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_giant_bear_gold"), SubResource("ResourceCost_giant_bear_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(40, 32)
 idle_frame_count = 4
@@ -78,10 +98,10 @@ cast_frame_count = 6
 cast_fps = 8.0
 can_gather = false
 can_build = false
-max_health = 320
-attack_damage = 34
+max_health = 860
+attack_damage = 14
 attack_range = 1.6
-attack_cooldown = 1.6
+attack_cooldown = 2.4
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

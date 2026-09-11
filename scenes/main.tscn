@@ -1,9 +1,8 @@
 [gd_scene format=4 uid="uid://n2ny6nebsu1v"]
 
-[ext_resource type="PackedScene" path="res://scenes/map_base.tscn" id="map_base"]
+[ext_resource type="Script" uid="uid://dk0ib5b4w24ll" path="res://addons/TileMapLayer3D/core/animated_tiles/animated_tile_data.gd" id="3_vchkt"]
 [ext_resource type="PackedScene" uid="uid://capdkcqswrjn6" path="res://scenes/resource_nodes/gatherable.tscn" id="8_tree"]
 [ext_resource type="Script" uid="uid://4kv8f8ejgwqn" path="res://addons/TileMapLayer3D/nodes/tilemap_layer_3d.gd" id="16_2f3dj"]
-[ext_resource type="PackedScene" uid="uid://d28gqdk37dgpr" path="res://scenes/resource_nodes/berry_bush.tscn" id="17_berry_bush"]
 [ext_resource type="Texture2D" uid="uid://bhyfp126phpf5" path="res://assets/art/Tilesets/ForgottenMemories/TileSet.png" id="18_fv21b"]
 [ext_resource type="PackedScene" uid="uid://c10y275vh27ta" path="res://scenes/resource_nodes/gold_deposit.tscn" id="18_gold_deposit"]
 [ext_resource type="Script" uid="uid://bli432i5uj51v" path="res://addons/TileMapLayer3D/core/resource_definition/tilemap_layer_settings.gd" id="19_tel4y"]
@@ -45,6 +44,7 @@
 [ext_resource type="Texture2D" uid="uid://cptvfvrbmpc1f" path="res://assets/art/Foliage Sprites/sprite_0008.png" id="50_t5ykj"]
 [ext_resource type="MultiMesh" path="res://scenes/main_grass/grass_multimesh.res" id="grass_multimesh"]
 [ext_resource type="MultiMesh" path="res://scenes/main_grass/grass_multimesh_2.res" id="grass_multimesh_2"]
+[ext_resource type="PackedScene" path="res://scenes/map_base.tscn" id="map_base"]
 
 [sub_resource type="NavigationMesh" id="NavigationMesh_1"]
 vertices = PackedVector3Array(-11.75, 0.42127842, 0.77062607, -8, 0.42127842, -2.979374, -8, 0.42127842, -46.229374, -59.5, 0.42127842, -46.229374, -59.5, 0.42127842, 2.020626, -11.75, 0.42127842, 2.270626, 1.5, 0.42127842, -3.479374, 2.25, 0.42127842, -2.479374, 3.5, 0.42127842, -3.479374, 10, 0.42127842, -46.229374, 9.5, 0.42127842, -3.479374, 10, 0.42127842, -2.979374, -7.5, 0.42127842, -3.479374, 11.75, 0.42127842, -1.2293739, 59.5, 0.42127842, 0.020626068, 59.5, 0.42127842, -46.229374, 11.75, 0.42127842, 0.27062607, -5, 1.0412784, 8.270626, -4, 1.0412784, 8.270626, -3.75, 1.4212785, 7.020626, -5.25, 1.4212785, 7.020626, -8.75, 1.4212785, 5.020626, -0.25, 1.4212785, 6.020626, 2, 1.4212785, -1.4793739, 1, 1.4212785, -2.479374, -7, 1.4212785, -2.479374, -10.75, 1.4212785, 4.270626, -10, 1.4212785, 5.020626, -10.75, 1.4212785, 1.2706261, -1, 1.4212785, 7.020626, -7, 1.4212785, 7.020626, 2, 1.4212785, 5.770626, 10.75, 1.4212785, 2.270626, 10.75, 1.4212785, -0.72937393, 9, 1.4212785, -2.479374, 4, 1.4212785, -2.479374, 3.25, 1.4212785, -1.4793739, 2.75, 1.4212785, 5.020626, 8, 1.4212785, 5.020626, 11.75, 0.42127842, 1.2706261, 59.5, 0.42127842, 1.5206261, -5, 0.6712784, 9.020626, -4, 0.6712784, 9.020626, -13.25, 0.42127842, 36.770626, -15.5, 0.42127842, 39.020626, -16.75, 0.42127842, 72.77063, -0.5, 0.42127842, 8.020626, -2.75, 0.42127842, 8.020626, -3, 0.42127842, 9.020626, 2.5, 0.42127842, 7.020626, 0.25, 0.42127842, 7.020626, -13.25, 0.42127842, 29.020626, 8.5, 0.42127842, 6.020626, 3.25, 0.42127842, 6.020626, 11.75, 0.42127842, 2.770626, -5.75, 0.42127842, 9.020626, -5.549999, 0.42127842, 10.353962, -4.6166687, 0.42127842, 10.353962, 59.5, 0.42127842, 72.77063, -17, 0.42127842, 39.020626, -40.25, 0.42127842, 32.520626, -36.75, 0.42127842, 32.520626, -36.75, 0.42127842, 28.770626, -40.75, 0.42127842, 33.020626, -59.5, 0.42127842, 34.270626, -40.75, 0.42127842, 34.520626, -34.5, 0.42127842, 26.520626, -15.75, 0.42127842, 26.520626, -11.75, 0.42127842, 4.520626, -6, 0.42127842, 8.020626, -7.5, 0.42127842, 8.020626, -9.25, 0.42127842, 6.020626, -10.5, 0.42127842, 6.020626, -32.25, 1.4212785, 38.520626, -33.25, 1.4212785, 38.520626, -33.25, 1.4212785, 39.020626, -29.25, 1.4212785, 39.020626, -29, 1.0412784, 40.270626, -28.5, 1.0412784, 40.270626, -27.75, 1.4212785, 39.020626, -28, 1.0412784, 40.270626, -32.25, 1.4212785, 35.020626, -32.25, 1.6712785, 36.020626, -31.25, 1.4212785, 37.020626, -33, 2.0412784, 36.020626, -33, 2.0412784, 37.520626, -32.25, 1.6712785, 37.520626, -34, 1.4212785, 27.520626, -35.75, 1.4212785, 29.270626, -33.25, 1.4212785, 33.020626, -25.25, 1.4212785, 38.020626, -23.25, 1.4212785, 38.020626, -23.25, 1.4212785, 27.520626, -33.25, 1.4212785, 35.020626, -26, 1.4212785, 39.020626, -33.75, 1.4212785, 32.520626, -31.25, 1.4212785, 38.020626, -35.75, 1.4212785, 32.520626, -16, 1.4212785, 38.020626, -14.25, 1.4212785, 36.270626, -14.25, 1.4212785, 29.270626, -16, 1.4212785, 27.520626, -34.25, 2.4212785, 35.770626, -34.25, 2.4212785, 37.770626, -36.75, 2.4212785, 38.020626, -34.25, 2.4212785, 33.520626, -39.75, 2.4212785, 33.520626, -39.75, 2.4212785, 38.020626, -36, 2.4212785, 39.020626, -34.25, 2.4212785, 39.020626, -36.5, 0.42127842, 37.770626, -35.75, 0.42127842, 38.770626, -34.5, 0.42127842, 38.770626, -34.5, 0.42127842, 33.770626, -39.5, 0.42127842, 33.770626, -39.5, 0.42127842, 37.770626, -59.5, 0.42127842, 37.270626, -40.75, 0.42127842, 37.020626, -40.75, 0.42127842, 38.520626, -40.25, 0.42127842, 39.020626, -59.5, 0.42127842, 72.77063, -39, 0.42127842, 72.77063, -38.75, 0.42127842, 39.020626, -36.5, 0.42127842, 40.020626, -37.25, 0.42127842, 39.020626, -35.25, 0.42127842, 72.77063, -35, 0.42127842, 40.020626, -28, 0.6712784, 41.020626, -28.5, 0.42127842, 72.77063, -28.022728, 0.42127842, 42.46381, -28.5, 0.42127842, 41.7479, -25.5, 0.42127842, 40.020626, -27, 0.42127842, 40.020626, -27, 0.42127842, 41.020626, -24.75, 0.42127842, 39.020626, -29, 0.6712784, 41.020626, -28.977272, 0.42127842, 42.46381, -30, 0.42127842, 41.020626, -30, 0.42127842, 40.020626)
@@ -12477,231 +12477,219 @@ shader_parameter/fog_vision_count = 0
 
 [node name="Main" unique_id=2055692591 instance=ExtResource("map_base")]
 
-[node name="NavigationRegion3D" parent="."]
+[node name="NavigationRegion3D" parent="." index="5" unique_id=1365774680]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.4012785, -5.270627)
 navigation_mesh = SubResource("NavigationMesh_1")
 
-[node name="TileMapLayer3D" type="Node3D" parent="NavigationRegion3D" unique_id=1901909271]
+[node name="TileMapLayer3D" type="Node3D" parent="NavigationRegion3D" index="0" unique_id=1901909271]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4012785, 5.270627)
 script = ExtResource("16_2f3dj")
 settings = SubResource("Resource_j8jky")
 tile_map_data = SubResource("Resource_kmb1v")
 metadata/_custom_type_script = "uid://4kv8f8ejgwqn"
 
-[node name="TileMapLayer3D_Collision" type="StaticBody3D" parent="NavigationRegion3D/TileMapLayer3D" unique_id=931800064]
+[node name="TileMapLayer3D_Collision" type="StaticBody3D" parent="NavigationRegion3D/TileMapLayer3D" index="0" unique_id=931800064]
 script = ExtResource("28_pibwh")
 
-[node name="Region_-1_0_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=44706137]
+[node name="Region_-1_0_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="0" unique_id=44706137]
 shape = ExtResource("21_augu2")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, 0, -1)
 
-[node name="Region_-1_0_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=983999808]
+[node name="Region_-1_0_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="1" unique_id=983999808]
 shape = ExtResource("23_tm6hj")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, 0, 0)
 
-[node name="Region_0_0_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1925555913]
+[node name="Region_0_0_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="2" unique_id=1925555913]
 shape = ExtResource("24_kf5aa")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, 0, -1)
 
-[node name="Region_0_0_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=9501432]
+[node name="Region_0_0_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="3" unique_id=9501432]
 shape = ExtResource("25_t5ykj")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, 0, 0)
 
-[node name="Region_-1_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=860939325]
+[node name="Region_-1_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="4" unique_id=860939325]
 shape = ExtResource("26_e755i")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, -1, -1)
 
-[node name="Region_-1_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1538793615]
+[node name="Region_-1_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="5" unique_id=1538793615]
 shape = ExtResource("27_ro3en")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, -1, 0)
 
-[node name="Region_0_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1032358797]
+[node name="Region_0_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="6" unique_id=1032358797]
 shape = ExtResource("28_od4ux")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, -1, -1)
 
-[node name="Region_0_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=467741463]
+[node name="Region_0_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="7" unique_id=467741463]
 shape = SubResource("ConcavePolygonShape3D_srgyy")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, -1, 0)
 
-[node name="Region_1_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=147879127]
+[node name="Region_1_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="8" unique_id=147879127]
 shape = ExtResource("29_xhfw6")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(1, -1, -1)
 
-[node name="Region_1_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1954709479]
+[node name="Region_1_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="9" unique_id=1954709479]
 shape = ExtResource("30_1epgm")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(1, -1, 0)
 
-[node name="Region_-2_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=955466250]
+[node name="Region_-2_-1_-1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="10" unique_id=955466250]
 shape = ExtResource("31_152kg")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, -1, -1)
 
-[node name="Region_-2_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1018947667]
+[node name="Region_-2_-1_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="11" unique_id=1018947667]
 shape = ExtResource("32_r4e17")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, -1, 0)
 
-[node name="Region_-2_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1598875623]
+[node name="Region_-2_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="12" unique_id=1598875623]
 shape = ExtResource("33_y57op")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, -1, 1)
 
-[node name="Region_-2_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1961346250]
+[node name="Region_-2_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="13" unique_id=1961346250]
 shape = ExtResource("34_mlv25")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, -1, 2)
 
-[node name="Region_-1_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1005628593]
+[node name="Region_-1_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="14" unique_id=1005628593]
 shape = ExtResource("35_a82wo")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, -1, 1)
 
-[node name="Region_-1_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=233823502]
+[node name="Region_-1_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="15" unique_id=233823502]
 shape = ExtResource("36_gdvew")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, -1, 2)
 
-[node name="Region_0_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=147110346]
+[node name="Region_0_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="16" unique_id=147110346]
 shape = ExtResource("37_kjtvk")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, -1, 1)
 
-[node name="Region_0_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1125545431]
+[node name="Region_0_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="17" unique_id=1125545431]
 shape = ExtResource("38_xrs0c")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, -1, 2)
 
-[node name="Region_1_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=913100428]
+[node name="Region_1_-1_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="18" unique_id=913100428]
 shape = ExtResource("39_xljpf")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(1, -1, 1)
 
-[node name="Region_1_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=345446347]
+[node name="Region_1_-1_2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="19" unique_id=345446347]
 shape = ExtResource("40_j4bwh")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(1, -1, 2)
 
-[node name="Region_0_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1414973650]
+[node name="Region_0_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="20" unique_id=1414973650]
 shape = ExtResource("41_ksmap")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(0, -1, -2)
 
-[node name="Region_1_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=509134379]
+[node name="Region_1_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="21" unique_id=509134379]
 shape = ExtResource("42_ygd8o")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(1, -1, -2)
 
-[node name="Region_-1_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=521328674]
+[node name="Region_-1_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="22" unique_id=521328674]
 shape = ExtResource("43_2s0kr")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, -1, -2)
 
-[node name="Region_-2_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=929658547]
+[node name="Region_-2_-1_-2" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="23" unique_id=929658547]
 shape = ExtResource("44_xaipn")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, -1, -2)
 
-[node name="Region_-2_0_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=181207333]
+[node name="Region_-2_0_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="24" unique_id=181207333]
 shape = ExtResource("45_ndrjj")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, 0, 1)
 
-[node name="Region_-1_0_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1513315646]
+[node name="Region_-1_0_1" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="25" unique_id=1513315646]
 shape = ExtResource("46_ih3m7")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-1, 0, 1)
 
-[node name="Region_-2_0_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" unique_id=1041379972]
+[node name="Region_-2_0_0" type="CollisionShape3D" parent="NavigationRegion3D/TileMapLayer3D/TileMapLayer3D_Collision" index="26" unique_id=1041379972]
 shape = ExtResource("47_11yus")
 script = ExtResource("30_5he1u")
 region_key = Vector3i(-2, 0, 0)
 
-[node name="TileMapLayer3D_Baked" type="MeshInstance3D" parent="NavigationRegion3D" unique_id=1491716709]
+[node name="TileMapLayer3D_Baked" type="MeshInstance3D" parent="NavigationRegion3D" index="1" unique_id=1491716709]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4012785, 5.270627)
 mesh = SubResource("ArrayMesh_155or")
 
-[node name="GrassMultiMesh2" type="MultiMeshInstance3D" parent="NavigationRegion3D/TileMapLayer3D_Baked" unique_id=2129980374]
+[node name="GrassMultiMesh2" type="MultiMeshInstance3D" parent="NavigationRegion3D/TileMapLayer3D_Baked" index="0" unique_id=2129980374]
 material_override = ExtResource("48_augu2")
 cast_shadow = 0
 multimesh = ExtResource("grass_multimesh_2")
 
-[node name="GrassMultiMesh" type="MultiMeshInstance3D" parent="NavigationRegion3D/TileMapLayer3D_Baked" unique_id=1233521322]
+[node name="GrassMultiMesh" type="MultiMeshInstance3D" parent="NavigationRegion3D/TileMapLayer3D_Baked" index="1" unique_id=1233521322]
 material_override = SubResource("ShaderMaterial_r4e17")
 cast_shadow = 0
 multimesh = ExtResource("grass_multimesh")
 
-[node name="PlayerSpawnPoint1" parent="PlayerSpawnPoints" unique_id=848134226 instance=ExtResource("40_player_spawn_point")]
+[node name="PlayerSpawnPoint1" parent="PlayerSpawnPoints" parent_id_path=PackedInt32Array(453093757) index="0" unique_id=848134226 instance=ExtResource("40_player_spawn_point")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9652376, 0.9265361, -7.036824)
 
-[node name="PlayerSpawnPoint2" parent="PlayerSpawnPoints" unique_id=576231332 instance=ExtResource("40_player_spawn_point")]
+[node name="PlayerSpawnPoint2" parent="PlayerSpawnPoints" parent_id_path=PackedInt32Array(453093757) index="1" unique_id=576231332 instance=ExtResource("40_player_spawn_point")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21.879335, 1.000001, 24.539072)
 
-[node name="Objective1" parent="." unique_id=243873150 instance=ExtResource("41_objective")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.626198, -9.536743e-07, 53.468353)
-
-[node name="Objective2" parent="." unique_id=836336563 instance=ExtResource("41_objective")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.373802, -9.536743e-07, 30.468353)
-
-[node name="BeastmenObjective" parent="." unique_id=1996597259 instance=ExtResource("42_beastmen_objective")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 40)
-
-[node name="ShrineObjective" parent="." unique_id=1583749754 instance=ExtResource("43_shrine_objective")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 48)
-
-[node name="Tree1" parent="ResourceNodes" unique_id=932968213 instance=ExtResource("8_tree")]
+[node name="Tree1" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="0" unique_id=932968213 instance=ExtResource("8_tree")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -11.794303, 0, 15.93079)
 
-[node name="Tree6" parent="ResourceNodes" unique_id=1219761216 instance=ExtResource("8_tree")]
+[node name="Tree6" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="1" unique_id=1219761216 instance=ExtResource("8_tree")]
 transform = Transform3D(0.49999997, 0, -0.86602545, 0, 1, 0, 0.86602545, 0, 0.49999997, -19.794304, 1, 23.93079)
 
-[node name="Tree7" parent="ResourceNodes" unique_id=456870518 instance=ExtResource("8_tree")]
+[node name="Tree7" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="2" unique_id=456870518 instance=ExtResource("8_tree")]
 transform = Transform3D(0.2588191, 0, 0.9659258, 0, 1, 0, -0.9659258, 0, 0.2588191, -16.794304, 1, 30.93079)
 
-[node name="Tree8" parent="ResourceNodes" unique_id=2127956926 instance=ExtResource("8_tree")]
+[node name="Tree8" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="3" unique_id=2127956926 instance=ExtResource("8_tree")]
 transform = Transform3D(-0.49999994, 0, 0.8660254, 0, 1, 0, -0.8660254, 0, -0.49999994, -36.794304, 0, 39.93079)
 
-[node name="Tree2" parent="ResourceNodes" unique_id=1243022168 instance=ExtResource("8_tree")]
+[node name="Tree2" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="4" unique_id=1243022168 instance=ExtResource("8_tree")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.199009, 9.536743e-07, 23.024776)
 
-[node name="Tree3" parent="ResourceNodes" unique_id=928748662 instance=ExtResource("8_tree")]
+[node name="Tree3" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="5" unique_id=928748662 instance=ExtResource("8_tree")]
 transform = Transform3D(0.49999997, 0, 0.86602545, 0, 1, 0, -0.86602545, 0, 0.49999997, -16.126715, 0, 13.366188)
 
-[node name="Tree4" parent="ResourceNodes" unique_id=744175782 instance=ExtResource("8_tree")]
+[node name="Tree4" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="6" unique_id=744175782 instance=ExtResource("8_tree")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, -6)
 
-[node name="Tree5" parent="ResourceNodes" unique_id=1937938722 instance=ExtResource("8_tree")]
+[node name="Tree5" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="7" unique_id=1937938722 instance=ExtResource("8_tree")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.4452, 1.9073486e-06, 19.697138)
 
-[node name="BerryBush1" parent="ResourceNodes" unique_id=918181438 instance=ExtResource("17_berry_bush")]
-transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, 8, 1, -2)
-
-[node name="BerryBush3" parent="ResourceNodes" unique_id=1305160936 instance=ExtResource("17_berry_bush")]
-transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, -32, 1, 28)
-
-[node name="BerryBush4" parent="ResourceNodes" unique_id=2743970 instance=ExtResource("17_berry_bush")]
-transform = Transform3D(0.8660254, 0, -0.5, 0, 1, 0, 0.5, 0, 0.8660254, -35, 0, 42)
-
-[node name="BerryBush2" parent="ResourceNodes" unique_id=665326967 instance=ExtResource("17_berry_bush")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -18)
-
-[node name="GoldDeposit1" parent="ResourceNodes" unique_id=2001545481 instance=ExtResource("18_gold_deposit")]
+[node name="GoldDeposit1" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="8" unique_id=2001545481 instance=ExtResource("18_gold_deposit")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 6)
 
-[node name="GoldDeposit2" parent="ResourceNodes" unique_id=1603363069 instance=ExtResource("18_gold_deposit")]
+[node name="GoldDeposit2" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="9" unique_id=1603363069 instance=ExtResource("18_gold_deposit")]
 transform = Transform3D(-0.25881904, 0, 0.9659258, 0, 1, 0, -0.9659258, 0, -0.25881904, -22, 0, 43)
 
-[node name="ShrineObjective" parent="ResourceNodes" unique_id=1082253826 instance=ExtResource("43_shrine_objective")]
+[node name="ShrineObjective" parent="ResourceNodes" parent_id_path=PackedInt32Array(1084375618) index="10" unique_id=1082253826 instance=ExtResource("43_shrine_objective")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 15)
 
-[node name="BeastmenObjective2" parent="." unique_id=1291895360 instance=ExtResource("42_beastmen_objective")]
+[node name="Objective1" parent="." index="17" unique_id=243873150 instance=ExtResource("41_objective")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.626198, -9.536743e-07, 53.468353)
+
+[node name="Objective2" parent="." index="18" unique_id=836336563 instance=ExtResource("41_objective")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.373802, -9.536743e-07, 30.468353)
+
+[node name="BeastmenObjective" parent="." index="19" unique_id=1996597259 instance=ExtResource("42_beastmen_objective")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, 40)
+
+[node name="ShrineObjective" parent="." index="20" unique_id=1583749754 instance=ExtResource("43_shrine_objective")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 48)
+
+[node name="BeastmenObjective2" parent="." index="21" unique_id=1291895360 instance=ExtResource("42_beastmen_objective")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 39, 0, 12)

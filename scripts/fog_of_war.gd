@@ -59,6 +59,14 @@ const ALPHA_UNEXPLORED: float = 255.0
 const ALPHA_EXPLORED: float = 153.0
 
 var explored: PackedByteArray = PackedByteArray()
+## Spectating (an eliminated player watching the rest of the match): the
+## whole map is explored and in vision. Done as one map-sized vision source
+## rather than every player's units, which would blow MAX_VISION_SOURCES.
+var reveal_all: bool = false:
+	set(value):
+		reveal_all = value
+		if value:
+			explored.fill(255)
 var fog_texture: ImageTexture
 
 var _image: Image
@@ -106,13 +114,6 @@ func _setup_terrain_fog_material() -> ShaderMaterial:
 	var terrain_material: Material = get_node(terrain_mesh_path).get_active_material(0)
 	var fog_material := ShaderMaterial.new()
 	fog_material.shader = preload("res://shaders/fog_of_war.gdshader")
-	var base := terrain_material as BaseMaterial3D
-	if base and base.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR and base.albedo_texture:
-		fog_material.set_shader_parameter("use_alpha_clip", true)
-		fog_material.set_shader_parameter("terrain_albedo", base.albedo_texture)
-		fog_material.set_shader_parameter("terrain_uv_scale", base.uv1_scale)
-		fog_material.set_shader_parameter("terrain_uv_offset", base.uv1_offset)
-		fog_material.set_shader_parameter("alpha_clip_threshold", base.alpha_scissor_threshold)
 	terrain_material.next_pass = fog_material
 	return fog_material
 
@@ -175,6 +176,11 @@ func _process(delta: float) -> void:
 ## wrongly renders them (and their buildings) through the fog entirely.
 func _update_vision_sources() -> void:
 	_vision_count = 0
+	if reveal_all:
+		_vision_positions[0] = map_origin + map_size * 0.5
+		_vision_radii[0] = map_size.length()
+		_vision_count = 1
+		return
 	var my_peer := multiplayer.get_unique_id()
 	if my_peer == 0:
 		return
@@ -273,9 +279,12 @@ func _stamp_explored(world_pos: Vector3, world_radius: float) -> void:
 			explored[idx] = maxi(explored[idx], value)
 
 func _update_explored() -> void:
-	for i in _vision_count:
-		var pos := _vision_positions[i]
-		_stamp_explored(Vector3(pos.x, 0.0, pos.y), _vision_radii[i])
+	## Already fully explored by reveal_all's setter — stamping a map-sized
+	## circle every tick would just redo that.
+	if not reveal_all:
+		for i in _vision_count:
+			var pos := _vision_positions[i]
+			_stamp_explored(Vector3(pos.x, 0.0, pos.y), _vision_radii[i])
 
 	_rebuild_texture()
 	_update_node_visibility()

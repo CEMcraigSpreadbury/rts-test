@@ -95,5 +95,16 @@ enum ProjectileStyle { NONE, FLYING, GROUND_WAVE }
 ## rather than as a single explosion in the middle.
 @export var impact_scatter_count: int = 0
 
+@export_group("Lingering Zone")
+## Seconds the area stays on the ground after landing. 0 = gone on impact.
+## While it lasts, every enemy unit standing in it — including ones that walk
+## in afterwards — is hurt once a second (see AbilityZone).
+@export var linger_duration: float = 0.0
+@export var linger_damage_per_second: int = 0
+## Looped at scattered points across the zone for as long as it lasts, on
+## top of the ground disc and rising particles every zone gets.
+@export var linger_effect: SpriteEffect
+@export var linger_effect_count: int = 5
+
 func is_activated() -> bool:
 	return kind != Kind.PASSIVE_AURA

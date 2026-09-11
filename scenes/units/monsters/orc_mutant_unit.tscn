@@ -3,17 +3,23 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://cn7w47uhifoeu" path="res://assets/art/MiniBigMonsters/Outline/MiniOrcMutant-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://b7amoqcrdrtic" path="res://assets/art/MiniBigMonsters/Effect-Sheet.png" id="fx_effect"]
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
 
-[sub_resource type="Resource" id="ResourceCost_orc_mutant_favour"]
+[sub_resource type="Resource" id="ResourceCost_orc_mutant_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 40
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_orc_mutant_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_orc_mutant_projectile"]
 script = ExtResource("fx_script")
@@ -40,7 +46,7 @@ kind = 2
 activation_range = 8.0
 cooldown = 15.0
 area_radius = 3.0
-area_damage = 20
+area_damage = 10
 slow_fraction = 0.5
 slow_duration = 4.0
 effect_color = Color(0.75, 0.85, 0.15, 1)
@@ -53,6 +59,8 @@ projectile_speed = 10.0
 projectile_arc_height = 2.5
 impact_effect = SubResource("SpriteEffect_orc_mutant_impact")
 impact_scatter_count = 4
+linger_duration = 10.0
+linger_damage_per_second = 2
 
 [node name="OrcMutant" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -61,8 +69,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Orc Mutant"
 move_speed = 2.5
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_orc_mutant_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_orc_mutant_gold"), SubResource("ResourceCost_orc_mutant_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(48, 32)
 idle_frame_count = 8
@@ -79,10 +87,10 @@ cast_frame_count = 14
 cast_fps = 12.0
 can_gather = false
 can_build = false
-max_health = 300
-attack_damage = 38
+max_health = 800
+attack_damage = 15
 attack_range = 1.7
-attack_cooldown = 1.5
+attack_cooldown = 2.3
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

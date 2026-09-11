@@ -22,11 +22,19 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 ## Network.map_index is an index into this (see MapInfo.list_all).
 var available_maps: Array[MapInfo] = MapInfo.list_all()
 
+## Under the map picker. Host-editable, read-only for everyone else — same
+## rule as the map picker.
+var _settings_row: MatchSettingsRow
+
 func _ready() -> void:
 	for map in available_maps:
 		map_option.add_item(map.map_name)
 	map_option.item_selected.connect(Network.set_map)
 	Network.map_changed.connect(_refresh_map_option.unbind(1))
+	_settings_row = MatchSettingsRow.new()
+	_settings_row.edited.connect(func(): Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target()))
+	map_option.add_sibling(_settings_row)
+	Network.match_settings_changed.connect(_refresh_match_settings)
 	_refresh_map_option()
 	quick_play_button.pressed.connect(_on_quick_play_pressed)
 	host_steam_button.pressed.connect(_on_host_steam_pressed)
@@ -156,6 +164,14 @@ func _refresh_map_option() -> void:
 		return
 	map_option.select(clampi(Network.map_index, 0, available_maps.size() - 1))
 	map_option.disabled = multiplayer.multiplayer_peer != null and not Network.is_host()
+	_refresh_match_settings()
+
+func _refresh_match_settings() -> void:
+	if _settings_row == null or available_maps.is_empty():
+		return
+	var map: MapInfo = available_maps[clampi(Network.map_index, 0, available_maps.size() - 1)]
+	var editable := multiplayer.multiplayer_peer == null or Network.is_host()
+	_settings_row.show_values(Network.game_mode, Network.favour_target, map, editable)
 
 func _refresh_player_list(_peer_id: int = -1) -> void:
 	_refresh_map_option()
@@ -226,4 +242,5 @@ func _on_start_pressed() -> void:
 	Network.mark_steam_lobby_in_progress()
 	start_button.disabled = true
 	map_option.disabled = true
+	_settings_row.set_editable(false)
 	SceneLoader.start_match(available_maps[clampi(Network.map_index, 0, available_maps.size() - 1)].scene_path)

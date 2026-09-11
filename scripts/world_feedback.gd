@@ -533,7 +533,9 @@ func _show_damage_number(node: Node3D, amount: int, mine: bool) -> void:
 	var entry: Dictionary = _damage_aggregates.get(id, {})
 	if not entry.is_empty() and now - float(entry["started"]) <= DAMAGE_AGGREGATE_WINDOW:
 		total += int(entry["total"])
-		var previous: Label = entry["label"]
+		## Untyped: the label may already have freed itself, and assigning a
+		## freed object to a typed Label var errors before is_instance_valid runs.
+		var previous = entry["label"]
 		if is_instance_valid(previous):
 			var previous_tween: Tween = previous.get_meta(POPUP_TWEEN_META, null)
 			if previous_tween != null and previous_tween.is_valid():
@@ -943,7 +945,7 @@ func _update_hover_cursor(collider: Object) -> void:
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		return
 	if (collider is Unit and collider.owner_peer_id != main.my_peer_id()) \
-			or (collider is ProductionBuilding and collider.owner_peer_id != main.my_peer_id()):
+			or (collider is ProductionBuilding and collider.owner_peer_id != main.my_peer_id() and collider.can_be_attacked()):
 		Input.set_default_cursor_shape(Input.CURSOR_CROSS)
 	elif collider is Gatherable:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
@@ -1209,6 +1211,8 @@ func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:
 	## Local, not relayed: every peer reaches this on its own timer.
 	if ability.impact_shake > 0.0:
 		main.camera_rig.shake_at(target_pos, ability.impact_shake)
+	if ability.linger_duration > 0.0:
+		_play_lingering_zone(ability, target_pos)
 	if ability.impact_effect == null:
 		return
 	_spawn_ground_effect(ability.impact_effect, target_pos, 1.0)
@@ -1220,6 +1224,114 @@ func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:
 		var pos := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * distance
 		var delay := randf_range(0.03, 0.25)
 		get_tree().create_timer(delay).timeout.connect(_spawn_ground_effect.bind(ability.impact_effect, pos, randf_range(0.55, 0.8)))
+
+## How strongly a lingering zone's ground disc shows while it lasts — fainter
+## than the impact flash, so the flash still reads as the moment it lands.
+const LINGER_DECAL_ALPHA: float = 0.6
+## The disc breathes between this fraction of LINGER_DECAL_ALPHA and full,
+## so a long-lived pool reads as live rather than as a painted-on stain.
+const LINGER_PULSE_LOW: float = 0.65
+const LINGER_PULSE_PERIOD: float = 1.4
+const LINGER_FADE_OUT: float = 1.0
+## How often a zone rechecks fog. It can outlive the vision that revealed it,
+## or be walked into view long after it landed.
+const LINGER_FOG_RECHECK: float = 0.25
+
+## The pool left on the ground by an ability with a linger_duration — purely
+## the look of the host's AbilityZone, which does the actual damage. Started
+## off each peer's own impact timer, so it lines up with the damage without a
+## relay of its own.
+func _play_lingering_zone(ability: Ability, target_pos: Vector3) -> void:
+	var zone := Node3D.new()
+	add_child(zone)
+	zone.global_position = target_pos
+	var radius: float = ability.area_radius
+	var duration: float = ability.linger_duration
+
+	var decal := _make_ability_decal()
+	decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
+	decal.modulate = Color(ability.effect_color, LINGER_DECAL_ALPHA)
+	zone.add_child(decal)
+	var pulse := decal.create_tween().set_loops()
+	pulse.tween_property(decal, "modulate:a", LINGER_DECAL_ALPHA * LINGER_PULSE_LOW, LINGER_PULSE_PERIOD * 0.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	pulse.tween_property(decal, "modulate:a", LINGER_DECAL_ALPHA, LINGER_PULSE_PERIOD * 0.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	var rising := ParticleProcessMaterial.new()
+	rising.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	rising.emission_ring_axis = Vector3.UP
+	rising.emission_ring_radius = radius * 0.9
+	rising.emission_ring_inner_radius = 0.0
+	rising.emission_ring_height = 0.05
+	rising.direction = Vector3.UP
+	rising.spread = 12.0
+	rising.initial_velocity_min = 0.4
+	rising.initial_velocity_max = 1.1
+	rising.gravity = Vector3.ZERO
+	rising.scale_min = 0.9
+	rising.scale_max = 1.8
+	var fade := Gradient.new()
+	fade.set_color(0, Color(ability.effect_color, 0.0))
+	fade.add_point(0.2, ability.effect_color)
+	fade.set_color(fade.get_point_count() - 1, Color(ability.effect_color, 0.0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	rising.color_ramp = ramp
+	var particles := GPUParticles3D.new()
+	particles.amount = int(clampf(radius * radius * 3.0, 12.0, 60.0))
+	particles.lifetime = 1.1
+	particles.process_material = rising
+	particles.draw_pass_1 = _impact_mesh
+	## Emitted just above the grass, like the rally dust — at ground level the
+	## blades would swallow most of it.
+	particles.position = Vector3(0, RALLY_DUST_HEIGHT, 0)
+	particles.emitting = true
+	zone.add_child(particles)
+
+	var sprites: Array[AnimatedSprite3D] = []
+	if ability.linger_effect:
+		for i in ability.linger_effect_count:
+			var offset := Vector3.ZERO
+			var extra_scale := 1.0
+			## The first sits in the middle; the rest spread evenly over the disc.
+			if i > 0:
+				var angle := randf() * TAU
+				offset = Vector3(cos(angle), 0.0, sin(angle)) * sqrt(randf()) * radius * 0.8
+				extra_scale = randf_range(0.6, 0.9)
+			var sprite := _make_effect_sprite(ability.linger_effect, extra_scale)
+			zone.add_child(sprite)
+			sprite.position = offset + Vector3.UP * (ability.linger_effect.world_height(extra_scale) * 0.5 + ability.linger_effect.height_offset)
+			sprite.play(SpriteEffect.LOOP)
+			## Out of step with each other, so the pool flickers rather than
+			## pulsing in unison.
+			sprite.frame = randi() % ability.linger_effect.frame_count
+			sprite.speed_scale = randf_range(0.85, 1.15)
+			sprites.append(sprite)
+
+	var fog_check := Timer.new()
+	fog_check.wait_time = LINGER_FOG_RECHECK
+	fog_check.autostart = true
+	zone.add_child(fog_check)
+	var update_fog := func() -> void:
+		zone.visible = main.fog_of_war.is_visible_at(target_pos)
+	fog_check.timeout.connect(update_fog)
+	update_fog.call()
+
+	## Bound to the zone itself, so everything dies together however it ends.
+	var life := zone.create_tween()
+	life.tween_interval(maxf(duration - LINGER_FADE_OUT, 0.0))
+	life.tween_callback(func() -> void:
+		pulse.kill()
+		particles.emitting = false)
+	life.set_parallel(true)
+	life.tween_property(decal, "modulate:a", 0.0, LINGER_FADE_OUT)
+	for sprite in sprites:
+		life.tween_property(sprite, "modulate:a", 0.0, LINGER_FADE_OUT)
+	life.set_parallel(false)
+	## Leaves the particles already in the air time to finish fading.
+	life.tween_interval(particles.lifetime)
+	life.tween_callback(zone.queue_free)
 
 ## Victim-side burning/slowed/stunned, relayed off Unit.status_applied (the
 ## effects themselves only run on the host).

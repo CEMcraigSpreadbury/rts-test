@@ -14,7 +14,7 @@ a `Faction`/`BuildingType`/`ProducibleItem` resource until it exists:
   `NavigationObstacle3D`, etc.) intact.
 - A starting unit scene (Villager-equivalent) — copy `scenes/units/unit.tscn`
   the same way, keeping the `Unit` script attached.
-- Any other buildings (Barracks/House/Farm/Mine/Stables-equivalents) and
+- Any other buildings (Barracks/House/Mine/Stables-equivalents) and
   combat units (Soldier/Archer/Spearman/Cavalry-equivalents) you want this
   faction to have. Reusing the existing building/unit scenes as-is is fine too
   (that's what Faction Two does today) — you don't have to replace everything
@@ -54,7 +54,7 @@ Costs and combat stats are edited on the building/unit scenes themselves, not
 on the `Faction`/`BuildingType` resource:
 
 - Open each building scene → select its root node → in the Inspector set
-  **Costs** (`Array[ResourceCost]`) and, for a Farm-equivalent, the
+  **Costs** (`Array[ResourceCost]`) and, for a buildable resource, the
   `Gatherable` costs.
 - Open each unit scene → select its root node (`Unit` script) → set **Costs**,
   **Population Cost**, **Damage Type**, **Weak To**, HP, damage, range, speed,

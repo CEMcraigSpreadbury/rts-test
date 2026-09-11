@@ -13,6 +13,17 @@ const MAPS_DIR: String = "res://resources/maps/"
 @export_file("*.tscn") var scene_path: String = ""
 ## Number of PlayerSpawnPoints on the map; 0 if unknown.
 @export var max_players: int = 0
+## Number of Objectives (capture points) on the map; 0 if unknown. Only used
+## to show the default Conquest target in the lobby before the map loads —
+## the match itself counts the real ones (see Main._ready).
+@export var capture_points: int = 0
+
+## Conquest Favour target per capture point — roughly 12-15 minutes of
+## holding half the map.
+const FAVOUR_TARGET_PER_POINT: int = 400
+
+func default_favour_target() -> int:
+	return FAVOUR_TARGET_PER_POINT * capture_points
 
 static func list_all() -> Array[MapInfo]:
 	var maps: Array[MapInfo] = []

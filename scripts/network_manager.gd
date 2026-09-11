@@ -20,6 +20,9 @@ signal player_updated(peer_id: int)
 ## Fired when the lobby's chosen map changes (host picked one, or a client
 ## learned the host's pick).
 signal map_changed(index: int)
+## Fired when the host changes the game mode or Favour target (or a client
+## learns them).
+signal match_settings_changed
 signal connection_failed
 signal connected_to_server
 signal server_disconnected
@@ -58,6 +61,16 @@ const TEAM_COLOR_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 var players: Dictionary = {}
 ## Index into the lobby's available_maps. Host-owned, like color assignment.
 var map_index: int = 0
+
+enum GameMode { CONQUEST, ANNIHILATION }
+const GAME_MODE_NAMES: Array[String] = ["Conquest", "Annihilation"]
+## Host-owned, like map_index. Conquest: first to favour_target Favour wins
+## (destroying every enemy base still wins too). Annihilation: bases only.
+var game_mode: GameMode = GameMode.CONQUEST
+## 0 = the chosen map's default (see MapInfo.default_favour_target). Reset to
+## 0 whenever the map changes, so a target picked for one map never silently
+## carries over to another.
+var favour_target: int = 0
 
 ## 0 when not hosting/in a Steam lobby.
 var _steam_lobby_id: int = 0
@@ -239,6 +252,10 @@ func leave_game() -> void:
 func start_offline() -> void:
 	leave_game()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	## Single player has no lobby to pick these in — always the defaults
+	## rather than whatever a previous lobby left behind.
+	game_mode = GameMode.CONQUEST
+	favour_target = 0
 
 func is_host() -> bool:
 	return multiplayer.multiplayer_peer != null and multiplayer.is_server()
@@ -259,6 +276,7 @@ func _on_peer_connected(id: int) -> void:
 		_sync_player_list.rpc_id(id, players)
 		_rpc_color_changed.rpc(id, players[id]["color"])
 		_rpc_map_changed.rpc_id(id, map_index)
+		_rpc_match_settings_changed.rpc_id(id, game_mode, favour_target)
 	player_connected.emit(id)
 
 func _on_peer_disconnected(id: int) -> void:
@@ -424,11 +442,33 @@ func set_map(index: int) -> void:
 	map_changed.emit(index)
 	if is_host():
 		_rpc_map_changed.rpc(index)
+	set_match_settings(game_mode, 0)
 
 @rpc("authority", "call_remote", "reliable")
 func _rpc_map_changed(index: int) -> void:
 	map_index = index
 	map_changed.emit(index)
+
+## --- Game mode + Favour target (lobby only) ---
+##
+## Same host-owned, clients-mirror shape as map selection above.
+
+## `mode` is a GameMode value — typed int so other scripts can pass one (an
+## autoload's enum isn't usable as a type outside it).
+func set_match_settings(mode: int, target: int) -> void:
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return
+	game_mode = mode as GameMode
+	favour_target = maxi(target, 0)
+	match_settings_changed.emit()
+	if is_host():
+		_rpc_match_settings_changed.rpc(game_mode, favour_target)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_match_settings_changed(mode: int, target: int) -> void:
+	game_mode = mode as GameMode
+	favour_target = target
+	match_settings_changed.emit()
 
 ## --- Ready-up (lobby only) ---
 ##

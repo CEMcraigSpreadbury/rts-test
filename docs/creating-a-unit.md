@@ -112,6 +112,12 @@ How an area ability looks:
   ground from caster to target. Damage lands when the projectile arrives.
 - **Impact** group: a burst at the target, plus **Impact Scatter Count**
   smaller ones spread across the radius.
+- **Lingering Zone** group: **Linger Duration** keeps the area on the ground
+  for that many seconds after it lands. Every enemy unit standing in it,
+  including ones that walk in later, takes **Linger Damage Per Second**, and
+  the ability's slow keeps being applied while they stay inside (stun and
+  damage over time are not). **Linger Effect** is an optional flipbook looped
+  at **Linger Effect Count** spots across the zone.
 
 Each effect is a `SpriteEffect` (`scripts/sprite_effect.gd`): a sheet, frame
 size, row, first frame, frame count, fps, scale and tint. Turn on **Orient To

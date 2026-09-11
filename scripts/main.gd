@@ -89,6 +89,12 @@ const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, 
 @export var on_placement_blocked_sound_effects: Array[AudioStream] = []
 ## Played for the owner when they plant a rally banner.
 @export var on_rally_set_sound_effects: Array[AudioStream] = []
+## Conquest alerts, all played locally by ConquestHud off the synced objective
+## state. Defaults are placeholders — swap real clips in on map_base.tscn.
+@export var on_point_captured_sound_effects: Array[AudioStream] = [preload("res://assets/sfx/Construction/Building_Complete_2.wav")]
+@export var on_point_lost_sound_effects: Array[AudioStream] = [preload("res://assets/sfx/UI SFX/07_decline_1.wav")]
+@export var on_point_under_attack_sound_effects: Array[AudioStream] = [preload("res://assets/sfx/UI SFX/07_decline_2.wav")]
+@export var on_enemy_near_victory_sound_effects: Array[AudioStream] = [preload("res://assets/sfx/UI SFX/08_start_game.wav")]
 
 
 @onready var ui_root: Node = $UI
@@ -185,12 +191,33 @@ var town_centers: Dictionary = {}
 ## Host-only: peer_id -> how many is_main_base buildings they still have.
 var main_base_count_by_peer: Dictionary = {}
 var defeated_peers: Dictionary = {}
+## Host-only: peers who left mid-match. Like a defeated player, their units
+## and buildings stay (with nobody controlling them) but they earn no Favour
+## and can't win.
+var disconnected_peers: Dictionary = {}
 var game_over: bool = false
+## This peer has been knocked out of a match that carries on without them
+## (an FFA elimination) — blocks their input like game_over does, without
+## stopping the host's own win checks when the host is the one knocked out.
+var local_player_out: bool = false
+## Conquest mode: the first active player to favour_target Favour wins.
+## Destroying every enemy main base wins in either mode. Both come from the
+## lobby (Network.game_mode / favour_target) and are set identically on every
+## peer in _ready, so clients know the target without being told.
+var conquest_enabled: bool = true
+var favour_target: int = 0
+## peer_id -> {score: int, active: bool}, for every player in the match —
+## broadcast by the host (see _broadcast_scores) since ResourceStockpile only
+## ever tells a client its own totals. Read by ConquestHud.
+var scores: Dictionary = {}
+const SCORE_BROADCAST_INTERVAL: float = 0.25
+var _score_broadcast_timer: float = 0.0
+var conquest_hud: ConquestHud = null
+const FAVOUR_RESOURCE: ResourceType = preload("res://resources/favour_resource_type.tres")
 
 ## Extend this when new resource types (Stone, ...) are added.
 const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
 	preload("res://resources/wood_resource_type.tres"),
-	preload("res://resources/food_resource_type.tres"),
 	preload("res://resources/gold_resource_type.tres"),
 	preload("res://resources/favour_resource_type.tres"),
 ]
@@ -210,7 +237,20 @@ func _enter_tree() -> void:
 		_add_components()
 
 func _ready() -> void:
+	## Before hud.setup(), which draws the resource bar off conquest_enabled.
+	conquest_enabled = Network.game_mode == Network.GameMode.CONQUEST
+	## Objectives join their group in their own _ready, which has already run
+	## by now (children ready before their parent) — so a lobby target of 0
+	## (the map default) is worked out from the real point count here.
+	favour_target = Network.favour_target if Network.favour_target > 0 \
+			else MapInfo.FAVOUR_TARGET_PER_POINT * get_tree().get_nodes_in_group(&"objectives").size()
+	_assign_objective_letters()
+
 	hud.setup()
+	if conquest_enabled:
+		conquest_hud = ConquestHud.new()
+		conquest_hud.main = self
+		ui_root.add_child(conquest_hud)
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
 	building_spawner.spawn_function = _spawn_building_from_data
@@ -244,6 +284,7 @@ func _ready() -> void:
 
 	game_over_panel.visible = false
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_return_to_main_menu)
+	_build_spectate_button()
 
 	Network.player_disconnected.connect(_on_network_player_disconnected)
 	Network.server_disconnected.connect(_on_network_server_disconnected)
@@ -438,12 +479,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 ##
 ## Deliberately a complete mirror of the connections in _spawn_unit_from_data
 ## rather than only the ones a guard demonstrably needs today. The two lists
-## drifting apart is what caused this in the first place, and a guard does not
-## stay a guard: capturing an objective hands it to a player (see
-## Objective._capture), after which it takes orders like any other unit —
-## order_completed in particular is what advances a shift-queued order chain,
-## so without it a captured guard would run the first order of a queue and
-## silently drop the rest.
+## drifting apart is what caused this in the first place.
 func register_objective_unit(unit: Unit) -> void:
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
@@ -513,24 +549,144 @@ func _on_building_destroyed(building: ProductionBuilding) -> void:
 	if main_base_count_by_peer[peer_id] <= 0 and not defeated_peers.has(peer_id):
 		defeated_peers[peer_id] = true
 		_check_for_game_over()
+		## Knocked out of a match that carries on (FFA): their own Defeat
+		## screen now, rather than waiting for everyone else to finish.
+		if not game_over and not disconnected_peers.has(peer_id):
+			_rpc_player_out.rpc_id(peer_id)
 
+## Still in the running: not eliminated, still connected. Only an active
+## player earns Favour (see Objective._tick_favour) or can win.
+func is_peer_active(peer_id: int) -> bool:
+	return peer_id > 0 and not defeated_peers.has(peer_id) and not disconnected_peers.has(peer_id)
+
+## Last player standing — by elimination or by everyone else leaving.
 func _check_for_game_over() -> void:
+	if game_over:
+		return
 	var all_peers: Array = main_base_count_by_peer.keys()
 	if all_peers.size() <= 1:
 		return
-	var remaining: Array = []
-	for peer_id in all_peers:
-		if not defeated_peers.has(peer_id):
-			remaining.append(peer_id)
+	var remaining: Array = all_peers.filter(is_peer_active)
 	if remaining.size() <= 1:
-		game_over = true
-		var winner_id: int = remaining[0] if remaining.size() == 1 else -1
-		_rpc_game_over.rpc(winner_id)
+		_end_game(remaining[0] if remaining.size() == 1 else -1)
+
+## Run by the host at the start of every physics tick — before any Objective
+## ticks, since Main is their ancestor — so everything banked during the
+## previous tick is judged together: two players crossing the line on the
+## same tick is a draw.
+func _physics_process(delta: float) -> void:
+	if not multiplayer.is_server() or game_over or not conquest_enabled or favour_target <= 0:
+		return
+	_score_broadcast_timer -= delta
+	if _score_broadcast_timer <= 0.0:
+		_score_broadcast_timer = SCORE_BROADCAST_INTERVAL
+		_broadcast_scores()
+	var winners: Array = []
+	for peer_id in main_base_count_by_peer.keys():
+		if is_peer_active(peer_id) and ResourceStockpile.get_amount(peer_id, FAVOUR_RESOURCE) >= favour_target:
+			winners.append(peer_id)
+	if not winners.is_empty():
+		_end_game(winners[0] if winners.size() == 1 else -1)
+
+## -1 = draw.
+func _end_game(winner_peer_id: int) -> void:
+	game_over = true
+	## One last push so every bar shows the finishing total, not the one from
+	## up to a broadcast interval ago.
+	if conquest_enabled:
+		_broadcast_scores()
+	_rpc_game_over.rpc(winner_peer_id)
+
+func _broadcast_scores() -> void:
+	var snapshot: Dictionary = {}
+	for peer_id in main_base_count_by_peer.keys():
+		snapshot[peer_id] = {score = ResourceStockpile.get_amount(peer_id, FAVOUR_RESOURCE), active = is_peer_active(peer_id)}
+	_rpc_scores.rpc(snapshot)
+
+@rpc("authority", "call_local", "unreliable_ordered")
+func _rpc_scores(snapshot: Dictionary) -> void:
+	scores = snapshot
+
+## "A", "B", ... going clockwise (seen from above, -Z up) from due north of
+## the map's middle, with the point sitting at the middle itself (if any)
+## last. Worked out identically on every peer from positions alone, so no
+## syncing is needed.
+func _assign_objective_letters() -> void:
+	var objectives: Array = get_tree().get_nodes_in_group(&"objectives")
+	if objectives.is_empty():
+		return
+	var middle := Vector3.ZERO
+	for o in objectives:
+		middle += o.global_position
+	middle /= objectives.size()
+	var centre: Node3D = null
+	if objectives.size() > 2:
+		for o in objectives:
+			if Vector2(o.global_position.x - middle.x, o.global_position.z - middle.z).length() < CENTRE_POINT_RADIUS:
+				centre = o
+				break
+	var ring: Array = objectives.filter(func(o): return o != centre)
+	var angle_of := func(o: Node3D) -> float:
+		return fposmod(atan2(o.global_position.x - middle.x, -(o.global_position.z - middle.z)), TAU)
+	ring.sort_custom(func(a, b):
+		var da: float = angle_of.call(a)
+		var db: float = angle_of.call(b)
+		if absf(da - db) > 0.0001:
+			return da < db
+		return a.global_position.distance_squared_to(middle) < b.global_position.distance_squared_to(middle))
+	if centre != null:
+		ring.append(centre)
+	for i in ring.size():
+		ring[i].set_letter(String.chr(65 + i))
+
+## How close to the average of every point's position a point must be to
+## count as the map's centre point for lettering.
+const CENTRE_POINT_RADIUS: float = 5.0
+
+## Only offered to a player knocked out of a match that's still going — see
+## _rpc_player_out. Hidden again once the match actually ends.
+var _spectate_button: Button = null
+
+func _build_spectate_button() -> void:
+	_spectate_button = Button.new()
+	_spectate_button.text = "Spectate"
+	_spectate_button.visible = false
+	_spectate_button.pressed.connect(_start_spectating)
+	var return_button: Button = $UI/GameOverPanel/Margin/VBox/ReturnButton
+	return_button.add_sibling(_spectate_button)
+	return_button.get_parent().move_child(_spectate_button, return_button.get_index())
+
+## Stays in the match with the whole map revealed. Esc brings the panel back
+## (see _unhandled_input) to leave later.
+func _start_spectating() -> void:
+	game_over_panel.visible = false
+	fog_of_war.reveal_all = true
+	## Nothing left to command — and a lingering selection would keep its
+	## command-card buttons live.
+	prune_selected_units()
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	select_building(null)
+	select_resource(null)
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_player_out() -> void:
+	local_player_out = true
+	game_over_panel.visible = true
+	game_over_label.text = "Defeat"
+	_spectate_button.visible = true
+	## The host IS the server: quitting takes the match down for everyone
+	## still playing, and there's no host migration to hand it off to.
+	if multiplayer.is_server() and not multiplayer.get_peers().is_empty():
+		$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Leave (ends the match for everyone)"
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_game_over(winner_peer_id: int) -> void:
 	game_over = true
 	game_over_panel.visible = true
+	_spectate_button.visible = false
+	$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Return to Main Menu"
 	if winner_peer_id == -1:
 		game_over_label.text = "Draw!"
 	elif winner_peer_id == my_peer_id():
@@ -583,8 +739,30 @@ func _show_opponent_left(message: String) -> void:
 	_opponent_left_label.text = message
 	_opponent_left_panel.visible = true
 
-func _on_network_player_disconnected(_peer_id: int, player_data: Dictionary) -> void:
-	_show_opponent_left("%s disconnected." % player_data.get("name", "Opponent"))
+## The match carries on without them (their units and buildings stay put,
+## uncontrolled), so this is a chat line rather than the blocking panel — the
+## host alone decides whether it ends the game (see _check_for_game_over).
+func _on_network_player_disconnected(peer_id: int, player_data: Dictionary) -> void:
+	if not multiplayer.is_server() or game_over:
+		return
+	disconnected_peers[peer_id] = true
+	var line := "%s disconnected." % player_data.get("name", "A player")
+	for peer in _chat_recipients():
+		chat.send_line(peer, line)
+	_check_for_game_over()
+
+## Host only: everyone in the match, the host included.
+func _chat_recipients() -> Array:
+	var recipients: Array = [my_peer_id()]
+	recipients.append_array(multiplayer.get_peers())
+	return recipients
+
+## Host only — called by Objective._set_owner whenever a point is taken.
+## The capturer reads "You", everyone else the capturer's name.
+func announce_point_captured(peer_id: int, letter: String) -> void:
+	var name_text: String = Network.players.get(peer_id, {}).get("name", "Player %d" % peer_id)
+	for peer in _chat_recipients():
+		chat.send_line(peer, "%s captured %s." % ["You" if peer == peer_id else name_text, letter])
 
 func _on_network_server_disconnected() -> void:
 	_show_opponent_left("Lost connection to host.")
@@ -621,6 +799,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"tint": get_team_tint(building.owner_peer_id),
 		"position": spawn_pos,
 	})
+	building.register_produced_unit(unit)
 	feedback.relay_building_squash(building)
 	if building.can_rally and building.has_rally_point:
 		var rally_target: Node = get_node_or_null(building.rally_target_path) \
@@ -673,6 +852,11 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over:
+		return
+	if local_player_out:
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			game_over_panel.visible = not game_over_panel.visible
+			get_viewport().set_input_as_handled()
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE and pause_menu.visible:
@@ -900,7 +1084,7 @@ func _cancel_formation_drag() -> void:
 func _poll_formation_drag() -> void:
 	if not _formation_drag_pressed or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		return
-	if game_over or _is_pause_menu_open() or chat.is_input_open() or placement.is_placing():
+	if game_over or local_player_out or _is_pause_menu_open() or chat.is_input_open() or placement.is_placing():
 		_cancel_formation_drag()
 	else:
 		_finish_formation_drag(Input.is_key_pressed(KEY_SHIFT))
@@ -1179,8 +1363,8 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 	## (e.g. a Mine — right-clicking the mine itself should still gather from
 	## the deposit it sits on), alongside the existing enemy-building-attack case.
 	elif result.collider is ProductionBuilding and \
-			(result.collider.owner_peer_id != my_peer_id() or result.collider.is_under_construction \
-				or result.collider.linked_deposit != null):
+			((result.collider.owner_peer_id != my_peer_id() and result.collider.can_be_attacked()) \
+				or result.collider.is_under_construction or result.collider.linked_deposit != null):
 		return result.collider.get_path()
 	return NodePath()
 
@@ -1193,6 +1377,8 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 ## construction or sit on a deposit, and none of those are attacks.
 func _popup_kind_for_order(result: Dictionary) -> String:
 	var collider = result.get("collider")
+	if collider is ProductionBuilding and not collider.can_be_attacked():
+		return "move"
 	if (collider is Unit or collider is ProductionBuilding) \
 			and collider.owner_peer_id != my_peer_id():
 		return "attack"
@@ -1455,7 +1641,8 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 			and not target_node.is_under_construction and target_node.linked_deposit.can_be_gathered():
 		unit.command_gather(target_node.linked_deposit, _get_dropoff_for(unit.owner_peer_id))
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.GATHER)
-	elif (target_node is Unit or target_node is ProductionBuilding) and target_node.owner_peer_id != unit.owner_peer_id:
+	elif (target_node is Unit or (target_node is ProductionBuilding and target_node.can_be_attacked())) \
+			and target_node.owner_peer_id != unit.owner_peer_id:
 		unit.command_attack(target_node)
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	elif target_node is ProductionBuilding and target_node.is_under_construction:
@@ -1660,6 +1847,9 @@ func get_armed_ability() -> Ability:
 
 func on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
 	var item := building.producibles[item_index]
+	## Hotkeys come straight here, bypassing the greyed-out button.
+	if item.kind == ProducibleItem.Kind.UNIT and building.synced_unit_limit_reached:
+		return
 	if not hud.can_afford_locally(item.get_costs()):
 		hud.flash_missing_resources(item.get_costs())
 		return

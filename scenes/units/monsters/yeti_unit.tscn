@@ -3,17 +3,23 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" uid="uid://bmtfiui1tgfet" path="res://assets/art/MiniBigMonsters/Outline/MiniYeti-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
-[ext_resource type="Resource" path="res://resources/favour_resource_type.tres" id="4_favour"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://c1w14k2e7mha" path="res://assets/art/MiniBigMonsters/Ice spikes 1-Sheet.png" id="fx_ice1"]
 [ext_resource type="Texture2D" uid="uid://qmuws1pb0hll" path="res://assets/art/MiniBigMonsters/Ice spikes 2-Sheet.png" id="fx_ice2"]
 
-[sub_resource type="Resource" id="ResourceCost_yeti_favour"]
+[sub_resource type="Resource" id="ResourceCost_yeti_gold"]
 script = ExtResource("3_cost_script")
-resource_type = ExtResource("4_favour")
-amount = 45
+resource_type = ExtResource("4_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ResourceCost_yeti_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 150
 
 [sub_resource type="Resource" id="SpriteEffect_yeti_projectile"]
 script = ExtResource("fx_script")
@@ -31,6 +37,15 @@ frame_count = 11
 fps = 16.0
 scale = 1.5
 
+[sub_resource type="Resource" id="SpriteEffect_yeti_linger"]
+script = ExtResource("fx_script")
+sheet = ExtResource("fx_ice1")
+frame_size = Vector2i(32, 32)
+first_frame = 2
+frame_count = 5
+fps = 6.0
+scale = 1.0
+
 [sub_resource type="Resource" id="Ability_yeti"]
 script = ExtResource("5_ability_script")
 ability_name = "Frost Nova"
@@ -38,7 +53,7 @@ kind = 2
 activation_range = 7.0
 cooldown = 16.0
 area_radius = 3.5
-area_damage = 15
+area_damage = 10
 slow_fraction = 0.6
 slow_duration = 3.0
 effect_color = Color(0.55, 0.85, 1, 1)
@@ -51,6 +66,10 @@ projectile_speed = 13.0
 wave_spacing = 0.8
 impact_effect = SubResource("SpriteEffect_yeti_impact")
 impact_scatter_count = 7
+linger_duration = 8.0
+linger_damage_per_second = 2
+linger_effect = SubResource("SpriteEffect_yeti_linger")
+linger_effect_count = 7
 
 [node name="Yeti" instance=ExtResource("1_unit")]
 move_command_lines = Array[ExtResource("109_command_line")]([])
@@ -59,8 +78,8 @@ patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Yeti"
 move_speed = 2.2
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_yeti_favour")])
-population_cost = 4
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_yeti_gold"), SubResource("ResourceCost_yeti_wood")])
+population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(40, 32)
 idle_frame_count = 4
@@ -77,10 +96,10 @@ cast_frame_count = 17
 cast_fps = 12.0
 can_gather = false
 can_build = false
-max_health = 340
-attack_damage = 32
+max_health = 900
+attack_damage = 13
 attack_range = 1.6
-attack_cooldown = 1.7
+attack_cooldown = 2.5
 aggro_range = 9.0
 weak_to = 4
 vision_range = 10.0

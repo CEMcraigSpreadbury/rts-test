@@ -6,3 +6,4 @@
 script = ExtResource("1_map_info")
 map_name = "Main"
 scene_path = "res://scenes/main.tscn"
+capture_points = 6
