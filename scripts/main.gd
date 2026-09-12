@@ -236,6 +236,11 @@ func _enter_tree() -> void:
 	if group_movement == null:
 		_add_components()
 
+## "cmd speed" (see ChatConsole) changes the engine-wide time scale; it must
+## not follow the player out to the menus or into their next match.
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+
 func _ready() -> void:
 	## Before hud.setup(), which draws the resource bar off conquest_enabled.
 	conquest_enabled = Network.game_mode == Network.GameMode.CONQUEST
@@ -292,13 +297,18 @@ func _ready() -> void:
 	placement.setup()
 
 	pause_menu.visible = false
+	pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
 	$UI/PauseMenu/Margin/VBox/ResumeButton.pressed.connect(_close_pause_menu)
 	$UI/PauseMenu/Margin/VBox/OptionsButton.pressed.connect(_open_options_menu)
 	$UI/PauseMenu/Margin/VBox/LeaveButton.pressed.connect(_return_to_main_menu)
 	_options_menu = OPTIONS_MENU_SCENE.instantiate()
 	_options_menu.visible = false
+	_options_menu.process_mode = Node.PROCESS_MODE_ALWAYS
 	_options_menu.closed.connect(_open_pause_menu)
 	ui_root.add_child(_options_menu)
+	var pause_listener := PauseEscapeListener.new()
+	pause_listener.main = self
+	add_child(pause_listener)
 
 ## Built in code rather than authored into main.tscn (same as
 ## NavigationBlockers), under fixed names so each component's RPCs resolve to
@@ -331,11 +341,31 @@ func _add_components() -> void:
 	chat.name = "ChatConsole"
 	add_child(chat)
 
+## Single player only: the pause menu (and Options behind it) actually stops
+## the match. With other humans in it the menu stays a local overlay.
 func _open_pause_menu() -> void:
 	pause_menu.visible = true
+	if Network.is_single_player() and not game_over:
+		get_tree().paused = true
 
 func _close_pause_menu() -> void:
 	pause_menu.visible = false
+	get_tree().paused = false
+
+## Main (and so its _unhandled_input) stops while the tree is paused, so Escape
+## closing the pause menu needs a listener of its own that only runs then.
+## Options handles its own Escape (see OptionsMenu._input).
+class PauseEscapeListener extends Node:
+	var main: Main
+
+	func _init() -> void:
+		process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+
+	func _unhandled_input(event: InputEvent) -> void:
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE \
+				and main.pause_menu.visible:
+			main._close_pause_menu()
+			get_viewport().set_input_as_handled()
 
 func _open_options_menu() -> void:
 	pause_menu.visible = false
@@ -375,12 +405,36 @@ func _start_navigation_blockers() -> void:
 
 ## --- Player / unit / building spawning (host only) ---
 
+## Humans first (host, then everyone connected), then AIs. Spawn points are
+## shuffled each match so nobody is always at the same corner. More players
+## than the map has spawn points is refused past the last point (AIs are
+## the ones left out) rather than stacking two bases on one spot.
 func _spawn_all_players() -> void:
 	var peer_ids: Array = [1]
 	if multiplayer.multiplayer_peer != null:
 		peer_ids.append_array(multiplayer.get_peers())
+	peer_ids.append_array(Network.ai_peer_ids())
+	var spawn_count: int = player_spawn_points.get_child_count()
+	if peer_ids.size() > spawn_count:
+		push_warning("Main: %d players but only %d spawn points; extra players not spawned." % [peer_ids.size(), spawn_count])
+		peer_ids.resize(spawn_count)
+	var spawn_order: Array = range(spawn_count)
+	spawn_order.shuffle()
 	for i in peer_ids.size():
-		_spawn_player_base(peer_ids[i], i)
+		_spawn_player_base(peer_ids[i], i, spawn_order[i])
+	for peer_id in peer_ids:
+		if Network.is_ai(peer_id):
+			_start_ai_player(peer_id)
+
+## Host-only: peer_id -> the AiPlayer brain playing that slot.
+var ai_players: Dictionary = {}
+
+func _start_ai_player(peer_id: int) -> void:
+	var ai := AiPlayer.new()
+	ai.name = "AiPlayer%d" % peer_id
+	ai.setup(self, peer_id, Network.players[peer_id].get("difficulty", Network.AiDifficulty.NORMAL))
+	add_child(ai)
+	ai_players[peer_id] = ai
 
 ## The color this player chose in the lobby, and the single place that answer
 ## comes from — every spawn path here and scripts outside main.gd (objective.gd
@@ -405,9 +459,15 @@ func _faction_for_peer(peer_id: int) -> Faction:
 	var faction_index: int = Network.players.get(peer_id, {}).get("faction_index", 0)
 	return available_factions[faction_index] if faction_index < available_factions.size() else available_factions[0]
 
-func _spawn_player_base(peer_id: int, index: int) -> void:
-	var spawn_point: PlayerSpawnPoint = player_spawn_points.get_child(index % player_spawn_points.get_child_count())
-	team_index_by_peer[peer_id] = index
+## Gap between starting units placed past a spawn point's last unit marker —
+## wider than two avoidance radii (see the spawn jitter note in
+## _on_building_item_completed for what overlapping spawns do).
+const EXTRA_START_UNIT_SPACING: float = 1.5
+
+## team_index: join order, only used for get_team_tint's fallback colour.
+func _spawn_player_base(peer_id: int, team_index: int, spawn_index: int) -> void:
+	var spawn_point: PlayerSpawnPoint = player_spawn_points.get_child(spawn_index)
+	team_index_by_peer[peer_id] = team_index
 	var tint: Color = get_team_tint(peer_id)
 	var faction: Faction = _faction_for_peer(peer_id)
 	faction_by_peer[peer_id] = faction
@@ -416,13 +476,21 @@ func _spawn_player_base(peer_id: int, index: int) -> void:
 	## (which is where population is normally reserved), so it has to be
 	## reserved for them here instead or they'd stand outside the population
 	## count entirely.
+	## A map whose spawn points have fewer unit markers than the faction has
+	## starting units still gets every unit: the extras stand in a short row
+	## beside the last marker rather than being dropped.
 	var unit_positions: Array[Vector3] = spawn_point.get_unit_positions()
-	for i in mini(faction.starting_units.size(), unit_positions.size()):
+	for i in faction.starting_units.size():
+		var pos: Vector3 = spawn_point.global_position
+		if i < unit_positions.size():
+			pos = unit_positions[i]
+		elif not unit_positions.is_empty():
+			pos = unit_positions[-1] + Vector3(EXTRA_START_UNIT_SPACING * (i - unit_positions.size() + 1), 0.0, 0.0)
 		var starting_unit: Unit = unit_spawner.spawn({
 			"scene_path": faction.starting_units[i].resource_path,
 			"peer_id": peer_id,
 			"tint": tint,
-			"position": unit_positions[i],
+			"position": pos,
 		})
 		Population.reserve(peer_id, starting_unit.population_cost)
 
@@ -551,7 +619,7 @@ func _on_building_destroyed(building: ProductionBuilding) -> void:
 		_check_for_game_over()
 		## Knocked out of a match that carries on (FFA): their own Defeat
 		## screen now, rather than waiting for everyone else to finish.
-		if not game_over and not disconnected_peers.has(peer_id):
+		if not game_over and not disconnected_peers.has(peer_id) and Network.can_rpc_to(peer_id):
 			_rpc_player_out.rpc_id(peer_id)
 
 ## Still in the running: not eliminated, still connected. Only an active
@@ -643,8 +711,8 @@ func _assign_objective_letters() -> void:
 ## count as the map's centre point for lettering.
 const CENTRE_POINT_RADIUS: float = 5.0
 
-## Only offered to a player knocked out of a match that's still going — see
-## _rpc_player_out. Hidden again once the match actually ends.
+## Offered to a player knocked out of a match that's still going (see
+## _rpc_player_out), and to everyone once the match ends (_rpc_game_over).
 var _spectate_button: Button = null
 
 func _build_spectate_button() -> void:
@@ -685,7 +753,7 @@ func _rpc_player_out() -> void:
 func _rpc_game_over(winner_peer_id: int) -> void:
 	game_over = true
 	game_over_panel.visible = true
-	_spectate_button.visible = false
+	_spectate_button.visible = true
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Return to Main Menu"
 	if winner_peer_id == -1:
 		game_over_label.text = "Draw!"
@@ -826,7 +894,8 @@ func _on_building_construction_finished(building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
 		return
 	chat.send_line(building.owner_peer_id, "Construction complete: %s" % building.building_name)
-	_rpc_building_completed_sound.rpc_id(building.owner_peer_id)
+	if Network.can_rpc_to(building.owner_peer_id):
+		_rpc_building_completed_sound.rpc_id(building.owner_peer_id)
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_building_completed_sound() -> void:
@@ -851,9 +920,7 @@ func _process(delta: float) -> void:
 	group_movement.update_reformation(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if game_over:
-		return
-	if local_player_out:
+	if game_over or local_player_out:
 		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 			game_over_panel.visible = not game_over_panel.visible
 			get_viewport().set_input_as_handled()
@@ -1364,7 +1431,7 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 	## the deposit it sits on), alongside the existing enemy-building-attack case.
 	elif result.collider is ProductionBuilding and \
 			((result.collider.owner_peer_id != my_peer_id() and result.collider.can_be_attacked()) \
-				or result.collider.is_under_construction or result.collider.linked_deposit != null):
+				or result.collider.is_under_construction or is_instance_valid(result.collider.linked_deposit)):
 		return result.collider.get_path()
 	return NodePath()
 
@@ -1468,6 +1535,15 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	issue_command_as(sender_id, unit_paths, target_path, world_pos, attack_move_fallback, append, formation_type, front_width, facing)
+
+## Host only. The *_as() functions below are where each order RPC ends up
+## once the sender is known, and what an AI player (see AiPlayer) calls
+## directly with its own peer id — so an AI's orders pass exactly the same
+## ownership/cost checks a human's do.
+func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool, formation_type: Formation.Type = Formation.DEFAULT_TYPE, front_width: float = -1.0, facing: Vector3 = Vector3.ZERO) -> void:
+	if not multiplayer.is_server():
+		return
 	## Client-supplied, so flattened and renormalized rather than trusted as-is.
 	facing.y = 0.0
 	facing = facing.normalized() if facing.length_squared() > 0.0001 else Vector3.ZERO
@@ -1637,7 +1713,7 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 	## same-owner building would never match attack anyway, and this only
 	## applies once construction is done (still-building falls through to
 	## the command_build branch below).
-	elif target_node is ProductionBuilding and target_node.linked_deposit != null \
+	elif target_node is ProductionBuilding and is_instance_valid(target_node.linked_deposit) \
 			and not target_node.is_under_construction and target_node.linked_deposit.can_be_gathered():
 		unit.command_gather(target_node.linked_deposit, _get_dropoff_for(unit.owner_peer_id))
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.GATHER)
@@ -1665,7 +1741,11 @@ func _rpc_issue_patrol(unit_paths: Array[NodePath], world_pos: Vector3, append: 
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	issue_patrol_as(sender_id, unit_paths, world_pos, append)
 
+func issue_patrol_as(sender_id: int, unit_paths: Array[NodePath], world_pos: Vector3, append: bool) -> void:
+	if not multiplayer.is_server():
+		return
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
 		if unit == null or unit.owner_peer_id != sender_id:
@@ -1683,7 +1763,11 @@ func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	issue_stop_as(sender_id, unit_paths)
 
+func issue_stop_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
 		if unit == null or unit.owner_peer_id != sender_id:
@@ -1863,13 +1947,18 @@ func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	enqueue_as(sender_id, building_path, item_index)
 
+## Returns whether it actually went into the queue.
+func enqueue_as(sender_id: int, building_path: NodePath, item_index: int) -> bool:
+	if not multiplayer.is_server():
+		return false
 	var building := get_node_or_null(building_path) as ProductionBuilding
 	if building == null or building.owner_peer_id != sender_id:
-		return
+		return false
 	if item_index < 0 or item_index >= building.producibles.size():
-		return
-	building.enqueue(building.producibles[item_index])
+		return false
+	return building.enqueue(building.producibles[item_index])
 
 ## queue_index 0 is the item in progress (the progress bar); 1+ are the slots
 ## queued behind it, in order.
@@ -1884,7 +1973,11 @@ func _rpc_cancel_production(building_path: NodePath, queue_index: int) -> void:
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	cancel_production_as(sender_id, building_path, queue_index)
 
+func cancel_production_as(sender_id: int, building_path: NodePath, queue_index: int) -> void:
+	if not multiplayer.is_server():
+		return
 	var building := get_node_or_null(building_path) as ProductionBuilding
 	if building == null or building.owner_peer_id != sender_id:
 		return
@@ -1922,17 +2015,23 @@ func _rpc_request_ability(unit_path: NodePath, ability_index: int, target_pos: V
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	request_ability_as(sender_id, unit_path, ability_index, target_pos)
 
+## Returns whether the cast order was accepted.
+func request_ability_as(sender_id: int, unit_path: NodePath, ability_index: int, target_pos: Vector3) -> bool:
+	if not multiplayer.is_server():
+		return false
 	var unit := get_node_or_null(unit_path) as Unit
 	if unit == null or unit.owner_peer_id != sender_id:
-		return
+		return false
 	var ability: Ability = unit.get_ability(ability_index)
 	if ability == null or not ability.is_activated() or not unit.is_ability_ready(ability_index):
-		return
+		return false
 	if not ResourceStockpile.can_afford(sender_id, ability.costs):
-		return
+		return false
 	unit.clear_order_queue()
 	unit.command_cast_ability(ability_index, target_pos)
+	return true
 
 ## Host-only (Unit.ability_cast only fires there). Tells the owner when the
 ## ability comes back so their HUD can grey it out, and shows everyone the
@@ -1942,8 +2041,9 @@ func _on_unit_ability_cast(ability_index: int, _target_pos: Vector3, unit: Unit)
 	var ability: Ability = unit.get_ability(ability_index)
 	if ability == null:
 		return
-	## Peer 0 is "neutral", not a real peer — rpc_id(0) would broadcast.
-	if unit.owner_peer_id > 0:
+	## Peer 0 is "neutral", not a real peer — rpc_id(0) would broadcast. An
+	## AI has no machine to tell; its brain reads the host-side cooldown.
+	if Network.can_rpc_to(unit.owner_peer_id):
 		_rpc_ability_cooldown_started.rpc_id(unit.owner_peer_id, unit.get_path(), ability_index, ability.cooldown)
 	if ability.kind == Ability.Kind.ACTIVATED_AREA:
 		feedback.relay_cast_windup(unit, ability_index)
@@ -1981,7 +2081,11 @@ func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3, target_pa
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = my_peer_id()
+	set_rally_point_as(sender_id, building_path, world_pos, target_path)
 
+func set_rally_point_as(sender_id: int, building_path: NodePath, world_pos: Vector3, target_path: NodePath) -> void:
+	if not multiplayer.is_server():
+		return
 	var building := get_node_or_null(building_path) as ProductionBuilding
 	if building == null or building.owner_peer_id != sender_id or not building.can_rally:
 		return

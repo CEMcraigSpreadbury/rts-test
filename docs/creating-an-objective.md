@@ -90,7 +90,7 @@ Select the **Objective** root node:
   1x, 2 units 1.5x, 3+ units 2x). With opposing units on the point it's a
   tug-of-war by head count: whoever outnumbers moves the flag at the speed
   of the difference; equal numbers (or two+ challengers at once) freeze it
-  as **Contested**. A contested or draining point pays no Favour.
+  as **Contested**. A contested or draining point pays no Favour or gold.
 - **Guard Respawn Delay** / **Guard Respawn Health** — a neutral point with
   every guard dead and nobody standing on it respawns its original guards
   after this many seconds, at this fraction of their health.
@@ -102,6 +102,9 @@ Select the **Objective** root node:
 - **Favour Per Second** — paid to the owner while the point is held
   (default `1`; a map's centre point is set to `2`). Favour is the Conquest
   score and is never spent.
+- **Gold Per Second** — also paid to the owner while the point is held, on
+  the same terms (default `2`), in every game mode — it's ordinary money, so
+  holding points keeps an army funded after the gold deposits run dry.
 
 Pick **Wander Radius** noticeably smaller than the **CaptureZone** radius
 from step 3 — guards should be wandering *inside* the area a capturing

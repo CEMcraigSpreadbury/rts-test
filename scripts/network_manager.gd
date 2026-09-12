@@ -58,7 +58,18 @@ const TEAM_COLORS: Array[Color] = [
 const TEAM_COLOR_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 
 ## peer_id -> { "name": String, "color": Color, "faction_index": int, "ready": bool }
+## AI players are entries here too, with "ai": true and "difficulty" (see
+## add_ai_player) — keyed by a made-up peer id that no real connection has.
 var players: Dictionary = {}
+
+enum AiDifficulty { EASY, NORMAL, HARD }
+const AI_DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
+## AI peer ids are handed out from here upward. Kept small on purpose: Unit
+## puts each owner on avoidance layer bit (owner_peer_id + 1), so a large id
+## would fall off the end of the 32-bit mask. Real ENet/Steam peers get
+## random ids in the millions-to-billions, so a collision is vanishingly rare
+## — and _on_peer_connected moves an AI out of the way if one ever happens.
+const FIRST_AI_PEER_ID: int = 2
 ## Index into the lobby's available_maps. Host-owned, like color assignment.
 var map_index: int = 0
 
@@ -246,12 +257,15 @@ func leave_game() -> void:
 		multiplayer.multiplayer_peer = null
 	players.clear()
 
-## Single Player: the same state as running main.tscn straight from the editor
-## — an offline peer that is its own host with no one else connected, so
-## main.gd's _spawn_all_players() spawns just the local base.
+## Single Player: an offline peer that is its own host with no one else
+## connected. Called when the single player setup screen opens, so its AI
+## rows can go straight into `players` through the same add_ai_player() etc.
+## a lobby host uses; main.gd's _spawn_all_players() then spawns the local
+## base plus one per AI.
 func start_offline() -> void:
 	leave_game()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	players[1] = {"name": "You", "color": TEAM_COLORS[0], "faction_index": 0, "ready": true}
 	## Single player has no lobby to pick these in — always the defaults
 	## rather than whatever a previous lobby left behind.
 	game_mode = GameMode.CONQUEST
@@ -260,10 +274,98 @@ func start_offline() -> void:
 func is_host() -> bool:
 	return multiplayer.multiplayer_peer != null and multiplayer.is_server()
 
+## No other humans can ever be in this match — the only case where pausing
+## the whole simulation is fair (see Main's pause menu).
+func is_single_player() -> bool:
+	return multiplayer.multiplayer_peer is OfflineMultiplayerPeer
+
+## --- AI players ---
+##
+## Host-owned (or offline) entries in `players`. They never connect, load or
+## receive RPCs — their brain runs on the host (see AiPlayer) and issues orders
+## through the same *_as() entry points a human's RPCs end up in.
+
+func is_ai(peer_id: int) -> bool:
+	return players.get(peer_id, {}).get("ai", false)
+
+## Whether `peer_id` is a real machine a targeted RPC can go to — not neutral
+## (0), and not an AI, which has no connection at all. Every host-side
+## "tell the owner" rpc_id() goes through this.
+func can_rpc_to(peer_id: int) -> bool:
+	return peer_id > 0 and not is_ai(peer_id)
+
+## Every AI in `players`, oldest first.
+func ai_peer_ids() -> Array[int]:
+	var ids: Array[int] = []
+	for id in players:
+		if is_ai(id):
+			ids.append(id)
+	ids.sort()
+	return ids
+
+## Returns the new AI's peer id, or 0 if refused (not host, or no colour left).
+func add_ai_player(difficulty: int = AiDifficulty.NORMAL) -> int:
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return 0
+	if players.size() >= MAX_PLAYERS:
+		return 0
+	var id := _free_ai_peer_id()
+	players[id] = {"name": "", "color": _first_free_color(), "faction_index": 0, "ready": true,
+			"ai": true, "difficulty": clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)}
+	_renumber_ai_players()
+	player_updated.emit(id)
+	return id
+
+func remove_ai_player(peer_id: int) -> void:
+	if not is_ai(peer_id) or (multiplayer.multiplayer_peer != null and not is_host()):
+		return
+	var data: Dictionary = players[peer_id]
+	players.erase(peer_id)
+	_renumber_ai_players()
+	player_disconnected.emit(peer_id, data)
+
+func set_ai_difficulty(peer_id: int, difficulty: int) -> void:
+	if not is_ai(peer_id) or (multiplayer.multiplayer_peer != null and not is_host()):
+		return
+	players[peer_id]["difficulty"] = clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)
+	_renumber_ai_players()
+	player_updated.emit(peer_id)
+
+## Host-side colour change for an AI (a human picks their own through
+## set_my_color). Same no-duplicates rule.
+func set_ai_color(peer_id: int, index: int) -> void:
+	if not is_ai(peer_id) or index < 0 or index >= TEAM_COLORS.size():
+		return
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return
+	_apply_color_change(peer_id, TEAM_COLORS[index])
+
+func _free_ai_peer_id() -> int:
+	var taken: Array = players.keys()
+	if multiplayer.multiplayer_peer != null:
+		taken.append_array(multiplayer.get_peers())
+	var id := FIRST_AI_PEER_ID
+	while taken.has(id):
+		id += 1
+	return id
+
+## "AI 1 (Hard)", "AI 2 (Easy)", ... numbered by age, so removing one never
+## leaves a gap.
+func _renumber_ai_players() -> void:
+	var ids := ai_peer_ids()
+	for i in ids.size():
+		var entry: Dictionary = players[ids[i]]
+		entry["name"] = "AI %d (%s)" % [i + 1, AI_DIFFICULTY_NAMES[entry.get("difficulty", AiDifficulty.NORMAL)]]
+
 func my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
 func _on_peer_connected(id: int) -> void:
+	## A real peer landed on an id an AI already holds — move the AI aside.
+	if is_ai(id):
+		var ai_data: Dictionary = players[id]
+		players.erase(id)
+		players[_free_ai_peer_id()] = ai_data
 	players[id] = {"name": "Player %d" % id, "color": Color.WHITE, "faction_index": 0, "ready": false}
 	if is_host():
 		## Only the host sees every player's pick, so it owns color assignment

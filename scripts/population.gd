@@ -38,7 +38,7 @@ func add_cap(peer_id: int, amount: int) -> void:
 func _notify(peer_id: int) -> void:
 	if peer_id == multiplayer.get_unique_id():
 		changed.emit(get_used(peer_id), get_cap(peer_id))
-	else:
+	elif Network.can_rpc_to(peer_id):
 		_rpc_notify.rpc_id(peer_id, get_used(peer_id), get_cap(peer_id))
 
 @rpc("authority", "call_remote", "reliable")

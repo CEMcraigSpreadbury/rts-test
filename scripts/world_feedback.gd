@@ -362,7 +362,7 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 func play_unit_order_sound(unit: Unit, kind: Unit.OrderSoundKind) -> void:
 	if unit.owner_peer_id == main.my_peer_id():
 		_play_order_sound_once(unit, kind)
-	elif multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+	elif multiplayer.is_server() and multiplayer.multiplayer_peer != null and Network.can_rpc_to(unit.owner_peer_id):
 		_rpc_unit_order_sound.rpc_id(unit.owner_peer_id, unit.get_path(), kind)
 
 @rpc("authority", "call_remote", "reliable")

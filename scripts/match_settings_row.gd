@@ -29,6 +29,8 @@ func _init() -> void:
 	_target_spin.max_value = 100000
 	_target_spin.step = 100
 	_target_spin.suffix = "Favour"
+	## Otherwise it sizes to the suffix alone and the number is clipped away.
+	_target_spin.custom_minimum_size = Vector2(170, 0)
 	_target_spin.value_changed.connect(_on_changed.unbind(1))
 	add_child(_target_spin)
 

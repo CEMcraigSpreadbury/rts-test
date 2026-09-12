@@ -414,20 +414,28 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = main.my_peer_id()
+	request_build_as(sender_id, type_index, world_pos, target_path, builder_paths, append)
 
+## Host only. Where a human's build RPC ends up, and what an AI calls directly
+## — same validation either way. Returns what was placed, or null if refused.
+func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath], append: bool) -> Node:
+	if not multiplayer.is_server():
+		return null
 	## Resolved against the SENDER's own faction, never a shared/global list —
 	## the same type_index means a different building depending on faction,
 	## so trusting anything else here would let a client reference another
 	## faction's roster.
 	if not main.faction_by_peer.has(sender_id):
-		return
+		return null
 	var sender_building_types: Array[BuildingType] = main.faction_by_peer[sender_id].building_types
 	if type_index < 0 or type_index >= sender_building_types.size():
-		return
+		return null
 	var building_type: BuildingType = sender_building_types[type_index]
+	if building_type.is_wall or building_type.is_gate_tool:
+		return null
 	var costs := building_type.get_costs()
 	if not ResourceStockpile.can_afford(sender_id, costs):
-		return
+		return null
 
 	## Deposit-snapped buildings ignore the client's proposed position — the
 	## host looks the target up itself and uses its real position, so a
@@ -437,12 +445,10 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 	if building_type.requires_deposit:
 		deposit = get_node_or_null(target_path) as Gatherable
 		if deposit == null or deposit.is_claimed or not _matches_scene(deposit, building_type.deposit_scene):
-			return
+			return null
 		build_pos = deposit.global_position
-	elif not _footprint_is_flat(world_pos, building_type.footprint_radius) \
-			or not _is_placement_valid(world_pos, building_type.footprint_radius) \
-			or not _has_nearby_host(world_pos, building_type, sender_id):
-		return
+	elif not can_place_at(world_pos, building_type, sender_id):
+		return null
 
 	ResourceStockpile.spend(sender_id, costs)
 	if deposit:
@@ -479,6 +485,34 @@ func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePa
 			, CONNECT_ONE_SHOT)
 
 		_dispatch_builders_to(building, builder_paths, sender_id, append)
+	return spawned
+
+## The open-ground placement rules (not deposit snapping, walls or gates):
+## flat, clear of other buildings/resources, near a host where required.
+func can_place_at(pos: Vector3, building_type: BuildingType, peer_id: int) -> bool:
+	return _footprint_is_flat(pos, building_type.footprint_radius) \
+			and _is_placement_valid(pos, building_type.footprint_radius) \
+			and _has_nearby_host(pos, building_type, peer_id)
+
+func is_matching_deposit(node: Node, building_type: BuildingType) -> bool:
+	return _matches_scene(node, building_type.deposit_scene)
+
+## No building or resource node within `radius` of `pos`. Like
+## _is_placement_valid, but with room for more results: a wider circle also
+## overlaps several terrain collision pieces, which could otherwise use up
+## every result slot and hide a building.
+func is_area_clear(pos: Vector3, radius: float) -> bool:
+	var shape := SphereShape3D.new()
+	shape.radius = radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.transform = Transform3D(Basis(), pos)
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	for result in get_world_3d().direct_space_state.intersect_shape(query, 64):
+		if result.collider is ProductionBuilding or result.collider is Gatherable:
+			return false
+	return true
 
 ## Sends whichever villager(s) opened the build menu to go build what they
 ## just placed, instead of leaving them standing idle next to it. Shared by

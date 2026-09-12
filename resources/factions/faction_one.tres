@@ -87,4 +87,4 @@ script = ExtResource("1_faction_script")
 faction_name = "Human"
 building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
-starting_units = Array[PackedScene]([ExtResource("10_unit")])
+starting_units = Array[PackedScene]([ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit")])

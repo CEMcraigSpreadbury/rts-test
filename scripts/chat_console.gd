@@ -33,7 +33,8 @@ func is_input_open() -> bool:
 ## Host-side: shows `line` in one peer's chat log only — used for replies that
 ## concern just that player (debug command results, their own completions).
 func send_line(peer_id: int, line: String) -> void:
-	_rpc_display_chat.rpc_id(peer_id, line)
+	if Network.can_rpc_to(peer_id):
+		_rpc_display_chat.rpc_id(peer_id, line)
 
 ## --- Chat / debug console ---
 ## Type a normal message to broadcast it to everyone, or "cmd ..." for a
@@ -43,6 +44,13 @@ func send_line(peer_id: int, line: String) -> void:
 ##   cursor, e.g. "cmd spawn soldier 3"; "monster" picks a random one each.
 ##   Append "e" ("cmd spawn soldier 3e", "cmd spawn monster e") to spawn them
 ##   as neutral enemies instead.
+##   "cmd speed <multiplier>" runs the whole match faster or slower (single
+##   player only), e.g. "cmd speed 4"; "cmd speed 1" puts it back.
+
+## Physics steps don't get more frequent with Engine.time_scale, only longer,
+## so past this movement and collisions start to go wrong.
+const MIN_GAME_SPEED: float = 0.25
+const MAX_GAME_SPEED: float = 8.0
 
 func open_chat_input() -> void:
 	_chat_input.visible = true
@@ -124,8 +132,17 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 					break
 				spawned_names.append(_spawn_debug_unit(0 if as_enemy else sender_id, path, center + _spawn_offset(i)).display_name)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] spawned %s%s" % [", ".join(spawned_names), " (enemy)" if as_enemy else ""])
+		"speed":
+			## Single player only: the host is the only machine simulating, so
+			## in multiplayer this would just leave everyone else behind.
+			if not Network.is_single_player():
+				_rpc_display_chat.rpc_id(sender_id, "[debug] speed only works in single player")
+				return
+			var factor: float = clampf(float(parts[1]) if parts.size() > 1 else 1.0, MIN_GAME_SPEED, MAX_GAME_SPEED)
+			Engine.time_scale = factor
+			_rpc_display_chat.rpc_id(sender_id, "[debug] game speed x%s" % factor)
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e]")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
 

@@ -38,7 +38,7 @@ func _set_amount(peer_id: int, resource_type: ResourceType, new_amount: int) -> 
 func _notify_owner(peer_id: int, resource_name: String, amount: int) -> void:
 	if peer_id == multiplayer.get_unique_id():
 		changed.emit(resource_name, amount)
-	else:
+	elif Network.can_rpc_to(peer_id):
 		_rpc_notify.rpc_id(peer_id, resource_name, amount)
 
 @rpc("authority", "call_remote", "reliable")

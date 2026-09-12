@@ -203,6 +203,12 @@ func _rebake() -> void:
 	_bake_in_flight = true
 	NavigationServer3D.bake_from_source_geometry_data_async(scratch, geometry, _on_bake_finished.bind(scratch))
 
+## True from the moment a change is spotted until the navmesh reflects it —
+## paths asked for in between are planned on the old mesh (or, at the very
+## start of a match, a half-swapped one) and can be wrong.
+func is_baking() -> bool:
+	return _bake_in_flight or _rebake_queued
+
 func _on_bake_finished(mesh: NavigationMesh) -> void:
 	_bake_in_flight = false
 	if is_instance_valid(_region) and mesh.get_polygon_count() > 0:

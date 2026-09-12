@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MapInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/map_info.gd" id="1_f11af"]
+
+[resource]
+script = ExtResource("1_f11af")
+map_name = "Four Kingdoms"
+scene_path = "res://scenes/maps/four_kingdoms.tscn"
+max_players = 4
+capture_points = 9

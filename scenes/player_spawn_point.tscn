@@ -17,3 +17,12 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, 4)
 
 [node name="UnitSpawn2" type="Marker3D" parent="UnitSpawns" unique_id=500450387]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, 5.5)
+
+[node name="UnitSpawn3" type="Marker3D" parent="UnitSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 4)
+
+[node name="UnitSpawn4" type="Marker3D" parent="UnitSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 5.5)
+
+[node name="UnitSpawn5" type="Marker3D" parent="UnitSpawns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, 7)

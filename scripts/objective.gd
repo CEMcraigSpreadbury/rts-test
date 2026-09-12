@@ -32,14 +32,20 @@ class_name Objective
 ## keeps paying until someone takes it — but not while it's contested or
 ## being drained (see _paying).
 @export var favour_per_second: float = 1.0
+## Gold per second credited to the holder on exactly the same terms as Favour
+## (not while contested or draining, not to an eliminated or disconnected
+## owner) — but in every game mode, since unlike Favour it's ordinary money.
+## Keeps armies fed once the map's gold deposits have been mined out.
+@export var gold_per_second: float = 2.0
 
 const LEASH_MULTIPLIER: float = 2.5
 const NEUTRAL_TINT: Color = Color(0.5, 0.5, 0.5)
 ## Above the Favour "+N" popups (WorldFeedback.FAVOUR_POPUP_HEIGHT).
 const LETTER_HEIGHT: float = 5.5
 ## ResourceStockpile totals are ints, so fractional income accumulates here
-## and is banked a whole point at a time (see _tick_favour).
+## and is banked a whole point at a time (see _tick_favour/_tick_gold).
 const FAVOUR_RESOURCE: ResourceType = preload("res://resources/favour_resource_type.tres")
+const GOLD_RESOURCE: ResourceType = preload("res://resources/gold_resource_type.tres")
 
 @onready var capture_zone: Area3D = $CaptureZone
 @onready var guards: Node3D = $Guards
@@ -321,6 +327,8 @@ func _process(_delta: float) -> void:
 		mat.set_shader_parameter("fill_color", Color(flag_tint(), 0.45))
 
 func _tick_favour(delta: float) -> void:
+	## First, so none of the Favour-only early-outs below (Annihilation) skip it.
+	_tick_gold(delta)
 	if favour_per_second <= 0.0 or owner_peer_id <= 0 or not _paying:
 		return
 	## An eliminated or disconnected owner keeps the point until someone takes
@@ -339,6 +347,23 @@ func _tick_favour(delta: float) -> void:
 	ResourceStockpile.add(owner_peer_id, FAVOUR_RESOURCE, whole)
 	if main.has_method("show_favour_popup"):
 		main.show_favour_popup(self, whole)
+
+## Host-only remainder of gold earned but not yet whole enough to bank.
+var _gold_fraction: float = 0.0
+
+## Same terms as Favour (see _tick_favour) apart from the game mode.
+func _tick_gold(delta: float) -> void:
+	if gold_per_second <= 0.0 or owner_peer_id <= 0 or not _paying:
+		return
+	var main := get_tree().current_scene
+	if main.has_method("is_peer_active") and not main.is_peer_active(owner_peer_id):
+		return
+	_gold_fraction += gold_per_second * delta
+	var whole := int(_gold_fraction)
+	if whole <= 0:
+		return
+	_gold_fraction -= float(whole)
+	ResourceStockpile.add(owner_peer_id, GOLD_RESOURCE, whole)
 
 ## Host only. Both halves of a capture come through here: lowering the old
 ## owner's flag hands the point to 0 (neutral), raising a new one hands it to
@@ -361,5 +386,6 @@ func _set_owner(new_owner: int) -> void:
 	## Dropped rather than carried over, so a partial point earned under the
 	## previous owner can't be banked by whoever takes the objective off them.
 	_favour_fraction = 0.0
+	_gold_fraction = 0.0
 	if new_owner > 0 and main.has_method("announce_point_captured"):
 		main.announce_point_captured(new_owner, letter)
