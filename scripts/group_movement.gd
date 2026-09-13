@@ -72,7 +72,8 @@ func drag_facing(units: Array[Unit], line_start: Vector3, line_end: Vector3) -> 
 func drag_preview_slots(units: Array[Unit], line_start: Vector3, line_end: Vector3, facing: Vector3) -> Array[Vector3]:
 	var midpoint := (line_start + line_end) * 0.5
 	var right := Vector3(facing.z, 0.0, -facing.x)
-	var formation := Formation.new(units, Formation.DEFAULT_TYPE, _flat_distance(line_start, line_end))
+	var front_width := _flat_distance(line_start, line_end)
+	var formation := Formation.new(units, Formation.DEFAULT_TYPE, front_width)
 	return formation.get_slot_positions(midpoint, facing, right)
 
 func group_centroid(units: Array[Unit]) -> Vector3:
@@ -534,6 +535,7 @@ func register_formation(group: Array[Unit], target_pos: Vector3, formation_type:
 	## members of it and the next poll retires it on its own.
 	_active_formations.append({
 		"group": group,
+		"slots": _slot_map(members),
 		"target": target_pos,
 		"type": formation_type,
 		"attack_move": attack_move,
@@ -574,10 +576,10 @@ func update_reformation(delta: float) -> void:
 		return
 	for i in range(_active_formations.size() - 1, -1, -1):
 		var record: Dictionary = _active_formations[i]
-		var group: Array[Unit] = record["group"]
-		var members := _formation_record_members(group)
-		## Nothing left to hold a shape: everyone arrived, died, or moved on.
-		if members.size() < 2:
+		var members := _record_holding(record)
+		## Nothing left to hold a shape (everyone died or moved on), or nothing
+		## left to close ranks on the way to (everyone still here has arrived).
+		if members.size() < 2 or not _any_walking(record, members):
 			_active_formations.remove_at(i)
 			continue
 		if members.size() < int(record["count"]):
@@ -604,6 +606,46 @@ func update_reformation(delta: float) -> void:
 		## group, so the record has to follow it or every member would read as
 		## "moved on" on the very next poll.
 		record["group"] = members
+		record["slots"] = _slot_map(members)
+
+## How near its slot an idle member has to be standing to count as having
+## arrived there (MOVE_ARRIVAL_DISTANCE plus room for a separation nudge),
+## rather than having been stopped somewhere along the way.
+const HOLD_SLOT_DISTANCE: float = 1.2
+
+## unit -> the slot its current formation order is taking it to.
+func _slot_map(units: Array[Unit]) -> Dictionary:
+	var slots: Dictionary = {}
+	for unit in units:
+		slots[unit] = unit.formation_slot()
+	return slots
+
+## A record's members still holding its formation: alive, and either still
+## walking this order or standing idle on the slot it gave them. Arriving
+## clears a unit's formation_group (see Unit._on_velocity_computed), so going
+## by the group alone read every arrival as a loss and re-solved the
+## stragglers into slots the arrivals were already standing in.
+func _record_holding(record: Dictionary) -> Array[Unit]:
+	var slots: Dictionary = record["slots"]
+	var holding: Array[Unit] = []
+	for unit in slots:
+		if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		var arrived: bool = unit.status_command == Unit.Command.NONE and unit.attack_target == null \
+				and _flat_distance(unit.global_position, slots[unit]) <= HOLD_SLOT_DISTANCE
+		if arrived or _is_walking(record, unit):
+			holding.append(unit)
+	return holding
+
+func _is_walking(record: Dictionary, unit: Unit) -> bool:
+	return (unit.status_command == Unit.Command.MOVE or unit.status_command == Unit.Command.ATTACK_MOVE) \
+			and is_same(unit.formation_group, record["group"])
+
+func _any_walking(record: Dictionary, units: Array[Unit]) -> bool:
+	for unit in units:
+		if _is_walking(record, unit):
+			return true
+	return false
 
 func any_funnelling(units: Array[Unit]) -> bool:
 	for unit in units:
@@ -621,7 +663,10 @@ func any_funnelling(units: Array[Unit]) -> bool:
 ## cohesion for the new leg on its own (Unit._set_formation_cohesion), which is
 ## exactly what a re-solved slot needs, and clears any stale funnel with it.
 func reform_group(units: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward_override: Vector3 = Vector3.ZERO, front_width: float = -1.0) -> void:
-	var slots := formation_positions(units, target_pos, formation_type, forward_override, front_width)
+	_issue_slots(units, formation_positions(units, target_pos, formation_type, forward_override, front_width), attack_move)
+
+## `slots` aligned to `units`; `units` itself becomes their cohesion group.
+func _issue_slots(units: Array[Unit], slots: Array[Vector3], attack_move: bool) -> void:
 	var speed := slowest_move_speed(units)
 	for i in units.size():
 		if attack_move:

@@ -303,6 +303,16 @@ func ai_peer_ids() -> Array[int]:
 	ids.sort()
 	return ids
 
+## How many players, humans and AIs together, the lobby's chosen map has spawn
+## points for (MAX_PLAYERS for a map that doesn't say). The single player
+## screen keeps its own map choice and works this out itself.
+func player_capacity() -> int:
+	var maps: Array[MapInfo] = MapInfo.list_all()
+	if maps.is_empty():
+		return MAX_PLAYERS
+	var map: MapInfo = maps[clampi(map_index, 0, maps.size() - 1)]
+	return mini(map.max_players, MAX_PLAYERS) if map.max_players > 0 else MAX_PLAYERS
+
 ## Returns the new AI's peer id, or 0 if refused (not host, or no colour left).
 func add_ai_player(difficulty: int = AiDifficulty.NORMAL) -> int:
 	if multiplayer.multiplayer_peer != null and not is_host():
@@ -313,6 +323,7 @@ func add_ai_player(difficulty: int = AiDifficulty.NORMAL) -> int:
 	players[id] = {"name": "", "color": _first_free_color(), "faction_index": 0, "ready": true,
 			"ai": true, "difficulty": clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)}
 	_renumber_ai_players()
+	_broadcast_ai_players()
 	player_updated.emit(id)
 	return id
 
@@ -322,6 +333,7 @@ func remove_ai_player(peer_id: int) -> void:
 	var data: Dictionary = players[peer_id]
 	players.erase(peer_id)
 	_renumber_ai_players()
+	_broadcast_ai_players()
 	player_disconnected.emit(peer_id, data)
 
 func set_ai_difficulty(peer_id: int, difficulty: int) -> void:
@@ -329,7 +341,41 @@ func set_ai_difficulty(peer_id: int, difficulty: int) -> void:
 		return
 	players[peer_id]["difficulty"] = clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)
 	_renumber_ai_players()
+	_broadcast_ai_players()
 	player_updated.emit(peer_id)
+
+## Host: drops the newest AIs until everyone fits the map — after picking a
+## smaller map, or when a human joins a lobby AIs had filled (humans come
+## first).
+func trim_ai_to_capacity() -> void:
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return
+	var ids := ai_peer_ids()
+	while players.size() > player_capacity() and not ids.is_empty():
+		remove_ai_player(ids.pop_back())
+
+## Host -> clients: every AI slot, whole. One message for all of them rather
+## than per-field updates, since adding or removing one renames the others
+## ("AI 1", "AI 2", ...) — and a client can then never end up with a stale or
+## half-built slot.
+func _broadcast_ai_players() -> void:
+	if multiplayer.multiplayer_peer == null or not is_host() or multiplayer.get_peers().is_empty():
+		return
+	var entries: Dictionary = {}
+	for id in ai_peer_ids():
+		entries[id] = players[id]
+	_rpc_ai_players.rpc(entries)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_ai_players(entries: Dictionary) -> void:
+	for id in ai_peer_ids():
+		if not entries.has(id):
+			var data: Dictionary = players[id]
+			players.erase(id)
+			player_disconnected.emit(id, data)
+	for id in entries:
+		players[id] = entries[id]
+		player_updated.emit(id)
 
 ## Host-side colour change for an AI (a human picks their own through
 ## set_my_color). Same no-duplicates rule.
@@ -368,6 +414,10 @@ func _on_peer_connected(id: int) -> void:
 		players[_free_ai_peer_id()] = ai_data
 	players[id] = {"name": "Player %d" % id, "color": Color.WHITE, "faction_index": 0, "ready": false}
 	if is_host():
+		## Humans come first: a lobby AIs had filled drops its newest AI to
+		## make room — before the colour pick below, so the one it frees is up
+		## for grabs.
+		trim_ai_to_capacity()
 		## Only the host sees every player's pick, so it owns color assignment
 		## outright — clients each guessing a default locally is exactly how two
 		## players end up the same color. Assigned before the sync below so the

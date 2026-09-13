@@ -44,8 +44,11 @@ signal fog_updated
 @export var grid_resolution: int = 256
 @export var explored_update_interval: float = 0.15
 
-## Must match MAX_VISION_SOURCES in fog_of_war.gdshader.
-const MAX_VISION_SOURCES: int = 32
+## Must match MAX_VISION_SOURCES in fog_of_war.gdshader and
+## FOG_MAX_VISION_SOURCES in grass_wind.gdshader.
+const MAX_VISION_SOURCES: int = 64
+## Units within one cell of this size share a vision source (see _update_vision_sources).
+const VISION_MERGE_CELL: float = 3.0
 
 ## explored[] no longer stores a plain 0/1 flag — it stores 0..255 "how
 ## strongly explored" per cell, with a smoothstep falloff baked in at stamp
@@ -185,14 +188,34 @@ func _update_vision_sources() -> void:
 	if my_peer == 0:
 		return
 
+	## Units standing together see practically the same circle, and a squad is
+	## several men in one block — so units share one source per
+	## VISION_MERGE_CELL cell (at their average position, with the widest sight
+	## among them). Keeps a big army under MAX_VISION_SOURCES instead of every
+	## unit past the cap silently going blind.
+	var cell_index: Dictionary = {}
+	var cell_counts: PackedInt32Array = PackedInt32Array()
 	for node in get_tree().get_nodes_in_group("units"):
-		if _vision_count >= MAX_VISION_SOURCES:
-			break
 		var unit := node as Unit
-		if unit and unit.owner_peer_id == my_peer and unit.status_activity != Unit.Activity.DEAD:
-			_vision_positions[_vision_count] = Vector2(unit.global_position.x, unit.global_position.z)
-			_vision_radii[_vision_count] = unit.vision_range
-			_vision_count += 1
+		if not unit or unit.owner_peer_id != my_peer or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		var pos := Vector2(unit.global_position.x, unit.global_position.z)
+		var key := Vector2i(floori(pos.x / VISION_MERGE_CELL), floori(pos.y / VISION_MERGE_CELL))
+		var index: int = cell_index.get(key, -1)
+		if index >= 0:
+			_vision_positions[index] += pos
+			_vision_radii[index] = maxf(_vision_radii[index], unit.vision_range)
+			cell_counts[index] += 1
+			continue
+		if _vision_count >= MAX_VISION_SOURCES:
+			continue
+		cell_index[key] = _vision_count
+		_vision_positions[_vision_count] = pos
+		_vision_radii[_vision_count] = unit.vision_range
+		cell_counts.append(1)
+		_vision_count += 1
+	for i in _vision_count:
+		_vision_positions[i] /= cell_counts[i]
 
 	for node in get_tree().get_nodes_in_group("buildings"):
 		if _vision_count >= MAX_VISION_SOURCES:

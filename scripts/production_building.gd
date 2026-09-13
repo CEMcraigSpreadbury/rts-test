@@ -564,6 +564,14 @@ func get_footprint_radius() -> float:
 
 func _begin_destruction() -> void:
 	is_destroyed = true
+	## Whatever was still queued will never spawn, so the population enqueue()
+	## reserved for it has to come back now; otherwise every unit a destroyed
+	## building had queued stays counted against its owner's cap for the rest
+	## of the match. (No refund: the building and its work are lost.)
+	for item in queue:
+		if item.kind == ProducibleItem.Kind.UNIT:
+			Population.release(owner_peer_id, item.get_population_cost())
+	queue.clear()
 	is_under_construction = false
 	_destroy_timer = 0.0
 	_destroy_start_y = position.y

@@ -3,11 +3,23 @@ extends RefCounted
 ## Shared by Unit and ProductionBuilding (no common combat base class between
 ## a CharacterBody3D and a StaticBody3D), so this lives as a static helper.
 
+const UnitGrid = preload("res://scripts/unit_grid.gd")
+## Neighbour-query radius for alert_nearby_allies: must cover the largest
+## Unit.aggro_range on any unit (9 as of writing), since each ally is still
+## checked against its own.
+const ALERT_QUERY_RADIUS: float = 10.0
+## A unit being hit raises the alarm at most this often. Every hit used to
+## re-scan the neighbourhood, and in a big melee that's hundreds a second for
+## the same handful of allies, who are already fighting after the first one.
+const ALERT_INTERVAL_MS: int = 500
+## Same for the aura lookup: must cover the largest Ability.aura_radius.
+const AURA_QUERY_RADIUS: float = 10.0
+
 ## Calls in nearby allied units to help fight back against whoever just landed a hit.
 static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defender_peer_id: int, attacker: Node3D) -> void:
 	if attacker == null or not is_instance_valid(attacker):
 		return
-	for node in tree.get_nodes_in_group("units"):
+	for node in UnitGrid.units_near(tree, from_position, ALERT_QUERY_RADIUS):
 		if not (node is Unit):
 			continue
 		var ally: Unit = node
@@ -46,7 +58,7 @@ static func nearby_aura_armor_bonus(tree: SceneTree, unit: Unit) -> int:
 static func find_nearest_enemy_unit(tree: SceneTree, from_position: Vector3, owner_peer_id: int, search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_dist := search_range
-	for node in tree.get_nodes_in_group("units"):
+	for node in UnitGrid.units_near(tree, from_position, search_range):
 		if not (node is Unit):
 			continue
 		var other: Unit = node
@@ -95,7 +107,9 @@ static func is_worth_attacking(target) -> bool:
 	return effective_health(target) > 0
 
 static func _find_nearby_aura(tree: SceneTree, unit: Unit) -> Ability:
-	for node in tree.get_nodes_in_group("units"):
+	if Unit.monarch_count <= 0:
+		return null
+	for node in UnitGrid.units_near(tree, unit.global_position, AURA_QUERY_RADIUS):
 		if not (node is Unit) or node == unit:
 			continue
 		var monarch: Unit = node

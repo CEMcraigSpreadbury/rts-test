@@ -21,7 +21,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 shape = SubResource("CylinderShape3D_trunk")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=988922623]
-radius = 0.6
+radius = 0.4
 height = 3.5
 
 [node name="tree" parent="." unique_id=1247366733 instance=ExtResource("3_nrl5y")]

@@ -1,13 +1,11 @@
 class_name ConquestHud
 extends Control
-## Battlefield-style Conquest bar, top-centre of the screen, built from the
-## same HUD kit as the bottom bar: a panel_gold backing plate; one stone slot
-## per capture point (gold for points you hold) showing its letter over the
-## owner's colour, with a strip for a flag that's moving and a pulse while
-## contested; and under that one score bar per player — the same
-## TextureProgressBar art as the command panel's queue bar (Hud), with a
-## neutral fill tinted to the player's colour. The leader's bar shakes once
-## they're past NEAR_VICTORY_FRACTION.
+## Conquest bar, top-centre of the screen, kept to two slim rows so it never
+## eats into the battlefield: one slot per capture point (gold frame for points
+## you hold) showing its letter over the owner's colour, with a strip for a
+## flag that's moving and a pulse while contested; and under that every
+## player's score bar side by side, filling toward the target in that player's
+## colour. The leader's bar shakes once they're past NEAR_VICTORY_FRACTION.
 ##
 ## Also the Conquest alerts — played locally on every peer off the synced
 ## objective state (Objective.owner_peer_id/flag_*) and Main.scores, so the
@@ -16,35 +14,32 @@ extends Control
 ## Only created in Conquest mode (see Main._ready). Laid out by hand each
 ## frame rather than with containers, since the shake is a per-bar offset.
 
-const PANEL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/panel_gold.png")
 const SLOT_TEXTURE: Texture2D = preload("res://assets/ui/HUD/elements/square_frame_dark.png")
 const SLOT_OWNED_TEXTURE: Texture2D = preload("res://assets/ui/HUD/elements/square_frame_gold_2.png")
-const BAR_FRAME_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_frame.png")
-## Greyscale copy of bar_fill_green, so tint_progress can make it any team's
-## colour.
-const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill_neutral.png")
 
-## Same margins as the bottom bar's panel_gold NinePatchRects.
-const PANEL_PATCH_MARGINS: Vector4i = Vector4i(36, 26, 34, 26)
-## Content inset from the panel's outer edge — inside the stone pillars.
-const PANEL_PADDING: Vector2 = Vector2(30.0, 18.0)
-const SLOT_SIZE: float = 36.0
-const SLOT_GAP: float = 4.0
+const PANEL_BG_COLOR: Color = Color(0.05, 0.05, 0.07, 0.82)
+const PANEL_BORDER_COLOR: Color = Color(0.72, 0.56, 0.28)
+const PANEL_PADDING: Vector2 = Vector2(8.0, 6.0)
+const SLOT_SIZE: float = 28.0
+const SLOT_GAP: float = 3.0
 ## How far the owner-colour fill sits inside the slot's frame.
-const SLOT_INSET: float = 6.0
-const SLOT_STRIP_HEIGHT: float = 4.0
-const SLOT_FONT_SIZE: int = 18
-const BAR_WIDTH: float = 280.0
-const BAR_HEIGHT: float = 20.0
-const BAR_GAP: float = 3.0
-const BAR_FONT_SIZE: int = 13
-const SECTION_GAP: float = 8.0
+const SLOT_INSET: float = 4.5
+const SLOT_STRIP_HEIGHT: float = 3.0
+const SLOT_FONT_SIZE: int = 14
+## Bars share the slot row's width between them, but never shrink below this
+## (the panel widens instead) so a score still fits inside.
+const BAR_MIN_WIDTH: float = 64.0
+const BAR_HEIGHT: float = 14.0
+const BAR_GAP: float = 4.0
+const BAR_FONT_SIZE: int = 11
+const BAR_BG_COLOR: Color = Color(0.03, 0.04, 0.08, 0.95)
+const SECTION_GAP: float = 4.0
 const TOP_MARGIN: float = 4.0
 const NEAR_VICTORY_FRACTION: float = 0.85
 ## Shake amplitude in pixels, ramping from the first to the second as the
 ## leader goes from NEAR_VICTORY_FRACTION to the target itself.
-const SHAKE_MIN: float = 1.0
-const SHAKE_MAX: float = 4.0
+const SHAKE_MIN: float = 0.5
+const SHAKE_MAX: float = 2.0
 const NEUTRAL_FILL_COLOR: Color = Color(0.0, 0.0, 0.0, 0.0)
 const OWNER_FILL_ALPHA: float = 0.7
 const INACTIVE_DARKEN: float = 0.6
@@ -54,10 +49,10 @@ const UNDER_ATTACK_ALERT_COOLDOWN_MS: int = 8000
 
 var main: Main
 
-var _panel: NinePatchRect
+var _panel: Panel
 ## Objective -> {frame: TextureRect, fill: ColorRect, strip_bg, strip, label}
 var _slots: Dictionary = {}
-## peer_id -> TextureProgressBar (its Overlay label is a child).
+## peer_id -> {bar: ProgressBar, fill: StyleBoxFlat, label: Label}
 var _bars: Dictionary = {}
 
 ## Objective -> last seen owner / flag height, for spotting changes.
@@ -74,14 +69,13 @@ var _tint_cache: Dictionary = {}
 func _ready() -> void:
 	name = "ConquestHud"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel = NinePatchRect.new()
-	_panel.texture = PANEL_TEXTURE
-	_panel.patch_margin_left = PANEL_PATCH_MARGINS.x
-	_panel.patch_margin_top = PANEL_PATCH_MARGINS.y
-	_panel.patch_margin_right = PANEL_PATCH_MARGINS.z
-	_panel.patch_margin_bottom = PANEL_PATCH_MARGINS.w
-	_panel.axis_stretch_horizontal = NinePatchRect.AXIS_STRETCH_MODE_TILE_FIT
-	_panel.axis_stretch_vertical = NinePatchRect.AXIS_STRETCH_MODE_TILE_FIT
+	var style := StyleBoxFlat.new()
+	style.bg_color = PANEL_BG_COLOR
+	style.border_color = PANEL_BORDER_COLOR
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(4)
+	_panel = Panel.new()
+	_panel.add_theme_stylebox_override("panel", style)
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_panel)
 
@@ -156,49 +150,50 @@ func _make_slot(letter: String) -> Dictionary:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size = Vector2(SLOT_SIZE, SLOT_SIZE - 2.0)
 	label.add_theme_font_size_override("font_size", SLOT_FONT_SIZE)
-	label.add_theme_constant_override("outline_size", 4)
+	label.add_theme_constant_override("outline_size", 3)
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(label)
 	return {frame = frame, fill = fill, strip_bg = strip_bg, strip = strip, label = label}
 
-## Same construction as Hud._make_progress_bar_with_overlay, so the two read
-## as one kit.
-func _make_bar() -> TextureProgressBar:
-	var bar := TextureProgressBar.new()
-	bar.size = Vector2(BAR_WIDTH, BAR_HEIGHT)
+## Flat styleboxes rather than the bottom bar's framed bar art, whose frame
+## is too thick to leave any fill visible at this height.
+func _make_bar() -> Dictionary:
+	var bar := ProgressBar.new()
+	bar.show_percentage = false
 	bar.max_value = 1.0
 	bar.step = 0.0
-	bar.texture_under = BAR_FRAME_TEXTURE
-	bar.texture_progress = BAR_FILL_TEXTURE
-	bar.fill_mode = TextureProgressBar.FILL_LEFT_TO_RIGHT
-	bar.nine_patch_stretch = true
-	bar.stretch_margin_left = 10
-	bar.stretch_margin_right = 10
-	bar.stretch_margin_top = 6
-	bar.stretch_margin_bottom = 6
+	bar.size = Vector2(BAR_MIN_WIDTH, BAR_HEIGHT)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var overlay := Label.new()
-	overlay.name = "Overlay"
-	overlay.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	overlay.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	overlay.size = bar.size
-	overlay.add_theme_font_size_override("font_size", BAR_FONT_SIZE)
-	overlay.add_theme_constant_override("outline_size", 4)
-	overlay.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.add_child(overlay)
+	var background := StyleBoxFlat.new()
+	background.bg_color = BAR_BG_COLOR
+	background.border_color = PANEL_BORDER_COLOR.darkened(0.3)
+	background.set_border_width_all(1)
+	background.set_corner_radius_all(2)
+	var fill := StyleBoxFlat.new()
+	fill.set_corner_radius_all(2)
+	bar.add_theme_stylebox_override("background", background)
+	bar.add_theme_stylebox_override("fill", fill)
+	var label := Label.new()
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", BAR_FONT_SIZE)
+	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(label)
 	add_child(bar)
-	return bar
+	return {bar = bar, fill = fill, label = label}
 
 ## --- Per-frame state + layout ---
 
 func _layout(objectives: Array, peers: Array) -> void:
 	var slots_width: float = objectives.size() * SLOT_SIZE + maxf(objectives.size() - 1, 0) * SLOT_GAP
-	var content_width: float = maxf(slots_width, BAR_WIDTH if not peers.is_empty() else 0.0)
+	var bars_min_width: float = peers.size() * BAR_MIN_WIDTH + maxf(peers.size() - 1, 0) * BAR_GAP
+	var content_width: float = maxf(slots_width, bars_min_width)
 	var content_height: float = SLOT_SIZE
 	if not peers.is_empty():
-		content_height += SECTION_GAP + peers.size() * BAR_HEIGHT + (peers.size() - 1) * BAR_GAP
+		content_height += SECTION_GAP + BAR_HEIGHT
 	size = Vector2(content_width, content_height) + PANEL_PADDING * 2.0
 	position = Vector2((get_viewport_rect().size.x - size.x) * 0.5, TOP_MARGIN)
 	_panel.size = size
@@ -226,8 +221,9 @@ func _layout(objectives: Array, peers: Array) -> void:
 	if peers.is_empty():
 		return
 	var leader_score := _leader_score()
+	var bar_width: float = (content_width - (peers.size() - 1) * BAR_GAP) / peers.size()
+	var bar_x: float = PANEL_PADDING.x
 	var y: float = PANEL_PADDING.y + SLOT_SIZE + SECTION_GAP
-	var bar_x: float = PANEL_PADDING.x + (content_width - BAR_WIDTH) * 0.5
 	for peer_id in peers:
 		var entry: Dictionary = main.scores[peer_id]
 		var score: int = entry.score
@@ -236,13 +232,20 @@ func _layout(objectives: Array, peers: Array) -> void:
 		if entry.active and score == leader_score and fraction >= NEAR_VICTORY_FRACTION:
 			var amp: float = lerpf(SHAKE_MIN, SHAKE_MAX, inverse_lerp(NEAR_VICTORY_FRACTION, 1.0, fraction))
 			offset = Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
-		var bar: TextureProgressBar = _bars[peer_id]
+		var parts: Dictionary = _bars[peer_id]
+		var bar: ProgressBar = parts.bar
+		bar.size = Vector2(bar_width, BAR_HEIGHT)
 		bar.position = Vector2(bar_x, y) + offset
 		bar.value = fraction
 		var tint := _tint_for(peer_id)
-		bar.tint_progress = tint.darkened(INACTIVE_DARKEN) if not entry.active else tint
-		(bar.get_node("Overlay") as Label).text = "%d / %d" % [score, main.favour_target]
-		y += BAR_HEIGHT + BAR_GAP
+		var fill_color: Color = tint.darkened(INACTIVE_DARKEN) if not entry.active else tint
+		var fill: StyleBoxFlat = parts.fill
+		if fill.bg_color != fill_color:
+			fill.bg_color = fill_color
+		var label: Label = parts.label
+		label.size = bar.size
+		label.text = str(score)
+		bar_x += bar_width + BAR_GAP
 
 func _leader_score() -> int:
 	var best := -1

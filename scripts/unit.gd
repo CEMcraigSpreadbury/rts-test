@@ -2,6 +2,7 @@ extends CharacterBody3D
 class_name Unit
 
 const SpriteSheetFrames = preload("res://scripts/sprite_sheet_frames.gd")
+const UnitGrid = preload("res://scripts/unit_grid.gd")
 
 const GRAVITY: float = 20.0
 ## The sheets in assets/art face right by default; flip_h mirrors them to face left.
@@ -102,6 +103,33 @@ const WEAKNESS_DAMAGE_MULTIPLIER: float = 1.5
 ## inside this circle — enemy buildings included — until the area is clear or
 ## it's given another order. See _find_assault_target().
 const ASSAULT_AREA_RADIUS: float = 12.0
+
+## Separation: allies never avoid each other through RVO (see
+## _update_avoidance_team) and units don't physically collide with other units,
+## so without this nothing stops two units standing in exactly the same spot —
+## which is what a melee scrum collapses into. Any two living units closer than
+## SEPARATION_DISTANCE (a little over two 0.4 body capsules) get nudged apart.
+## Only overlapping bodies are pushed, so formation slots (Formation.SPACING
+## apart) and melee contact (attack_range apart) are never disturbed by it.
+const SEPARATION_DISTANCE: float = 0.85
+## Push speed at full overlap, scaled down linearly as bodies part.
+const SEPARATION_SPEED: float = 3.0
+const SEPARATION_MAX_SPEED: float = 2.5
+## Recomputed on a short timer rather than every frame — cheap, and the push
+## only has to be roughly current to read as bodies jostling apart.
+const SEPARATION_INTERVAL: float = 0.1
+
+## Melee crowding: each melee attacker already on a target makes it read this
+## many meters further away to the target scans, so a line of melee units
+## spreads across the enemy line instead of all picking the one nearest enemy.
+const MELEE_CROWD_PENALTY: float = 1.2
+## How many melee attackers can already be closer to a target than this unit
+## before it looks for a less crowded enemy beside it (see _tick_melee_overflow).
+const MELEE_CROWD_LIMIT: int = 3
+## How far from the crowded target that replacement may stand — close enough
+## that it's still "the same fight" the player sent them into.
+const MELEE_OVERFLOW_RADIUS: float = 4.0
+const MELEE_OVERFLOW_SCAN_INTERVAL: float = 0.3
 
 ## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
 ## hold (resource->dropoff->resource / target->next target / stay building
@@ -230,6 +258,9 @@ func _update_team_tint_visual() -> void:
 @export var costs: Array[ResourceCost] = []
 ## Released back to the owner's Population pool when this unit dies.
 @export var population_cost: int = 1
+## Monarchs currently in the tree, any owner — lets CombatUtils skip its aura
+## lookups (run on every attack and every hit) when there are none.
+static var monarch_count: int = 0
 
 @export_group("Sprite Sheet")
 @export var sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png")
@@ -424,6 +455,8 @@ func _play_selection_punch() -> void:
 ## replication — same reasoning as the `selected` setter above.
 var is_monarch: bool = false:
 	set(value):
+		if value != is_monarch:
+			monarch_count += 1 if value else -1
 		is_monarch = value
 		if crown_icon:
 			crown_icon.visible = value
@@ -759,6 +792,11 @@ var _funnel_final_target: Vector3 = Vector3.ZERO
 var _funnel_timer: float = 0.0
 
 const COHESION_RECHECK_INTERVAL: float = 0.2
+## Most groupmates a unit averages over per recheck (see _update_cohesion).
+const COHESION_SAMPLE_SIZE: int = 24
+## This unit's _formation_progress() as of its last cohesion recheck — what
+## groupmates read instead of recomputing it.
+var _cohesion_progress: float = 0.0
 ## Progress-fraction lead (0-1) over the group average tolerated before any
 ## throttling kicks in — small formation-keeping wobble/noise shouldn't cause
 ## constant micro-braking.
@@ -808,7 +846,29 @@ var target_resource: Gatherable = null
 var dropoff_point: Node3D = null
 var gather_timer: float = 0.0
 ## Unit or ProductionBuilding — anything with owner_peer_id/current_health/take_damage().
-var attack_target: Node3D = null
+## Setter keeps the target's melee_attackers count in step, whichever of the
+## many code paths below retargets this unit.
+var attack_target: Node3D = null:
+	set(value):
+		if value == attack_target:
+			return
+		var melee := _counts_as_melee()
+		if melee and is_instance_valid(attack_target) and attack_target is Unit:
+			attack_target.melee_attackers = maxi(attack_target.melee_attackers - 1, 0)
+		attack_target = value
+		if melee and is_instance_valid(value) and value is Unit:
+			value.melee_attackers += 1
+## Host only: how many melee units currently have this unit as attack_target.
+var melee_attackers: int = 0
+var _separation_timer: float = randf() * SEPARATION_INTERVAL
+var _separation_velocity: Vector3 = Vector3.ZERO
+var _overflow_scan_timer: float = 0.0
+## Earliest Time.get_ticks_msec() this unit may call allies in again (see take_damage).
+var _next_alert_ms: int = 0
+## How long this unit's move path has been over without reaching its target
+## (see _on_velocity_computed), and how long that's allowed before it gives up.
+var _path_end_timer: float = 0.0
+const PATH_END_GIVE_UP: float = 1.0
 var attack_timer: float = 0.0
 var build_target: ProductionBuilding = null
 ## Progress-stall tracking for _tick_build_approach() while heading to
@@ -864,6 +924,7 @@ func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> vo
 	formation_group = group
 	formation_initial_distance = global_position.distance_to(target_position) if not group.is_empty() else 0.0
 	_cohesion_recheck_timer = 0.0
+	_cohesion_progress = 0.0
 	_cohesion_target_speed_scale = 1.0
 	_cohesion_speed_scale = 1.0
 	_cohesion_last_remaining_distance = -1.0
@@ -994,6 +1055,11 @@ func _ready() -> void:
 		nav_agent.avoidance_enabled = true
 		nav_agent.velocity_computed.connect(_on_velocity_computed)
 
+func _exit_tree() -> void:
+	if is_monarch:
+		monarch_count -= 1
+		is_monarch = false
+
 ## Same-team units broadcast on (and only avoid) their own owner_peer_id's
 ## avoidance layer, so allies can freely overlap/squeeze past each other in a
 ## tight chokepoint (e.g. a narrow ramp) instead of RVO treating every nearby
@@ -1076,6 +1142,11 @@ func set_funnel_waypoint(point: Vector3, forward: Vector3) -> void:
 ## being funnelled around. Reformation defers until nobody is funnelling.
 func is_funnelling() -> bool:
 	return _funnel_active
+
+## Where this unit's current formation order is taking it, even while a
+## funnel waypoint is steering it somewhere nearer first.
+func formation_slot() -> Vector3:
+	return _funnel_final_target if _funnel_active else nav_agent.target_position
 
 func _funnel_can_arm() -> bool:
 	return status_activity == Activity.MOVING \
@@ -1647,7 +1718,10 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 			## makes this unit fight back, but must not quietly cancel the
 			## standing order to take the place it was sent to.
 			command_attack(attacker, true)
-		CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
+		var now := Time.get_ticks_msec()
+		if now >= _next_alert_ms:
+			_next_alert_ms = now + CombatUtils.ALERT_INTERVAL_MS
+			CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
 
 func _physics_process(delta: float) -> void:
 	## Only the host simulates movement/gathering/combat; other peers just display
@@ -1662,7 +1736,7 @@ func _physics_process(delta: float) -> void:
 
 	if status_activity == Activity.DEAD:
 		velocity = Vector3.ZERO
-		move_and_slide()
+		_slide()
 		return
 
 	if not is_on_floor():
@@ -1689,14 +1763,14 @@ func _physics_process(delta: float) -> void:
 		## Those activities ignore the avoidance callback and so never get its
 		## move_and_slide(); everything else gets one from the callback.
 		if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.CASTING:
-			move_and_slide()
+			_slide()
 		return
 
 	if status_activity == Activity.CASTING:
 		velocity.x = 0.0
 		velocity.z = 0.0
 		_tick_casting(delta)
-		move_and_slide()
+		_slide()
 		return
 
 	if status_activity == Activity.GATHERING:
@@ -1705,15 +1779,16 @@ func _physics_process(delta: float) -> void:
 		_tick_gathering(delta)
 		if sprite.sprite_frames:
 			_set_animation("gather")
-		move_and_slide()
+		_slide()
 		return
 
 	if status_activity == Activity.ATTACKING:
-		velocity.x = 0.0
-		velocity.z = 0.0
+		var push := _update_separation(delta)
+		velocity.x = push.x
+		velocity.z = push.z
 		_face_attack_target(delta)
 		_tick_attacking(delta)
-		move_and_slide()
+		_slide()
 		return
 
 	if status_activity == Activity.BUILDING:
@@ -1722,7 +1797,7 @@ func _physics_process(delta: float) -> void:
 		_tick_building()
 		if sprite.sprite_frames:
 			_set_animation("idle")
-		move_and_slide()
+		_slide()
 		return
 
 	if status_activity == Activity.TO_RESOURCE and nav_agent.is_navigation_finished():
@@ -1730,11 +1805,15 @@ func _physics_process(delta: float) -> void:
 	elif status_activity == Activity.TO_DROPOFF and nav_agent.is_navigation_finished():
 		_deposit_and_continue()
 	elif status_activity == Activity.TO_TARGET:
-		if nav_agent.is_navigation_finished():
+		## Straight-line reach counts as arrived too: in a scrum the path can't
+		## finish (bodies in the way keep the agent short of its nav target)
+		## even though the target is already within swing.
+		if nav_agent.is_navigation_finished() or _target_in_reach():
 			_start_attacking()
 		else:
 			_tick_chase(delta)
 			_tick_approach_threats(delta)
+			_tick_melee_overflow(delta)
 	elif status_activity == Activity.TO_BUILD_SITE:
 		if nav_agent.is_navigation_finished():
 			_start_building()
@@ -1807,7 +1886,35 @@ func _physics_process(delta: float) -> void:
 	effective_speed *= _cohesion_speed_scale * _slow_multiplier()
 	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
+	## Added after avoidance (see _on_velocity_computed), not into the desired
+	## velocity: RVO boxed in by enemies returns a near-zero safe velocity and
+	## would cancel the push, leaving stacked units stacked.
+	_update_separation(delta)
 	nav_agent.set_velocity(desired_velocity)
+
+## Push away from any living unit overlapping this one (see SEPARATION_DISTANCE).
+## Units sitting on exactly the same point part along a per-unit fixed angle so
+## a stacked pair splits instead of both computing a zero-length direction.
+func _update_separation(delta: float) -> Vector3:
+	_separation_timer -= delta
+	if _separation_timer > 0.0:
+		return _separation_velocity
+	_separation_timer = SEPARATION_INTERVAL
+	var push := Vector3.ZERO
+	for other in UnitGrid.units_near(get_tree(), global_position, SEPARATION_DISTANCE):
+		if other == self:
+			continue
+		var away := global_position - other.global_position
+		away.y = 0.0
+		var distance := away.length()
+		if distance < 0.01:
+			var angle := float(get_instance_id() % 6283) * 0.001
+			away = Vector3(cos(angle), 0.0, sin(angle))
+		else:
+			away /= distance
+		push += away * (1.0 - distance / SEPARATION_DISTANCE) * SEPARATION_SPEED
+	_separation_velocity = push.limit_length(SEPARATION_MAX_SPEED)
+	return _separation_velocity
 
 ## Group cohesion on top of formation_speed's flat pacing cap: throttles this
 ## unit further, proportionally, when it's running ahead of the formation
@@ -1831,6 +1938,7 @@ func _update_cohesion(delta: float, base_speed: float) -> void:
 	if _cohesion_recheck_timer <= 0.0:
 		_cohesion_recheck_timer = COHESION_RECHECK_INTERVAL
 		var self_progress := _formation_progress()
+		_cohesion_progress = self_progress
 
 		## Stall detection compares RAW meters progressed this recheck window
 		## against what this unit's own current commanded pace should cover —
@@ -1871,7 +1979,14 @@ func _update_cohesion(delta: float, base_speed: float) -> void:
 
 		var total_progress := 0.0
 		var count := 0
-		for other in formation_group:
+		## A big group is averaged over an evenly spaced sample rather than every
+		## member (offset per unit, so different units sample different members)
+		## — the whole-group loop is O(n^2) across the group, which a large army
+		## selection turns into most of the frame.
+		var group_size: int = formation_group.size()
+		var stride: int = maxi(1, ceili(float(group_size) / COHESION_SAMPLE_SIZE))
+		for i in range(get_instance_id() % stride, group_size, stride):
+			var other: Unit = formation_group[i]
 			## formation_group is built by main.gd as "the units dispatched
 			## together" and deliberately does NOT exclude this unit itself
 			## (it's a single shared array reference across the whole group,
@@ -1900,7 +2015,10 @@ func _update_cohesion(delta: float, base_speed: float) -> void:
 			## paces itself against its own half.
 			if other._funnel_active != _funnel_active:
 				continue
-			total_progress += other._formation_progress()
+			## Each member's own progress as of its last recheck, rather than a
+			## fresh _formation_progress() (a full remaining-path walk) per
+			## groupmate per recheck.
+			total_progress += other._cohesion_progress
 			count += 1
 
 		_cohesion_target_speed_scale = 1.0
@@ -1927,17 +2045,24 @@ func _update_cohesion(delta: float, base_speed: float) -> void:
 ## once a unit is done treating this as a formation leg.
 func _update_formation_avoidance() -> void:
 	if formation_group.is_empty():
-		nav_agent.radius = FORMATION_BASE_RADIUS
-		nav_agent.avoidance_priority = 1.0
+		_set_avoidance(FORMATION_BASE_RADIUS, 1.0)
 		return
-	var progress: float = _formation_progress()
+	## The progress cached at the last cohesion recheck, not a fresh
+	## remaining-path walk every frame — this runs for every unit every frame.
+	var progress: float = _cohesion_progress
 	if progress < FORMATION_SETTLE_PROGRESS_START:
-		nav_agent.radius = FORMATION_BASE_RADIUS
-		nav_agent.avoidance_priority = FORMATION_TRAVELING_AVOIDANCE_PRIORITY
+		_set_avoidance(FORMATION_BASE_RADIUS, FORMATION_TRAVELING_AVOIDANCE_PRIORITY)
 		return
 	var t: float = clampf((progress - FORMATION_SETTLE_PROGRESS_START) / (1.0 - FORMATION_SETTLE_PROGRESS_START), 0.0, 1.0)
-	nav_agent.radius = lerpf(FORMATION_BASE_RADIUS, FORMATION_SETTLE_RADIUS_FLOOR, t)
-	nav_agent.avoidance_priority = lerpf(FORMATION_TRAVELING_AVOIDANCE_PRIORITY, 1.0, t)
+	_set_avoidance(lerpf(FORMATION_BASE_RADIUS, FORMATION_SETTLE_RADIUS_FLOOR, t),
+			lerpf(FORMATION_TRAVELING_AVOIDANCE_PRIORITY, 1.0, t))
+
+## Each set on the agent is a NavigationServer call, so only on a real change.
+func _set_avoidance(radius: float, priority: float) -> void:
+	if absf(nav_agent.radius - radius) > 0.005:
+		nav_agent.radius = radius
+	if absf(nav_agent.avoidance_priority - priority) > 0.01:
+		nav_agent.avoidance_priority = priority
 
 ## 0 (just started) to 1 (arrived) fraction of this unit's straight-line
 ## distance-to-slot at the start of this leg (see _set_formation_cohesion)
@@ -1957,8 +2082,8 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD or status_activity == Activity.CASTING:
 		return
 
-	velocity.x = safe_velocity.x
-	velocity.z = safe_velocity.z
+	velocity.x = safe_velocity.x + _separation_velocity.x
+	velocity.z = safe_velocity.z + _separation_velocity.z
 
 	var flat_speed := Vector2(velocity.x, velocity.z).length()
 	var is_moving := flat_speed > MOVING_SPEED_THRESHOLD
@@ -1970,7 +2095,7 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	if sprite.sprite_frames:
 		_set_animation("walk" if is_moving else "idle")
 
-	move_and_slide()
+	_slide()
 
 	## Gated on Activity.MOVING specifically (not just nav-finished) because
 	## PATROL stays Command.PATROL while chasing/fighting (Activity.TO_TARGET/
@@ -1989,8 +2114,17 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## but with a shift-queued order waiting, this false completion would
 	## immediately pop and dispatch it, making the unit skip straight to the
 	## next waypoint instead of ever visiting the first one.
-	if status_activity == Activity.MOVING and nav_agent.is_navigation_finished() \
-			and global_position.distance_to(nav_agent.target_position) <= nav_agent.target_desired_distance + 0.5:
+	##
+	## A path can also end short of its target for good — a destination the
+	## navmesh can't reach, where the path stops at the nearest point it can.
+	## Without a way out the unit would stand there on its move order forever
+	## (never idle, so never re-formed, never scanning), so a path that has
+	## been over for PATH_END_GIVE_UP counts as arrived wherever it left the unit.
+	var path_over := status_activity == Activity.MOVING and nav_agent.is_navigation_finished()
+	var at_target := path_over and global_position.distance_to(nav_agent.target_position) <= nav_agent.target_desired_distance + 0.5
+	_path_end_timer = _path_end_timer + get_physics_process_delta_time() if path_over and not at_target else 0.0
+	if at_target or _path_end_timer >= PATH_END_GIVE_UP:
+		_path_end_timer = 0.0
 		if status_command == Command.MOVE or status_command == Command.ATTACK_MOVE:
 			## Reset status_command too, not just status_activity — otherwise
 			## a unit that has ever finished a move order (including every
@@ -2213,6 +2347,50 @@ func _tick_chase(delta: float) -> void:
 		return
 	_chase_target_position = current
 	move_to(current)
+
+func _target_in_reach() -> bool:
+	return _is_target_alive(attack_target) \
+			and _flat_distance(global_position, attack_target.global_position) <= _effective_attack_range()
+
+func _counts_as_melee() -> bool:
+	return can_fight and projectile_scene == null
+
+## A melee unit still closing on a target that MELEE_CROWD_LIMIT other melee
+## units will reach first switches to the least crowded enemy standing right
+## beside it, so the overflow spreads along the enemy line rather than queueing
+## up behind one man. Applies to hand-picked targets too, but only ever swaps
+## within MELEE_OVERFLOW_RADIUS of them, so the unit still joins the fight it
+## was sent into.
+func _tick_melee_overflow(delta: float) -> void:
+	if not _counts_as_melee() or not _is_target_alive(attack_target) or not (attack_target is Unit):
+		return
+	_overflow_scan_timer -= delta
+	if _overflow_scan_timer > 0.0:
+		return
+	_overflow_scan_timer = MELEE_OVERFLOW_SCAN_INTERVAL
+	var target_pos: Vector3 = attack_target.global_position
+	var my_distance := _flat_distance(global_position, target_pos)
+	if my_distance <= _effective_attack_range() * ATTACK_LEASH_SLACK:
+		return
+	var ahead := 0
+	for other in UnitGrid.units_near(get_tree(), target_pos, my_distance):
+		if other != self and other.attack_target == attack_target and other._counts_as_melee():
+			ahead += 1
+	if ahead < MELEE_CROWD_LIMIT:
+		return
+	var best: Unit = null
+	var best_crowd: int = attack_target.melee_attackers - 1
+	for other in UnitGrid.units_near(get_tree(), target_pos, MELEE_OVERFLOW_RADIUS):
+		if other == attack_target or other.owner_peer_id == owner_peer_id or not CombatUtils.is_worth_attacking(other):
+			continue
+		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
+			continue
+		if other.melee_attackers < best_crowd:
+			best = other
+			best_crowd = other.melee_attackers
+	if best != null:
+		attack_target = best
+		_head_to_target()
 
 func _start_attacking() -> void:
 	if not _is_target_alive(attack_target):
@@ -2487,10 +2665,14 @@ func _nearest_in_assault_area(group: StringName) -> Node3D:
 func _flat_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
 
+## Melee units score each candidate by distance plus MELEE_CROWD_PENALTY per
+## melee attacker already on it (this unit itself not counted), so they spread
+## across nearby enemies; `search_range` still limits the raw distance.
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 	var nearest: Unit = null
-	var nearest_dist := search_range
-	for node in get_tree().get_nodes_in_group("units"):
+	var nearest_score := INF
+	var melee := _counts_as_melee()
+	for node in UnitGrid.units_near(get_tree(), global_position, search_range):
 		if node == self or not (node is Unit):
 			continue
 		var other: Unit = node
@@ -2504,9 +2686,15 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
 			continue
 		var dist := global_position.distance_to(other.global_position)
-		if dist <= nearest_dist:
+		if dist > search_range:
+			continue
+		var score := dist
+		if melee:
+			var crowd: int = other.melee_attackers - (1 if other == attack_target else 0)
+			score += maxi(crowd, 0) * MELEE_CROWD_PENALTY
+		if score <= nearest_score:
 			nearest = other
-			nearest_dist = dist
+			nearest_score = score
 	return nearest
 
 func _die(attacker: Node3D = null) -> void:
@@ -2604,3 +2792,13 @@ func _death_squash(target_scale: Vector3, strength: float) -> void:
 	_sprite_scale_tween = create_tween()
 	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, DEATH_LAND_SQUASH_DURATION) \
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+## move_and_slide() is a full collision sweep against the terrain — by far the
+## most expensive thing a unit does each tick — and a grounded unit that isn't
+## moving (most of a battle line, stood fighting) gets nothing from it.
+## is_on_floor() is as of the last real slide, which is still true for a unit
+## that hasn't moved since.
+func _slide() -> void:
+	if is_on_floor() and absf(velocity.x) < 0.01 and absf(velocity.z) < 0.01:
+		return
+	move_and_slide()

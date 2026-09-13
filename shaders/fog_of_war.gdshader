@@ -24,7 +24,7 @@ uniform vec2 map_size;
 // Instead each of the local player's own units/buildings is passed in here
 // and the reveal circle is computed analytically per-pixel, which is exact
 // (no steps at any distance) and cheap regardless of grid resolution.
-const int MAX_VISION_SOURCES = 32;
+const int MAX_VISION_SOURCES = 64;
 uniform vec2 vision_positions[MAX_VISION_SOURCES];
 uniform float vision_radii[MAX_VISION_SOURCES];
 uniform int vision_count;

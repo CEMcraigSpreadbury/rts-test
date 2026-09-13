@@ -25,16 +25,24 @@ var available_maps: Array[MapInfo] = MapInfo.list_all()
 ## Under the map picker. Host-editable, read-only for everyone else — same
 ## rule as the map picker.
 var _settings_row: MatchSettingsRow
+## Under the player list, host only: fills an empty slot with an AI (see
+## Network.add_ai_player). Disabled once the map's spawn points are all taken.
+var _add_ai_button: Button
 
 func _ready() -> void:
 	for map in available_maps:
 		map_option.add_item(map.map_name)
 	map_option.item_selected.connect(Network.set_map)
-	Network.map_changed.connect(_refresh_map_option.unbind(1))
+	Network.map_changed.connect(_on_map_changed)
 	_settings_row = MatchSettingsRow.new()
 	_settings_row.edited.connect(func(): Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target()))
 	map_option.add_sibling(_settings_row)
 	Network.match_settings_changed.connect(_refresh_match_settings)
+	_add_ai_button = Button.new()
+	_add_ai_button.name = "AddAiButton"
+	_add_ai_button.text = "Add AI"
+	_add_ai_button.pressed.connect(func(): Network.add_ai_player())
+	player_list.add_sibling(_add_ai_button)
 	_refresh_map_option()
 	quick_play_button.pressed.connect(_on_quick_play_pressed)
 	host_steam_button.pressed.connect(_on_host_steam_pressed)
@@ -48,6 +56,7 @@ func _ready() -> void:
 	start_button.visible = false
 	invite_button.visible = false
 	disconnect_button.visible = false
+	_add_ai_button.visible = false
 	searching_label.get_parent().visible = false
 
 	if not Steamworks.is_available:
@@ -57,7 +66,9 @@ func _ready() -> void:
 		host_steam_button.tooltip_text = "Steam must be running to host a Steam lobby."
 
 	Network.player_connected.connect(_refresh_player_list)
-	Network.player_disconnected.connect(_refresh_player_list)
+	## player_disconnected also hands over the departed player's data, which
+	## the refresh has no use for.
+	Network.player_disconnected.connect(_refresh_player_list.unbind(1))
 	Network.player_updated.connect(_refresh_player_list)
 	Network.connected_to_server.connect(_on_connected)
 	Network.connection_failed.connect(_on_connection_failed)
@@ -157,6 +168,14 @@ func _set_connect_controls_enabled(enabled: bool) -> void:
 	host_steam_button.disabled = not enabled or not Steamworks.is_available
 	disconnect_button.visible = not enabled
 
+## A smaller map can't seat everyone the last one did — the host drops the
+## newest AIs to fit (see Network.trim_ai_to_capacity).
+func _on_map_changed(_index: int) -> void:
+	if Network.is_host():
+		Network.trim_ai_to_capacity()
+	_refresh_map_option()
+	_refresh_player_list()
+
 ## Only the host (or someone not yet connected, who'll become one by hosting)
 ## gets to pick — a joined client just sees the host's choice.
 func _refresh_map_option() -> void:
@@ -176,9 +195,12 @@ func _refresh_match_settings() -> void:
 func _refresh_player_list(_peer_id: int = -1) -> void:
 	_refresh_map_option()
 	for child in player_list.get_children():
+		player_list.remove_child(child)
 		child.queue_free()
+	var is_host := Network.is_host()
 	for id in Network.players:
 		var row := HBoxContainer.new()
+		var is_ai := Network.is_ai(id)
 		var name_label := Label.new()
 		name_label.text = "%s%s" % [Network.players[id].get("name", "Player %d" % id), " (you)" if id == Network.my_peer_id() else ""]
 		row.add_child(name_label)
@@ -202,7 +224,8 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 		swatch.custom_minimum_size = Vector2(24, 24)
 		row.add_child(swatch)
 
-		if id == Network.my_peer_id():
+		## Your own colour, or — for the host — an AI's.
+		if id == Network.my_peer_id() or (is_ai and is_host):
 			var color_option := OptionButton.new()
 			var available: Array[int] = Network.available_color_indices(id)
 			var color_index: int = Network.color_index_of(id)
@@ -215,8 +238,20 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 				color_option.set_item_disabled(i, not available.has(i) and i != color_index)
 			if color_index >= 0:
 				color_option.select(color_index)
-			color_option.item_selected.connect(Network.set_my_color)
+			if is_ai:
+				color_option.item_selected.connect(func(i): Network.set_ai_color(id, i))
+			else:
+				color_option.item_selected.connect(Network.set_my_color)
 			row.add_child(color_option)
+
+		## Everyone else reads an AI's difficulty off its name ("AI 1 (Hard)").
+		if is_ai and is_host:
+			var difficulty_option := OptionButton.new()
+			for difficulty_name in Network.AI_DIFFICULTY_NAMES:
+				difficulty_option.add_item(difficulty_name)
+			difficulty_option.select(Network.players[id].get("difficulty", Network.AiDifficulty.NORMAL))
+			difficulty_option.item_selected.connect(func(i): Network.set_ai_difficulty(id, i))
+			row.add_child(difficulty_option)
 
 		var ready_check := CheckButton.new()
 		ready_check.text = "Ready"
@@ -227,9 +262,17 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 			ready_check.disabled = true
 		row.add_child(ready_check)
 
+		if is_ai and is_host:
+			var remove_button := Button.new()
+			remove_button.text = "Remove"
+			remove_button.pressed.connect(Network.remove_ai_player.bind(id))
+			row.add_child(remove_button)
+
 		player_list.add_child(row)
 
-	if Network.is_host():
+	_add_ai_button.visible = is_host
+	_add_ai_button.disabled = Network.players.size() >= Network.player_capacity()
+	if is_host:
 		start_button.disabled = not Network.all_players_ready()
 
 func _on_start_pressed() -> void:
@@ -242,5 +285,6 @@ func _on_start_pressed() -> void:
 	Network.mark_steam_lobby_in_progress()
 	start_button.disabled = true
 	map_option.disabled = true
+	_add_ai_button.disabled = true
 	_settings_row.set_editable(false)
 	SceneLoader.start_match(available_maps[clampi(Network.map_index, 0, available_maps.size() - 1)].scene_path)

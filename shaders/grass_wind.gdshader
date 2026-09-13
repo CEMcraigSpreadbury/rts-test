@@ -41,7 +41,7 @@ uniform bool fog_enabled = false;
 uniform sampler2D fog_tex : source_color, filter_linear;
 uniform vec2 fog_map_origin;
 uniform vec2 fog_map_size;
-const int FOG_MAX_VISION_SOURCES = 32;
+const int FOG_MAX_VISION_SOURCES = 64;
 uniform vec2 fog_vision_positions[FOG_MAX_VISION_SOURCES];
 uniform float fog_vision_radii[FOG_MAX_VISION_SOURCES];
 uniform int fog_vision_count;

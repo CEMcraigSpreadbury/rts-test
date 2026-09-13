@@ -101,6 +101,21 @@ func gather(amount: int) -> int:
 	var taken: int = mini(amount, amount_remaining)
 	amount_remaining -= taken
 	if amount_remaining <= 0:
-		depleted.emit()
-		queue_free()
+		_deplete()
+		## Gathering only runs on the host and Gatherables aren't networked
+		## nodes, so every other peer has to be told to drop theirs too — or its
+		## collision, model and navmesh carve stay behind on their screens.
+		if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+			_rpc_deplete.rpc()
 	return taken
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_deplete() -> void:
+	amount_remaining = 0
+	_deplete()
+
+func _deplete() -> void:
+	if is_queued_for_deletion():
+		return
+	depleted.emit()
+	queue_free()
