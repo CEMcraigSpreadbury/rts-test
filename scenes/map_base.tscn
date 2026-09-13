@@ -23,6 +23,7 @@
 [ext_resource type="Shader" path="res://shaders/cloud_shadows.gdshader" id="21_lsodw"]
 [ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="22_80dis"]
 [ext_resource type="Script" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
+[ext_resource type="Shader" path="res://shaders/ambient_dust.gdshader" id="ambient_dust_shader"]
 [ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/bar_band.png" id="24_i2k1h"]
 [ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/panel_stone.png" id="25_lrrmx"]
 [ext_resource type="Script" path="res://scripts/minimap.gd" id="26_vqeq8"]
@@ -94,17 +95,14 @@ orbit_velocity_min = 0.02
 orbit_velocity_max = 0.08
 gravity = Vector3(0, 0, 0)
 scale_min = 0.4
-color = Color(1, 0.95, 0.8, 0.35)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
-transparency = 1
-shading_mode = 0
-albedo_color = Color(1, 0.95, 0.8, 0.35)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dust"]
+render_priority = 0
+shader = ExtResource("ambient_dust_shader")
 
 [sub_resource type="SphereMesh" id="SphereMesh_dust"]
-material = SubResource("StandardMaterial3D_dust")
-radius = 0.04
-height = 0.08
+radius = 0.06
+height = 0.12
 radial_segments = 6
 rings = 3
 
@@ -162,6 +160,8 @@ field_of_view = 50.0
 
 [node name="ForestDust" type="GPUParticles3D" parent="." unique_id=1933763604]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+material_override = SubResource("ShaderMaterial_dust")
+cast_shadow = 0
 amount = 200
 lifetime = 8.0
 visibility_aabb = AABB(-34, -6, -34, 68, 12, 68)

@@ -27,7 +27,7 @@ uniform int alpha_mode : hint_enum("Smooth", "Dithered", "Cut") = 0;
 
 group_uniforms FogOfWar;
 // Wired up by fog_of_war.gd directly onto each grass layer's own material
-// (see FogOfWar._setup_grass_fog_materials) — not part of the original
+// (see FogOfWar._setup_fogged_materials) — not part of the original
 // referenced shader, kept in its own uniform group and named with a fog_
 // prefix so it's obviously separate from everything above.
 //

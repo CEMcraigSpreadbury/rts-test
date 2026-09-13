@@ -113,6 +113,16 @@ var _vision_count: int = 0
 const GRASS_SHADER: Shader = preload("res://shaders/grass_wind.gdshader")
 var _grass_materials: Array[ShaderMaterial] = []
 
+## Ambient dust (ForestDust in map_base.tscn) floats above the terrain, so the
+## terrain fog pass never covers it — ambient_dust.gdshader takes the same
+## vision uniforms and only shows motes inside current vision. Found by shader
+## like the grass. Its emitter is also stretched over this map's rect, since
+## maps range from 144 to 208 across and the scene can't know which it's in.
+const DUST_SHADER: Shader = preload("res://shaders/ambient_dust.gdshader")
+## Motes per square world unit — the original 200 over a 60x60 box.
+const DUST_DENSITY: float = 200.0 / 3600.0
+var _dust_materials: Array[ShaderMaterial] = []
+
 func _setup_terrain_fog_material() -> ShaderMaterial:
 	var terrain_material: Material = get_node(terrain_mesh_path).get_active_material(0)
 	var fog_material := ShaderMaterial.new()
@@ -120,11 +130,12 @@ func _setup_terrain_fog_material() -> ShaderMaterial:
 	terrain_material.next_pass = fog_material
 	return fog_material
 
-func _setup_grass_fog_materials() -> void:
+func _setup_fogged_materials() -> void:
 	_grass_materials.clear()
-	_find_grass_materials(get_tree().root)
+	_dust_materials.clear()
+	_find_fogged_materials(get_tree().root)
 
-func _find_grass_materials(node: Node) -> void:
+func _find_fogged_materials(node: Node) -> void:
 	if node is MultiMeshInstance3D:
 		var grass_material := (node as MultiMeshInstance3D).material_override as ShaderMaterial
 		if grass_material and grass_material.shader == GRASS_SHADER:
@@ -133,8 +144,25 @@ func _find_grass_materials(node: Node) -> void:
 			grass_material.set_shader_parameter("fog_map_origin", map_origin)
 			grass_material.set_shader_parameter("fog_map_size", map_size)
 			_grass_materials.append(grass_material)
+	elif node is GPUParticles3D:
+		var dust_material := (node as GPUParticles3D).material_override as ShaderMaterial
+		if dust_material and dust_material.shader == DUST_SHADER:
+			dust_material.set_shader_parameter("fog_enabled", true)
+			_dust_materials.append(dust_material)
+			_fit_dust_to_map(node as GPUParticles3D)
 	for child in node.get_children():
-		_find_grass_materials(child)
+		_find_fogged_materials(child)
+
+func _fit_dust_to_map(particles: GPUParticles3D) -> void:
+	var half := map_size * 0.5
+	var center := map_origin + half
+	particles.global_position = Vector3(center.x, particles.global_position.y, center.y)
+	## Duplicated so the resized box doesn't leak into the cached map_base scene.
+	var process := particles.process_material.duplicate() as ParticleProcessMaterial
+	process.emission_box_extents = Vector3(half.x, process.emission_box_extents.y, half.y)
+	particles.process_material = process
+	particles.amount = maxi(1, int(map_size.x * map_size.y * DUST_DENSITY))
+	particles.visibility_aabb = AABB(Vector3(-half.x - 4.0, -6.0, -half.y - 4.0), Vector3(map_size.x + 8.0, 12.0, map_size.y + 8.0))
 
 func _ready() -> void:
 	var cell_count := grid_resolution * grid_resolution
@@ -149,7 +177,7 @@ func _ready() -> void:
 	_material.set_shader_parameter("map_origin", map_origin)
 	_material.set_shader_parameter("map_size", map_size)
 
-	call_deferred("_setup_grass_fog_materials")
+	call_deferred("_setup_fogged_materials")
 
 	_vision_positions.resize(MAX_VISION_SOURCES)
 	_vision_radii.resize(MAX_VISION_SOURCES)
@@ -245,6 +273,10 @@ func _push_vision_to_shader() -> void:
 		grass_material.set_shader_parameter("fog_vision_count", _vision_count)
 		grass_material.set_shader_parameter("fog_vision_positions", _vision_positions)
 		grass_material.set_shader_parameter("fog_vision_radii", _vision_radii)
+	for dust_material in _dust_materials:
+		dust_material.set_shader_parameter("fog_vision_count", _vision_count)
+		dust_material.set_shader_parameter("fog_vision_positions", _vision_positions)
+		dust_material.set_shader_parameter("fog_vision_radii", _vision_radii)
 
 ## Exact (not grid-quantized) check against this tick's own vision sources —
 ## smoother and cheaper than a lookup into a rasterized grid would be, since
