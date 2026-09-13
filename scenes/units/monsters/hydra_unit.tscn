@@ -79,7 +79,7 @@ attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])
 build_command_lines = Array[ExtResource("109_command_line")]([])
 display_name = "Hydra"
-move_speed = 2.0
+move_speed = 1.5
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_hydra_gold"), SubResource("ResourceCost_hydra_wood")])
 population_cost = 3
 sprite_sheet = ExtResource("2_sheet")
@@ -104,7 +104,7 @@ attack_range = 1.8
 attack_cooldown = 2.2
 aggro_range = 9.0
 weak_to = 4
-vision_range = 10.0
+vision_range = 13.0
 abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_hydra")])
 
 [node name="Sprite" parent="." index="1"]

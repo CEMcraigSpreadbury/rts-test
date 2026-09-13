@@ -14,9 +14,11 @@ void fragment() {
 	vec4 texel = texture(source_texture, UV);
 	vec3 albedo;
 	vec3 emission;
-	write_team_colored_surface(texel, albedo, emission);
+	float ao;
+	write_team_colored_surface(texel, albedo, emission, ao);
 	ALBEDO = albedo;
 	EMISSION = emission;
+	AO = ao;
 	METALLIC = metallic_value;
 	ROUGHNESS = roughness_value;
 	ALPHA = texel.a * construction_alpha;

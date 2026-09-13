@@ -20,7 +20,8 @@ const ATTACK_PING_PULSES: int = 3
 const OBJECTIVE_MARKER_RADIUS: float = 7.0
 const OBJECTIVE_FONT_SIZE: int = 11
 
-## Right-click-to-ping: main.gd relays this out to every player (see
+## Right-click-to-ping (when there's no own selection to move — see
+## _gui_input): main.gd relays this out to every player (see
 ## show_ping()) once the host has confirmed it, so it's driven externally
 ## rather than drawn the instant this peer clicks.
 signal ping_requested(world_pos: Vector3)
@@ -173,7 +174,11 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _dragging:
 		_pan_to(event.position)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-		ping_requested.emit(_local_to_world(event.position))
+		## With own units selected it's a move order, same as right-clicking
+		## the ground; with nothing to command it falls back to a ping.
+		var world_pos := _local_to_world(event.position)
+		if not owner.issue_minimap_move_order(world_pos, event.shift_pressed):
+			ping_requested.emit(world_pos)
 
 func _pan_to(local_pos: Vector2) -> void:
 	var world_pos := _local_to_world(local_pos)

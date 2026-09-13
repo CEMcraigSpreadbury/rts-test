@@ -12640,6 +12640,9 @@ material_override = SubResource("ShaderMaterial_r4e17")
 cast_shadow = 0
 multimesh = ExtResource("grass_multimesh")
 
+[node name="CloudShadowLayer" parent="." index="6" unique_id=1401837760]
+visible = false
+
 [node name="PlayerSpawnPoint1" parent="PlayerSpawnPoints" parent_id_path=PackedInt32Array(453093757) index="0" unique_id=848134226 instance=ExtResource("40_player_spawn_point")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9652376, 0.9265361, -7.036824)
 

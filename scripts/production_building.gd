@@ -40,7 +40,7 @@ const MAX_QUEUE_SIZE: int = 7
 ## Barracks, etc). When off, right-clicking it while selected does nothing.
 @export var can_rally: bool = true
 ## How far this building reveals fog of war around itself.
-@export var vision_range: float = 10.0
+@export var vision_range: float = 14.0
 ## One is picked at random and played through select_audio_player whenever
 ## this building becomes newly selected (see main.gd's selection code).
 @export var on_select_sound_effects: Array[AudioStream] = []

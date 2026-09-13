@@ -314,7 +314,7 @@ const DAMAGE_POPUP_FONT_SIZE: int = 15
 ## rts_camera.gd's own starting zoom_distance, so the default view is 1:1.
 const POPUP_REFERENCE_DISTANCE: float = 18.0
 ## Bounds on the distance scaling. Without them the range is unusable at the
-## extremes of rts_camera.gd's 8-22 zoom (fully in would be 2.25x).
+## extremes of rts_camera.gd's 8-45 zoom (fully in would be 2.25x).
 const POPUP_SCALE_MIN: float = 0.6
 const POPUP_SCALE_MAX: float = 1.25
 ## Hits landing on one target inside this window are summed into a single

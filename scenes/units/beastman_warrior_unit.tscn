@@ -18,7 +18,7 @@ amount = 30
 
 [node name="BeastmanWarrior" unique_id=1766743184 instance=ExtResource("1_unit")]
 display_name = "Beastman Warrior"
-move_speed = 4.0
+move_speed = 3.0
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_bear_wood"), SubResource("ResourceCost_bear_gold")])
 sprite_sheet = ExtResource("2_bear")
 sprite_cell_size = Vector2i(40, 32)

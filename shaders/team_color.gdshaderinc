@@ -65,6 +65,10 @@ uniform float saturation_gate_high : hint_range(0.0, 1.0) = 0.52;
 uniform float value_gate_low : hint_range(0.0, 1.0) = 0.05;
 uniform float value_gate_high : hint_range(0.0, 1.0) = 0.10;
 uniform float tint_strength : hint_range(0.0, 1.0) = 1.0;
+// How much of a sun-facing surface's baked brightness a directional shadow
+// (cloud shadows, other buildings) takes away. Emission alone ignores lights
+// entirely, which is why these buildings used to stay fully lit under clouds.
+uniform float sun_shadow_strength : hint_range(0.0, 1.0) = 0.5;
 
 vec3 rgb_to_hsv(vec3 c) {
 	vec4 k = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -134,13 +138,28 @@ vec3 apply_team_color(vec3 linear_rgb) {
 
 // Writes the recolored texture out the same way the model's own material did,
 // so a team-colored building is lit identically to an untinted one.
-void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission) {
+void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, out float ao) {
 	vec3 recolored = apply_team_color(texel.rgb);
 	if (texture_drives_emission) {
-		albedo = base_albedo.rgb;
+		// Albedo mirrors the emission only so light() below has something to
+		// subtract from under a shadow; AO = 0 keeps ambient light off it, so
+		// out of shadow the result is exactly the baked emission as before.
 		emission = recolored * emission_color.rgb * emission_energy;
+		albedo = emission;
+		ao = 0.0;
 	} else {
 		albedo = recolored * base_albedo.rgb;
 		emission = vec3(0.0);
+		ao = 1.0;
+	}
+}
+
+#include "res://shaders/util/baked_sun_shadow.gdshaderinc"
+
+void light() {
+	if (texture_drives_emission) {
+		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, ATTENUATION, LIGHT_IS_DIRECTIONAL, sun_shadow_strength);
+	} else {
+		DIFFUSE_LIGHT += LIGHT_COLOR * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION / PI;
 	}
 }

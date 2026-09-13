@@ -117,7 +117,7 @@ properties/12/replication_mode = 2
 script = ExtResource("1_building_script")
 building_name = "Beastmen Barracks"
 producibles = Array[ExtResource("2_item_script")]([SubResource("ProducibleItem_beastman_warrior"), SubResource("ProducibleItem_beastman_raider"), SubResource("ProducibleItem_beastman_druid")])
-vision_range = 14.0
+vision_range = 18.0
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_sfx_a"), ExtResource("9_sfx_b")])
 max_health = 160
 

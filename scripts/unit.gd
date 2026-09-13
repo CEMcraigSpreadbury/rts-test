@@ -201,7 +201,7 @@ signal status_applied(dot_seconds: float, slow_seconds: float, stun_seconds: flo
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
 ## "Unit2") when several of the same unit are siblings under Units.
 @export var display_name: String = "Villager"
-@export var move_speed: float = 5.0
+@export var move_speed: float = 3.75
 @export var rotation_speed: float = 10.0
 ## Setter (guarded — sprite isn't ready yet the first time Godot applies this
 ## from the scene file during instantiation) so an Objective capture can
@@ -245,7 +245,7 @@ func _update_team_tint_visual() -> void:
 	if sprite:
 		sprite.modulate = _resting_modulate()
 ## How far this unit reveals fog of war around itself.
-@export var vision_range: float = 8.0
+@export var vision_range: float = 11.0
 ## One is picked at random and played through select_audio_player whenever
 ## this unit becomes newly selected (see main.gd's selection code — never
 ## replayed for a selection refresh, only an actual new selection action).

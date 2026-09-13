@@ -62,6 +62,7 @@ func _ready() -> void:
 		if child is Node3D and not (child is CollisionShape3D or child is NavigationObstacle3D):
 			_model = child
 			_model_base_scale = _model.scale
+			BakedLightingMaterial.apply_to(_model)
 			break
 
 func play_select_sound() -> void:

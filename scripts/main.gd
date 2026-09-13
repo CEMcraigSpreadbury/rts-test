@@ -250,6 +250,11 @@ func _ready() -> void:
 	favour_target = Network.favour_target if Network.favour_target > 0 \
 			else MapInfo.FAVOUR_TARGET_PER_POINT * get_tree().get_nodes_in_group(&"objectives").size()
 	_assign_objective_letters()
+	## Map dressing like the border trees uses the same baked-lighting GLBs as
+	## gatherables, which convert themselves in Gatherable._ready().
+	var scenery: Node = get_node_or_null(^"Scenery")
+	if scenery:
+		BakedLightingMaterial.apply_to(scenery)
 
 	hud.setup()
 	if conquest_enabled:
@@ -285,6 +290,7 @@ func _ready() -> void:
 	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
 	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
 	utility_buttons.get_node(^"FormationStaggeredButton").pressed.connect(_set_formation_type.bind(Formation.Type.STAGGERED))
+	_scale_bottom_bar()
 	UiDebugEditor.register_editable_root(ui_root, "main")
 
 	game_over_panel.visible = false
@@ -1460,6 +1466,20 @@ func _popup_kind_for_order(result: Dictionary) -> String:
 ## *this* player's own next move order will request — the host is still the
 ## one that actually computes and enforces the resulting slot positions (see
 ## current_formation_type/_rpc_issue_command).
+## Whole bottom HUD (minimap, info/action panels, chat) shrinks by this.
+const HUD_SCALE: float = 0.8
+
+## Control.scale rather than resized offsets, so every panel, nine-patch and
+## button inside keeps its authored proportions. Pivoted on the bottom-centre
+## so the bar still hugs the screen's bottom edge, re-pivoted on resize.
+func _scale_bottom_bar() -> void:
+	var bottom_bar: Control = $UI/BottomBar
+	bottom_bar.scale = Vector2.ONE * HUD_SCALE
+	var repivot := func() -> void:
+		bottom_bar.pivot_offset = Vector2(bottom_bar.size.x * 0.5, bottom_bar.size.y)
+	repivot.call()
+	bottom_bar.resized.connect(repivot)
+
 func _set_formation_type(type: Formation.Type) -> void:
 	current_formation_type = type
 	formation_label.text = "Formation: %s" % Formation.type_name(type)
@@ -1482,6 +1502,26 @@ func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	feedback.play_command_feedback(result.position, false)
 	feedback.spawn_command_popup(_popup_kind_for_order(result), result.position, feedback.command_speaker())
 	_update_order_path_markers(result.position, append)
+
+## Right-click on the minimap. There's no raycast to resolve a target from, so
+## it's always a plain ground move, snapped onto the navmesh for a real ground
+## height. Returns false when nothing of this player's own is selected, so the
+## minimap falls back to a ping instead.
+func issue_minimap_move_order(world_pos: Vector3, append: bool) -> bool:
+	prune_selected_units()
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		if unit.owner_peer_id == my_peer_id():
+			unit_paths.append(unit.get_path())
+	if unit_paths.is_empty():
+		return false
+	world_pos = NavigationServer3D.map_get_closest_point(get_world_3d().navigation_map, world_pos)
+	_rpc_issue_command.rpc_id(1, unit_paths, NodePath(), world_pos, false, append, current_formation_type)
+	play_command_sound()
+	feedback.play_command_feedback(world_pos, false)
+	feedback.spawn_command_popup("move", world_pos, feedback.command_speaker())
+	_update_order_path_markers(world_pos, append)
+	return true
 
 ## A shift-queued order adds a waypoint marker per unit; a fresh one replaces
 ## whatever queue they were showing.
