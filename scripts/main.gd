@@ -255,6 +255,7 @@ func _ready() -> void:
 	var scenery: Node = get_node_or_null(^"Scenery")
 	if scenery:
 		BakedLightingMaterial.apply_to(scenery)
+		TreeWind.apply_to_trees_in(scenery)
 
 	hud.setup()
 	if conquest_enabled:

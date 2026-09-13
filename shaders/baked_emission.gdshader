@@ -7,11 +7,16 @@ shader_type spatial;
 render_mode cull_disabled;
 
 #include "res://shaders/util/baked_sun_shadow.gdshaderinc"
+#include "res://shaders/util/tree_wind.gdshaderinc"
 
 uniform sampler2D source_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec4 emission_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform float emission_energy : hint_range(0.0, 16.0) = 1.0;
 uniform float sun_shadow_strength : hint_range(0.0, 1.0) = 0.5;
+
+void vertex() {
+	VERTEX += tree_wind(VERTEX, MODEL_MATRIX, NODE_POSITION_WORLD, TIME);
+}
 
 void fragment() {
 	vec3 baked = texture(source_texture, UV).rgb * emission_color.rgb * emission_energy;
