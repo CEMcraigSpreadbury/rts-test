@@ -241,6 +241,15 @@ func _enter_tree() -> void:
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
 
+## The cloud layer both casts the drifting shadows and draws the faint visible
+## wisps, so hiding it turns off both.
+func _apply_clouds_setting(key: StringName) -> void:
+	if key != &"clouds":
+		return
+	var clouds: Node3D = get_node_or_null(^"CloudShadowLayer")
+	if clouds:
+		clouds.visible = Settings.get_value(&"clouds")
+
 func _ready() -> void:
 	## Before hud.setup(), which draws the resource bar off conquest_enabled.
 	conquest_enabled = Network.game_mode == Network.GameMode.CONQUEST
@@ -256,6 +265,8 @@ func _ready() -> void:
 	if scenery:
 		BakedLightingMaterial.apply_to(scenery)
 		TreeWind.apply_to_trees_in(scenery)
+	_apply_clouds_setting(&"clouds")
+	Settings.changed.connect(_apply_clouds_setting)
 
 	hud.setup()
 	if conquest_enabled:

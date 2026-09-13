@@ -26,6 +26,7 @@ const DEFAULTS := {
 	&"max_fps": 0,
 	&"render_scale": 1.0,
 	&"depth_of_field": true,
+	&"clouds": true,
 }
 
 ## Only the fixed, per-player hotkeys. Ability/production/building hotkeys are
