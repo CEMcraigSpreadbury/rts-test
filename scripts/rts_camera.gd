@@ -1,5 +1,5 @@
 extends Node3D
-## RTS camera rig: WASD/edge pan, middle-mouse-drag pan, Q/E rotate, scroll-wheel zoom.
+## RTS camera rig: WASD/edge pan, Q/E or middle-mouse-drag rotate, scroll-wheel zoom.
 
 @export var pan_speed: float = 24.0
 @export var edge_pan_margin: int = 14
@@ -8,10 +8,10 @@ extends Node3D
 @export var edge_pan_enabled: bool = false
 @export var rotate_speed: float = 2.0
 ## How quickly panning ramps up to speed and coasts back down, as a fraction of
-## the remaining gap closed per second. Also drains middle-drag movement, so a
-## flick of the mouse glides to a stop instead of ending dead.
+## the remaining gap closed per second.
 @export var pan_smoothing: float = 12.0
-@export var mouse_pan_sensitivity: float = 0.05
+## Radians of yaw per pixel of middle-mouse drag.
+@export var mouse_rotate_sensitivity: float = 0.008
 @export var zoom_speed: float = 2.0
 ## How quickly zoom_distance chases the wheel's target, as a fraction of the
 ## remaining gap closed per second. Higher is snappier, lower is floatier.
@@ -41,9 +41,8 @@ const SHAKE_MAX_OFFSET: float = 0.22
 
 var zoom_distance: float = 18.0
 var _zoom_target: float = 18.0
-var panning: bool = false
+var rotating: bool = false
 var _pan_velocity: Vector3 = Vector3.ZERO
-var _pan_drag_pending: Vector3 = Vector3.ZERO
 var _shake_trauma: float = 0.0
 
 func _ready() -> void:
@@ -72,18 +71,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_zoom_target = clamp(_zoom_target + zoom_speed, min_zoom, max_zoom)
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
-			panning = event.pressed
-	elif event is InputEventMouseMotion and panning:
-		## Scaled by zoom_distance so a drag covers roughly the same amount of
-		## visible ground per pixel whether zoomed in or fully out.
-		var forward := -yaw.transform.basis.z
-		var right := yaw.transform.basis.x
-		forward.y = 0.0
-		right.y = 0.0
-		forward = forward.normalized()
-		right = right.normalized()
-		var pan_amount := mouse_pan_sensitivity * zoom_distance
-		_pan_drag_pending += (right * event.relative.x - forward * event.relative.y) * pan_amount
+			rotating = event.pressed
+	elif event is InputEventMouseMotion and rotating:
+		## Horizontal drag only — pitch stays fixed because the DOF band is
+		## fitted to pitch_degrees.
+		yaw.rotation.y -= event.relative.x * mouse_rotate_sensitivity
 
 ## Jolts the camera for something happening at world_pos — ignored outright if
 ## that point isn't in frame, so a base collapsing across the map never shakes
@@ -150,10 +142,7 @@ func _process(delta: float) -> void:
 	_update_pan(input_dir, delta)
 
 ## Eases the rig toward the velocity the current key/edge input asks for rather
-## than snapping to it, so pans start and stop with a little weight. Middle-drag
-## movement is kept separate: it's already 1:1 with the mouse, so it's drained
-## at the same rate instead of being fed through the velocity, which would make
-## the camera lag behind the cursor.
+## than snapping to it, so pans start and stop with a little weight.
 func _update_pan(input_dir: Vector2, delta: float) -> void:
 	var desired := Vector3.ZERO
 	if input_dir.length_squared() > 0.0:
@@ -171,12 +160,7 @@ func _update_pan(input_dir: Vector2, delta: float) -> void:
 	if _pan_velocity.length_squared() < 0.0001:
 		_pan_velocity = desired
 
-	var drag_step := _pan_drag_pending * weight
-	_pan_drag_pending -= drag_step
-	if _pan_drag_pending.length_squared() < 0.000001:
-		_pan_drag_pending = Vector3.ZERO
-
-	global_position += _pan_velocity * delta + drag_step
+	global_position += _pan_velocity * delta
 
 ## View-space depth of the ground (at pivot height) seen through the given
 ## screen row (0 = top edge, 1 = bottom edge). Rows that look at or above the
