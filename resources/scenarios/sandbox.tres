@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"sandbox"
+scenario_name = "Sandbox"
+scene_path = "res://scenes/scenarios/sandbox.tscn"
+briefing_title = "Sandbox"
+briefing_text = "A scratch mission for trying the scenario systems: a locked HUD that opens up as you look around, reinforcements at the crossroads, a garrison to clear, and an enemy that sits and builds until something provokes it."
+human_slots = 1

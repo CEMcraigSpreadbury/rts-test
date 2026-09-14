@@ -86,8 +86,10 @@ func _draw() -> void:
 		var building := node as ProductionBuilding
 		if not building or building.is_destroyed:
 			continue
+		## Allies are drawn like your own (a team sees the same map); only your
+		## own get the outline that marks them as yours to command.
 		var mine: bool = building.owner_peer_id == my_peer
-		if not mine and not fog.is_explored_at(building.global_position):
+		if not Teams.is_friendly(my_peer, building.owner_peer_id) and not fog.is_explored_at(building.global_position):
 			continue
 		var p := _world_to_local(building.global_position)
 		draw_circle(p, BUILDING_DOT_RADIUS, building.team_tint)
@@ -99,7 +101,7 @@ func _draw() -> void:
 		if not unit or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		var mine: bool = unit.owner_peer_id == my_peer
-		if not mine and not fog.is_visible_at(unit.global_position):
+		if not Teams.is_friendly(my_peer, unit.owner_peer_id) and not fog.is_visible_at(unit.global_position):
 			continue
 		var p := _world_to_local(unit.global_position)
 		draw_circle(p, UNIT_DOT_RADIUS, unit.team_tint)

@@ -413,21 +413,22 @@ func remove_builder(unit: Unit) -> void:
 	synced_builder_count = builders.size()
 
 ## What `item` costs this building's owner right now: its listed price less
-## their research discounts (Efficient Workshops; Arcane Tutelage at a Shrine).
+## their research discounts (Efficient Workshops; Arcane Tutelage at a Shrine),
+## then scaled by whatever a scenario charges them (MatchRules).
 func costs_for(item: ProducibleItem) -> Array[ResourceCost]:
 	var base: Array[ResourceCost] = item.get_costs()
 	var discount := Research.bonus(owner_peer_id, ResearchNode.Stat.COST_REDUCTION)
 	if role == Role.SHRINE and item.kind == ProducibleItem.Kind.UNIT:
 		discount += Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_COST_REDUCTION)
 	if discount <= 0.0:
-		return base
+		return MatchRules.active().scaled_costs(owner_peer_id, base)
 	var result: Array[ResourceCost] = []
 	for cost in base:
 		var discounted := ResourceCost.new()
 		discounted.resource_type = cost.resource_type
 		discounted.amount = roundi(cost.amount * (1.0 - discount))
 		result.append(discounted)
-	return result
+	return MatchRules.active().scaled_costs(owner_peer_id, result)
 
 ## Host-only Ruler power effects currently on this building.
 var buffs := TimedBuffs.new()
@@ -451,6 +452,10 @@ func _production_speed() -> float:
 
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null:
+		return false
+	## A scenario can take things off the menu mid-mission, so this is checked
+	## here rather than trusted to the HUD having hidden the button.
+	if not MatchRules.active().item_allowed(owner_peer_id, item.item_name):
 		return false
 	var costs := costs_for(item)
 	if not ResourceStockpile.can_afford(owner_peer_id, costs):

@@ -1,0 +1,244 @@
+[gd_scene load_steps=43 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/trial_forest.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/elapsed_time_condition.gd" id="cond_elapsed"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/have_units_condition.gd" id="cond_have_units"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/destroy_targets_condition.gd" id="cond_destroy"]
+[ext_resource type="Script" path="res://scripts/quests/actions/spawn_units_action.gd" id="act_spawn"]
+[ext_resource type="Script" path="res://scripts/quests/actions/give_resources_action.gd" id="act_give"]
+[ext_resource type="Script" path="res://scripts/quests/actions/set_unlocks_action.gd" id="act_unlock"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/show_briefing_action.gd" id="act_briefing"]
+[ext_resource type="Script" path="res://scripts/quests/actions/camera_pan_action.gd" id="act_camera"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="act_ping"]
+[ext_resource type="Script" path="res://scripts/quests/actions/reveal_area_action.gd" id="act_reveal"]
+[ext_resource type="Script" path="res://scripts/quests/actions/world_marker_action.gd" id="act_marker"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/tutorial_input_condition.gd" id="cond_input"]
+[ext_resource type="Script" path="res://scripts/quests/actions/highlight_ui_action.gd" id="act_highlight"]
+
+[sub_resource type="Resource" id="cost_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 600
+
+[sub_resource type="Resource" id="cost_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 400
+
+[sub_resource type="Resource" id="cost_reward"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 200
+
+[sub_resource type="Resource" id="cost_enemy_purse"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 500
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods_script")
+cost_multiplier = 0.5
+allowed_buildings = Array[String](["Town Center", "House", "Barracks", "Mine"])
+research_tier_cap = 2
+locked_hud = Array[String](["research", "formations"])
+
+[sub_resource type="Resource" id="wait_three"]
+script = ExtResource("cond_elapsed")
+label = "Reinforcements arrive"
+seconds = 3.0
+
+[sub_resource type="Resource" id="spawn_guard"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("soldier")
+count = 2
+slot_index = 0
+at = &"Crossroads"
+spread = 2.0
+
+[sub_resource type="Resource" id="give_gold"]
+script = ExtResource("act_give")
+amounts = Array[ExtResource("cost_script")]([SubResource("cost_reward")])
+slot_index = -1
+
+[sub_resource type="Resource" id="have_two_soldiers"]
+script = ExtResource("cond_have_units")
+label = "Soldiers mustered"
+unit_name = "Soldier"
+count = 2
+
+[sub_resource type="Resource" id="unlock_stables"]
+script = ExtResource("act_unlock")
+slot_index = -1
+unlock_buildings = Array[String](["Stables"])
+research_tier_cap = -2
+
+[sub_resource type="Resource" id="kill_garrison"]
+script = ExtResource("cond_destroy")
+label = "Garrison cleared"
+target_names = Array[String](["Guard1", "Guard2"])
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[sub_resource type="Resource" id="line_captain"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The muster is in, my lord. Two of the guard stand ready at the crossroads."
+speaker_scene = ExtResource("soldier")
+pause_in_single_player = false
+
+[sub_resource type="Resource" id="line_scout"]
+script = ExtResource("act_dialogue")
+speaker = "Scout"
+text = "Beastmen hold the old road west of here. Clear them out and the way is ours."
+speaker_scene = ExtResource("soldier")
+pause_in_single_player = false
+
+[sub_resource type="Resource" id="pan_crossroads"]
+script = ExtResource("act_camera")
+at = &"Crossroads"
+
+[sub_resource type="Resource" id="ping_crossroads"]
+script = ExtResource("act_ping")
+at = &"Crossroads"
+hostile = false
+
+[sub_resource type="Resource" id="mark_crossroads"]
+script = ExtResource("act_marker")
+at = &"Crossroads"
+marker_id = &"muster"
+radius = 4.0
+clear = false
+
+[sub_resource type="Resource" id="reveal_crossroads"]
+script = ExtResource("act_reveal")
+at = &"Crossroads"
+radius = 0.0
+seconds = 20.0
+
+[sub_resource type="Resource" id="clear_marker"]
+script = ExtResource("act_marker")
+at = &"Crossroads"
+marker_id = &"muster"
+radius = 4.0
+clear = true
+
+[sub_resource type="Resource" id="move_the_camera"]
+script = ExtResource("cond_input")
+label = "Camera moved"
+kind = "camera_move"
+count = 1
+
+[sub_resource type="Resource" id="point_at_minimap"]
+script = ExtResource("act_highlight")
+element = "minimap"
+clear = false
+
+[sub_resource type="Resource" id="stop_pointing"]
+script = ExtResource("act_highlight")
+element = "minimap"
+clear = true
+
+[sub_resource type="Resource" id="teach_research"]
+script = ExtResource("act_unlock")
+slot_index = -1
+research_tier_cap = -2
+unlock_hud = Array[String](["research", "formations"])
+
+[sub_resource type="Resource" id="brief_midway"]
+script = ExtResource("act_briefing")
+title = "The Long Peace Ends"
+text = "Word comes from the border: the seal beneath the Ashen Peaks has failed. Vorgrath stirs, and the Beastmen answer him. Hold the crossroads, and send word to Aldmere."
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "Sandbox"
+briefing_title = "Sandbox"
+briefing_text = "Scratch scenario for testing the scenario and quest layers."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+starting_resources = Array[ExtResource("cost_script")]([SubResource("cost_gold"), SubResource("cost_wood")])
+modifiers = SubResource("mods_player")
+
+[node name="Enemy" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 1
+team = 2
+color_index = 1
+ai_difficulty = 1
+ai_mode = 1
+attack_at = &"Crossroads"
+spawn_point_index = 1
+starting_resources = Array[ExtResource("cost_script")]([SubResource("cost_enemy_purse")])
+
+[node name="Garrison" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 2
+team = 2
+color_index = 1
+spawn_point_index = -1
+
+[node name="Guard1" parent="Scenario/Slots/Garrison" instance=ExtResource("soldier")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, 22)
+
+[node name="Guard2" parent="Scenario/Slots/Garrison" instance=ExtResource("soldier")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, 22)
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Crossroads" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, 30)
+script = ExtResource("zone_script")
+radius = 10.0
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="LookAround" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Look around the valley"
+conditions = Array[ExtResource("condition_script")]([SubResource("move_the_camera")])
+on_start = Array[ExtResource("action_script")]([SubResource("point_at_minimap")])
+on_complete = Array[ExtResource("action_script")]([SubResource("stop_pointing"), SubResource("teach_research")])
+
+[node name="Muster" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Await the muster"
+conditions = Array[ExtResource("condition_script")]([SubResource("wait_three")])
+on_complete = Array[ExtResource("action_script")]([SubResource("spawn_guard"), SubResource("give_gold"), SubResource("line_captain"), SubResource("pan_crossroads"), SubResource("ping_crossroads"), SubResource("mark_crossroads"), SubResource("reveal_crossroads")])
+
+[node name="Gather" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Gather two soldiers"
+requires = Array[NodePath]([NodePath("Muster")])
+conditions = Array[ExtResource("condition_script")]([SubResource("have_two_soldiers")])
+on_complete = Array[ExtResource("action_script")]([SubResource("unlock_stables"), SubResource("brief_midway"), SubResource("line_scout"), SubResource("clear_marker")])
+
+[node name="Clear" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Clear the garrison"
+requires = Array[NodePath]([NodePath("Muster")])
+conditions = Array[ExtResource("condition_script")]([SubResource("kill_garrison")])
+on_complete = Array[ExtResource("action_script")]([SubResource("win")])

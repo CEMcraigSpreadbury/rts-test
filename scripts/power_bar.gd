@@ -26,11 +26,16 @@ func _ready() -> void:
 	research_button.focus_mode = Control.FOCUS_NONE
 	research_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	research_button.pressed.connect(main.research_panel.toggle)
+	## A tutorial can keep research off the HUD until it teaches it.
+	research_button.visible = MatchRules.active().hud_allowed(main.my_peer_id(), "research")
 	add_child(research_button)
 	main.research.owned_changed.connect(_rebuild)
 	_rebuild()
 
 func _rebuild() -> void:
+	var research_button: Button = get_node_or_null(^"ResearchButton")
+	if research_button != null:
+		research_button.visible = MatchRules.active().hud_allowed(main.my_peer_id(), "research")
 	for entry in _entries:
 		remove_child(entry["button"])
 		entry["button"].queue_free()

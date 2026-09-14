@@ -1,0 +1,75 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/four_kingdoms.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/eliminate_slot_condition.gd" id="cond_eliminate"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+
+[sub_resource type="Resource" id="raze_the_camp"]
+script = ExtResource("cond_eliminate")
+label = "Enemy buildings destroyed"
+slot_index = 2
+buildings_only = true
+
+[sub_resource type="Resource" id="say_open"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The raiders have made a camp to the south, my lord. You hold the north road, your neighbour the west — take it apart between you."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "Two Lords"
+briefing_title = "Two Lords"
+briefing_text = "Two neighbouring lords hold the north of the valley. Raze the camp to the south between you. Played alone, the second seat is taken by an allied AI."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="FirstLord" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+
+[node name="SecondLord" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+ai_difficulty = 1
+spawn_point_index = 1
+fill_with_ai = true
+
+[node name="Raiders" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 1
+team = 2
+color_index = 1
+ai_difficulty = 1
+spawn_point_index = 2
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="RazeTheCamp" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Raze the raiders' camp"
+conditions = Array[ExtResource("condition_script")]([SubResource("raze_the_camp")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_open")])
+on_complete = Array[ExtResource("action_script")]([SubResource("win")])

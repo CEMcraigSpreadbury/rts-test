@@ -180,13 +180,13 @@ func _use_abilities() -> void:
 				abilities_cast += 1
 				break
 
-## Living units of anyone else (other players and neutral guards) within
-## `radius` of `pos`.
+## Living units of anyone hostile (enemy players and neutral guards — never an
+## ally's) within `radius` of `pos`.
 func _hostiles_near(pos: Vector3, radius: float) -> Array[Unit]:
 	var out: Array[Unit] = []
 	for child in ai.main.units_root.get_children():
 		var other := child as Unit
-		if other == null or other.owner_peer_id == ai.peer_id or other.status_activity == Unit.Activity.DEAD:
+		if other == null or not Teams.is_enemy(ai.peer_id, other.owner_peer_id) or other.status_activity == Unit.Activity.DEAD:
 			continue
 		if other.global_position.distance_to(pos) <= radius:
 			out.append(other)
@@ -245,7 +245,7 @@ func _perceive() -> void:
 	var strength_by_peer: Dictionary = {}
 	for child in ai.main.units_root.get_children():
 		var unit := child as Unit
-		if unit == null or unit.owner_peer_id <= 0 or unit.owner_peer_id == ai.peer_id:
+		if unit == null or unit.owner_peer_id <= 0 or not Teams.is_enemy(ai.peer_id, unit.owner_peer_id):
 			continue
 		if unit.status_activity == Unit.Activity.DEAD or not _is_seen(grid, unit.global_position):
 			continue
@@ -259,14 +259,14 @@ func _perceive() -> void:
 
 	for node in ai.get_tree().get_nodes_in_group("buildings"):
 		var building := node as ProductionBuilding
-		if building == null or building.owner_peer_id <= 0 or building.owner_peer_id == ai.peer_id:
+		if building == null or building.owner_peer_id <= 0 or not Teams.is_enemy(ai.peer_id, building.owner_peer_id):
 			continue
 		if not building.can_be_attacked() or known_buildings.has(building):
 			continue
 		if _is_seen(grid, building.global_position):
 			known_buildings[building] = true
 	for key in known_buildings.keys():
-		if not is_instance_valid(key) or key.is_destroyed or key.owner_peer_id == ai.peer_id or key.owner_peer_id <= 0:
+		if not is_instance_valid(key) or key.is_destroyed or key.owner_peer_id <= 0 or not Teams.is_enemy(ai.peer_id, key.owner_peer_id):
 			known_buildings.erase(key)
 
 	## Looked at once any of ours gets within SCOUTED_RADIUS — a spawn marker
@@ -312,7 +312,7 @@ func _is_seen(grid: Dictionary, pos: Vector3) -> bool:
 func _reveal_buildings_near(pos: Vector3, radius: float) -> void:
 	for node in ai.get_tree().get_nodes_in_group("buildings"):
 		var building := node as ProductionBuilding
-		if building == null or building.owner_peer_id <= 0 or building.owner_peer_id == ai.peer_id:
+		if building == null or building.owner_peer_id <= 0 or not Teams.is_enemy(ai.peer_id, building.owner_peer_id):
 			continue
 		if building.can_be_attacked() and building.global_position.distance_to(pos) < radius:
 			known_buildings[building] = true
@@ -445,7 +445,7 @@ func _update_wave() -> void:
 	if is_instance_valid(_wave_target_objective) and _update_point_hold(centre):
 		return
 	var target_gone: bool = _wave_target_node != null and (not is_instance_valid(_wave_target_node) or _wave_target_node.is_destroyed \
-			or _wave_target_node.owner_peer_id == ai.peer_id or _wave_target_node.owner_peer_id <= 0)
+			or _wave_target_node.owner_peer_id <= 0 or not Teams.is_enemy(ai.peer_id, _wave_target_node.owner_peer_id))
 	## Sent to look at a spawn point, and it's been looked at.
 	if _wave_target_spawn != null and not _unscouted_spawns.has(_wave_target_spawn):
 		target_gone = true
@@ -527,9 +527,10 @@ func _update_point_hold(centre: Vector3) -> bool:
 			ai.order_move([unit], ai.nearest_navmesh_point(spot), true)
 	return true
 
-## Ours, flag fully up, and nobody fighting over it.
+## Our side's (an ally's counts), flag fully up, and nobody fighting over it.
 func _point_secured(point) -> bool:
-	return point.owner_peer_id == ai.peer_id and point.flag_control >= 1.0 and not point.contested \
+	return point.owner_peer_id > 0 and Teams.is_friendly(ai.peer_id, point.owner_peer_id) \
+			and point.flag_control >= 1.0 and not point.contested \
 			and not _enemies_near(point.global_position, POINT_THREAT_RADIUS)
 
 func _enemies_near(pos: Vector3, radius: float) -> bool:
@@ -540,6 +541,10 @@ func _enemies_near(pos: Vector3, radius: float) -> bool:
 
 func _maybe_launch_wave() -> void:
 	var p: AiProfile = ai.profile
+	## A side told to hold its ground keeps its army home; defending itself
+	## (see _defend) carries on as normal.
+	if ai.mode == AiPlayer.Mode.DEFEND:
+		return
 	if ai.game_time - _last_retreat_time < RETREAT_COOLDOWN_SECONDS:
 		return
 	var pool := _home_army()
@@ -555,7 +560,14 @@ func _maybe_launch_wave() -> void:
 	pool.sort_custom(func(a: Unit, b: Unit) -> bool:
 		return a.global_position.distance_squared_to(ai.map_centre) < b.global_position.distance_squared_to(ai.map_centre))
 	var attackers: Array[Unit] = pool.slice(0, free)
-	var target := _choose_target(ai.home, _strength_of(attackers), can_capture, can_attack)
+	var target: Dictionary = {}
+	if ai.mode == AiPlayer.Mode.ATTACK:
+		## Sent somewhere specific: go there and keep going there, rather than
+		## weighing up the map. Whatever is standing on the spot gets fought on
+		## the way in, the same as any other wave.
+		target = {pos = ai.attack_position, node = null, objective = null, peer = 0}
+	else:
+		target = _choose_target(ai.home, _strength_of(attackers), can_capture, can_attack)
 	if target.is_empty():
 		return
 	if target.objective == null and p.attack_advantage > 0.0:
@@ -609,11 +621,11 @@ func _point_candidates(from: Vector3, strength: float) -> Array:
 		if not is_instance_valid(point) or _on_cooldown(point):
 			continue
 		var pos: Vector3 = point.global_position
-		var income: float = point.gold_per_second * GOLD_VALUE_SHARE
+		var income: float = (point.gold_per_second + point.wood_per_second) * GOLD_VALUE_SHARE
 		if ai.main.conquest_enabled:
 			income += point.favour_per_second
 		var score: float = pos.distance_to(from) - income * POINT_VALUE_WEIGHT
-		if point.owner_peer_id == ai.peer_id:
+		if point.owner_peer_id > 0 and Teams.is_friendly(ai.peer_id, point.owner_peer_id):
 			if _point_secured(point):
 				continue
 			score -= DEFEND_POINT_BONUS
@@ -633,11 +645,13 @@ func _guard_strength(point) -> float:
 			total += unit_strength(guard)
 	return total
 
+## Main.scores is per team, so this asks about the owner's whole side.
 func _near_victory(peer: int) -> bool:
 	var target: int = ai.main.favour_target
-	if target <= 0 or not ai.main.scores.has(peer):
+	var team: int = Teams.team_of(peer)
+	if target <= 0 or not ai.main.scores.has(team):
 		return false
-	return float(ai.main.scores[peer].score) >= target * LEADER_THRESHOLD
+	return float(ai.main.scores[team].score) >= target * LEADER_THRESHOLD
 
 func _target_key(target: Dictionary):
 	if target.objective != null:

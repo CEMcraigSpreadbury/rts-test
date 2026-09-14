@@ -65,6 +65,20 @@ var explored: PackedByteArray = PackedByteArray()
 ## Spectating (an eliminated player watching the rest of the match): the
 ## whole map is explored and in vision. Done as one map-sized vision source
 ## rather than every player's units, which would blow MAX_VISION_SOURCES.
+## Spots a quest has opened up: {position: Vector2, radius: float, until:
+## float seconds, 0 = for the rest of the match}. They see like a unit does,
+## so what they show goes stale the same way once they expire.
+var _reveals: Array[Dictionary] = []
+
+## A quest revealing part of the map (RevealAreaAction). `seconds` of 0 leaves
+## it revealed for the rest of the match.
+func add_reveal(world_pos: Vector3, radius: float, seconds: float = 0.0) -> void:
+	_reveals.append({
+		position = Vector2(world_pos.x, world_pos.z),
+		radius = radius,
+		until = (Time.get_ticks_msec() / 1000.0 + seconds) if seconds > 0.0 else 0.0,
+	})
+
 var reveal_all: bool = false:
 	set(value):
 		reveal_all = value
@@ -225,7 +239,7 @@ func _update_vision_sources() -> void:
 	var cell_counts: PackedInt32Array = PackedInt32Array()
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
-		if not unit or unit.owner_peer_id != my_peer or unit.status_activity == Unit.Activity.DEAD:
+		if not unit or not Teams.is_friendly(my_peer, unit.owner_peer_id) or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		var pos := Vector2(unit.global_position.x, unit.global_position.z)
 		var key := Vector2i(floori(pos.x / VISION_MERGE_CELL), floori(pos.y / VISION_MERGE_CELL))
@@ -245,6 +259,20 @@ func _update_vision_sources() -> void:
 	for i in _vision_count:
 		_vision_positions[i] /= cell_counts[i]
 
+	## Places a quest has revealed (see add_reveal) see for themselves, for as
+	## long as they last.
+	var now: float = Time.get_ticks_msec() / 1000.0
+	for i in range(_reveals.size() - 1, -1, -1):
+		var entry: Dictionary = _reveals[i]
+		if entry.until > 0.0 and now >= entry.until:
+			_reveals.remove_at(i)
+			continue
+		if _vision_count >= MAX_VISION_SOURCES:
+			continue
+		_vision_positions[_vision_count] = entry.position
+		_vision_radii[_vision_count] = entry.radius
+		_vision_count += 1
+
 	for node in get_tree().get_nodes_in_group("buildings"):
 		if _vision_count >= MAX_VISION_SOURCES:
 			break
@@ -252,7 +280,7 @@ func _update_vision_sources() -> void:
 		## Under-construction sites grant no vision at all — otherwise a player
 		## could scatter cheap unbuilt foundations across the map and scout it
 		## for free, without ever paying a builder's time to finish one.
-		var is_mine_and_alive: bool = building and building.owner_peer_id == my_peer and not building.is_destroyed
+		var is_mine_and_alive: bool = building and Teams.is_friendly(my_peer, building.owner_peer_id) and not building.is_destroyed
 		if is_mine_and_alive and not building.is_under_construction:
 			_vision_positions[_vision_count] = Vector2(building.global_position.x, building.global_position.z)
 			_vision_radii[_vision_count] = building.vision_range
@@ -357,8 +385,10 @@ func _rebuild_texture() -> void:
 	_image.set_data(grid_resolution, grid_resolution, false, Image.FORMAT_RGBA8, _pixel_data)
 	fog_texture.update(_image)
 
-## Enemy units only render while actually in vision (they move, so a stale
-## position would be misleading). Enemy buildings and neutral resource nodes
+## Allied units and buildings always render and always grant vision — a team
+## shares what it can see. Enemy units only render while actually in vision
+## (they move, so a stale position would be misleading). Enemy buildings and
+## neutral resource nodes
 ## don't move, so once explored they stay visible at their known position —
 ## same "remembered map" idea classic RTS fog uses for static structures.
 func _update_node_visibility() -> void:
@@ -369,12 +399,12 @@ func _update_node_visibility() -> void:
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
 		if unit:
-			unit.visible = (i_am_valid_peer and unit.owner_peer_id == my_peer) or is_visible_at(unit.global_position)
+			unit.visible = (i_am_valid_peer and Teams.is_friendly(my_peer, unit.owner_peer_id)) or is_visible_at(unit.global_position)
 
 	for node in get_tree().get_nodes_in_group("buildings"):
 		var building := node as ProductionBuilding
 		if building:
-			building.visible = (i_am_valid_peer and building.owner_peer_id == my_peer) or is_explored_at(building.global_position)
+			building.visible = (i_am_valid_peer and Teams.is_friendly(my_peer, building.owner_peer_id)) or is_explored_at(building.global_position)
 
 	for node in get_tree().get_nodes_in_group("gatherables"):
 		var res := node as Gatherable

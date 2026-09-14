@@ -1,0 +1,159 @@
+[gd_scene format=3 uid="uid://bthtp27uur1k7"]
+
+[ext_resource type="Script" uid="uid://c4sqf3gkudvt2" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" uid="uid://c7b8nx1ea7qii" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" uid="uid://cmfxjmkdn6k8p" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="Script" uid="uid://d4dwjwv006n5g" path="res://scripts/quests/actions/world_marker_action.gd" id="act_marker"]
+[ext_resource type="Script" uid="uid://bnumjbhvsjpx0" path="res://scripts/quests/actions/set_unlocks_action.gd" id="act_unlock"]
+[ext_resource type="PackedScene" uid="uid://bthoe2v14hrbg" path="res://scenes/units/beastman_warrior_unit.tscn" id="beastman"]
+[ext_resource type="Script" uid="uid://23hym1ue8snr" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" uid="uid://2j0yoetdqoft" path="res://scripts/quests/conditions/have_buildings_condition.gd" id="cond_buildings"]
+[ext_resource type="Script" uid="uid://d3c5pjrl0wtka" path="res://scripts/quests/conditions/destroy_targets_condition.gd" id="cond_destroy"]
+[ext_resource type="Script" uid="uid://bcegf8sdsl2nu" path="res://scripts/quests/conditions/trained_units_condition.gd" id="cond_trained"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="PackedScene" path="res://scenes/maps/trial_forest.tscn" id="map"]
+[ext_resource type="Script" uid="uid://sl7q8jgyvbpx" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" uid="uid://fpircc4dvllq" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" uid="uid://ccvegjlc56w56" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="PackedScene" uid="uid://c6lf7yot5o577" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+[ext_resource type="Script" uid="uid://b4pjvph6w4hdu" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="Script" uid="uid://8envuw7b2qmd" path="res://scripts/scenario/scenario_zone.gd" id="zone_script"]
+
+[sub_resource type="Resource" id="start_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 400
+
+[sub_resource type="Resource" id="start_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 300
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods_script")
+allowed_buildings = Array[String](["House", "Barracks"])
+research_tier_cap = 0
+locked_hud = Array[String](["research", "formations", "control_groups"])
+
+[sub_resource type="Resource" id="have_barracks"]
+script = ExtResource("cond_buildings")
+building_name = "Barracks"
+label = "Barracks built"
+
+[sub_resource type="Resource" id="say_barracks"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Beastmen on the old road, my lord — three of them, and more behind. Build a Barracks: press B, choose it, and set it down near the hall."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="trained_three"]
+script = ExtResource("cond_trained")
+unit_name = "Soldier"
+count = 3
+label = "Soldiers trained"
+
+[sub_resource type="Resource" id="say_train"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Select the Barracks and train three soldiers. Ctrl and a number binds them to a group; the F1 to F3 keys set how they stand."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="teach_orders"]
+script = ExtResource("act_unlock")
+unlock_hud = Array[String](["formations", "control_groups"])
+
+[sub_resource type="Resource" id="raiders_dead"]
+script = ExtResource("cond_destroy")
+target_names = Array[String](["Raider1", "Raider2", "Raider3"])
+label = "Raiders driven off"
+
+[sub_resource type="Resource" id="say_attack"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Now drive them off. Select your soldiers and right-click a raider to set on it, or press F and click the ground to advance fighting whatever they meet."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="mark_raiders"]
+script = ExtResource("act_marker")
+at = &"RaidersCamp"
+marker_id = &"raiders"
+radius = 7.0
+
+[sub_resource type="Resource" id="clear_raider_marker"]
+script = ExtResource("act_marker")
+at = &"RaidersCamp"
+marker_id = &"raiders"
+clear = true
+
+[sub_resource type="Resource" id="say_done"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The road is ours again. Word should go to Aldmere all the same — beastmen have not come this far west in living memory."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+
+[node name="Main" unique_id=1648531331 instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="." index="19" unique_id=1541027335]
+script = ExtResource("scenario_script")
+scenario_name = "Blades for the Border"
+briefing_title = "Blades for the Border"
+briefing_text = "Beastmen have come to the old road — the first seen this side of the hills in three hundred years. Raise a barracks, arm some men, and drive them off."
+
+[node name="Slots" type="Node3D" parent="Scenario" index="0" unique_id=1793634304]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots" index="0" unique_id=2074559033]
+script = ExtResource("slot_script")
+spawn_point_index = 0
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_player")
+
+[node name="Raiders" type="Node3D" parent="Scenario/Slots" index="1" unique_id=1489763567]
+script = ExtResource("slot_script")
+kind = 2
+team = 2
+color_index = 1
+defender_leash_radius = 10.0
+
+[node name="Raider1" parent="Scenario/Slots/Raiders" index="0" unique_id=1686682883 instance=ExtResource("beastman")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -39, 0, 13)
+
+[node name="Raider2" parent="Scenario/Slots/Raiders" index="1" unique_id=1350446799 instance=ExtResource("beastman")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -41.5, 0, 14.5)
+
+[node name="Raider3" parent="Scenario/Slots/Raiders" index="2" unique_id=786374690 instance=ExtResource("beastman")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37, 0, 15)
+
+[node name="Zones" type="Node3D" parent="Scenario" index="1" unique_id=1758332440]
+
+[node name="RaidersCamp" type="Node3D" parent="Scenario/Zones" index="0" unique_id=415801135]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -39, 0, 14)
+script = ExtResource("zone_script")
+radius = 7.0
+
+[node name="Quests" type="Node" parent="Scenario" index="2" unique_id=997724285]
+
+[node name="BuildBarracks" type="Node" parent="Scenario/Quests" index="0" unique_id=1298160289]
+script = ExtResource("step_script")
+title = "Build a Barracks"
+conditions = Array[ExtResource("condition_script")]([SubResource("have_barracks")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_barracks")])
+
+[node name="TrainSoldiers" type="Node" parent="Scenario/Quests" index="1" unique_id=1816099426]
+script = ExtResource("step_script")
+title = "Train three soldiers"
+requires = Array[NodePath]([NodePath("BuildBarracks")])
+conditions = Array[ExtResource("condition_script")]([SubResource("trained_three")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_train"), SubResource("teach_orders")])
+
+[node name="DriveThemOff" type="Node" parent="Scenario/Quests" index="2" unique_id=1688571785]
+script = ExtResource("step_script")
+title = "Drive off the raiders"
+requires = Array[NodePath]([NodePath("TrainSoldiers")])
+conditions = Array[ExtResource("condition_script")]([SubResource("raiders_dead")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_attack"), SubResource("mark_raiders")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_raider_marker"), SubResource("say_done"), SubResource("win")])

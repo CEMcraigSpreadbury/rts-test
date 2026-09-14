@@ -17,8 +17,11 @@ var _cap: Dictionary = {}
 func get_used(peer_id: int) -> int:
 	return _used.get(peer_id, 0)
 
+## A scenario can pin a player's cap regardless of what they have built (see
+## ScenarioModifiers.population_cap); 0 there means the ordinary rules.
 func get_cap(peer_id: int) -> int:
-	return _cap.get(peer_id, 0)
+	var fixed: int = MatchRules.active().population_cap(peer_id)
+	return fixed if fixed > 0 else _cap.get(peer_id, 0)
 
 func has_room(peer_id: int, amount: int) -> bool:
 	return get_used(peer_id) + amount <= get_cap(peer_id)

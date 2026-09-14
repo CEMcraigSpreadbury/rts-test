@@ -14,3 +14,8 @@ func _init(selected_ruler_index: int) -> void:
 		add_item(rulers[i].ruler_name, i + 1)
 	select(get_item_index(selected_ruler_index + 1))
 	item_selected.connect(func(i: int): ruler_picked.emit(get_item_id(i) - 1))
+
+## The Ruler index currently chosen, Ruler.RANDOM included — for callers that
+## read the picker when they need it rather than following ruler_picked.
+func selected_ruler() -> int:
+	return get_item_id(selected) - 1 if selected >= 0 else Ruler.RANDOM

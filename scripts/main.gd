@@ -204,23 +204,38 @@ var defeated_peers: Dictionary = {}
 ## and can't win.
 var disconnected_peers: Dictionary = {}
 var game_over: bool = false
+## No winning team: two crossing the line on the same tick, or everyone gone.
+## Never a real team id (see Teams.team_of).
+const DRAW: int = -1
 ## This peer has been knocked out of a match that carries on without them
 ## (an FFA elimination) — blocks their input like game_over does, without
 ## stopping the host's own win checks when the host is the one knocked out.
 var local_player_out: bool = false
-## Conquest mode: the first active player to favour_target Favour wins.
+## Conquest mode: the first active team to favour_target Favour wins.
 ## Destroying every enemy main base wins in either mode. Both come from the
 ## lobby (Network.game_mode / favour_target) and are set identically on every
 ## peer in _ready, so clients know the target without being told.
 var conquest_enabled: bool = true
 var favour_target: int = 0
-## peer_id -> {score: int, active: bool}, for every player in the match —
-## broadcast by the host (see _broadcast_scores) since ResourceStockpile only
-## ever tells a client its own totals. Read by ConquestHud.
+## The Scenario node in this scene, or null in an ordinary skirmish. Set in
+## _ready from MatchRules, which the node itself installed on entering.
+var scenario: Scenario = null
+## Scenario slot index -> the peer playing it. The same on every machine.
+var scenario_peer_by_slot: Dictionary = {}
+## Authored name ("Guard1") -> the placed unit/building it became, so quest
+## steps can name the things a scenario put on the map even though adopting
+## them renames and reparents them.
+var scenario_entities: Dictionary = {}
+## team -> {score: int, active: bool, tint: Color} — a team's members' Favour
+## added together, since a team wins together (see Teams). Broadcast by the
+## host (see _broadcast_scores) because ResourceStockpile only ever tells a
+## client its own totals. Read by ConquestHud.
 var scores: Dictionary = {}
 const SCORE_BROADCAST_INTERVAL: float = 0.25
 var _score_broadcast_timer: float = 0.0
 var conquest_hud: ConquestHud = null
+## The tracker, dialogue box and briefing screen; only in a scenario.
+var quest_ui: QuestUi = null
 var research_panel: ResearchPanel = null
 var power_bar: PowerBar = null
 const FAVOUR_RESOURCE: ResourceType = preload("res://resources/favour_resource_type.tres")
@@ -239,6 +254,7 @@ var hud: Hud
 var placement: BuildingPlacement
 var chat: ChatConsole
 var research: Research
+var quests: QuestRunner
 
 ## Components are created here rather than in _ready(): Objectives are
 ## children of this scene, and their own _ready() — which runs before this
@@ -247,6 +263,11 @@ var research: Research
 func _enter_tree() -> void:
 	if group_movement == null:
 		_add_components()
+	## Cleared per match, before any child's _enter_tree: a Scenario node in
+	## this scene installs its own rules there, and everything that asks
+	## (a Shrine rolling monsters, a building pricing an item) runs in _ready,
+	## after both. An ordinary match leaves this null and gets the defaults.
+	MatchRules.current = null
 
 ## "cmd speed" (see ChatConsole) changes the engine-wide time scale; it must
 ## not follow the player out to the menus or into their next match.
@@ -263,12 +284,18 @@ func _apply_clouds_setting(key: StringName) -> void:
 		clouds.visible = Settings.get_value(&"clouds")
 
 func _ready() -> void:
+	## A scenario scene is an ordinary map with a Scenario node added; it
+	## installed itself in MatchRules while entering the tree, so there is no
+	## mode to switch on — this is the whole of "are we in a mission".
+	scenario = MatchRules.active().scenario
 	## Before hud.setup(), which draws the resource bar off conquest_enabled.
-	conquest_enabled = Network.game_mode == Network.GameMode.CONQUEST
+	conquest_enabled = scenario.favour_enabled if scenario != null \
+			else Network.game_mode == Network.GameMode.CONQUEST
 	## Objectives join their group in their own _ready, which has already run
-	## by now (children ready before their parent) — so a lobby target of 0
-	## (the map default) is worked out from the real point count here.
-	favour_target = Network.favour_target if Network.favour_target > 0 \
+	## by now (children ready before their parent) — so a target of 0 (the map
+	## default) is worked out from the real point count here.
+	var wanted_target: int = scenario.favour_target if scenario != null else Network.favour_target
+	favour_target = wanted_target if wanted_target > 0 \
 			else MapInfo.FAVOUR_TARGET_PER_POINT * get_tree().get_nodes_in_group(&"objectives").size()
 	_assign_objective_letters()
 	## Map dressing like the border trees uses the same baked-lighting GLBs as
@@ -292,6 +319,13 @@ func _ready() -> void:
 	power_bar.main = self
 	ui_root.add_child(power_bar)
 
+	## Every peer works out the same sides and adopts the same hand-placed
+	## units — none of it is networked (see Scenario.resolve_players).
+	if scenario != null:
+		scenario_peer_by_slot = scenario.resolve_players()
+		_apply_scenario_modifiers()
+		_adopt_scenario_entities()
+
 	unit_spawner.spawn_function = _spawn_unit_from_data
 	building_spawner.spawn_function = _spawn_building_from_data
 	## Connected before _spawn_all_players() (not after) so the host's own
@@ -312,6 +346,19 @@ func _ready() -> void:
 	## joining client has none of that yet and picks them up as they replicate.
 	_start_navigation_blockers()
 
+	## The UI goes up before the quest is read, or the very first step's
+	## dialogue is announced to a screen that does not exist yet and is lost —
+	## which is every mission's opening line. It queues behind the briefing and
+	## plays once that is closed.
+	if scenario != null:
+		quest_ui = QuestUi.new()
+		quest_ui.main = self
+		quest_ui.runner = quests
+		ui_root.add_child(quest_ui)
+	## After spawning, so a first step that counts what the team has starts
+	## from the real numbers.
+	quests.setup()
+
 	feedback.setup()
 	chat.setup()
 
@@ -326,6 +373,7 @@ func _ready() -> void:
 	game_over_panel.visible = false
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_return_to_main_menu)
 	_build_spectate_button()
+	_build_next_mission_button()
 
 	Network.player_disconnected.connect(_on_network_player_disconnected)
 	Network.server_disconnected.connect(_on_network_server_disconnected)
@@ -381,6 +429,11 @@ func _add_components() -> void:
 	research.main = self
 	research.name = "Research"
 	add_child(research)
+
+	quests = QuestRunner.new()
+	quests.main = self
+	quests.name = "QuestRunner"
+	add_child(quests)
 
 ## Single player only: the pause menu (and Options behind it) actually stops
 ## the match. With other humans in it the menu stays a local overlay.
@@ -453,6 +506,9 @@ func _start_navigation_blockers() -> void:
 ## than the map has spawn points is refused past the last point (AIs are
 ## the ones left out) rather than stacking two bases on one spot.
 func _spawn_all_players() -> void:
+	if scenario != null:
+		_spawn_scenario_sides()
+		return
 	var peer_ids: Array = [1]
 	if multiplayer.multiplayer_peer != null:
 		peer_ids.append_array(multiplayer.get_peers())
@@ -468,6 +524,115 @@ func _spawn_all_players() -> void:
 	for peer_id in peer_ids:
 		if Network.is_ai(peer_id):
 			_start_ai_player(peer_id)
+
+## --- Scenario sides ---
+
+## Each side's own modifiers, so prices and rosters are right from the first
+## frame. Every peer does this: they all resolved the same sides.
+func _apply_scenario_modifiers() -> void:
+	var rules := MatchRules.active()
+	var slots := scenario.slots()
+	for i in slots.size():
+		if scenario_peer_by_slot.has(i):
+			rules.assign(scenario_peer_by_slot[i], slots[i].modifiers)
+
+## Runs on every peer. Units and buildings a scenario placed by hand are in the
+## scene file on all of them, so each peer gives them their owner and colour
+## and moves them into the usual Units/Buildings containers — where the AI, the
+## minimap and the fog all look for them. Nothing is spawned and nothing is
+## sent; the result is identical everywhere because the scene is.
+func _adopt_scenario_entities() -> void:
+	var slots := scenario.slots()
+	for i in slots.size():
+		var peer_id: int = scenario_peer_by_slot.get(i, 0)
+		var tint: Color = get_team_tint(peer_id) if peer_id > 0 else Objective.NEUTRAL_TINT
+		for entity in slots[i].placed_entities():
+			entity.owner_peer_id = peer_id
+			entity.team_tint = tint
+			## Remembered under the name it was authored with, which is what
+			## quest steps refer to.
+			scenario_entities[String(entity.name)] = entity
+			## Renamed before the move so two slots can both hold a "Guard",
+			## and named the same way on every peer so the NodePaths that
+			## orders travel as still line up.
+			entity.name = "Slot%d_%s" % [i, entity.name]
+			if entity is Unit:
+				entity.reparent(units_root, true)
+				register_objective_unit(entity)
+				_leash_defender(slots[i], entity)
+			else:
+				entity.reparent(buildings_root, true)
+				_register_placed_building(entity)
+			## Already in the tree, so the usual ready-hook in the spawn
+			## functions can't do it.
+			research.apply_all_to(entity)
+
+## A garrison stays a garrison: a DEFENDERS unit will chase what attacks it,
+## then come back to where it was put. The post is a node of its own because
+## a unit can't be leashed to itself once it starts moving — the same
+## arrangement Objective guards use.
+func _leash_defender(slot: ScenarioSlot, unit: Unit) -> void:
+	if slot.kind != ScenarioSlot.Kind.DEFENDERS or slot.defender_leash_radius <= 0.0:
+		return
+	var post := Node3D.new()
+	post.name = "%sPost" % unit.name
+	slot.add_child(post)
+	post.global_position = unit.global_position
+	unit.leash_origin = post
+	unit.leash_radius = slot.defender_leash_radius
+
+## The wiring _spawn_building_from_data gives a spawned building, for one placed
+## by hand in a scenario — nothing spawned it, so nothing had connected it.
+func _register_placed_building(building: ProductionBuilding) -> void:
+	register_objective_building(building)
+	building.construction_finished.connect(_on_building_construction_finished.bind(building))
+	if not multiplayer.is_server() or building.owner_peer_id <= 0:
+		return
+	if building.is_main_base:
+		main_base_count_by_peer[building.owner_peer_id] = main_base_count_by_peer.get(building.owner_peer_id, 0) + 1
+	if building.is_main_base or not town_centers.has(building.owner_peer_id):
+		town_centers[building.owner_peer_id] = building
+	## Placed pre-built, so its population room is granted now rather than
+	## waiting on a construction_finished that will never fire.
+	if building.population_capacity > 0:
+		Population.add_cap(building.owner_peer_id, building.population_capacity)
+		building.destroyed.connect(
+			func(): Population.add_cap(building.owner_peer_id, -building.population_capacity), CONNECT_ONE_SHOT
+		)
+
+## Host only. A side with a spawn point gets the usual starting base (from its
+## own lists when it has them), every side gets its starting resources, and an
+## ENEMY_AI side gets a brain. A DEFENDERS side deliberately never enters
+## main_base_count_by_peer, so wiping out a garrison isn't a win condition —
+## the quests decide that.
+func _spawn_scenario_sides() -> void:
+	var slots := scenario.slots()
+	for i in slots.size():
+		if not scenario_peer_by_slot.has(i):
+			continue
+		var slot: ScenarioSlot = slots[i]
+		var peer_id: int = scenario_peer_by_slot[i]
+		## An enemy's purse grows or shrinks with the campaign difficulty; the
+		## player's stipend is whatever the mission says it is.
+		## Asked of the scenario, not the quest runner: sides are set up before
+		## the runner has read the quest.
+		var purse: float = 1.0 if slot.team == scenario.player_team() else MatchRules.enemy_scale()
+		for cost in slot.starting_resources:
+			ResourceStockpile.add(peer_id, cost.resource_type, roundi(cost.amount * purse))
+		if slot.spawn_point_index >= 0 and slot.spawn_point_index < player_spawn_points.get_child_count():
+			_spawn_player_base(peer_id, i, slot.spawn_point_index, slot)
+		## A brain for every side that isn't a person: the scenario's own AI
+		## opponents, and any human seat an allied AI has taken (see
+		## Scenario.resolve_players).
+		if slot.kind == ScenarioSlot.Kind.ENEMY_AI or (slot.kind == ScenarioSlot.Kind.HUMAN and Network.is_ai(peer_id)):
+			_start_ai_player(peer_id)
+			var ai: AiPlayer = ai_players[peer_id]
+			## An ally filling a seat plays the whole game; only a scenario's
+			## own opponents take orders about how to behave.
+			if slot.kind == ScenarioSlot.Kind.ENEMY_AI:
+				ai.mode = slot.ai_mode as AiPlayer.Mode
+				if slot.attack_at != &"":
+					ai.attack_position = scenario.position_of(slot.attack_at)
 
 ## Host-only: peer_id -> the AiPlayer brain playing that slot.
 var ai_players: Dictionary = {}
@@ -507,12 +672,19 @@ func _faction_for_peer(_peer_id: int) -> Faction:
 const EXTRA_START_UNIT_SPACING: float = 1.5
 
 ## team_index: join order, only used for get_team_tint's fallback colour.
-func _spawn_player_base(peer_id: int, team_index: int, spawn_index: int) -> void:
+## `slot` (scenarios only) replaces what the player starts with.
+func _spawn_player_base(peer_id: int, team_index: int, spawn_index: int, slot: ScenarioSlot = null) -> void:
 	var spawn_point: PlayerSpawnPoint = player_spawn_points.get_child(spawn_index)
 	team_index_by_peer[peer_id] = team_index
 	var tint: Color = get_team_tint(peer_id)
 	var faction: Faction = _faction_for_peer(peer_id)
 	faction_by_peer[peer_id] = faction
+	var starting_units: Array[PackedScene] = faction.starting_units
+	var starting_buildings: Array[PackedScene] = faction.starting_buildings
+	if slot != null and not slot.starting_units.is_empty():
+		starting_units = slot.starting_units
+	if slot != null and not slot.starting_buildings.is_empty():
+		starting_buildings = slot.starting_buildings
 
 	## Free starting villagers never went through ProductionBuilding.enqueue()
 	## (which is where population is normally reserved), so it has to be
@@ -522,14 +694,14 @@ func _spawn_player_base(peer_id: int, team_index: int, spawn_index: int) -> void
 	## starting units still gets every unit: the extras stand in a short row
 	## beside the last marker rather than being dropped.
 	var unit_positions: Array[Vector3] = spawn_point.get_unit_positions()
-	for i in faction.starting_units.size():
+	for i in starting_units.size():
 		var pos: Vector3 = spawn_point.global_position
 		if i < unit_positions.size():
 			pos = unit_positions[i]
 		elif not unit_positions.is_empty():
 			pos = unit_positions[-1] + Vector3(EXTRA_START_UNIT_SPACING * (i - unit_positions.size() + 1), 0.0, 0.0)
 		var starting_unit: Unit = unit_spawner.spawn({
-			"scene_path": faction.starting_units[i].resource_path,
+			"scene_path": starting_units[i].resource_path,
 			"peer_id": peer_id,
 			"tint": tint,
 			"position": pos,
@@ -541,9 +713,9 @@ func _spawn_player_base(peer_id: int, team_index: int, spawn_index: int) -> void
 	## entry) — town_centers[peer_id] is whichever one is flagged as the real
 	## main base, not just whichever spawned first.
 	var building_positions: Array[Vector3] = spawn_point.get_building_positions()
-	for i in mini(faction.starting_buildings.size(), building_positions.size()):
+	for i in mini(starting_buildings.size(), building_positions.size()):
 		var building: ProductionBuilding = building_spawner.spawn({
-			"scene_path": faction.starting_buildings[i].resource_path,
+			"scene_path": starting_buildings[i].resource_path,
 			"peer_id": peer_id,
 			"position": building_positions[i],
 			"tint": tint,
@@ -672,16 +844,18 @@ func _on_building_destroyed(building: ProductionBuilding) -> void:
 func is_peer_active(peer_id: int) -> bool:
 	return peer_id > 0 and not defeated_peers.has(peer_id) and not disconnected_peers.has(peer_id)
 
-## Last player standing — by elimination or by everyone else leaving.
+## Last team standing — by elimination or by everyone else leaving. A player
+## who loses their own last base is out (see _rpc_player_out), but their team
+## plays on while any ally still holds one.
 func _check_for_game_over() -> void:
 	if game_over:
 		return
 	var all_peers: Array = main_base_count_by_peer.keys()
-	if all_peers.size() <= 1:
+	if Teams.teams_of(all_peers).size() <= 1:
 		return
-	var remaining: Array = all_peers.filter(is_peer_active)
+	var remaining: Array[int] = Teams.teams_of(all_peers.filter(is_peer_active))
 	if remaining.size() <= 1:
-		_end_game(remaining[0] if remaining.size() == 1 else -1)
+		_end_game(remaining[0] if remaining.size() == 1 else DRAW)
 
 ## Run by the host at the start of every physics tick — before any Objective
 ## ticks, since Main is their ancestor — so everything banked during the
@@ -690,31 +864,54 @@ func _check_for_game_over() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or game_over or not conquest_enabled or favour_target <= 0:
 		return
+	var totals: Dictionary = _team_scores()
 	_score_broadcast_timer -= delta
 	if _score_broadcast_timer <= 0.0:
 		_score_broadcast_timer = SCORE_BROADCAST_INTERVAL
-		_broadcast_scores()
+		_rpc_scores.rpc(totals)
 	var winners: Array = []
-	for peer_id in main_base_count_by_peer.keys():
-		if is_peer_active(peer_id) and ResourceStockpile.get_amount(peer_id, FAVOUR_RESOURCE) >= favour_target:
-			winners.append(peer_id)
+	for team in totals:
+		if totals[team].active and totals[team].score >= favour_target:
+			winners.append(team)
 	if not winners.is_empty():
-		_end_game(winners[0] if winners.size() == 1 else -1)
+		_end_game(winners[0] if winners.size() == 1 else DRAW)
 
-## -1 = draw.
-func _end_game(winner_peer_id: int) -> void:
+## A team nobody is on, so a mission lost by the player team shows everyone
+## Defeat rather than crowning some enemy AI.
+const NO_TEAM: int = -99
+
+## A scenario's quest decided the outcome (see QuestRunner.end_mission). The
+## player team wins or loses together.
+func end_mission(victory: bool, player_team: int) -> void:
+	if game_over:
+		return
+	_end_game(player_team if victory else NO_TEAM)
+
+## `winner_team` is a Teams team id, or DRAW.
+func _end_game(winner_team: int) -> void:
 	game_over = true
 	## One last push so every bar shows the finishing total, not the one from
 	## up to a broadcast interval ago.
 	if conquest_enabled:
 		_broadcast_scores()
-	_rpc_game_over.rpc(winner_peer_id)
+	_rpc_game_over.rpc(winner_team)
 
 func _broadcast_scores() -> void:
+	_rpc_scores.rpc(_team_scores())
+
+## Each team's Favour (its members' totals added together), whether anyone on
+## it is still in the running, and the colour it plays in — its members all
+## share one, so the first member's tint stands for the team.
+func _team_scores() -> Dictionary:
 	var snapshot: Dictionary = {}
 	for peer_id in main_base_count_by_peer.keys():
-		snapshot[peer_id] = {score = ResourceStockpile.get_amount(peer_id, FAVOUR_RESOURCE), active = is_peer_active(peer_id)}
-	_rpc_scores.rpc(snapshot)
+		var team: int = Teams.team_of(peer_id)
+		if not snapshot.has(team):
+			snapshot[team] = {score = 0, active = false, tint = get_team_tint(peer_id)}
+		var entry: Dictionary = snapshot[team]
+		entry.score += ResourceStockpile.get_amount(peer_id, FAVOUR_RESOURCE)
+		entry.active = entry.active or is_peer_active(peer_id)
+	return snapshot
 
 @rpc("authority", "call_local", "unreliable_ordered")
 func _rpc_scores(snapshot: Dictionary) -> void:
@@ -760,6 +957,32 @@ const CENTRE_POINT_RADIUS: float = 5.0
 ## _rpc_player_out), and to everyone once the match ends (_rpc_game_over).
 var _spectate_button: Button = null
 
+## Offered on the victory screen when the mission just won has another after it
+## — carrying on shouldn't mean a trip back through the menus. Single player
+## only: in co-op one player cannot decide what everyone plays next.
+var _next_mission_button: Button = null
+
+func _build_next_mission_button() -> void:
+	_next_mission_button = Button.new()
+	_next_mission_button.visible = false
+	var return_button: Button = $UI/GameOverPanel/Margin/VBox/ReturnButton
+	return_button.add_sibling(_next_mission_button)
+	return_button.get_parent().move_child(_next_mission_button, return_button.get_index())
+
+func _offer_next_mission() -> void:
+	if scenario == null or not Network.is_single_player():
+		return
+	var next: ScenarioInfo = Campaign.next_mission_after(Network.current_scenario_id)
+	if next == null or next.scene_path.is_empty():
+		return
+	_next_mission_button.text = "Next: %s" % next.scenario_name
+	_next_mission_button.visible = true
+	_next_mission_button.pressed.connect(_start_next_mission.bind(next), CONNECT_ONE_SHOT)
+
+func _start_next_mission(next: ScenarioInfo) -> void:
+	Network.current_scenario_id = next.id
+	SceneLoader.change_scene(next.scene_path)
+
 func _build_spectate_button() -> void:
 	_spectate_button = Button.new()
 	_spectate_button.text = "Spectate"
@@ -795,15 +1018,21 @@ func _rpc_player_out() -> void:
 		$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Leave (ends the match for everyone)"
 
 @rpc("authority", "call_local", "reliable")
-func _rpc_game_over(winner_peer_id: int) -> void:
+func _rpc_game_over(winner_team: int) -> void:
 	game_over = true
 	game_over_panel.visible = true
 	_spectate_button.visible = true
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Return to Main Menu"
-	if winner_peer_id == -1:
+	if winner_team == DRAW:
 		game_over_label.text = "Draw!"
-	elif winner_peer_id == my_peer_id():
+	elif winner_team == Teams.team_of(my_peer_id()):
 		game_over_label.text = "Victory!"
+		## Written down on each winner's own machine, so in co-op everyone who
+		## played it has it unlocked afterwards. Recorded before the offer
+		## below, which needs the next mission to be unlocked.
+		if scenario != null:
+			CampaignProgress.mark_completed(Network.current_scenario_id, Network.campaign_difficulty)
+			_offer_next_mission()
 	else:
 		game_over_label.text = "Defeat"
 
@@ -873,6 +1102,7 @@ func _chat_recipients() -> Array:
 ## Host only — called by Objective._set_owner whenever a point is taken.
 ## The capturer reads "You", everyone else the capturer's name.
 func announce_point_captured(peer_id: int, letter: String) -> void:
+	quests.notify(&"point_captured", {peer_id = peer_id, letter = letter})
 	var name_text: String = Network.players.get(peer_id, {}).get("name", "Player %d" % peer_id)
 	for peer in _chat_recipients():
 		chat.send_line(peer, "%s captured %s." % ["You" if peer == peer_id else name_text, letter])
@@ -883,6 +1113,8 @@ func _on_network_server_disconnected() -> void:
 func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
 		return
+	quests.notify(&"unit_trained" if item.kind == ProducibleItem.Kind.UNIT else &"upgrade_bought",
+			{peer_id = building.owner_peer_id, item_name = item.item_name})
 	if item.kind == ProducibleItem.Kind.UPGRADE:
 		building._purchased_upgrades.append(item)
 		## Extension point: a future upgrade effect is another optional flag
@@ -938,6 +1170,7 @@ func _on_building_construction_finished(building: ProductionBuilding) -> void:
 	feedback.relay_impact_shake(building.global_position, 0.25)
 	if not multiplayer.is_server():
 		return
+	quests.notify(&"building_completed", {peer_id = building.owner_peer_id, building_name = building.building_name})
 	chat.send_line(building.owner_peer_id, "Construction complete: %s" % building.building_name)
 	if Network.can_rpc_to(building.owner_peer_id):
 		_rpc_building_completed_sound.rpc_id(building.owner_peer_id)
@@ -992,6 +1225,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		hud.pulse_action_button(OS.get_keycode_string(event.keycode))
+		## Past the chat and menu guards, so a tutorial waiting on "press B"
+		## isn't ticked off by typing one into the chat box.
+		report_tutorial_input(&"hotkey", OS.get_keycode_string(event.keycode))
 
 	if placement.is_placing():
 		placement.handle_placement_input(event)
@@ -1232,6 +1468,9 @@ func prune_selected_units() -> void:
 ## --- Control groups ---
 
 func _assign_control_group(number: int) -> void:
+	if not MatchRules.active().hud_allowed(my_peer_id(), "control_groups"):
+		return
+	report_tutorial_input(&"control_group", str(number))
 	prune_selected_units()
 	var members: Array[Node3D] = []
 	for unit in selected_units:
@@ -1252,6 +1491,8 @@ func _play_random_select_sound(units: Array[Unit]) -> void:
 		units[randi() % units.size()].play_select_sound()
 
 func _activate_control_group(number: int) -> void:
+	if not MatchRules.active().hud_allowed(my_peer_id(), "control_groups"):
+		return
 	var members: Array = control_groups.get(number, [])
 	for i in range(members.size() - 1, -1, -1):
 		if not is_instance_valid(members[i]):
@@ -1380,6 +1621,18 @@ func _on_building_spawned_for_camera(node: Node) -> void:
 	_camera_centered_on_spawn = true
 	_center_camera_on([building])
 
+## Tells the quest what the player just did, for the tutorial conditions that
+## wait on it. Safe to call from anywhere and in any match: outside a scenario
+## the runner drops it.
+func report_tutorial_input(kind: StringName, detail: String = "") -> void:
+	if quests != null:
+		quests.report_input(kind, detail)
+
+## Puts the camera over a spot — what a quest's camera pan uses.
+func focus_camera_on(world_pos: Vector3) -> void:
+	camera_rig.global_position.x = world_pos.x
+	camera_rig.global_position.z = world_pos.z
+
 func _center_camera_on(members: Array) -> void:
 	var sum := Vector3.ZERO
 	var count := 0
@@ -1460,6 +1713,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 				child.selected = true
 				selected_units.append(child)
 	_play_random_select_sound(selected_units)
+	_report_selection()
 
 func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionary:
 	var space_state := get_world_3d().direct_space_state
@@ -1473,14 +1727,14 @@ func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionar
 func _resolve_order_target_path(result: Dictionary) -> NodePath:
 	if result.collider is Gatherable:
 		return result.collider.get_path()
-	elif result.collider is Unit and result.collider.owner_peer_id != my_peer_id():
+	elif result.collider is Unit and Teams.is_enemy(my_peer_id(), result.collider.owner_peer_id):
 		return result.collider.get_path()
 	## A friendly building under construction is also a valid target (to send
 	## builders to it), and so is a friendly building with a linked_deposit
 	## (e.g. a Mine — right-clicking the mine itself should still gather from
 	## the deposit it sits on), alongside the existing enemy-building-attack case.
 	elif result.collider is ProductionBuilding and \
-			((result.collider.owner_peer_id != my_peer_id() and result.collider.can_be_attacked()) \
+			((Teams.is_enemy(my_peer_id(), result.collider.owner_peer_id) and result.collider.can_be_attacked()) \
 				or result.collider.is_under_construction or is_instance_valid(result.collider.linked_deposit)):
 		return result.collider.get_path()
 	return NodePath()
@@ -1497,7 +1751,7 @@ func _popup_kind_for_order(result: Dictionary) -> String:
 	if collider is ProductionBuilding and not collider.can_be_attacked():
 		return "move"
 	if (collider is Unit or collider is ProductionBuilding) \
-			and collider.owner_peer_id != my_peer_id():
+			and Teams.is_enemy(my_peer_id(), collider.owner_peer_id):
 		return "attack"
 	return "move"
 
@@ -1525,13 +1779,17 @@ func _scale_bottom_bar() -> void:
 	bottom_bar.resized.connect(repivot)
 
 func _set_formation_type(type: Formation.Type) -> void:
+	if not MatchRules.active().hud_allowed(my_peer_id(), "formations"):
+		return
 	current_formation_type = type
 	formation_label.text = "Formation: %s" % Formation.type_name(type)
+	report_tutorial_input(&"formation", Formation.type_name(type))
 
 func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	prune_selected_units()
 	if selected_units.is_empty():
 		return
+	report_tutorial_input(&"move_order")
 	var result := raycast(screen_pos)
 	if result.is_empty():
 		return
@@ -1582,6 +1840,7 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	prune_selected_units()
 	if selected_units.is_empty():
 		return
+	report_tutorial_input(&"attack_order")
 	var result := raycast(screen_pos)
 	if result.is_empty():
 		return
@@ -1802,7 +2061,7 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 		unit.command_gather(target_node.linked_deposit, _get_dropoff_for(unit.owner_peer_id))
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.GATHER)
 	elif (target_node is Unit or (target_node is ProductionBuilding and target_node.can_be_attacked())) \
-			and target_node.owner_peer_id != unit.owner_peer_id:
+			and Teams.is_enemy(unit.owner_peer_id, target_node.owner_peer_id):
 		unit.command_attack(target_node)
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	elif target_node is ProductionBuilding and target_node.is_under_construction:
@@ -1958,6 +2217,13 @@ func select_only_unit(unit: Unit) -> void:
 	unit.selected = true
 	selected_units.append(unit)
 	unit.play_select_sound()
+	_report_selection()
+
+## A tutorial step can wait for "select a villager": the detail is what was
+## picked, so a step can ask for a particular sort of unit.
+func _report_selection() -> void:
+	if not selected_units.is_empty():
+		report_tutorial_input(&"select_units", selected_units[0].display_name)
 
 ## Left-click select/deselect a resource node (see selected_resource);
 ## null clears it back to whatever the rest of the selection implies.

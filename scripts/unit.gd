@@ -1608,7 +1608,7 @@ func _execute_area_ability(ability: Ability, target: Vector3) -> void:
 	var victims: Array[Unit] = []
 	for node in get_tree().get_nodes_in_group("units"):
 		var other := node as Unit
-		if other == null or other == self or other.owner_peer_id == owner_peer_id or not _is_target_alive(other):
+		if other == null or other == self or not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or not _is_target_alive(other):
 			continue
 		if _flat_distance(target, other.global_position) <= ability.area_radius:
 			victims.append(other)
@@ -2462,7 +2462,7 @@ func _tick_melee_overflow(delta: float) -> void:
 	var best: Unit = null
 	var best_crowd: int = attack_target.melee_attackers - 1
 	for other in UnitGrid.units_near(get_tree(), target_pos, MELEE_OVERFLOW_RADIUS):
-		if other == attack_target or other.owner_peer_id == owner_peer_id or not CombatUtils.is_worth_attacking(other):
+		if other == attack_target or not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or not CombatUtils.is_worth_attacking(other):
 			continue
 		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
 			continue
@@ -2730,7 +2730,7 @@ func _nearest_in_assault_area(group: StringName) -> Node3D:
 			continue
 		if not (candidate is Unit or candidate is ProductionBuilding):
 			continue
-		if candidate.owner_peer_id == owner_peer_id or not _is_target_alive(candidate):
+		if not Teams.is_enemy(owner_peer_id, candidate.owner_peer_id) or not _is_target_alive(candidate):
 			continue
 		if not CombatUtils.is_worth_attacking(candidate):
 			continue
@@ -2758,7 +2758,7 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 		if node == self or not (node is Unit):
 			continue
 		var other: Unit = node
-		if other.owner_peer_id == owner_peer_id or not _is_target_alive(other):
+		if not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or not _is_target_alive(other):
 			continue
 		## Overkill guard: a target that already has enough arrows in the air to
 		## kill it isn't worth another shot. Skipping it here is what spreads a
@@ -2798,6 +2798,15 @@ func _die(attacker: Node3D = null) -> void:
 	if main is Main and main.research != null:
 		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
 		main.research.award_kill(self, attacker, credit)
+		## Quest steps count kills too, on looser terms than research does
+		## (which skips summons and anything without a living killer).
+		if main.quests != null:
+			var killer: int = credit
+			if attacker != null and is_instance_valid(attacker) and "owner_peer_id" in attacker:
+				killer = attacker.owner_peer_id
+			main.quests.notify(&"unit_killed", {
+				killer_peer = killer, victim_peer = owner_peer_id, victim_name = display_name,
+			})
 
 	## Decided here on the host and sent as a world-space direction, so every
 	## peer launches the corpse the same way even if the attacker has already

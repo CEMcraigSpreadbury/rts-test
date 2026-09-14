@@ -134,7 +134,18 @@ func _builder_speaker() -> Unit:
 ## Holding Shift while picking the NEXT building (even a different type) keeps
 ## the same builders queued up from a chain already in progress — see
 ## _confirm_placement, which is what actually starts/continues _build_queue_active.
+## What `building_type` costs `peer_id` under this match's rules — a scenario
+## can charge a side more or less than the listed price.
+func costs_for(peer_id: int, building_type: BuildingType) -> Array[ResourceCost]:
+	return MatchRules.active().scaled_costs(peer_id, building_type.get_costs())
+
 func on_construction_button_pressed(building_type: BuildingType) -> void:
+	## Hotkeys reach this without going through the (already filtered) menu.
+	if not MatchRules.active().hud_allowed(main.my_peer_id(), "build"):
+		return
+	if not MatchRules.active().building_allowed(main.my_peer_id(), building_type.building_name):
+		main.play_placement_blocked_sound()
+		return
 	if not (_build_queue_active and Input.is_key_pressed(KEY_SHIFT)):
 		_pending_builder_paths.clear()
 		_build_queue_active = false
@@ -371,8 +382,9 @@ func _confirm_placement() -> void:
 	## feedback instead of just silently doing nothing once the RPC reaches
 	## the host and gets refused there. Placement mode is left running so the
 	## player can keep waiting for resources and try the same spot again.
-	if not main.hud.can_afford_locally(placing_type.get_costs()):
-		main.hud.flash_missing_resources(placing_type.get_costs())
+	var local_costs := costs_for(main.my_peer_id(), placing_type)
+	if not main.hud.can_afford_locally(local_costs):
+		main.hud.flash_missing_resources(local_costs)
 		return
 	var my_building_types: Array[BuildingType] = main.my_faction().building_types
 	var type_index: int = my_building_types.find(placing_type)
@@ -381,6 +393,7 @@ func _confirm_placement() -> void:
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
 	var build_position := placement_ghost.global_position
 	_rpc_request_build.rpc_id(1, type_index, build_position, target_path, _pending_builder_paths, shift_held)
+	main.report_tutorial_input(&"build_placed", placed_type.building_name)
 	AudioUtils.play_random(main.command_audio_player, main.on_building_placed_sound_effects)
 	main.feedback.spawn_command_popup("build", build_position, _builder_speaker())
 
@@ -433,7 +446,9 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 	var building_type: BuildingType = sender_building_types[type_index]
 	if building_type.is_wall or building_type.is_gate_tool:
 		return null
-	var costs := building_type.get_costs()
+	if not MatchRules.active().building_allowed(sender_id, building_type.building_name):
+		return null
+	var costs := costs_for(sender_id, building_type)
 	if not ResourceStockpile.can_afford(sender_id, costs):
 		return null
 
@@ -815,7 +830,9 @@ func _wall_total_cost(pieces: Array[Dictionary]) -> Array[ResourceCost]:
 		var unit_costs: Array[ResourceCost] = placing_type.get_costs() if piece["kind"] == "segment" else placing_type.get_corner_costs()
 		for cost in unit_costs:
 			totals[cost.resource_type] = totals.get(cost.resource_type, 0) + cost.amount
-	return _totals_to_costs(totals)
+	## Scaled once on the total, the same way the host scales it (see
+	## request_build_wall_as) — per piece it would round differently.
+	return MatchRules.active().scaled_costs(main.my_peer_id(), _totals_to_costs(totals))
 
 func _totals_to_costs(totals: Dictionary) -> Array[ResourceCost]:
 	var result: Array[ResourceCost] = []
@@ -965,6 +982,8 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 	var building_type: BuildingType = sender_building_types[type_index]
 	if not building_type.is_wall:
 		return
+	if not MatchRules.active().building_allowed(sender_id, building_type.building_name):
+		return
 	var count: int = positions.size()
 	if count == 0 or count != directions.size() or count != kinds.size() or count > WALL_MAX_SEGMENTS * 2:
 		return
@@ -1006,7 +1025,7 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 		for cost in unit_costs:
 			totals[cost.resource_type] = totals.get(cost.resource_type, 0) + cost.amount
 
-	var merged_costs := _totals_to_costs(totals)
+	var merged_costs := MatchRules.active().scaled_costs(sender_id, _totals_to_costs(totals))
 	if not ResourceStockpile.can_afford(sender_id, merged_costs):
 		return
 	ResourceStockpile.spend(sender_id, merged_costs)
@@ -1099,8 +1118,9 @@ func _confirm_gate_placement() -> void:
 	if _gate_target == null or not is_instance_valid(_gate_target):
 		main.play_placement_blocked_sound()
 		return
-	if not main.hud.can_afford_locally(placing_type.get_costs()):
-		main.hud.flash_missing_resources(placing_type.get_costs())
+	var gate_costs := costs_for(main.my_peer_id(), placing_type)
+	if not main.hud.can_afford_locally(gate_costs):
+		main.hud.flash_missing_resources(gate_costs)
 		return
 
 	var my_building_types: Array[BuildingType] = main.my_faction().building_types

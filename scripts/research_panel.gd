@@ -140,11 +140,15 @@ func _process(_delta: float) -> void:
 		close()
 
 func toggle() -> void:
+	## A tutorial can keep research out of the way until it has been taught.
+	if not visible and not MatchRules.active().hud_allowed(main.my_peer_id(), "research"):
+		return
 	if visible:
 		close()
 	else:
 		visible = true
 		_refresh()
+		main.report_tutorial_input(&"research_panel")
 
 func close() -> void:
 	visible = false
@@ -174,7 +178,10 @@ func _refresh() -> void:
 		## name wraps onto a third line.
 		button.position = _slot_centre(node) - button.size * 0.5
 		var is_owned := owned.has(i)
-		var unlocked := Research.requirements_met(_ruler, node, owned)
+		## A tier a scenario has put out of reach reads as locked, the same way
+		## an unmet requirement does.
+		var unlocked := Research.requirements_met(_ruler, node, owned) \
+				and MatchRules.active().research_allowed(main.my_peer_id(), node)
 		button.disabled = is_owned or not unlocked
 		button.modulate = Color.WHITE if is_owned or unlocked else LOCKED_MODULATE
 		if is_owned:

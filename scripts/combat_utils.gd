@@ -23,6 +23,9 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 		if not (node is Unit):
 			continue
 		var ally: Unit = node
+		## Deliberately this player's own units only, not a teammate's: pulling
+		## another human's idle soldiers into a fight would be commanding their
+		## army for them. They still retaliate on their own when hit.
 		if ally.owner_peer_id != defender_peer_id or not ally.can_fight:
 			continue
 		## attack_target is only ever non-null while actively engaged, regardless
@@ -62,7 +65,7 @@ static func find_nearest_enemy_unit(tree: SceneTree, from_position: Vector3, own
 		if not (node is Unit):
 			continue
 		var other: Unit = node
-		if other.owner_peer_id == owner_peer_id or other.status_activity == Unit.Activity.DEAD:
+		if not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or other.status_activity == Unit.Activity.DEAD:
 			continue
 		if not is_worth_attacking(other):
 			continue

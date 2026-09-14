@@ -48,7 +48,7 @@ func _tick() -> void:
 	var flat_center := Vector2(center.x, center.z)
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
-		if unit == null or unit.owner_peer_id == owner_peer_id or unit.status_activity == Unit.Activity.DEAD:
+		if unit == null or not Teams.is_enemy(owner_peer_id, unit.owner_peer_id) or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		if flat_center.distance_to(Vector2(unit.global_position.x, unit.global_position.z)) <= ability.area_radius:
 			victims.append(unit)

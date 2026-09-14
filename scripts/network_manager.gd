@@ -58,6 +58,8 @@ const TEAM_COLORS: Array[Color] = [
 const TEAM_COLOR_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 
 ## peer_id -> { "name": String, "color": Color, "ruler_index": int, "ready": bool }
+## The colour doubles as the team — players sharing one are allies (see Teams).
+## A scenario may add an explicit "team" int, which overrides that.
 ## ruler_index is a Ruler.list_all() index, or Ruler.RANDOM until the match starts.
 ## AI players are entries here too, with "ai": true and "difficulty" (see
 ## add_ai_player) — keyed by a made-up peer id that no real connection has.
@@ -83,6 +85,41 @@ var game_mode: GameMode = GameMode.CONQUEST
 ## 0 whenever the map changes, so a target picked for one map never silently
 ## carries over to another.
 var favour_target: int = 0
+
+## Campaign and tutorial missions only: 0 Easy, 1 Normal, 2 Hard. Shifts every
+## enemy AI's level and scales enemy numbers and starting resources (see
+## MatchRules.enemy_scale). Skirmish ignores it.
+var campaign_difficulty: int = 1
+## The ScenarioInfo id of the mission being played, so winning it can be
+## written down (see CampaignProgress). Empty in a skirmish. In a lobby this is
+## the host's choice, mirrored to everyone like the map is.
+var current_scenario_id: StringName = &""
+signal scenario_changed
+
+## Host: pick a campaign mission for the lobby to play, or &"" for an ordinary
+## skirmish on the chosen map.
+func set_scenario(id: StringName) -> void:
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return
+	current_scenario_id = id
+	scenario_changed.emit()
+	if multiplayer.multiplayer_peer != null and is_host():
+		_rpc_scenario_changed.rpc(id)
+	trim_ai_to_capacity()
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_scenario_changed(id: StringName) -> void:
+	current_scenario_id = id
+	scenario_changed.emit()
+
+## The mission the lobby is set to play, or null for a skirmish.
+func current_scenario() -> ScenarioInfo:
+	if String(current_scenario_id).is_empty():
+		return null
+	for info in ScenarioInfo.list_all():
+		if info.id == current_scenario_id:
+			return info
+	return null
 
 ## 0 when not hosting/in a Steam lobby.
 var _steam_lobby_id: int = 0
@@ -308,6 +345,11 @@ func ai_peer_ids() -> Array[int]:
 ## points for (MAX_PLAYERS for a map that doesn't say). The single player
 ## screen keeps its own map choice and works this out itself.
 func player_capacity() -> int:
+	## A mission seats exactly as many people as it has human slots; any it is
+	## short of are filled by an allied AI when it starts.
+	var scenario := current_scenario()
+	if scenario != null:
+		return clampi(scenario.human_slots, 1, MAX_PLAYERS)
 	var maps: Array[MapInfo] = MapInfo.list_all()
 	if maps.is_empty():
 		return MAX_PLAYERS
@@ -535,10 +577,11 @@ func _rpc_ruler_changed(peer_id: int, index: int) -> void:
 
 ## --- Team color selection (lobby only) ---
 ##
-## Same host-relay shape as Ruler selection above, with one extra rule: two
-## players must never share a color, or telling their buildings apart on the
-## field stops working. Only the host sees everyone's current pick, so the
-## host alone decides — a client can propose, never apply.
+## Same host-relay shape as Ruler selection above. Sharing a colour is allowed
+## and is how team games are set up: the colour IS the team (see Teams), so two
+## players on Blue play as allies and everyone on a different colour is the old
+## free-for-all. Only the host sees everyone's current pick, so the host alone
+## decides — a client can propose, never apply.
 
 func set_my_color(index: int) -> void:
 	if index < 0 or index >= TEAM_COLORS.size():
@@ -553,15 +596,29 @@ func set_my_color(index: int) -> void:
 func color_index_of(peer_id: int) -> int:
 	return TEAM_COLORS.find(players.get(peer_id, {}).get("color", Color.WHITE))
 
-## Colors no other player has claimed — what the lobby offers this peer.
-func available_color_indices(peer_id: int) -> Array[int]:
+## Every colour is offered to everyone — picking one somebody already has is
+## how you join their team. Kept as a function (rather than dropped) because
+## both pickers ask it, and a scenario may yet want to narrow the choice.
+func available_color_indices(_peer_id: int) -> Array[int]:
 	var out: Array[int] = []
 	for i in TEAM_COLORS.size():
-		if _color_holder(TEAM_COLORS[i], peer_id) == 0:
-			out.append(i)
+		out.append(i)
 	return out
 
+## Whether at least two teams are represented — false when everyone has picked
+## the same colour, which would be a match with nobody to fight.
+func has_opposing_teams() -> bool:
+	return Teams.teams_of(players.keys()).size() > 1
+
+## What both Start buttons check. A lone player is still allowed to start (the
+## established "walk around a map on my own" case); two or more have to be on
+## at least two teams.
+func can_start_match() -> bool:
+	return players.size() <= 1 or has_opposing_teams()
+
 ## The peer already using `color`, ignoring `except_peer_id`, or 0 for nobody.
+## No longer a veto (see the section note) — only _first_free_color() still
+## uses it, to keep each added AI on its own team by default.
 func _color_holder(color: Color, except_peer_id: int) -> int:
 	for id in players:
 		if id != except_peer_id and players[id].get("color", Color.WHITE) == color:
@@ -583,14 +640,6 @@ func _rpc_request_color(index: int) -> void:
 
 func _apply_color_change(peer_id: int, color: Color) -> void:
 	if not players.has(peer_id):
-		return
-	if _color_holder(color, peer_id) != 0:
-		## Taken. Re-broadcast the color they still have rather than staying
-		## silent, so the asking player's own picker snaps back to reality
-		## instead of sitting on a choice that never took.
-		var unchanged: Color = players[peer_id].get("color", Color.WHITE)
-		player_updated.emit(peer_id)
-		_rpc_color_changed.rpc(peer_id, unchanged)
 		return
 	players[peer_id]["color"] = color
 	player_updated.emit(peer_id)

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="Campaign" format=3]
+
+[ext_resource type="Script" path="res://scripts/campaign.gd" id="1_campaign"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="2_info_script"]
+[ext_resource type="Resource" path="res://resources/scenarios/first_steps.tres" id="3_first"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_woodcutters.tres" id="4_wood"]
+[ext_resource type="Resource" path="res://resources/scenarios/blades_for_the_border.tres" id="5_blades"]
+[ext_resource type="Resource" path="res://resources/scenarios/coop_sandbox.tres" id="6_coop"]
+
+[resource]
+script = ExtResource("1_campaign")
+id = &"campaign"
+campaign_name = "Campaign"
+description = "The Shadow Returns. The first missions teach the game; the rest are the war."
+missions = Array[ExtResource("2_info_script")]([ExtResource("3_first"), ExtResource("4_wood"), ExtResource("5_blades"), ExtResource("6_coop")])
+order = 0

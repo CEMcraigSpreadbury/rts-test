@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"coop_sandbox"
+scenario_name = "Two Lords"
+scene_path = "res://scenes/scenarios/coop_sandbox.tscn"
+briefing_title = "Two Lords"
+briefing_text = "Two neighbouring lords hold the north of the valley. Raze the raiders' camp to the south between you. Played alone, the second seat is taken by an allied AI."
+human_slots = 2

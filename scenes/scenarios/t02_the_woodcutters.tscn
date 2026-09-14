@@ -1,0 +1,124 @@
+[gd_scene load_steps=23 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/trial_forest.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/have_resources_condition.gd" id="cond_resources"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/have_buildings_condition.gd" id="cond_buildings"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/trained_units_condition.gd" id="cond_trained"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/highlight_ui_action.gd" id="act_highlight"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods_script")
+allowed_buildings = Array[String](["House"])
+research_tier_cap = 0
+locked_hud = Array[String](["research", "formations", "control_groups"])
+
+[sub_resource type="Resource" id="say_gather"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Wood before anything else, my lord. Select your villagers and right-click the trees; they will fell them and carry the timber home on their own."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="have_wood"]
+script = ExtResource("cond_resources")
+label = "Wood gathered"
+resource_type = ExtResource("wood_type")
+amount = 120
+
+[sub_resource type="Resource" id="say_build"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Timber enough. Press B for the build menu, choose a House, then click where it should stand — more houses, more folk."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="point_at_actions"]
+script = ExtResource("act_highlight")
+element = "action_panel"
+
+[sub_resource type="Resource" id="stop_pointing"]
+script = ExtResource("act_highlight")
+element = "action_panel"
+clear = true
+
+[sub_resource type="Resource" id="have_house"]
+script = ExtResource("cond_buildings")
+label = "House raised"
+building_name = "House"
+count = 1
+
+[sub_resource type="Resource" id="say_train"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Now the hall itself. Select the Town Center and train two more villagers — every pair of hands pays for itself by dusk."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="trained_two"]
+script = ExtResource("cond_trained")
+label = "Villagers trained"
+unit_name = "Villager"
+count = 2
+
+[sub_resource type="Resource" id="say_done"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "A working holding, my lord. Keep them at the trees and the gold, and we shall want for nothing."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "The Woodcutters"
+briefing_title = "The Woodcutters"
+briefing_text = "A holding lives on timber and gold. Put your villagers to work, raise a house, and take on more hands."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+modifiers = SubResource("mods_player")
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="Gather" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Gather 120 wood"
+conditions = Array[ExtResource("condition_script")]([SubResource("have_wood")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_gather")])
+
+[node name="BuildHouse" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Raise a House"
+requires = Array[NodePath]([NodePath("Gather")])
+conditions = Array[ExtResource("condition_script")]([SubResource("have_house")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_build"), SubResource("point_at_actions")])
+on_complete = Array[ExtResource("action_script")]([SubResource("stop_pointing")])
+
+[node name="TrainVillagers" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Train two villagers"
+requires = Array[NodePath]([NodePath("BuildHouse")])
+conditions = Array[ExtResource("condition_script")]([SubResource("trained_two")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_train")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_done"), SubResource("win")])

@@ -2,10 +2,10 @@ class_name ConquestHud
 extends Control
 ## Conquest bar, top-centre of the screen, kept to two slim rows so it never
 ## eats into the battlefield: one slot per capture point (gold frame for points
-## you hold) showing its letter over the owner's colour, with a strip for a
-## flag that's moving and a pulse while contested; and under that every
-## player's score bar side by side, filling toward the target in that player's
-## colour. The leader's bar shakes once they're past NEAR_VICTORY_FRACTION.
+## your team holds) showing its letter over the owner's colour, with a strip
+## for a flag that's moving and a pulse while contested; and under that every
+## team's score bar side by side, filling toward the target in that team's
+## colour. Allies share one bar, because they win together (see Main.scores). The leader's bar shakes once they're past NEAR_VICTORY_FRACTION.
 ##
 ## Also the Conquest alerts — played locally on every peer off the synced
 ## objective state (Objective.owner_peer_id/flag_*) and Main.scores, so the
@@ -52,7 +52,7 @@ var main: Main
 var _panel: Panel
 ## Objective -> {frame: TextureRect, fill: ColorRect, strip_bg, strip, label}
 var _slots: Dictionary = {}
-## peer_id -> {bar: ProgressBar, fill: StyleBoxFlat, label: Label}
+## team -> {bar: ProgressBar, fill: StyleBoxFlat, label: Label}
 var _bars: Dictionary = {}
 
 ## Objective -> last seen owner / flag height, for spotting changes.
@@ -60,11 +60,8 @@ var _last_owner: Dictionary = {}
 var _last_control: Dictionary = {}
 ## Objective -> Time.get_ticks_msec() of its last under-attack alert.
 var _last_attack_alert_ms: Dictionary = {}
-## Enemies already announced as near victory (once each).
+## Enemy teams already announced as near victory (once each).
 var _near_victory_warned: Dictionary = {}
-## peer_id -> colour, remembered while they're connected: Main.get_team_tint
-## can't resolve a player who has since disconnected on a client.
-var _tint_cache: Dictionary = {}
 
 func _ready() -> void:
 	name = "ConquestHud"
@@ -81,9 +78,9 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var objectives := _sorted_objectives()
-	var peers := _sorted_peers() if main.favour_target > 0 else []
-	_sync_nodes(objectives, peers)
-	_layout(objectives, peers)
+	var teams := _sorted_teams() if main.favour_target > 0 else []
+	_sync_nodes(objectives, teams)
+	_layout(objectives, teams)
 	_check_alerts(objectives)
 
 func _sorted_objectives() -> Array:
@@ -91,31 +88,31 @@ func _sorted_objectives() -> Array:
 	objectives.sort_custom(func(a, b): return a.letter < b.letter)
 	return objectives
 
-## Local player first, then everyone else by peer id — same order on each
-## screen apart from "you" leading.
-func _sorted_peers() -> Array:
-	var me := main.my_peer_id()
-	var peers: Array = main.scores.keys()
-	peers.sort_custom(func(a, b):
-		if a == me or b == me:
-			return a == me
+## Your own team first, then the rest by team id — same order on each screen
+## apart from yours leading.
+func _sorted_teams() -> Array:
+	var mine := Teams.team_of(main.my_peer_id())
+	var teams: Array = main.scores.keys()
+	teams.sort_custom(func(a, b):
+		if a == mine or b == mine:
+			return a == mine
 		return a < b)
-	return peers
+	return teams
 
-func _tint_for(peer_id: int) -> Color:
-	if Network.players.has(peer_id) or not _tint_cache.has(peer_id):
-		_tint_cache[peer_id] = main.get_team_tint(peer_id)
-	return _tint_cache[peer_id]
+## The colour comes with the score snapshot, so a team whose players have all
+## disconnected still draws in its own colour on a client.
+func _tint_for(team: int) -> Color:
+	return main.scores.get(team, {}).get("tint", Teams.team_color(team))
 
 ## --- Building the nodes (only when the set of points/players changes) ---
 
-func _sync_nodes(objectives: Array, peers: Array) -> void:
+func _sync_nodes(objectives: Array, teams: Array) -> void:
 	for o in objectives:
 		if not _slots.has(o):
 			_slots[o] = _make_slot(o.letter)
-	for peer_id in peers:
-		if not _bars.has(peer_id):
-			_bars[peer_id] = _make_bar()
+	for team in teams:
+		if not _bars.has(team):
+			_bars[team] = _make_bar()
 
 func _make_slot(letter: String) -> Dictionary:
 	var frame := TextureRect.new()
@@ -187,12 +184,12 @@ func _make_bar() -> Dictionary:
 
 ## --- Per-frame state + layout ---
 
-func _layout(objectives: Array, peers: Array) -> void:
+func _layout(objectives: Array, teams: Array) -> void:
 	var slots_width: float = objectives.size() * SLOT_SIZE + maxf(objectives.size() - 1, 0) * SLOT_GAP
-	var bars_min_width: float = peers.size() * BAR_MIN_WIDTH + maxf(peers.size() - 1, 0) * BAR_GAP
+	var bars_min_width: float = teams.size() * BAR_MIN_WIDTH + maxf(teams.size() - 1, 0) * BAR_GAP
 	var content_width: float = maxf(slots_width, bars_min_width)
 	var content_height: float = SLOT_SIZE
-	if not peers.is_empty():
+	if not teams.is_empty():
 		content_height += SECTION_GAP + BAR_HEIGHT
 	size = Vector2(content_width, content_height) + PANEL_PADDING * 2.0
 	position = Vector2((get_viewport_rect().size.x - size.x) * 0.5, TOP_MARGIN)
@@ -200,12 +197,13 @@ func _layout(objectives: Array, peers: Array) -> void:
 
 	var me := main.my_peer_id()
 	var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * TAU * 1.5)
+	## A point an ally holds counts as held by your side.
 	var x: float = PANEL_PADDING.x + (content_width - slots_width) * 0.5
 	for o in objectives:
 		var slot: Dictionary = _slots[o]
 		var frame: TextureRect = slot.frame
 		frame.position = Vector2(x, PANEL_PADDING.y)
-		frame.texture = SLOT_OWNED_TEXTURE if o.owner_peer_id == me and me > 0 else SLOT_TEXTURE
+		frame.texture = SLOT_OWNED_TEXTURE if o.owner_peer_id > 0 and me > 0 and Teams.is_friendly(me, o.owner_peer_id) else SLOT_TEXTURE
 		(slot.fill as ColorRect).color = Color(o.owner_tint(), OWNER_FILL_ALPHA) if o.owner_peer_id > 0 else NEUTRAL_FILL_COLOR
 		var moving: bool = not o.is_flag_at_rest()
 		(slot.strip_bg as ColorRect).visible = moving
@@ -218,26 +216,26 @@ func _layout(objectives: Array, peers: Array) -> void:
 		frame.modulate = Color.WHITE.lerp(Color(1.8, 1.8, 1.8), pulse) if o.contested else Color.WHITE
 		x += SLOT_SIZE + SLOT_GAP
 
-	if peers.is_empty():
+	if teams.is_empty():
 		return
 	var leader_score := _leader_score()
-	var bar_width: float = (content_width - (peers.size() - 1) * BAR_GAP) / peers.size()
+	var bar_width: float = (content_width - (teams.size() - 1) * BAR_GAP) / teams.size()
 	var bar_x: float = PANEL_PADDING.x
 	var y: float = PANEL_PADDING.y + SLOT_SIZE + SECTION_GAP
-	for peer_id in peers:
-		var entry: Dictionary = main.scores[peer_id]
+	for team in teams:
+		var entry: Dictionary = main.scores[team]
 		var score: int = entry.score
 		var fraction: float = clampf(float(score) / main.favour_target, 0.0, 1.0)
 		var offset := Vector2.ZERO
 		if entry.active and score == leader_score and fraction >= NEAR_VICTORY_FRACTION:
 			var amp: float = lerpf(SHAKE_MIN, SHAKE_MAX, inverse_lerp(NEAR_VICTORY_FRACTION, 1.0, fraction))
 			offset = Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
-		var parts: Dictionary = _bars[peer_id]
+		var parts: Dictionary = _bars[team]
 		var bar: ProgressBar = parts.bar
 		bar.size = Vector2(bar_width, BAR_HEIGHT)
 		bar.position = Vector2(bar_x, y) + offset
 		bar.value = fraction
-		var tint := _tint_for(peer_id)
+		var tint := _tint_for(team)
 		var fill_color: Color = tint.darkened(INACTIVE_DARKEN) if not entry.active else tint
 		var fill: StyleBoxFlat = parts.fill
 		if fill.bg_color != fill_color:
@@ -249,8 +247,8 @@ func _layout(objectives: Array, peers: Array) -> void:
 
 func _leader_score() -> int:
 	var best := -1
-	for peer_id in main.scores:
-		var entry: Dictionary = main.scores[peer_id]
+	for team in main.scores:
+		var entry: Dictionary = main.scores[team]
 		if entry.active:
 			best = maxi(best, entry.score)
 	return best
@@ -263,14 +261,17 @@ func _check_alerts(objectives: Array) -> void:
 		var owner: int = o.owner_peer_id
 		var previous_owner: int = _last_owner.get(o, owner)
 		var previous_control: float = _last_control.get(o, o.flag_control)
+		## Your side's point, whether you or an ally holds it.
+		var ours: bool = owner > 0 and Teams.is_friendly(me, owner)
+		var was_ours: bool = previous_owner > 0 and Teams.is_friendly(me, previous_owner)
 		if owner != previous_owner:
-			if owner == me:
+			if ours and not was_ours:
 				_alert(main.on_point_captured_sound_effects)
 				main.minimap.show_ping(o.global_position)
-			elif previous_owner == me:
+			elif was_ours and not ours:
 				_alert(main.on_point_lost_sound_effects)
 				main.minimap.show_attack_ping(o.global_position)
-		elif owner == me and o.flag_peer_id == me and o.flag_control < previous_control - 0.0001:
+		elif ours and Teams.is_friendly(me, o.flag_peer_id) and o.flag_control < previous_control - 0.0001:
 			var now := Time.get_ticks_msec()
 			if now - int(_last_attack_alert_ms.get(o, -UNDER_ATTACK_ALERT_COOLDOWN_MS)) >= UNDER_ATTACK_ALERT_COOLDOWN_MS:
 				_alert(main.on_point_under_attack_sound_effects)
@@ -283,11 +284,12 @@ func _check_alerts(objectives: Array) -> void:
 
 	if main.favour_target <= 0:
 		return
-	for peer_id in main.scores:
-		if peer_id == me or _near_victory_warned.has(peer_id):
+	var my_team := Teams.team_of(me)
+	for team in main.scores:
+		if team == my_team or _near_victory_warned.has(team):
 			continue
-		if main.scores[peer_id].score >= main.favour_target * NEAR_VICTORY_FRACTION:
-			_near_victory_warned[peer_id] = true
+		if main.scores[team].score >= main.favour_target * NEAR_VICTORY_FRACTION:
+			_near_victory_warned[team] = true
 			_alert(main.on_enemy_near_victory_sound_effects)
 
 func _alert(sounds: Array[AudioStream]) -> void:

@@ -1,0 +1,128 @@
+[gd_scene load_steps=22 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/trial_forest.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/tutorial_input_condition.gd" id="cond_input"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/units_in_zone_condition.gd" id="cond_zone"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/world_marker_action.gd" id="act_marker"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods_script")
+research_tier_cap = 0
+locked_hud = Array[String](["research", "build", "formations", "control_groups"])
+
+[sub_resource type="Resource" id="say_welcome"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Welcome to Aldmere, my lord. Look about the valley first: hold W, A, S or D to move your view, and turn it with Q and E."
+speaker_scene = ExtResource("villager")
+pause_in_single_player = false
+
+[sub_resource type="Resource" id="moved_camera"]
+script = ExtResource("cond_input")
+label = "View moved"
+kind = "camera_move"
+count = 1
+
+[sub_resource type="Resource" id="say_select"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Those are your villagers, by the hall. Click one to pick it up, or drag a box across several at once."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="selected_someone"]
+script = ExtResource("cond_input")
+label = "Villagers selected"
+kind = "select_units"
+count = 1
+
+[sub_resource type="Resource" id="say_move"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Now send them along the old road. With them selected, right-click inside the ring to the south-east."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="mark_road"]
+script = ExtResource("act_marker")
+at = &"OldRoad"
+marker_id = &"road"
+radius = 6.0
+
+[sub_resource type="Resource" id="three_at_road"]
+script = ExtResource("cond_zone")
+label = "Villagers at the road"
+zone_name = &"OldRoad"
+count = 3
+
+[sub_resource type="Resource" id="clear_road_marker"]
+script = ExtResource("act_marker")
+at = &"OldRoad"
+marker_id = &"road"
+clear = true
+
+[sub_resource type="Resource" id="say_done"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "Well done. That is all the marching a lord need learn today — the rest we shall teach you with work in hand."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "First Steps"
+briefing_title = "First Steps"
+briefing_text = "The Long Peace has held for three hundred years, and a new lord has come to the valley. Learn to look about it and to move those who serve you."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+modifiers = SubResource("mods_player")
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="OldRoad" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, 40)
+script = ExtResource("zone_script")
+radius = 6.0
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="LookAround" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Look about the valley"
+conditions = Array[ExtResource("condition_script")]([SubResource("moved_camera")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_welcome")])
+
+[node name="SelectVillagers" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Select your villagers"
+requires = Array[NodePath]([NodePath("LookAround")])
+conditions = Array[ExtResource("condition_script")]([SubResource("selected_someone")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_select")])
+
+[node name="WalkTheRoad" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Send three villagers to the old road"
+requires = Array[NodePath]([NodePath("SelectVillagers")])
+conditions = Array[ExtResource("condition_script")]([SubResource("three_at_road")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_move"), SubResource("mark_road")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_road_marker"), SubResource("say_done"), SubResource("win")])

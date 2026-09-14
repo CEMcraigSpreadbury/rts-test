@@ -36,7 +36,11 @@ class_name Objective
 ## (not while contested or draining, not to an eliminated or disconnected
 ## owner) — but in every game mode, since unlike Favour it's ordinary money.
 ## Keeps armies fed once the map's gold deposits have been mined out.
-@export var gold_per_second: float = 2.0
+@export var gold_per_second: float = 1.0
+## Wood per second, on exactly the same terms as gold. Wood is the scarcer
+## resource (villagers and every building cost it), so a point pays both
+## rather than all gold.
+@export var wood_per_second: float = 1.0
 
 const LEASH_MULTIPLIER: float = 2.5
 const NEUTRAL_TINT: Color = Color(0.5, 0.5, 0.5)
@@ -46,6 +50,7 @@ const LETTER_HEIGHT: float = 5.5
 ## and is banked a whole point at a time (see _tick_favour/_tick_gold).
 const FAVOUR_RESOURCE: ResourceType = preload("res://resources/favour_resource_type.tres")
 const GOLD_RESOURCE: ResourceType = preload("res://resources/gold_resource_type.tres")
+const WOOD_RESOURCE: ResourceType = preload("res://resources/wood_resource_type.tres")
 
 @onready var capture_zone: Area3D = $CaptureZone
 @onready var guards: Node3D = $Guards
@@ -161,16 +166,23 @@ func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
 
-	## Combat-unit head count per player standing in the zone. Neutral guards
-	## (peer 0) aren't a player; they block capture outright instead.
+	## Combat-unit head count per TEAM standing in the zone — allies push the
+	## same flag together instead of cancelling each other out as two rival
+	## challengers. Neutral guards (peer 0) aren't a player; they block capture
+	## outright instead. A point is still owned by a player (whose colour it
+	## flies), so team_rep remembers which one raised each team's flag.
 	var counts: Dictionary = {}
+	var team_rep: Dictionary = {}
 	var anyone_present := false
 	for body in capture_zone.get_overlapping_bodies():
 		if not (body is Unit) or body.status_activity == Unit.Activity.DEAD or body.owner_peer_id <= 0:
 			continue
 		anyone_present = true
 		if _counts_for_capture(body):
-			counts[body.owner_peer_id] = counts.get(body.owner_peer_id, 0) + 1
+			var team: int = Teams.team_of(body.owner_peer_id)
+			counts[team] = counts.get(team, 0) + 1
+			if not team_rep.has(team):
+				team_rep[team] = body.owner_peer_id
 
 	_tick_guard_respawn(delta, anyone_present)
 
@@ -182,8 +194,10 @@ func _physics_process(delta: float) -> void:
 		return
 
 	var step := delta / stage_duration
-	var holder_count: int = counts.get(flag_peer_id, 0) if flag_peer_id > 0 else 0
-	var challengers: Array = counts.keys().filter(func(p): return p != flag_peer_id)
+	## Everything below works in teams; only the flag itself names a player.
+	var flag_team: int = Teams.team_of(flag_peer_id)
+	var holder_count: int = counts.get(flag_team, 0) if flag_peer_id > 0 else 0
+	var challengers: Array = counts.keys().filter(func(t): return t != flag_team)
 
 	if challengers.is_empty():
 		if holder_count > 0:
@@ -199,14 +213,14 @@ func _physics_process(delta: float) -> void:
 		## after which the ordinary holder-vs-challenger tug-of-war takes over.
 		var a: int = counts[challengers[0]]
 		var b: int = counts[challengers[1]]
-		flag_peer_id = challengers[0] if a > b else challengers[1]
+		flag_peer_id = team_rep[challengers[0] if a > b else challengers[1]]
 		_raise(step * _capture_speed(absi(a - b)))
 	elif challengers.size() > 1:
 		contested = true
 		_paying = false
 	elif flag_peer_id == 0:
-		## A bare pole: the lone player present starts raising their flag.
-		flag_peer_id = challengers[0]
+		## A bare pole: the lone team present starts raising its flag.
+		flag_peer_id = team_rep[challengers[0]]
 		_raise(step * _capture_speed(counts[challengers[0]]))
 	else:
 		var net: int = counts[challengers[0]] - holder_count
@@ -223,7 +237,11 @@ func _physics_process(delta: float) -> void:
 
 func _raise(amount: float) -> void:
 	flag_control = minf(flag_control + amount, 1.0)
-	if flag_control >= 1.0 and owner_peer_id != flag_peer_id:
+	## An ally standing on a teammate's point helps hold it; it never changes
+	## hands within a team (is_friendly is false for a neutral point, so those
+	## are still taken normally).
+	if flag_control >= 1.0 and owner_peer_id != flag_peer_id \
+			and not Teams.is_friendly(owner_peer_id, flag_peer_id):
 		_set_owner(flag_peer_id)
 
 func _lower(amount: float) -> void:
@@ -349,22 +367,29 @@ func _tick_favour(delta: float) -> void:
 	if main.has_method("show_favour_popup"):
 		main.show_favour_popup(self, whole)
 
-## Host-only remainder of gold earned but not yet whole enough to bank.
+## Host-only remainders of gold/wood earned but not yet whole enough to bank.
 var _gold_fraction: float = 0.0
+var _wood_fraction: float = 0.0
 
-## Same terms as Favour (see _tick_favour) apart from the game mode.
+## Same terms as Favour (see _tick_favour) apart from the game mode. Pays
+## wood alongside gold; the POINT_GOLD research bonus scales both.
 func _tick_gold(delta: float) -> void:
-	if gold_per_second <= 0.0 or owner_peer_id <= 0 or not _paying:
+	if (gold_per_second <= 0.0 and wood_per_second <= 0.0) or owner_peer_id <= 0 or not _paying:
 		return
 	var main := get_tree().current_scene
 	if main.has_method("is_peer_active") and not main.is_peer_active(owner_peer_id):
 		return
-	_gold_fraction += gold_per_second * (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.POINT_GOLD)) * delta
-	var whole := int(_gold_fraction)
-	if whole <= 0:
-		return
-	_gold_fraction -= float(whole)
-	ResourceStockpile.add(owner_peer_id, GOLD_RESOURCE, whole)
+	var mult := (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.POINT_GOLD)) * delta
+	_gold_fraction += gold_per_second * mult
+	_wood_fraction += wood_per_second * mult
+	var whole_gold := int(_gold_fraction)
+	if whole_gold > 0:
+		_gold_fraction -= float(whole_gold)
+		ResourceStockpile.add(owner_peer_id, GOLD_RESOURCE, whole_gold)
+	var whole_wood := int(_wood_fraction)
+	if whole_wood > 0:
+		_wood_fraction -= float(whole_wood)
+		ResourceStockpile.add(owner_peer_id, WOOD_RESOURCE, whole_wood)
 
 ## Research points per point of favour_per_second — so the centre point,
 ## which pays double Favour, pays double research too.
@@ -408,5 +433,6 @@ func _set_owner(new_owner: int) -> void:
 	## previous owner can't be banked by whoever takes the objective off them.
 	_favour_fraction = 0.0
 	_gold_fraction = 0.0
+	_wood_fraction = 0.0
 	if new_owner > 0 and main.has_method("announce_point_captured"):
 		main.announce_point_captured(new_owner, letter)

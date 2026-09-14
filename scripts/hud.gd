@@ -253,6 +253,9 @@ func show_building(building: ProductionBuilding) -> void:
 		var item: ProducibleItem = building.producibles[i]
 		if not _producible_is_visible(building, item):
 			continue
+		## A scenario may not have unlocked this one yet.
+		if not MatchRules.active().item_allowed(building.owner_peer_id, item.item_name):
+			continue
 		## Hotkeys map to on-screen position, not the item's true index into
 		## producibles — otherwise the visible buttons would jump to
 		## whatever hotkey their hidden neighbors happened to occupy.
@@ -325,10 +328,16 @@ func _refresh_resource_info() -> void:
 func _populate_construction_buttons() -> void:
 	var my_building_types: Array[BuildingType] = main.my_faction().building_types
 	var buttons: Array[Control] = []
+	var rules := MatchRules.active()
+	var me: int = main.my_peer_id()
 	for i in my_building_types.size():
 		var building_type: BuildingType = my_building_types[i]
+		## Each type keeps its own hotkey whether or not the ones before it are
+		## available, so a scenario locking one doesn't move the others.
+		if not rules.building_allowed(me, building_type.building_name):
+			continue
 		var hotkey: String = OS.get_keycode_string(Main.BUILDING_HOTKEYS[i]) if i < Main.BUILDING_HOTKEYS.size() else "?"
-		var tooltip := "%s (%s)" % [building_type.building_name, format_costs(building_type.get_costs())]
+		var tooltip := "%s (%s)" % [building_type.building_name, format_costs(rules.scaled_costs(me, building_type.get_costs()))]
 		buttons.append(_make_command_button(hotkey, tooltip, building_type.icon, main.placement.on_construction_button_pressed.bind(building_type)))
 	_fill_action_panel_grid(buttons)
 
@@ -351,6 +360,8 @@ func _make_empty_action_slot() -> Control:
 	return slot
 
 func open_build_submenu() -> void:
+	if not MatchRules.active().hud_allowed(main.my_peer_id(), "build"):
+		return
 	showing_build_submenu = true
 	for child in action_panel_grid.get_children():
 		child.queue_free()

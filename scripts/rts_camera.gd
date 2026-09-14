@@ -68,8 +68,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 			_zoom_target = clamp(_zoom_target - zoom_speed, min_zoom, max_zoom)
+			_report_zoom()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_zoom_target = clamp(_zoom_target + zoom_speed, min_zoom, max_zoom)
+			_report_zoom()
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			rotating = event.pressed
 	elif event is InputEventMouseMotion and rotating:
@@ -161,6 +163,35 @@ func _update_pan(input_dir: Vector2, delta: float) -> void:
 		_pan_velocity = desired
 
 	global_position += _pan_velocity * delta
+	_report_camera_use(_pan_velocity.length() * delta)
+
+## --- Tutorial reporting ---
+##
+## A tutorial step can wait for "have a look around". Reported once the player
+## has actually shifted the view a meaningful amount, rather than on the first
+## frame a key is held — and only in a scenario, where something is listening.
+const TUTORIAL_PAN_DISTANCE: float = 10.0
+const TUTORIAL_ROTATE_RADIANS: float = 0.6
+
+var _panned_since_report: float = 0.0
+var _yaw_at_report: float = 0.0
+
+func _report_zoom() -> void:
+	var main: Node = get_tree().current_scene
+	if main is Main:
+		main.report_tutorial_input(&"camera_zoom")
+
+func _report_camera_use(moved: float) -> void:
+	var main: Node = get_tree().current_scene
+	if not (main is Main):
+		return
+	_panned_since_report += moved
+	if _panned_since_report >= TUTORIAL_PAN_DISTANCE:
+		_panned_since_report = 0.0
+		main.report_tutorial_input(&"camera_move")
+	if absf(yaw.rotation.y - _yaw_at_report) >= TUTORIAL_ROTATE_RADIANS:
+		_yaw_at_report = yaw.rotation.y
+		main.report_tutorial_input(&"camera_rotate")
 
 ## View-space depth of the ground (at pivot height) seen through the given
 ## screen row (0 = top edge, 1 = bottom edge). Rows that look at or above the

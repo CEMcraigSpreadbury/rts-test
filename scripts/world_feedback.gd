@@ -944,8 +944,8 @@ func _update_hover_cursor(collider: Object) -> void:
 	if main.selected_units.is_empty():
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		return
-	if (collider is Unit and collider.owner_peer_id != main.my_peer_id()) \
-			or (collider is ProductionBuilding and collider.owner_peer_id != main.my_peer_id() and collider.can_be_attacked()):
+	if (collider is Unit and Teams.is_enemy(main.my_peer_id(), collider.owner_peer_id)) \
+			or (collider is ProductionBuilding and Teams.is_enemy(main.my_peer_id(), collider.owner_peer_id) and collider.can_be_attacked()):
 		Input.set_default_cursor_shape(Input.CURSOR_CROSS)
 	elif collider is Gatherable:
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)

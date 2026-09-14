@@ -71,7 +71,15 @@ func _roll_monsters() -> Dictionary:
 	return rolls[roll_group]
 
 func _fresh_roll() -> Dictionary:
-	var pool: Array = range(_shrine().producibles.size())
+	## A scenario can narrow what the Shrines of its map may offer at all.
+	var shrine := _shrine()
+	var rules := MatchRules.active()
+	var pool: Array = []
+	for i in shrine.producibles.size():
+		if rules.monster_allowed(shrine.producibles[i].item_name):
+			pool.append(i)
+	if pool.is_empty():
+		pool = range(shrine.producibles.size())
 	pool.shuffle()
 	var indices := PackedInt32Array(pool.slice(0, mini(monster_choice_count, pool.size())))
 	indices.sort()

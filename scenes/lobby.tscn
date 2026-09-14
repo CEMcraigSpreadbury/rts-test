@@ -30,77 +30,87 @@ theme_override_font_sizes/font_size = 24
 text = "RTS Test - Multiplayer"
 horizontal_alignment = 1
 
-[node name="SteamRow" type="HBoxContainer" parent="VBox"]
+[node name="StatusLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Not connected."
+horizontal_alignment = 1
+
+[node name="Connect" type="VBoxContainer" parent="VBox"]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="QuickPlayButton" type="Button" parent="VBox/SteamRow"]
+[node name="SteamRow" type="HBoxContainer" parent="VBox/Connect"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="QuickPlayButton" type="Button" parent="VBox/Connect/SteamRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Quick Play"
 
-[node name="HostSteamButton" type="Button" parent="VBox/SteamRow"]
+[node name="HostSteamButton" type="Button" parent="VBox/Connect/SteamRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Host Steam Lobby"
 
-[node name="InviteButton" type="Button" parent="VBox/SteamRow"]
-layout_mode = 2
-text = "Invite Friend"
-
-[node name="SearchingRow" type="HBoxContainer" parent="VBox"]
+[node name="SearchingRow" type="HBoxContainer" parent="VBox/Connect"]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="SearchingLabel" type="Label" parent="VBox/SearchingRow"]
+[node name="SearchingLabel" type="Label" parent="VBox/Connect/SearchingRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Searching for opponent..."
 
-[node name="CancelSearchButton" type="Button" parent="VBox/SearchingRow"]
+[node name="CancelSearchButton" type="Button" parent="VBox/Connect/SearchingRow"]
 layout_mode = 2
 text = "Cancel"
 
-[node name="DirectConnectLabel" type="Label" parent="VBox"]
+[node name="DirectConnectLabel" type="Label" parent="VBox/Connect"]
 layout_mode = 2
 text = "Direct Connect (IP)"
 
-[node name="ConnectRow" type="HBoxContainer" parent="VBox"]
+[node name="ConnectRow" type="HBoxContainer" parent="VBox/Connect"]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="AddressEdit" type="LineEdit" parent="VBox/ConnectRow"]
+[node name="AddressEdit" type="LineEdit" parent="VBox/Connect/ConnectRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "127.0.0.1"
 placeholder_text = "IP address"
 
-[node name="HostButton" type="Button" parent="VBox/ConnectRow"]
+[node name="HostButton" type="Button" parent="VBox/Connect/ConnectRow"]
 layout_mode = 2
 text = "Host"
 
-[node name="JoinButton" type="Button" parent="VBox/ConnectRow"]
+[node name="JoinButton" type="Button" parent="VBox/Connect/ConnectRow"]
 layout_mode = 2
 text = "Join"
 
-[node name="StatusLabel" type="Label" parent="VBox"]
+[node name="BackButton" type="Button" parent="VBox/Connect"]
 layout_mode = 2
-text = "Not connected."
+text = "Back"
 
-[node name="MapOption" type="OptionButton" parent="VBox"]
+[node name="Room" type="VBoxContainer" parent="VBox"]
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="InviteButton" type="Button" parent="VBox/Room"]
+layout_mode = 2
+text = "Invite Friend"
+
+[node name="MapOption" type="OptionButton" parent="VBox/Room"]
 layout_mode = 2
 
-[node name="PlayerList" type="VBoxContainer" parent="VBox"]
+[node name="PlayerList" type="VBoxContainer" parent="VBox/Room"]
 layout_mode = 2
 
-[node name="StartButton" type="Button" parent="VBox"]
+[node name="StartButton" type="Button" parent="VBox/Room"]
 layout_mode = 2
 text = "Start Game"
 
-[node name="DisconnectButton" type="Button" parent="VBox"]
+[node name="DisconnectButton" type="Button" parent="VBox/Room"]
 layout_mode = 2
-text = "Disconnect"
-
-[node name="BackButton" type="Button" parent="VBox"]
-layout_mode = 2
-text = "Back"
+text = "Leave"

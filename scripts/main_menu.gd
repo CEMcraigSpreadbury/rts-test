@@ -17,6 +17,8 @@ var _settings_row: MatchSettingsRow
 ## same Network.add_ai_player() etc. a lobby host does.
 var _players_box: VBoxContainer
 var _add_ai_button: Button
+## Mission select, built only when there is a campaign to show.
+var _campaign_menu: CampaignMenu = null
 
 func _ready() -> void:
 	$Menu/SinglePlayerButton.pressed.connect(_on_single_player_pressed)
@@ -46,10 +48,55 @@ func _ready() -> void:
 	_show_map_default(Network.GameMode.CONQUEST)
 	Network.player_updated.connect(_refresh_players.unbind(1))
 	Network.player_disconnected.connect(_refresh_players.unbind(2))
+	_build_campaign_buttons()
 	map_select.visible = false
 	options_menu.visible = false
 	options_menu.closed.connect(_on_options_closed)
 	UiDebugEditor.register_editable_root(self, "main_menu")
+
+## --- Campaigns ---
+
+## One button per campaign resource, above Single Player, so adding a campaign
+## is a matter of dropping a .tres into resources/campaigns/.
+func _build_campaign_buttons() -> void:
+	var campaigns := Campaign.list_all()
+	if campaigns.is_empty():
+		return
+	## In a full-rect CenterContainer, which centres it on its own size at any
+	## window size. Centre anchors alone would only pin its top-left corner to
+	## the middle of the screen and let the rest run off the edges.
+	var centre := CenterContainer.new()
+	centre.name = "CampaignCentre"
+	## Covers the whole screen, so it must not take mouse input itself or it
+	## swallows every click meant for the menu behind it — and it is hidden
+	## outright while unused, rather than left invisible over the top.
+	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	centre.visible = false
+	add_child(centre)
+	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_campaign_menu = CampaignMenu.new()
+	_campaign_menu.closed.connect(_on_campaign_closed)
+	centre.add_child(_campaign_menu)
+
+	var index: int = $Menu/SinglePlayerButton.get_index()
+	for campaign in campaigns:
+		var button := Button.new()
+		button.name = "Campaign_%s" % campaign.id
+		button.text = campaign.campaign_name
+		button.custom_minimum_size = Vector2(0, 36)
+		button.pressed.connect(_on_campaign_pressed.bind(campaign))
+		menu.add_child(button)
+		menu.move_child(button, index)
+		index += 1
+
+func _on_campaign_pressed(campaign: Campaign) -> void:
+	menu.visible = false
+	_campaign_menu.get_parent().visible = true
+	_campaign_menu.open(campaign)
+
+func _on_campaign_closed() -> void:
+	_campaign_menu.get_parent().visible = false
+	menu.visible = true
 
 func _on_single_player_pressed() -> void:
 	Network.start_offline()
@@ -63,7 +110,7 @@ func _on_map_select_back_pressed() -> void:
 	menu.visible = true
 
 func _on_start_pressed() -> void:
-	if map_option.selected < 0:
+	if map_option.selected < 0 or not Network.can_start_match():
 		return
 	Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target())
 	Network.resolve_random_rulers()
@@ -126,11 +173,11 @@ func _make_player_row(peer_id: int) -> HBoxContainer:
 	row.add_child(name_label)
 
 	var color_option := OptionButton.new()
-	var available: Array[int] = Network.available_color_indices(peer_id)
 	var color_index: int = Network.color_index_of(peer_id)
+	## Sharing a colour makes those players allies (see Teams), so nothing here
+	## is disabled.
 	for i in Network.TEAM_COLORS.size():
 		color_option.add_item(Network.TEAM_COLOR_NAMES[i])
-		color_option.set_item_disabled(i, not available.has(i) and i != color_index)
 	if color_index >= 0:
 		color_option.select(color_index)
 	if Network.is_ai(peer_id):

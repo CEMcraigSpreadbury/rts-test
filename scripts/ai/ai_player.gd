@@ -34,9 +34,24 @@ const GROUND_RAY_MASK: int = 0xFFFFFFFF & ~4
 ## How close to the navmesh a point must be to count as reachable ground.
 const NAVMESH_TOLERANCE: float = 0.8
 
+## What this brain is currently trying to do. A skirmish AI is always NORMAL;
+## a scenario sets a slot's starting mode and a quest step can change it (see
+## SetAiModeAction), which is how "the garrison notices you" works.
+enum Mode {
+	## Plays the whole game: expands, takes points, attacks where it likes.
+	NORMAL,
+	## Builds and defends, but never sends a wave out.
+	DEFEND,
+	## Throws its waves at one place, whatever else is going on.
+	ATTACK,
+}
+
 var main: Main
 var peer_id: int = 0
 var profile: AiProfile
+var mode: Mode = Mode.NORMAL
+## Where ATTACK mode sends its waves.
+var attack_position: Vector3 = Vector3.ZERO
 
 var economy: AiEconomy
 var builder: AiBaseBuilder
@@ -300,7 +315,7 @@ func away_from_centre() -> Vector3:
 ## Town Center than our own.
 func is_dangerous(pos: Vector3) -> bool:
 	for objective in objectives:
-		if is_instance_valid(objective) and objective.owner_peer_id != peer_id \
+		if is_instance_valid(objective) and Teams.is_enemy(peer_id, objective.owner_peer_id) \
 				and objective.global_position.distance_to(pos) < DANGER_RADIUS_OBJECTIVE:
 			return true
 	var my_distance: float = pos.distance_to(home)

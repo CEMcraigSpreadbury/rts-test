@@ -153,7 +153,7 @@ func award_kill(victim: Unit, attacker: Node3D, credit_peer: int = 0) -> void:
 	if attacker != null and is_instance_valid(attacker) and "owner_peer_id" in attacker:
 		killer = attacker.owner_peer_id
 		by_unit = attacker is Unit
-	if killer <= 0 or killer == victim.owner_peer_id or not main.is_peer_active(killer):
+	if killer <= 0 or not Teams.is_enemy(killer, victim.owner_peer_id) or not main.is_peer_active(killer):
 		return
 	var fraction: float = _kill_fraction.get(killer, 0.0) + kill_value(victim)
 	var whole := int(fraction)
@@ -218,12 +218,20 @@ func buy_as(peer_id: int, index: int) -> bool:
 	var node: ResearchNode = ruler.nodes[index]
 	if owned.has(index) or not requirements_met(ruler, node, owned):
 		return false
+	## A scenario can cap how far a Ruler's tree goes, or shut it off entirely.
+	if not MatchRules.active().research_allowed(peer_id, node):
+		return false
 	var costs := node_costs(node)
 	if not ResourceStockpile.can_afford(peer_id, costs):
 		return false
 	ResourceStockpile.spend(peer_id, costs)
 	owned.append(index)
 	_rpc_owned.rpc(peer_id, owned)
+	## Host-side already, and the buyer is known, so this goes straight in as
+	## an event rather than through the client-input relay.
+	if main.quests != null:
+		main.quests.notify(&"player_input",
+				{peer_id = peer_id, kind = "research_bought", detail = node.node_name})
 	## One-off, host-side effects of the purchase itself.
 	var population := roundi(node.effects.get(ResearchNode.Stat.POPULATION_CAP, 0.0))
 	if population > 0:
@@ -292,6 +300,9 @@ func cast_as(peer_id: int, index: int, target_pos: Vector3) -> bool:
 	var ready_at: Dictionary = _power_ready_at.get(peer_id, {})
 	ready_at[index] = _time + cooldown
 	_power_ready_at[peer_id] = ready_at
+	if main.quests != null:
+		main.quests.notify(&"player_input",
+				{peer_id = peer_id, kind = "power_cast", detail = node.node_name})
 	if peer_id == multiplayer.get_unique_id():
 		_start_my_cooldown(index, cooldown)
 	elif Network.can_rpc_to(peer_id):
@@ -312,7 +323,8 @@ func is_power_ready(peer_id: int, index: int) -> bool:
 func can_see(peer_id: int, pos: Vector3) -> bool:
 	for root in [main.units_root, main.buildings_root]:
 		for child in root.get_children():
-			if not (child is Unit or child is ProductionBuilding) or child.owner_peer_id != peer_id:
+			## An ally's eyes count, the same way the fog shares their vision.
+			if not (child is Unit or child is ProductionBuilding) or Teams.is_enemy(peer_id, child.owner_peer_id):
 				continue
 			if (child is Unit and child.status_activity == Unit.Activity.DEAD) or (child is ProductionBuilding and child.is_destroyed):
 				continue
@@ -331,7 +343,9 @@ func _apply_power(peer_id: int, node: ResearchNode, pos: Vector3) -> void:
 		var unit := child as Unit
 		if unit == null or unit.status_activity == Unit.Activity.DEAD or _flat_distance(unit.global_position, pos) > node.radius:
 			continue
-		if unit.owner_peer_id == peer_id:
+		## An ally's units count as your own here: friendly powers help them,
+		## hostile ones never touch them.
+		if not Teams.is_enemy(peer_id, unit.owner_peer_id):
 			if node.affects_own_units:
 				targets.append(unit)
 		else:
@@ -341,7 +355,7 @@ func _apply_power(peer_id: int, node: ResearchNode, pos: Vector3) -> void:
 	if node.affects_own_buildings or (node.upgraded_affects_own_buildings and _is_upgraded(peer_id, node)):
 		for child in main.buildings_root.get_children():
 			var building := child as ProductionBuilding
-			if building == null or building.owner_peer_id != peer_id or building.is_destroyed or building.is_under_construction 					or _flat_distance(building.global_position, pos) > node.radius:
+			if building == null or Teams.is_enemy(peer_id, building.owner_peer_id) or building.is_destroyed or building.is_under_construction 					or _flat_distance(building.global_position, pos) > node.radius:
 				continue
 			targets.append(building)
 	for target in targets:
