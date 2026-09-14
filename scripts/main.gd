@@ -39,14 +39,19 @@ const FORMATION_STAGGERED_KEY: Key = KEY_F3
 ## reformation (the other half, closing ranks when a member dies mid-move, is
 ## automatic; see update_reformation). F4 continues the F1-F3 shape row.
 const FORMATION_REFORM_KEY: Key = KEY_F4
+## Opens/closes the Research panel (see ResearchPanel, which listens for it).
+const RESEARCH_PANEL_KEY: Key = KEY_TAB
+## One per PowerBar slot, in tree order. Every letter is already a command,
+## camera or building key.
+const POWER_HOTKEYS: Array[Key] = [KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9]
 ## Assigned by position in Unit.get_abilities(), same convention as
 ## PRODUCIBLE_HOTKEYS/BUILDING_HOTKEYS below — a passive ability still claims
 ## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
 const ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
 const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_G, KEY_O]
-## Same list (and order) as lobby.tscn's Lobby.available_factions — that
-## shared order is what a "faction_index" in Network.players refers to.
+## The unit/building roster. Only [0] is used — every player gets the same
+## one (see _faction_for_peer).
 @export var available_factions: Array[Faction] = []
 
 @onready var camera: Camera3D = $CameraRig/Yaw/Pitch/Camera3D
@@ -146,6 +151,9 @@ var _patrol_started_this_session: bool = false
 ## own state since the ability belongs to one unit, not the whole current
 ## selection. {"unit": Unit, "ability_index": int} or {}.
 var _armed_ability: Dictionary = {}
+## pending_order_mode == "power": which of the local Ruler's nodes the next
+## left-click casts (see arm_power).
+var _armed_power_index: int = -1
 ## Purely local UI state: which units/buildings belong to each numbered
 ## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
 var control_groups: Dictionary = {}
@@ -213,6 +221,8 @@ var scores: Dictionary = {}
 const SCORE_BROADCAST_INTERVAL: float = 0.25
 var _score_broadcast_timer: float = 0.0
 var conquest_hud: ConquestHud = null
+var research_panel: ResearchPanel = null
+var power_bar: PowerBar = null
 const FAVOUR_RESOURCE: ResourceType = preload("res://resources/favour_resource_type.tres")
 
 ## Extend this when new resource types (Stone, ...) are added.
@@ -220,6 +230,7 @@ const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
 	preload("res://resources/wood_resource_type.tres"),
 	preload("res://resources/gold_resource_type.tres"),
 	preload("res://resources/favour_resource_type.tres"),
+	preload("res://resources/research_resource_type.tres"),
 ]
 
 var group_movement: GroupMovement
@@ -227,6 +238,7 @@ var feedback: WorldFeedback
 var hud: Hud
 var placement: BuildingPlacement
 var chat: ChatConsole
+var research: Research
 
 ## Components are created here rather than in _ready(): Objectives are
 ## children of this scene, and their own _ready() — which runs before this
@@ -273,6 +285,12 @@ func _ready() -> void:
 		conquest_hud = ConquestHud.new()
 		conquest_hud.main = self
 		ui_root.add_child(conquest_hud)
+	research_panel = ResearchPanel.new()
+	research_panel.main = self
+	ui_root.add_child(research_panel)
+	power_bar = PowerBar.new()
+	power_bar.main = self
+	ui_root.add_child(power_bar)
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
 	building_spawner.spawn_function = _spawn_building_from_data
@@ -359,9 +377,16 @@ func _add_components() -> void:
 	chat.name = "ChatConsole"
 	add_child(chat)
 
+	research = Research.new()
+	research.main = self
+	research.name = "Research"
+	add_child(research)
+
 ## Single player only: the pause menu (and Options behind it) actually stops
 ## the match. With other humans in it the menu stays a local overlay.
 func _open_pause_menu() -> void:
+	## It sits above the pause menu in the UI.
+	research_panel.close()
 	pause_menu.visible = true
 	if Network.is_single_player() and not game_over:
 		get_tree().paused = true
@@ -470,12 +495,11 @@ func get_team_tint(peer_id: int) -> Color:
 	var team_index: int = team_index_by_peer.get(peer_id, 0)
 	return Network.TEAM_COLORS[team_index % Network.TEAM_COLORS.size()]
 
-## index < 0 (or unset) defaults everyone to available_factions[0] — the safe
-## fallback for the established direct-run-main.tscn-in-editor workflow, which
-## bypasses the lobby (and thus Network.players) entirely.
-func _faction_for_peer(peer_id: int) -> Faction:
-	var faction_index: int = Network.players.get(peer_id, {}).get("faction_index", 0)
-	return available_factions[faction_index] if faction_index < available_factions.size() else available_factions[0]
+## Everyone plays the same roster — players differ by Ruler instead (see
+## Ruler). Still a per-peer lookup so a Ruler-specific roster would only need
+## to change this.
+func _faction_for_peer(_peer_id: int) -> Faction:
+	return available_factions[0]
 
 ## Gap between starting units placed past a spawn point's last unit marker —
 ## wider than two avoidance radii (see the spawn jitter note in
@@ -551,6 +575,8 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
 	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
+	## After Unit._ready has set its health, so research raises it from there.
+	unit.ready.connect(research.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
 	return unit
 
 ## Hand-placed buildings (currently just Objective guards' buildings) never
@@ -610,6 +636,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.damaged.connect(feedback.relay_damage_number.bind(building))
 		building.construction_finished.connect(_on_building_construction_finished.bind(building))
 		building.projectile_fired.connect(feedback.on_building_projectile_fired.bind(building))
+		building.ready.connect(research.apply_all_to.bind(building), CONNECT_ONE_SHOT)
 		if multiplayer.is_server() and building.is_main_base:
 			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
 		if data.has("deposit_path"):
@@ -984,9 +1011,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	if research_panel.visible and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		research_panel.close()
+		get_viewport().set_input_as_handled()
+		return
+
 	## Fallback: nothing above claimed this Escape (not chatting, not
-	## placing, no build submenu, no pending order), so it opens the pause
-	## menu instead.
+	## placing, no build submenu, no pending order, no Research panel), so it
+	## opens the pause menu instead.
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		_open_pause_menu()
 		get_viewport().set_input_as_handled()
@@ -1859,6 +1891,16 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 				play_command_sound()
 				feedback.clear_path_markers(unit)
 			_armed_ability = {}
+		"power":
+			## Only somewhere the player can currently see; a miss keeps the
+			## power armed for another try, like a blocked building placement.
+			var result := raycast(event.position)
+			if result.is_empty() or not fog_of_war.is_visible_at(result.position):
+				play_placement_blocked_sound()
+				return
+			pending_order_mode = ""
+			research.request_cast(_armed_power_index, result.position)
+			play_command_sound()
 		"move":
 			_issue_move_order(event.position, event.shift_pressed)
 			if not event.shift_pressed:
@@ -1981,13 +2023,30 @@ func get_armed_ability() -> Ability:
 		return null
 	return unit.get_ability(_armed_ability["ability_index"])
 
+## Same shape as arm_ability: refuses silently while the power is cooling down.
+func arm_power(node_index: int) -> void:
+	if research.power_cooldown_remaining_fraction(node_index) > 0.0:
+		return
+	_armed_power_index = node_index
+	pending_order_mode = "power"
+	play_command_sound()
+
+## The power the next left-click will cast, or null — read every frame by
+## WorldFeedback for the targeting ring.
+func get_armed_power() -> ResearchNode:
+	if pending_order_mode != "power" or _armed_power_index < 0:
+		return null
+	var ruler := Research.ruler_for(my_peer_id())
+	return ruler.nodes[_armed_power_index] if ruler != null and _armed_power_index < ruler.nodes.size() else null
+
 func on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
 	var item := building.producibles[item_index]
 	## Hotkeys come straight here, bypassing the greyed-out button.
 	if item.kind == ProducibleItem.Kind.UNIT and building.synced_unit_limit_reached:
 		return
-	if not hud.can_afford_locally(item.get_costs()):
-		hud.flash_missing_resources(item.get_costs())
+	var costs := building.costs_for(item)
+	if not hud.can_afford_locally(costs):
+		hud.flash_missing_resources(costs)
 		return
 	_rpc_enqueue.rpc_id(1, building.get_path(), item_index)
 	play_command_sound()
@@ -2096,7 +2155,7 @@ func _on_unit_ability_cast(ability_index: int, _target_pos: Vector3, unit: Unit)
 	## Peer 0 is "neutral", not a real peer — rpc_id(0) would broadcast. An
 	## AI has no machine to tell; its brain reads the host-side cooldown.
 	if Network.can_rpc_to(unit.owner_peer_id):
-		_rpc_ability_cooldown_started.rpc_id(unit.owner_peer_id, unit.get_path(), ability_index, ability.cooldown)
+		_rpc_ability_cooldown_started.rpc_id(unit.owner_peer_id, unit.get_path(), ability_index, unit.ability_cooldown(ability))
 	if ability.kind == Ability.Kind.ACTIVATED_AREA:
 		feedback.relay_cast_windup(unit, ability_index)
 

@@ -11,7 +11,8 @@ extends Node
 ##
 ## Split into parts that each own one job, run in priority order every think
 ## (see _think): AiEconomy (houses, villagers, worker jobs), AiBaseBuilder
-## (build order, site finding, rally points), AiMilitary (army production).
+## (build order, site finding, rally points), AiMilitary (army production),
+## AiCombat (defend/attack/abilities), AiResearch (Ruler tree and powers).
 ## Spending is prioritised through `reserved`: a higher-priority want that
 ## can't be afforded yet sets its cost aside, and everything after it only
 ## spends what's left, so the army never starves the next House.
@@ -41,6 +42,7 @@ var economy: AiEconomy
 var builder: AiBaseBuilder
 var military: AiMilitary
 var combat: AiCombat
+var research: AiResearch
 
 ## --- Refreshed at the start of every think (see _refresh_world) ---
 var villagers: Array[Unit] = []
@@ -83,6 +85,7 @@ func setup(p_main: Main, p_peer_id: int, difficulty: int) -> void:
 	builder = AiBaseBuilder.new(self)
 	military = AiMilitary.new(self)
 	combat = AiCombat.new(self)
+	research = AiResearch.new(self)
 
 func _ready() -> void:
 	var faction: Faction = main.faction_by_peer.get(peer_id)
@@ -139,6 +142,8 @@ func _think() -> void:
 	## Fighting before worker jobs, so villagers told to flee aren't handed
 	## a tree in the same breath.
 	combat.think()
+	## After combat, so powers are aimed off this think's view of the enemy.
+	research.think()
 	## Orders last, so builders picked above aren't also handed a tree.
 	economy.think_workers()
 

@@ -16,9 +16,6 @@ extends Control
 
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 
-## Same list (and order) as main.tscn's Main.available_factions — that shared
-## order is what a "faction_index" in Network.players actually refers to.
-@export var available_factions: Array[Faction] = []
 ## Network.map_index is an index into this (see MapInfo.list_all).
 var available_maps: Array[MapInfo] = MapInfo.list_all()
 
@@ -205,19 +202,19 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 		name_label.text = "%s%s" % [Network.players[id].get("name", "Player %d" % id), " (you)" if id == Network.my_peer_id() else ""]
 		row.add_child(name_label)
 
-		var faction_index: int = Network.players[id].get("faction_index", 0)
-		if id == Network.my_peer_id():
-			var option := OptionButton.new()
-			for faction in available_factions:
-				option.add_item(faction.faction_name)
-			option.selected = faction_index
-			option.item_selected.connect(Network.set_my_faction)
-			row.add_child(option)
+		## Your own Ruler, or — for the host — an AI's.
+		var ruler_index: int = Network.players[id].get("ruler_index", 0)
+		if id == Network.my_peer_id() or (is_ai and is_host):
+			var ruler_option := RulerPicker.new(ruler_index)
+			if is_ai:
+				ruler_option.ruler_picked.connect(func(i): Network.set_ai_ruler(id, i))
+			else:
+				ruler_option.ruler_picked.connect(Network.set_my_ruler)
+			row.add_child(ruler_option)
 		else:
-			var faction_label := Label.new()
-			faction_label.text = available_factions[faction_index].faction_name \
-					if faction_index < available_factions.size() else "?"
-			row.add_child(faction_label)
+			var ruler_label := Label.new()
+			ruler_label.text = Ruler.display_name_for(ruler_index)
+			row.add_child(ruler_label)
 
 		var swatch := ColorRect.new()
 		swatch.color = Network.players[id].get("color", Color.WHITE)
@@ -283,6 +280,9 @@ func _on_start_pressed() -> void:
 	if available_maps.is_empty():
 		return
 	Network.mark_steam_lobby_in_progress()
+	## Before the buttons lock below: each resolved pick refreshes the player
+	## list, which would otherwise re-enable Start.
+	Network.resolve_random_rulers()
 	start_button.disabled = true
 	map_option.disabled = true
 	_add_ai_button.disabled = true

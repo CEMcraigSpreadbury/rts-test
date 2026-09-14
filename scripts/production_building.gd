@@ -27,6 +27,11 @@ const DESTROY_SINK_DURATION: float = 1.5
 const MAX_QUEUE_SIZE: int = 7
 
 @export var building_name: String = "Production Building"
+## Which research bonuses apply to this building (see _production_speed,
+## costs_for and Research._apply_building_stat). Watchtowers need no role —
+## any building with attack_range > 0 counts as one.
+enum Role { OTHER, MILITARY, SHRINE, WALL }
+@export var role: Role = Role.OTHER
 ## The single source of truth for what this building costs to construct —
 ## edit it right here rather than on BuildingType, which just reads it back
 ## via BuildingType.get_costs() when placement is requested.
@@ -134,6 +139,9 @@ var linked_deposit: Gatherable = null
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
+## Host-only, parallel to `queue`: what each entry actually cost, so a
+## cancel refunds exactly that even if a research discount changed since.
+var _paid_costs: Array = []
 ## Host-only, and only filled when max_alive_units_per_owner > 0: peer_id ->
 ## units this building trained for them. Untyped arrays because dead units get
 ## freed, and a freed entry in an Array[Unit] errors on read.
@@ -225,6 +233,11 @@ var _squash_tween: Tween
 var _next_squash_msec: int = 0
 var _flash_meshes: Array[MeshInstance3D] = []
 var _flash_material: StandardMaterial3D
+## A Ruler power's buff on this building (see show_buff_tint): the same kind
+## of overlay as the hit flash, faint and in the power's colour.
+const BUFF_TINT_ALPHA: float = 0.22
+var _buff_material: StandardMaterial3D = null
+var _buff_tint_until_ms: int = 0
 var _flash_tween: Tween
 ## MeshInstance3D -> Array[Material], as the model shipped. See _capture_source_materials().
 var _source_materials: Dictionary = {}
@@ -344,10 +357,34 @@ func play_hit_flash() -> void:
 	_flash_tween.tween_property(_flash_material, "albedo_color:a", 0.0, FLASH_DURATION)
 	_flash_tween.tween_callback(_clear_hit_flash)
 
+## Hands the overlay back to a buff tint that's still running, if any.
 func _clear_hit_flash() -> void:
+	var overlay: Material = _buff_material if _buff_tint_until_ms > Time.get_ticks_msec() else null
 	for mesh in _flash_meshes:
 		if is_instance_valid(mesh):
-			mesh.material_overlay = null
+			mesh.material_overlay = overlay
+
+## Every peer, relayed by WorldFeedback.relay_buff_tints.
+func show_buff_tint(color: Color, seconds: float) -> void:
+	if _flash_meshes.is_empty() or is_destroyed:
+		return
+	if _buff_material == null:
+		_buff_material = StandardMaterial3D.new()
+		_buff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_buff_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_buff_material.albedo_color = Color(color, BUFF_TINT_ALPHA)
+	_buff_tint_until_ms = maxi(_buff_tint_until_ms, Time.get_ticks_msec() + int(seconds * 1000.0))
+	if not (_flash_tween and _flash_tween.is_valid() and _flash_tween.is_running()):
+		_clear_hit_flash()
+	get_tree().create_timer(seconds).timeout.connect(_on_buff_tint_timeout)
+
+## Several casts can overlap; only the last one to run out clears it.
+func _on_buff_tint_timeout() -> void:
+	if not is_instance_valid(self) or _buff_tint_until_ms > Time.get_ticks_msec():
+		return
+	_buff_tint_until_ms = 0
+	if not (_flash_tween and _flash_tween.is_valid() and _flash_tween.is_running()):
+		_clear_hit_flash()
 
 ## Called by whatever places this building (e.g. the placement system) once
 ## it's positioned in the world. Buildings placed directly in a scene file
@@ -375,8 +412,48 @@ func remove_builder(unit: Unit) -> void:
 	builders.erase(unit)
 	synced_builder_count = builders.size()
 
+## What `item` costs this building's owner right now: its listed price less
+## their research discounts (Efficient Workshops; Arcane Tutelage at a Shrine).
+func costs_for(item: ProducibleItem) -> Array[ResourceCost]:
+	var base: Array[ResourceCost] = item.get_costs()
+	var discount := Research.bonus(owner_peer_id, ResearchNode.Stat.COST_REDUCTION)
+	if role == Role.SHRINE and item.kind == ProducibleItem.Kind.UNIT:
+		discount += Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_COST_REDUCTION)
+	if discount <= 0.0:
+		return base
+	var result: Array[ResourceCost] = []
+	for cost in base:
+		var discounted := ResourceCost.new()
+		discounted.resource_type = cost.resource_type
+		discounted.amount = roundi(cost.amount * (1.0 - discount))
+		result.append(discounted)
+	return result
+
+## Host-only Ruler power effects currently on this building.
+var buffs := TimedBuffs.new()
+
+## Host only. Never past max health.
+func heal(amount: int) -> void:
+	if not multiplayer.is_server() or is_destroyed:
+		return
+	current_health = mini(current_health + amount, max_health)
+	health_fraction = float(current_health) / float(maxi(max_health, 1))
+
+## Research (Drill Sergeants, Arcane Tutelage) plus any Industrious Age on it.
+func _production_speed() -> float:
+	var speed := 1.0 + buffs.amount(ResearchNode.Buff.PRODUCTION_SPEED)
+	match role:
+		Role.MILITARY:
+			speed += Research.bonus(owner_peer_id, ResearchNode.Stat.MILITARY_TRAIN_SPEED)
+		Role.SHRINE:
+			speed += Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_TRAIN_SPEED)
+	return speed
+
 func enqueue(item: ProducibleItem) -> bool:
-	if is_destroyed or is_under_construction or item == null or not ResourceStockpile.can_afford(owner_peer_id, item.get_costs()):
+	if is_destroyed or is_under_construction or item == null:
+		return false
+	var costs := costs_for(item)
+	if not ResourceStockpile.can_afford(owner_peer_id, costs):
 		return false
 	if queue.size() >= MAX_QUEUE_SIZE:
 		return false
@@ -392,10 +469,11 @@ func enqueue(item: ProducibleItem) -> bool:
 		return false
 	if item.kind == ProducibleItem.Kind.UNIT and is_at_unit_limit(owner_peer_id):
 		return false
-	ResourceStockpile.spend(owner_peer_id, item.get_costs())
+	ResourceStockpile.spend(owner_peer_id, costs)
 	if item.kind == ProducibleItem.Kind.UNIT:
 		Population.reserve(owner_peer_id, item.get_population_cost())
 	queue.append(item)
+	_paid_costs.append(costs)
 	queue_changed.emit()
 	return true
 
@@ -428,10 +506,13 @@ func cancel_at(index: int) -> bool:
 	if is_destroyed or index < 0 or index >= queue.size():
 		return false
 	var item: ProducibleItem = queue[index]
+	var paid: Array = _paid_costs[index] if index < _paid_costs.size() else item.get_costs()
 	queue.remove_at(index)
+	if index < _paid_costs.size():
+		_paid_costs.remove_at(index)
 	if index == 0:
 		build_timer = 0.0
-	for cost in item.get_costs():
+	for cost in paid:
 		ResourceStockpile.add(owner_peer_id, cost.resource_type, cost.amount)
 	if item.kind == ProducibleItem.Kind.UNIT:
 		Population.release(owner_peer_id, item.get_population_cost())
@@ -455,6 +536,10 @@ func can_be_attacked() -> bool:
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or not can_be_attacked():
 		return
+	## Fortify.
+	var reduction := buffs.amount(ResearchNode.Buff.DAMAGE_TAKEN_REDUCTION)
+	if reduction > 0.0:
+		amount = maxi(roundi(amount * (1.0 - reduction)), 1)
 	## Same shape as Unit.take_damage — see the signal declaration above. A
 	## building never recoils (it has no sprite to shove), but the attacker
 	## still earns its kill hitstop for levelling one.
@@ -572,6 +657,7 @@ func _begin_destruction() -> void:
 		if item.kind == ProducibleItem.Kind.UNIT:
 			Population.release(owner_peer_id, item.get_population_cost())
 	queue.clear()
+	_paid_costs.clear()
 	is_under_construction = false
 	_destroy_timer = 0.0
 	_destroy_start_y = position.y
@@ -606,7 +692,8 @@ func _process(delta: float) -> void:
 
 		if not builders.is_empty():
 			construction_progress = clampf(
-				construction_progress + (builders.size() / maxf(construction_time, 0.01)) * delta, 0.0, 1.0
+				construction_progress + (builders.size() / maxf(construction_time, 0.01)) \
+						* (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.BUILD_SPEED)) * delta, 0.0, 1.0
 			)
 		if construction_progress >= 1.0:
 			is_under_construction = false
@@ -621,9 +708,10 @@ func _process(delta: float) -> void:
 	if queue.is_empty():
 		build_timer = 0.0
 	else:
-		build_timer += delta
+		build_timer += delta * _production_speed()
 		if build_timer >= queue[0].build_time:
 			var item: ProducibleItem = queue.pop_front()
+			_paid_costs.pop_front()
 			build_timer = 0.0
 			item_completed.emit(item)
 			queue_changed.emit()

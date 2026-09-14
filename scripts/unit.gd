@@ -236,6 +236,8 @@ func _resting_modulate() -> Color:
 		base = Color.WHITE.lerp(team_tint, _ENEMY_TINT_STRENGTH)
 	if _status_tint_until_ms > Time.get_ticks_msec():
 		base *= Color.WHITE.lerp(_status_tint, _STATUS_TINT_STRENGTH)
+	if _buff_tint_until_ms > Time.get_ticks_msec():
+		base *= Color.WHITE.lerp(_buff_tint, _BUFF_TINT_STRENGTH)
 	return base
 
 ## Called from both team_tint's and owner_peer_id's setters (order of property
@@ -618,6 +620,11 @@ const STUN_STAR_SPIN_SPEED: float = 5.0
 
 var _status_tint: Color = Color.WHITE
 var _status_tint_until_ms: int = 0
+## A Ruler power's buff (or Curse) on this unit — lighter than the status
+## tint, so it reads as a wash of colour rather than a burn or chill.
+const _BUFF_TINT_STRENGTH: float = 0.3
+var _buff_tint: Color = Color.WHITE
+var _buff_tint_until_ms: int = 0
 var _dot_until_ms: int = 0
 var _stun_until_ms: int = 0
 var _dot_particles: GPUParticles3D = null
@@ -644,9 +651,20 @@ func show_status_effects(dot_seconds: float, slow_seconds: float, stun_seconds: 
 		_ensure_stun_stars()
 		_stun_stars.visible = true
 
+## Every peer, relayed by WorldFeedback.relay_buff_tints.
+func show_buff_tint(color: Color, seconds: float) -> void:
+	if _death_playing:
+		return
+	_buff_tint = color
+	_buff_tint_until_ms = maxi(_buff_tint_until_ms, Time.get_ticks_msec() + int(seconds * 1000.0))
+	_update_team_tint_visual()
+
 ## Called every frame from _process; cheap when nothing is active.
 func _update_status_visuals(delta: float) -> void:
 	var now := Time.get_ticks_msec()
+	if _buff_tint_until_ms != 0 and now >= _buff_tint_until_ms:
+		_buff_tint_until_ms = 0
+		_update_team_tint_visual()
 	if _status_tint_until_ms != 0 and now >= _status_tint_until_ms:
 		_status_tint_until_ms = 0
 		_update_team_tint_visual()
@@ -1491,7 +1509,7 @@ func _perform_cast() -> void:
 		_end_cast_command()
 		return
 	ResourceStockpile.spend(owner_peer_id, ability.costs)
-	_ability_ready_at_ms[index] = Time.get_ticks_msec() + int(ability.cooldown * 1000.0)
+	_ability_ready_at_ms[index] = Time.get_ticks_msec() + int(ability_cooldown(ability) * 1000.0)
 
 	var to_target := target - global_position
 	to_target.y = 0.0
@@ -1609,7 +1627,7 @@ func apply_zone_tick(ability: Ability, source) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.linger_damage_per_second > 0:
-		take_damage(ability.linger_damage_per_second, source if is_instance_valid(source) else null)
+		take_damage(_warded(ability.linger_damage_per_second), source if is_instance_valid(source) else null)
 	if status_activity == Activity.DEAD:
 		return
 	var slow_seconds := 0.0
@@ -1628,7 +1646,7 @@ func apply_ability_hit(ability: Ability, source) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.area_damage > 0:
-		take_damage(ability.area_damage, source if is_instance_valid(source) else null)
+		take_damage(_warded(ability.area_damage), source if is_instance_valid(source) else null)
 	if status_activity == Activity.DEAD:
 		return
 	if ability.dot_damage_per_second > 0 and ability.dot_duration > 0.0:
@@ -1661,10 +1679,53 @@ func _tick_status_effects(delta: float) -> void:
 		if dot["ticks_left"] <= 0:
 			_dots.remove_at(i)
 		var source = dot["source"]
-		take_damage(dot["dps"], source if is_instance_valid(source) else null)
+		take_damage(_warded(dot["dps"]), source if is_instance_valid(source) else null)
 		if status_activity == Activity.DEAD:
 			_dots.clear()
 			return
+
+## Host-only: when this unit last took damage — Research's out-of-combat
+## regeneration waits on it.
+var last_damaged_msec: int = -100000
+## Host-only Ruler power effects currently on this unit.
+var buffs := TimedBuffs.new()
+## Host-only: spawned by a power (Muster) rather than trained — reserves no
+## population and is worth nothing to its killer.
+var summoned: bool = false
+## Host-only: the player whose power last hit this unit, and when. A power
+## has no attacking unit, so this is who a power kill is credited to.
+var power_credit_peer: int = 0
+var power_credit_time: float = -1000.0
+
+## Host only: a summon's time is up.
+func expire() -> void:
+	if is_multiplayer_authority() and status_activity != Activity.DEAD:
+		_die(null)
+
+func _buff_speed_multiplier() -> float:
+	return maxf(1.0 + buffs.amount(ResearchNode.Buff.MOVE_SPEED), 0.1)
+
+## Host only. Never past max health.
+func heal(amount: int) -> void:
+	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
+		return
+	status_current_health = mini(status_current_health + amount, max_health)
+
+## Only the Shrine monsters carry abilities of their own (a Monarch's live in
+## monarch_abilities instead).
+func is_monster() -> bool:
+	return not abilities.is_empty()
+
+## A monster's cooldown shortened by its owner's research (Spirit Link).
+func ability_cooldown(ability: Ability) -> float:
+	if not is_monster():
+		return ability.cooldown
+	return ability.cooldown * (1.0 - Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_COOLDOWN_REDUCTION))
+
+## Ability damage taken, after this unit's owner's Warding.
+func _warded(amount: int) -> int:
+	var reduction := Research.bonus(owner_peer_id, ResearchNode.Stat.ABILITY_DAMAGE_REDUCTION)
+	return maxi(roundi(amount * (1.0 - reduction)), 1) if reduction > 0.0 else amount
 
 func _slow_multiplier() -> float:
 	return 1.0 - _slow_fraction if _slow_remaining > 0.0 else 1.0
@@ -1672,6 +1733,10 @@ func _slow_multiplier() -> float:
 func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
+	## Sanctuary: nothing gets through while it lasts.
+	if buffs.amount(ResearchNode.Buff.INVULNERABLE) > 0.0:
+		return
+	last_damaged_msec = Time.get_ticks_msec()
 	## Rock-paper-scissors bonus: an attacker whose damage_type matches what
 	## this unit is weak_to hits harder. NONE never matches NONE, so units
 	## with no assigned weakness (or attackers with no assigned type, e.g.
@@ -1682,7 +1747,7 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	## armor upgrades both reduce this further; never reduces below 1 so
 	## neither can make a unit fully immune.
 	var armor: int = CombatUtils.nearby_aura_armor_bonus(get_tree(), self) \
-			+ UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category)
+			+ UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) 			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR))
 	amount = maxi(amount - armor, 1)
 	## Fatality is decided here, before the health subtraction below, purely so
 	## it can ride along with the signal: main.gd relays this to every peer and
@@ -1883,7 +1948,10 @@ func _physics_process(delta: float) -> void:
 	## unit's own move_speed even if it somehow got set wrong.
 	var effective_speed: float = minf(formation_speed, move_speed) if formation_speed > 0.0 else move_speed
 	_update_cohesion(delta, effective_speed)
-	effective_speed *= _cohesion_speed_scale * _slow_multiplier()
+	effective_speed *= _cohesion_speed_scale * _slow_multiplier() * _buff_speed_multiplier()
+	## The agent clamps what avoidance hands back to max_speed, so a speed-up
+	## (Charge!) has to lift the cap too or it would never show.
+	nav_agent.max_speed = move_speed * maxf(_buff_speed_multiplier(), 1.0)
 	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	## Added after avoidance (see _on_velocity_computed), not into the desired
@@ -2227,7 +2295,8 @@ func _tick_gathering(delta: float) -> void:
 		return
 
 	gather_timer += delta
-	var interval: float = target_resource.resource_type.gather_interval / maxf(gather_level, 1.0)
+	var interval: float = target_resource.resource_type.gather_interval / maxf(gather_level, 1.0) \
+			/ (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.GATHER_SPEED) + buffs.amount(ResearchNode.Buff.GATHER_SPEED))
 	if gather_timer >= interval:
 		gather_timer = 0.0
 		var amount: int = target_resource.resource_type.gather_amount_per_tick * gather_level
@@ -2310,9 +2379,17 @@ func _effective_attack_range() -> float:
 
 ## Live Blacksmith weapon-upgrade bonus on top of the exported stat, same
 ## "computed live, not baked into the field itself" approach as the Monarch
-## aura attack-speed bonus.
-func _effective_attack_damage() -> int:
-	return attack_damage + UnitUpgrades.get_weapon_bonus(owner_peer_id, unit_category)
+## aura attack-speed bonus — then the owner's research: more against buildings
+## (Siegebreakers), more while badly hurt (Relentless).
+func _effective_attack_damage(target: Node3D = null) -> int:
+	var damage := attack_damage + UnitUpgrades.get_weapon_bonus(owner_peer_id, unit_category)
+	var extra := 0.0
+	if target is ProductionBuilding:
+		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.BUILDING_DAMAGE)
+	if status_current_health < max_health * Research.LOW_HEALTH_FRACTION:
+		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
+	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
+	return roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
 
 func _head_to_target() -> void:
 	if not _is_target_alive(attack_target):
@@ -2461,7 +2538,8 @@ func _tick_attacking(delta: float) -> void:
 	attack_timer += delta
 	## A nearby allied Monarch's passive aura can shrink the effective cooldown
 	## (not the exported stat itself — this is computed live each tick).
-	var effective_cooldown := attack_cooldown * (1.0 - CombatUtils.nearby_aura_attack_speed_bonus(get_tree(), self))
+	var effective_cooldown := attack_cooldown * (1.0 - CombatUtils.nearby_aura_attack_speed_bonus(get_tree(), self)) \
+			/ (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED))
 	if attack_timer >= effective_cooldown:
 		attack_timer = 0.0
 		_play_attack_swing()
@@ -2471,14 +2549,14 @@ func _tick_attacking(delta: float) -> void:
 			## its own cooldown in the meantime rather than waiting for it.
 			_fire_projectile(attack_target)
 		else:
-			attack_target.take_damage(_effective_attack_damage(), self)
+			attack_target.take_damage(_effective_attack_damage(attack_target), self)
 			if not _is_target_alive(attack_target):
 				_find_new_target_or_idle()
 
 func _fire_projectile(target: Node3D) -> void:
 	var dist := global_position.distance_to(target.global_position)
 	var travel_time := dist / maxf(projectile_speed, 0.01)
-	var damage := _effective_attack_damage()
+	var damage := _effective_attack_damage(target)
 	_pending_projectile_hits.append({
 		"time_remaining": travel_time,
 		"target": target,
@@ -2709,7 +2787,13 @@ func _die(attacker: Node3D = null) -> void:
 	_leave_gather_site()
 	## take_damage() (the only caller of _die()) already gates on
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
-	Population.release(owner_peer_id, population_cost)
+	## A summon never reserved any population (see Research._summon).
+	if not summoned:
+		Population.release(owner_peer_id, population_cost)
+	var main := get_tree().current_scene
+	if main is Main and main.research != null:
+		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
+		main.research.award_kill(self, attacker, credit)
 
 	## Decided here on the host and sent as a world-space direction, so every
 	## peer launches the corpse the same way even if the attacker has already

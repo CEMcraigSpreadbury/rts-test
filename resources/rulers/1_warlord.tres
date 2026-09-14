@@ -1,0 +1,156 @@
+[gd_resource type="Resource" script_class="Ruler" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/ruler.gd" id="1_ruler"]
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="2_node"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="3_soldier"]
+
+[sub_resource type="Resource" id="drill_sergeants"]
+script = ExtResource("2_node")
+effects = {1: 0.15}
+node_name = "Drill Sergeants"
+description = "Barracks and Stables train 15% faster."
+tier = 1
+column = 0.0
+cost = 5
+
+[sub_resource type="Resource" id="forced_march"]
+script = ExtResource("2_node")
+effects = {2: 0.1}
+node_name = "Forced March"
+description = "Combat units move 10% faster."
+tier = 1
+column = 1.0
+cost = 5
+
+[sub_resource type="Resource" id="war_cry"]
+script = ExtResource("2_node")
+affects_own_units = true
+duration = 15.0
+buffs = {1: 0.35}
+effect_color = Color(1, 0.45, 0.2, 1)
+node_name = "War Cry"
+description = "Your units in the area attack 35% faster for 15s."
+kind = 1
+tier = 1
+column = 2.0
+cost = 5
+cooldown = 90.0
+radius = 6.0
+
+[sub_resource type="Resource" id="siegebreakers"]
+script = ExtResource("2_node")
+effects = {3: 0.25}
+node_name = "Siegebreakers"
+description = "Your units deal 25% more damage to buildings."
+tier = 1
+column = 3.0
+cost = 5
+
+[sub_resource type="Resource" id="rally_banner"]
+script = ExtResource("2_node")
+affects_own_units = true
+duration = 30.0
+buffs = {2: 2.0}
+effect_color = Color(0.35, 0.6, 1, 1)
+node_name = "Rally Banner"
+description = "Your units in the area gain +2 armour for 30s."
+kind = 1
+tier = 2
+column = 0.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("drill_sergeants")])
+cooldown = 120.0
+radius = 5.0
+
+[sub_resource type="Resource" id="charge"]
+script = ExtResource("2_node")
+affects_own_units = true
+duration = 8.0
+buffs = {3: 0.5}
+effect_color = Color(1, 0.8, 0.3, 1)
+node_name = "Charge!"
+description = "Your units in the area move 50% faster for 8s."
+kind = 1
+tier = 2
+column = 1.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("forced_march")])
+cooldown = 90.0
+radius = 6.0
+
+[sub_resource type="Resource" id="bloodlust"]
+script = ExtResource("2_node")
+effects = {4: 5.0}
+node_name = "Bloodlust"
+description = "Your units heal 5 HP whenever they land a killing blow."
+tier = 2
+column = 2.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("war_cry")])
+
+[sub_resource type="Resource" id="muster"]
+script = ExtResource("2_node")
+duration = 60.0
+summon_scene = ExtResource("3_soldier")
+summon_count = 4
+effect_color = Color(0.9, 0.9, 0.9, 1)
+node_name = "Muster"
+description = "Summons 4 Soldiers at the target for 60s."
+kind = 1
+tier = 3
+column = 0.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("rally_banner")])
+cooldown = 150.0
+radius = 2.0
+
+[sub_resource type="Resource" id="relentless"]
+script = ExtResource("2_node")
+effects = {5: 0.3}
+node_name = "Relentless"
+description = "Your units below 30% health deal 30% more damage."
+tier = 3
+column = 1.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("charge")])
+
+[sub_resource type="Resource" id="hardened_veterans"]
+script = ExtResource("2_node")
+effects = {6: 0.15}
+node_name = "Hardened Veterans"
+description = "Infantry and cavalry have 15% more health."
+tier = 3
+column = 2.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("bloodlust")])
+
+[sub_resource type="Resource" id="army_of_legend"]
+script = ExtResource("2_node")
+effects = {7: 20.0}
+node_name = "Army of Legend"
+description = "+20 population cap."
+tier = 4
+column = 0.0
+cost = 40
+requires = Array[ExtResource("2_node")]([SubResource("muster")])
+
+[sub_resource type="Resource" id="warlords_fury"]
+script = ExtResource("2_node")
+affects_own_units = true
+duration = 12.0
+buffs = {4: 1.0}
+effect_color = Color(1, 0.2, 0.15, 1)
+node_name = "Warlord's Fury"
+description = "Your units in the area deal double damage for 12s."
+kind = 1
+tier = 4
+column = 1.0
+cost = 40
+requires = Array[ExtResource("2_node")]([SubResource("relentless")])
+cooldown = 180.0
+radius = 8.0
+
+[resource]
+script = ExtResource("1_ruler")
+ruler_name = "Warlord"
+nodes = Array[ExtResource("2_node")]([SubResource("drill_sergeants"), SubResource("forced_march"), SubResource("war_cry"), SubResource("siegebreakers"), SubResource("rally_banner"), SubResource("charge"), SubResource("bloodlust"), SubResource("muster"), SubResource("relentless"), SubResource("hardened_veterans"), SubResource("army_of_legend"), SubResource("warlords_fury")])

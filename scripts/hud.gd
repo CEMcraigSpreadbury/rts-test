@@ -258,7 +258,7 @@ func show_building(building: ProductionBuilding) -> void:
 		## whatever hotkey their hidden neighbors happened to occupy.
 		var slot: int = buttons.size()
 		var hotkey: String = OS.get_keycode_string(Main.PRODUCIBLE_HOTKEYS[slot]) if slot < Main.PRODUCIBLE_HOTKEYS.size() else "?"
-		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item)]
+		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item, building)]
 		var button := _make_command_button(hotkey, tooltip, item.icon, main.on_producible_button_pressed.bind(building, i))
 		_info_producible_badges[item.item_name] = _add_queue_count_badge(button)
 		if item.kind == ProducibleItem.Kind.UNIT:
@@ -742,8 +742,8 @@ func format_costs(costs: Array[ResourceCost]) -> String:
 		parts.append("%d %s" % [cost.amount, cost.resource_type.display_name])
 	return ", ".join(parts)
 
-func _format_item_costs(item: ProducibleItem) -> String:
-	var text := format_costs(item.get_costs())
+func _format_item_costs(item: ProducibleItem, building: ProductionBuilding) -> String:
+	var text := format_costs(building.costs_for(item))
 	if item.kind == ProducibleItem.Kind.UNIT:
 		text += ", %d Pop" % item.get_population_cost()
 	return text

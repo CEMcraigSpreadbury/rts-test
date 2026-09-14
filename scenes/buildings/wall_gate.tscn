@@ -62,6 +62,7 @@ properties/7/replication_mode = 2
 [node name="WallGate" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Gate"
+role = 3
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_wallgate")])
 can_rally = false
 max_health = 120

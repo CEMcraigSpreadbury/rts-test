@@ -50,6 +50,7 @@ properties/7/replication_mode = 2
 [node name="WallSegment" type="StaticBody3D" groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Wall"
+role = 3
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_wallsegment")])
 can_rally = false
 max_health = 90

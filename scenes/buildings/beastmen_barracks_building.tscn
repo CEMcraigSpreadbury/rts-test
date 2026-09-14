@@ -116,6 +116,7 @@ properties/12/replication_mode = 2
 [node name="ProductionBuilding" type="StaticBody3D" unique_id=1669210213 groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Beastmen Barracks"
+role = 1
 producibles = Array[ExtResource("2_item_script")]([SubResource("ProducibleItem_beastman_warrior"), SubResource("ProducibleItem_beastman_raider"), SubResource("ProducibleItem_beastman_druid")])
 vision_range = 18.0
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_sfx_a"), ExtResource("9_sfx_b")])

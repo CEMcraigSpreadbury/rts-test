@@ -327,8 +327,9 @@ func _process(_delta: float) -> void:
 		mat.set_shader_parameter("fill_color", Color(flag_tint(), 0.45))
 
 func _tick_favour(delta: float) -> void:
-	## First, so none of the Favour-only early-outs below (Annihilation) skip it.
+	## First, so none of the Favour-only early-outs below (Annihilation) skip them.
 	_tick_gold(delta)
+	_tick_research(delta)
 	if favour_per_second <= 0.0 or owner_peer_id <= 0 or not _paying:
 		return
 	## An eliminated or disconnected owner keeps the point until someone takes
@@ -358,12 +359,32 @@ func _tick_gold(delta: float) -> void:
 	var main := get_tree().current_scene
 	if main.has_method("is_peer_active") and not main.is_peer_active(owner_peer_id):
 		return
-	_gold_fraction += gold_per_second * delta
+	_gold_fraction += gold_per_second * (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.POINT_GOLD)) * delta
 	var whole := int(_gold_fraction)
 	if whole <= 0:
 		return
 	_gold_fraction -= float(whole)
 	ResourceStockpile.add(owner_peer_id, GOLD_RESOURCE, whole)
+
+## Research points per point of favour_per_second — so the centre point,
+## which pays double Favour, pays double research too.
+const RESEARCH_PER_FAVOUR: float = 1.0 / 20.0
+## Host-only remainder of research earned but not yet whole enough to bank.
+var _research_fraction: float = 0.0
+
+## Same terms as gold (see _tick_gold): every game mode.
+func _tick_research(delta: float) -> void:
+	if favour_per_second <= 0.0 or owner_peer_id <= 0 or not _paying:
+		return
+	var main := get_tree().current_scene
+	if main.has_method("is_peer_active") and not main.is_peer_active(owner_peer_id):
+		return
+	_research_fraction += favour_per_second * RESEARCH_PER_FAVOUR * delta
+	var whole := int(_research_fraction)
+	if whole <= 0:
+		return
+	_research_fraction -= float(whole)
+	Research.earn(owner_peer_id, whole, &"points")
 
 ## Host only. Both halves of a capture come through here: lowering the old
 ## owner's flag hands the point to 0 (neutral), raising a new one hands it to

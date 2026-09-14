@@ -66,6 +66,7 @@ func _on_start_pressed() -> void:
 	if map_option.selected < 0:
 		return
 	Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target())
+	Network.resolve_random_rulers()
 	SceneLoader.change_scene(available_maps[map_option.selected].scene_path)
 
 func _show_map_default(mode: int) -> void:
@@ -137,6 +138,13 @@ func _make_player_row(peer_id: int) -> HBoxContainer:
 	else:
 		color_option.item_selected.connect(Network.set_my_color)
 	row.add_child(color_option)
+
+	var ruler_option := RulerPicker.new(data.get("ruler_index", 0))
+	if Network.is_ai(peer_id):
+		ruler_option.ruler_picked.connect(func(i): Network.set_ai_ruler(peer_id, i))
+	else:
+		ruler_option.ruler_picked.connect(Network.set_my_ruler)
+	row.add_child(ruler_option)
 
 	if Network.is_ai(peer_id):
 		var difficulty_option := OptionButton.new()

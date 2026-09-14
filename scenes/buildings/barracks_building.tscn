@@ -123,6 +123,7 @@ properties/12/replication_mode = 2
 transform = Transform3D(0.7071067, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.7071067, 0, 0, 0)
 script = ExtResource("1_building_script")
 building_name = "Barracks"
+role = 1
 costs = Array[ExtResource("10_cost_script")]([SubResource("ResourceCost_barracks_building")])
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_archer"), SubResource("ProducibleItem_spearman")])
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_1ng4x"), ExtResource("9_jxfkj")])

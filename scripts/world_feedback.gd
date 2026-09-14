@@ -1036,8 +1036,9 @@ var _ability_target_decal: Decal = null
 ## sized to what the cast will actually cover.
 func update_ability_target_decal() -> void:
 	var ability: Ability = main.get_armed_ability()
+	var power: ResearchNode = main.get_armed_power()
 	var hit: Dictionary = {}
-	if ability != null and not main.chat.is_input_open() and not main.game_over:
+	if (ability != null or power != null) and not main.chat.is_input_open() and not main.game_over:
 		hit = main.raycast(get_viewport().get_mouse_position())
 	if hit.is_empty():
 		if _ability_target_decal:
@@ -1046,9 +1047,16 @@ func update_ability_target_decal() -> void:
 	if _ability_target_decal == null:
 		_ability_target_decal = _make_ability_decal()
 		add_child(_ability_target_decal)
-	var radius: float = ability.area_radius if ability.kind == Ability.Kind.ACTIVATED_AREA else ability.affected_ally_radius
+	var radius: float
+	var color: Color
+	if power != null:
+		radius = power.radius
+		color = power.effect_color
+	else:
+		radius = ability.area_radius if ability.kind == Ability.Kind.ACTIVATED_AREA else ability.affected_ally_radius
+		color = ability.effect_color
 	_ability_target_decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
-	_ability_target_decal.modulate = Color(ability.effect_color, ABILITY_TARGET_DECAL_ALPHA)
+	_ability_target_decal.modulate = Color(color, ABILITY_TARGET_DECAL_ALPHA)
 	_ability_target_decal.global_position = hit.position
 	_ability_target_decal.visible = true
 
@@ -1205,6 +1213,63 @@ func _run_ground_wave(ability: Ability, from_ground: Vector3, target_pos: Vector
 		var t := float(i) / steps
 		var pos := from_ground.lerp(target_pos, t)
 		get_tree().create_timer(travel * t).timeout.connect(_spawn_ground_effect.bind(ability.projectile_effect, pos, 0.85))
+
+## A Ruler power landing — the ground flash and sparks an area ability gets,
+## with no caster or projectile, since a power comes from nowhere.
+const POWER_EFFECT_DURATION: float = 1.4
+const POWER_PARTICLE_LIFETIME: float = 1.0
+
+func relay_power_effect(target_pos: Vector3, radius: float, color: Color) -> void:
+	_play_ability_effect(target_pos, radius, color, POWER_EFFECT_DURATION, POWER_PARTICLE_LIFETIME)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_power_effect.rpc(target_pos, radius, color)
+
+## Host: a slight wash of a lasting power's colour over everything it just
+## landed on (War Cry, Fortify, Curse, ...), for as long as it lasts, on every
+## peer — see Unit/ProductionBuilding.show_buff_tint.
+func relay_buff_tints(targets: Array, color: Color, seconds: float) -> void:
+	var paths: Array[NodePath] = []
+	for target in targets:
+		if is_instance_valid(target) and target.is_inside_tree():
+			paths.append(target.get_path())
+	_show_buff_tints(paths, color, seconds)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_buff_tints.rpc(paths, color, seconds)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_buff_tints(paths: Array, color: Color, seconds: float) -> void:
+	_show_buff_tints(paths, color, seconds)
+
+func _show_buff_tints(paths: Array, color: Color, seconds: float) -> void:
+	for path in paths:
+		var node := get_node_or_null(path)
+		if node != null and node.has_method(&"show_buff_tint"):
+			node.show_buff_tint(color, seconds)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_power_effect(target_pos: Vector3, radius: float, color: Color) -> void:
+	_play_ability_effect(target_pos, radius, color, POWER_EFFECT_DURATION, POWER_PARTICLE_LIFETIME)
+
+## A power that hits like an area ability (Smite, Wrath of the Heavens) gets
+## that ability's whole impact — flash, shake, effect sprites, burning pool.
+## Sent as the caster's peer id and node index; each peer looks the Ability up
+## in its own copy of that Ruler's tree.
+func relay_power_ability_impact(peer_id: int, node_index: int, target_pos: Vector3) -> void:
+	_play_power_ability_impact(peer_id, node_index, target_pos)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_power_ability_impact.rpc(peer_id, node_index, target_pos)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_power_ability_impact(peer_id: int, node_index: int, target_pos: Vector3) -> void:
+	_play_power_ability_impact(peer_id, node_index, target_pos)
+
+func _play_power_ability_impact(peer_id: int, node_index: int, target_pos: Vector3) -> void:
+	var ruler := Research.ruler_for(peer_id)
+	if ruler == null or node_index < 0 or node_index >= ruler.nodes.size():
+		return
+	var ability: Ability = ruler.nodes[node_index].hit_ability
+	if ability != null:
+		_play_ability_impact(ability, target_pos)
 
 func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:
 	_play_ability_effect(target_pos, ability.area_radius, ability.effect_color, ability.effect_duration, ability.effect_particle_lifetime)

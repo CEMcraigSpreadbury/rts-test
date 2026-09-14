@@ -1,0 +1,149 @@
+[gd_resource type="Resource" script_class="Ruler" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/ruler.gd" id="1_ruler"]
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="2_node"]
+
+[sub_resource type="Resource" id="swift_harvest"]
+script = ExtResource("2_node")
+effects = {8: 0.15}
+node_name = "Swift Harvest"
+description = "Villagers gather 15% faster."
+tier = 1
+column = 0.0
+cost = 5
+
+[sub_resource type="Resource" id="masonry"]
+script = ExtResource("2_node")
+effects = {9: 0.25}
+node_name = "Masonry"
+description = "Your buildings have 25% more health."
+tier = 1
+column = 1.0
+cost = 5
+
+[sub_resource type="Resource" id="surveyors"]
+script = ExtResource("2_node")
+effects = {10: 0.25}
+node_name = "Surveyors"
+description = "Villagers construct buildings 25% faster."
+tier = 1
+column = 2.0
+cost = 5
+
+[sub_resource type="Resource" id="bountiful_lands"]
+script = ExtResource("2_node")
+affects_own_units = true
+duration = 30.0
+buffs = {5: 1.0}
+effect_color = Color(0.6, 0.9, 0.3, 1)
+node_name = "Bountiful Lands"
+description = "Your villagers in the area gather twice as fast for 30s."
+kind = 1
+tier = 1
+column = 3.0
+cost = 5
+cooldown = 120.0
+radius = 6.0
+
+[sub_resource type="Resource" id="tax_collection"]
+script = ExtResource("2_node")
+effects = {11: 0.5}
+node_name = "Tax Collection"
+description = "Capture points pay you 50% more gold."
+tier = 2
+column = 0.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("swift_harvest")])
+
+[sub_resource type="Resource" id="repair_crews"]
+script = ExtResource("2_node")
+affects_own_buildings = true
+heal_fraction = 0.4
+duration = 10.0
+effect_color = Color(1, 0.85, 0.4, 1)
+node_name = "Repair Crews"
+description = "Your buildings in the area heal 40% of their health over 10s."
+kind = 1
+tier = 2
+column = 1.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("masonry")])
+cooldown = 90.0
+radius = 6.0
+
+[sub_resource type="Resource" id="efficient_workshops"]
+script = ExtResource("2_node")
+effects = {12: 0.15}
+node_name = "Efficient Workshops"
+description = "Units and upgrades cost 15% less."
+tier = 2
+column = 2.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("surveyors")])
+
+[sub_resource type="Resource" id="guilds"]
+script = ExtResource("2_node")
+effects = {13: 1.0}
+node_name = "Guilds"
+description = "Your passive research point trickle is doubled."
+tier = 3
+column = 0.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("tax_collection")])
+
+[sub_resource type="Resource" id="fortify"]
+script = ExtResource("2_node")
+affects_own_buildings = true
+duration = 30.0
+buffs = {6: 0.5}
+effect_color = Color(0.7, 0.75, 0.85, 1)
+node_name = "Fortify"
+description = "Your buildings in the area take 50% less damage for 30s."
+kind = 1
+tier = 3
+column = 1.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("repair_crews")])
+cooldown = 150.0
+radius = 6.0
+
+[sub_resource type="Resource" id="industrious_age"]
+script = ExtResource("2_node")
+affects_own_buildings = true
+duration = 30.0
+buffs = {7: 1.0}
+effect_color = Color(1, 0.7, 0.3, 1)
+node_name = "Industrious Age"
+description = "Your buildings in the area produce twice as fast for 30s."
+kind = 1
+tier = 3
+column = 2.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("efficient_workshops")])
+cooldown = 180.0
+radius = 8.0
+
+[sub_resource type="Resource" id="bastions"]
+script = ExtResource("2_node")
+effects = {15: 0.5, 16: 0.25, 17: 0.5}
+node_name = "Bastions"
+description = "Watchtowers deal 50% more damage with 25% more range, and walls have 50% more health."
+tier = 4
+column = 1.0
+cost = 40
+requires = Array[ExtResource("2_node")]([SubResource("fortify")])
+
+[sub_resource type="Resource" id="golden_age"]
+script = ExtResource("2_node")
+effects = {14: 150.0}
+node_name = "Golden Age"
+description = "Receive 150 gold and 150 wood every 60s."
+tier = 4
+column = 0.0
+cost = 40
+requires = Array[ExtResource("2_node")]([SubResource("guilds")])
+
+[resource]
+script = ExtResource("1_ruler")
+ruler_name = "Steward"
+nodes = Array[ExtResource("2_node")]([SubResource("swift_harvest"), SubResource("masonry"), SubResource("surveyors"), SubResource("bountiful_lands"), SubResource("tax_collection"), SubResource("repair_crews"), SubResource("efficient_workshops"), SubResource("guilds"), SubResource("fortify"), SubResource("industrious_age"), SubResource("bastions"), SubResource("golden_age")])

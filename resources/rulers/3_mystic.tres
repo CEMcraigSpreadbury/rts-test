@@ -1,0 +1,200 @@
+[gd_resource type="Resource" script_class="Ruler" load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/ruler.gd" id="1_ruler"]
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="2_node"]
+[ext_resource type="Script" path="res://scripts/ability.gd" id="3_ability"]
+[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="4_fx"]
+[ext_resource type="Texture2D" path="res://assets/art/MiniBigMonsters/Outline/MiniPhoenix-Sheet.png" id="5_phoenix"]
+
+[sub_resource type="Resource" id="SpriteEffect_wrath_impact"]
+script = ExtResource("4_fx")
+sheet = ExtResource("5_phoenix")
+frame_size = Vector2i(40, 32)
+row = 6
+frame_count = 5
+fps = 10.0
+scale = 1.6
+
+[sub_resource type="Resource" id="SpriteEffect_wrath_linger"]
+script = ExtResource("4_fx")
+sheet = ExtResource("5_phoenix")
+frame_size = Vector2i(40, 32)
+row = 6
+frame_count = 4
+fps = 8.0
+scale = 0.9
+
+[sub_resource type="Resource" id="Ability_smite"]
+script = ExtResource("3_ability")
+ability_name = "Smite"
+kind = 2
+area_radius = 4.0
+area_damage = 45
+stun_duration = 1.5
+effect_color = Color(1, 0.95, 0.6, 1)
+effect_duration = 1.2
+impact_shake = 0.5
+
+[sub_resource type="Resource" id="Ability_wrath"]
+script = ExtResource("3_ability")
+ability_name = "Wrath of the Heavens"
+kind = 2
+area_radius = 7.0
+area_damage = 30
+effect_color = Color(1, 0.4, 0.1, 1)
+impact_shake = 0.8
+impact_effect = SubResource("SpriteEffect_wrath_impact")
+impact_scatter_count = 10
+linger_duration = 8.0
+linger_damage_per_second = 6
+linger_effect = SubResource("SpriteEffect_wrath_linger")
+linger_effect_count = 9
+
+[sub_resource type="Resource" id="healing_light"]
+script = ExtResource("2_node")
+affects_own_units = true
+heal_fraction = 0.3
+effect_color = Color(0.55, 1, 0.6, 1)
+upgraded_by = 25
+upgraded_cooldown_multiplier = 0.75
+upgraded_affects_own_buildings = true
+node_name = "Healing Light"
+description = "Heals your units in the area for 30% of their max health."
+kind = 1
+tier = 1
+column = 0.0
+cost = 5
+cooldown = 75.0
+radius = 5.0
+
+[sub_resource type="Resource" id="soothing_aura"]
+script = ExtResource("2_node")
+effects = {18: 2.0}
+node_name = "Soothing Aura"
+description = "Your units slowly regenerate health while out of combat."
+tier = 1
+column = 1.0
+cost = 5
+
+[sub_resource type="Resource" id="warding"]
+script = ExtResource("2_node")
+effects = {19: 0.25}
+node_name = "Warding"
+description = "Your units take 25% less damage from abilities."
+tier = 1
+column = 2.0
+cost = 5
+
+[sub_resource type="Resource" id="eyes_of_the_crow"]
+script = ExtResource("2_node")
+effects = {20: 0.2}
+node_name = "Eyes of the Crow"
+description = "Your units see 20% further."
+tier = 1
+column = 3.0
+cost = 5
+
+[sub_resource type="Resource" id="renewal"]
+script = ExtResource("2_node")
+effects = {25: 1.0}
+node_name = "Renewal"
+description = "Healing Light's cooldown is 25% shorter, and it also heals your buildings."
+tier = 2
+column = 0.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("healing_light")])
+
+[sub_resource type="Resource" id="arcane_tutelage"]
+script = ExtResource("2_node")
+effects = {21: 0.2, 22: 0.25}
+node_name = "Arcane Tutelage"
+description = "Shrine monsters cost 20% less and train 25% faster."
+tier = 2
+column = 2.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("warding")])
+
+[sub_resource type="Resource" id="curse"]
+script = ExtResource("2_node")
+affects_enemy_units = true
+duration = 15.0
+buffs = {2: -1.0, 3: -0.3}
+effect_color = Color(0.6, 0.25, 0.8, 1)
+node_name = "Curse"
+description = "Enemies in the area lose 1 armour and move 30% slower for 15s."
+kind = 1
+tier = 2
+column = 3.0
+cost = 10
+requires = Array[ExtResource("2_node")]([SubResource("eyes_of_the_crow")])
+cooldown = 90.0
+radius = 5.0
+
+[sub_resource type="Resource" id="sanctuary"]
+script = ExtResource("2_node")
+affects_own_units = true
+duration = 6.0
+buffs = {8: 1.0}
+effect_color = Color(1, 1, 0.8, 1)
+node_name = "Sanctuary"
+description = "Your units in the area can't be damaged for 6s."
+kind = 1
+tier = 3
+column = 0.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("renewal")])
+cooldown = 240.0
+radius = 6.0
+
+[sub_resource type="Resource" id="spirit_link"]
+script = ExtResource("2_node")
+effects = {23: 0.3, 24: 0.2}
+node_name = "Spirit Link"
+description = "Monster ability cooldowns are 30% shorter, and monsters have 20% more health."
+tier = 3
+column = 2.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("arcane_tutelage")])
+
+[sub_resource type="Resource" id="smite"]
+script = ExtResource("2_node")
+hit_ability = SubResource("Ability_smite")
+effect_color = Color(1, 0.95, 0.6, 1)
+node_name = "Smite"
+description = "Lightning deals 45 damage to enemies in the area and stuns them for 1.5s."
+kind = 1
+tier = 3
+column = 3.0
+cost = 25
+requires = Array[ExtResource("2_node")]([SubResource("curse")])
+cooldown = 120.0
+radius = 4.0
+
+[sub_resource type="Resource" id="ascension"]
+script = ExtResource("2_node")
+effects = {26: 0.3}
+node_name = "Ascension"
+description = "All your power cooldowns are 30% shorter."
+tier = 4
+column = 2.0
+cost = 40
+requires = Array[ExtResource("2_node")]([SubResource("spirit_link")])
+
+[sub_resource type="Resource" id="wrath_of_the_heavens"]
+script = ExtResource("2_node")
+hit_ability = SubResource("Ability_wrath")
+effect_color = Color(1, 0.4, 0.1, 1)
+node_name = "Wrath of the Heavens"
+description = "A meteor storm scorches the area, leaving it burning for 8s."
+kind = 1
+tier = 4
+column = 3.0
+cost = 40
+requires = Array[ExtResource("2_node")]([SubResource("smite")])
+cooldown = 300.0
+radius = 7.0
+
+[resource]
+script = ExtResource("1_ruler")
+ruler_name = "Mystic"
+nodes = Array[ExtResource("2_node")]([SubResource("healing_light"), SubResource("soothing_aura"), SubResource("warding"), SubResource("eyes_of_the_crow"), SubResource("renewal"), SubResource("arcane_tutelage"), SubResource("curse"), SubResource("sanctuary"), SubResource("spirit_link"), SubResource("smite"), SubResource("ascension"), SubResource("wrath_of_the_heavens")])
