@@ -2,6 +2,7 @@ extends CharacterBody3D
 class_name Unit
 
 const SpriteSheetFrames = preload("res://scripts/sprite_sheet_frames.gd")
+const UnitSilhouetteMaterial = preload("res://scripts/unit_silhouette_material.gd")
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 
 const GRAVITY: float = 20.0
@@ -246,6 +247,9 @@ func _resting_modulate() -> Color:
 func _update_team_tint_visual() -> void:
 	if sprite:
 		sprite.modulate = _resting_modulate()
+		## Rebuilt here too so an Objective capture recolors the silhouette.
+		if sprite_sheet and not _death_playing:
+			sprite.material_overlay = UnitSilhouetteMaterial.build(sprite_sheet, team_tint)
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 11.0
 ## One is picked at random and played through select_audio_player whenever
@@ -2817,6 +2821,8 @@ func _die(attacker: Node3D = null) -> void:
 @rpc("authority", "call_local", "reliable")
 func _play_death_and_remove(away: Vector3) -> void:
 	_death_playing = true
+	## Corpses don't need picking out behind buildings.
+	sprite.material_overlay = null
 	var has_death_anim: bool = sprite.sprite_frames and sprite.sprite_frames.has_animation("death")
 	## Held on the clip's first frame through the flight; played directly
 	## rather than via _set_animation, since every peer runs this RPC itself
