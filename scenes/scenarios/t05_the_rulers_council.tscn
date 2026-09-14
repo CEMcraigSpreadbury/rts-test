@@ -1,0 +1,120 @@
+[gd_scene load_steps=23 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/trial_forest.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="Resource" path="res://resources/research_resource_type.tres" id="research_type"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/tutorial_input_condition.gd" id="cond_input"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/highlight_ui_action.gd" id="act_highlight"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+
+[sub_resource type="Resource" id="start_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 300
+
+[sub_resource type="Resource" id="start_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 300
+
+[sub_resource type="Resource" id="start_research"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("research_type")
+amount = 40
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods_script")
+allowed_buildings = Array[String](["House", "Barracks", "Mine"])
+
+[sub_resource type="Resource" id="say_council"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "A lord is nothing without a Ruler behind him, my lord. Yours has sent word — and forty points of study with it. Open the Research panel: the button at the top left, or the Tab key."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="point_at_research"]
+script = ExtResource("act_highlight")
+element = "research_button"
+
+[sub_resource type="Resource" id="opened_panel"]
+script = ExtResource("cond_input")
+label = "Research panel opened"
+kind = "research_panel"
+count = 1
+
+[sub_resource type="Resource" id="stop_pointing"]
+script = ExtResource("act_highlight")
+element = "research_button"
+clear = true
+
+[sub_resource type="Resource" id="say_buy"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "There is your Ruler's tree. The first rank is open to you now; each one you take opens what sits beneath it. Buy one."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="bought_one"]
+script = ExtResource("cond_input")
+label = "Research bought"
+kind = "research_bought"
+count = 1
+
+[sub_resource type="Resource" id="say_done"]
+script = ExtResource("act_dialogue")
+speaker = "Steward"
+text = "It is done, and it holds for the rest of the war. Study comes from the fighting, from the watchfires you hold, and slowly on its own — spend it as it comes."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "The Ruler's Council"
+briefing_title = "The Ruler's Council"
+briefing_text = "Every lord of Aldmere answers to one of the three old offices. Yours has sent word, and the means to begin studying — learn what a Ruler can give you before the Beastmen come again."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold"), SubResource("start_research")])
+modifiers = SubResource("mods_player")
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="OpenTheTree" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Open the Research panel"
+conditions = Array[ExtResource("condition_script")]([SubResource("opened_panel")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_council"), SubResource("point_at_research")])
+on_complete = Array[ExtResource("action_script")]([SubResource("stop_pointing")])
+
+[node name="BuyResearch" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Buy your first research"
+requires = Array[NodePath]([NodePath("OpenTheTree")])
+conditions = Array[ExtResource("condition_script")]([SubResource("bought_one")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_buy")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_done"), SubResource("win")])

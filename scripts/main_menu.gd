@@ -17,7 +17,9 @@ var _settings_row: MatchSettingsRow
 ## same Network.add_ai_player() etc. a lobby host does.
 var _players_box: VBoxContainer
 var _add_ai_button: Button
-## Mission select, built only when there is a campaign to show.
+## The campaign list and the mission list inside one, built only when there is
+## a campaign to show.
+var _campaign_select: CampaignSelect = null
 var _campaign_menu: CampaignMenu = null
 
 func _ready() -> void:
@@ -56,46 +58,62 @@ func _ready() -> void:
 
 ## --- Campaigns ---
 
-## One button per campaign resource, above Single Player, so adding a campaign
-## is a matter of dropping a .tres into resources/campaigns/.
+## Three screens, one at a time: the main menu, the list of campaigns, and the
+## missions inside the chosen one. Adding a campaign is a matter of dropping a
+## .tres into resources/campaigns/ — no menu code to touch.
 func _build_campaign_buttons() -> void:
-	var campaigns := Campaign.list_all()
-	if campaigns.is_empty():
+	if Campaign.list_all().is_empty():
 		return
-	## In a full-rect CenterContainer, which centres it on its own size at any
-	## window size. Centre anchors alone would only pin its top-left corner to
-	## the middle of the screen and let the rest run off the edges.
+	_campaign_select = CampaignSelect.new()
+	_campaign_select.campaign_chosen.connect(_on_campaign_chosen)
+	_campaign_select.closed.connect(_on_campaign_select_closed)
+	_centre_panel(_campaign_select)
+
+	_campaign_menu = CampaignMenu.new()
+	_campaign_menu.closed.connect(_on_campaign_menu_closed)
+	_centre_panel(_campaign_menu)
+
+	var button := Button.new()
+	button.name = "CampaignButton"
+	button.text = "Campaign"
+	button.custom_minimum_size = Vector2(0, 36)
+	button.pressed.connect(_on_campaign_pressed)
+	menu.add_child(button)
+	menu.move_child(button, $Menu/SinglePlayerButton.get_index())
+
+## Puts a panel in a screen-sized container that centres it at any window size.
+## Centre anchors alone would pin only its top-left corner to the middle and
+## let the rest run off the edges. The container must ignore the mouse and be
+## hidden while unused, or it swallows every click meant for the screen behind.
+func _centre_panel(panel: Control) -> void:
 	var centre := CenterContainer.new()
-	centre.name = "CampaignCentre"
-	## Covers the whole screen, so it must not take mouse input itself or it
-	## swallows every click meant for the menu behind it — and it is hidden
-	## outright while unused, rather than left invisible over the top.
+	centre.name = "%sCentre" % panel.name
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	centre.visible = false
 	add_child(centre)
 	centre.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_campaign_menu = CampaignMenu.new()
-	_campaign_menu.closed.connect(_on_campaign_closed)
-	centre.add_child(_campaign_menu)
+	centre.add_child(panel)
 
-	var index: int = $Menu/SinglePlayerButton.get_index()
-	for campaign in campaigns:
-		var button := Button.new()
-		button.name = "Campaign_%s" % campaign.id
-		button.text = campaign.campaign_name
-		button.custom_minimum_size = Vector2(0, 36)
-		button.pressed.connect(_on_campaign_pressed.bind(campaign))
-		menu.add_child(button)
-		menu.move_child(button, index)
-		index += 1
-
-func _on_campaign_pressed(campaign: Campaign) -> void:
+func _on_campaign_pressed() -> void:
 	menu.visible = false
+	_campaign_select.get_parent().visible = true
+	_campaign_select.open()
+
+## Chosen a campaign: swap the list for its missions.
+func _on_campaign_chosen(campaign: Campaign) -> void:
+	_campaign_select.get_parent().visible = false
 	_campaign_menu.get_parent().visible = true
 	_campaign_menu.open(campaign)
 
-func _on_campaign_closed() -> void:
+## Back out of the missions to the campaigns, refreshing the counts in case one
+## was just won.
+func _on_campaign_menu_closed() -> void:
 	_campaign_menu.get_parent().visible = false
+	_campaign_select.get_parent().visible = true
+	_campaign_select.refresh()
+
+func _on_campaign_select_closed() -> void:
+	_campaign_select.get_parent().visible = false
 	menu.visible = true
 
 func _on_single_player_pressed() -> void:

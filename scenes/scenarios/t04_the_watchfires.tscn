@@ -1,0 +1,118 @@
+[gd_scene load_steps=24 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/trial_forest.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/capture_points_condition.gd" id="cond_points"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/highlight_ui_action.gd" id="act_highlight"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+
+[sub_resource type="Resource" id="start_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 300
+
+[sub_resource type="Resource" id="start_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 300
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods_script")
+allowed_buildings = Array[String](["House", "Barracks"])
+research_tier_cap = 0
+locked_hud = Array[String](["research"])
+
+[sub_resource type="Resource" id="say_beacons"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The old watchfires stand along the valley. Walk soldiers into the ring around one and it turns to your colours — villagers are no use for it, they carry no arms."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="point_at_minimap"]
+script = ExtResource("act_highlight")
+element = "minimap"
+
+[sub_resource type="Resource" id="stop_pointing"]
+script = ExtResource("act_highlight")
+element = "minimap"
+clear = true
+
+[sub_resource type="Resource" id="take_one"]
+script = ExtResource("cond_points")
+label = "Watchfire taken"
+count = 1
+
+[sub_resource type="Resource" id="say_hold"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Lit. Every fire you hold pays you in Favour, gold and timber while it burns — take a second and keep them both for half a minute."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="hold_two"]
+script = ExtResource("cond_points")
+label = "Two held"
+count = 2
+hold_seconds = 30.0
+
+[sub_resource type="Resource" id="say_done"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The valley can see us now. Whoever holds the fires holds the road — remember it when the Beastmen come in earnest."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "The Watchfires"
+briefing_title = "The Watchfires"
+briefing_text = "The beacons along the valley have stood cold since the Long Peace began. Light them, and hold them: a watchfire pays its keeper while it burns."
+favour_enabled = true
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+starting_units = Array[PackedScene]([ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("villager"), ExtResource("villager")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_player")
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="TakeAWatchfire" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Light a watchfire"
+conditions = Array[ExtResource("condition_script")]([SubResource("take_one")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_beacons"), SubResource("point_at_minimap")])
+on_complete = Array[ExtResource("action_script")]([SubResource("stop_pointing")])
+
+[node name="HoldTwo" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Hold two watchfires for 30 seconds"
+requires = Array[NodePath]([NodePath("TakeAWatchfire")])
+conditions = Array[ExtResource("condition_script")]([SubResource("hold_two")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_hold")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_done"), SubResource("win")])

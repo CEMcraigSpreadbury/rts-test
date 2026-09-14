@@ -5,12 +5,13 @@
 [ext_resource type="Resource" path="res://resources/scenarios/first_steps.tres" id="3_first"]
 [ext_resource type="Resource" path="res://resources/scenarios/the_woodcutters.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/scenarios/blades_for_the_border.tres" id="5_blades"]
-[ext_resource type="Resource" path="res://resources/scenarios/coop_sandbox.tres" id="6_coop"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_watchfires.tres" id="6_watchfires"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_rulers_council.tres" id="7_council"]
 
 [resource]
 script = ExtResource("1_campaign")
-id = &"campaign"
-campaign_name = "Campaign"
-description = "The Shadow Returns. The first missions teach the game; the rest are the war."
-missions = Array[ExtResource("2_info_script")]([ExtResource("3_first"), ExtResource("4_wood"), ExtResource("5_blades"), ExtResource("6_coop")])
+id = &"tutorial"
+campaign_name = "Tutorial"
+description = "Five short lessons in the running of a holding: looking about it, working it, arming it, holding the watchfires, and the study a Ruler sends you."
+missions = Array[ExtResource("2_info_script")]([ExtResource("3_first"), ExtResource("4_wood"), ExtResource("5_blades"), ExtResource("6_watchfires"), ExtResource("7_council")])
 order = 0

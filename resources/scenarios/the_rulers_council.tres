@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"the_rulers_council"
+scenario_name = "The Ruler's Council"
+scene_path = "res://scenes/scenarios/t05_the_rulers_council.tscn"
+briefing_title = "The Ruler's Council"
+briefing_text = "Every lord of Aldmere answers to one of the three old offices. Learn what a Ruler can give you before the Beastmen come again."
+human_slots = 1

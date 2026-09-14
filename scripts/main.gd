@@ -284,6 +284,11 @@ func _apply_clouds_setting(key: StringName) -> void:
 		clouds.visible = Settings.get_value(&"clouds")
 
 func _ready() -> void:
+	## Both are autoloads and outlive a match, so a second one in the same
+	## session — the next campaign mission, or another skirmish — would open
+	## holding the last one's gold, population and research points.
+	ResourceStockpile.reset()
+	Population.reset()
 	## A scenario scene is an ordinary map with a Scenario node added; it
 	## installed itself in MatchRules while entering the tree, so there is no
 	## mode to switch on — this is the whole of "are we in a mission".

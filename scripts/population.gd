@@ -14,6 +14,12 @@ signal changed(used: int, cap: int)
 var _used: Dictionary = {}
 var _cap: Dictionary = {}
 
+## Emptied at the start of every match, for the same reason as
+## ResourceStockpile.reset — this is an autoload and outlives a match.
+func reset() -> void:
+	_used.clear()
+	_cap.clear()
+
 func get_used(peer_id: int) -> int:
 	return _used.get(peer_id, 0)
 

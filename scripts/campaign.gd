@@ -30,6 +30,15 @@ static func list_all() -> Array[Campaign]:
 	out.sort_custom(func(a, b): return a.order < b.order)
 	return out
 
+## How many of this campaign's missions have been won — what the campaign list
+## shows beside each one.
+func completed_count() -> int:
+	var done := 0
+	for info in missions:
+		if CampaignProgress.is_completed(info.id):
+			done += 1
+	return done
+
 ## The mission after this one in this campaign, or null at the end of it.
 func mission_after(mission_id: StringName) -> ScenarioInfo:
 	for i in missions.size():

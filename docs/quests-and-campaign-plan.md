@@ -345,6 +345,44 @@ aura).
   sprite-sheet portrait. "First Steps" was played through end to end —
   briefing, three steps with their lines, closing line, Victory, and the win
   written to campaign progress.
+- 2026-09-15: **campaigns are now a screen of their own** (owner's call). The
+  menu goes main menu → **Campaign** → the list of campaigns → that campaign's
+  missions → play, with Back stepping one screen at a time.
+  `CampaignSelect` (built in code like the other panels) lists every campaign
+  resource with its progress ("Tutorial (1/5)"), shows the selected one's
+  description, and hands the chosen campaign to the existing mission list.
+  `Campaign.completed_count()` feeds the counts, and backing out of the
+  missions refreshes them in case one was just won.
+  `MainMenu._centre_panel()` now builds both panels the same way — full-rect
+  CenterContainer, mouse ignored, hidden while unused.
+  Content split to match: **Tutorial** (the five lessons) and **Embers on the
+  Border** (the war; currently only "Two Lords" as a placeholder while its real
+  missions are written). One `Campaign` button replaces the old one-button-per
+  -campaign row, so adding a campaign is still just a .tres in
+  `resources/campaigns/`.
+  Verified with real clicks: menu → campaigns (Tutorial 1/5, Embers 0/1, panel
+  fully on screen) → Tutorial's five missions with the first marked completed →
+  Back → Back, with both layers hidden at rest.
+- 2026-09-15: **two more tutorial missions**, so the campaign now runs
+  First Steps → The Woodcutters → Blades for the Border → The Watchfires →
+  The Ruler's Council → Two Lords.
+  4. **The Watchfires** (`t04_the_watchfires.tscn`) — capture points. Starts
+     the player with 4 soldiers and 2 villagers (a slot's `starting_units`
+     replaces the faction's), Favour switched on so the Conquest bar appears:
+     light one watchfire, then hold two for 30 seconds.
+  5. **The Ruler's Council** (`t05_the_rulers_council.tscn`) — research. Starts
+     with 40 research points banked through `starting_resources` (any
+     ResourceType works, research included), highlights the Research button,
+     and asks the player to open the tree and buy one node.
+  **Bug found and fixed:** `ResourceStockpile` and `Population` are autoloads
+  and outlive a match, so a second mission in the same session opened holding
+  the last one's gold, population and research — Two Lords began with the
+  Council's 40 points. `Main._ready` now calls `reset()` on both. This also
+  affected two skirmishes in a row, not just campaign missions.
+  The dock's Validate now also flags a `ScenarioInfo` whose `human_slots`
+  disagrees with the scene's actual HUMAN slot count, or which has no id —
+  both are silent in play (seats nobody can fill, a co-op mission missing from
+  the lobby, progress saved against nothing).
 - 2026-09-15: the victory screen offers **"Next: <mission>"** when the mission
   just won has another after it (`Campaign.next_mission_after`,
   `Main._offer_next_mission`), so a player carries straight on instead of

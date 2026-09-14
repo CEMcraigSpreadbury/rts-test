@@ -282,13 +282,26 @@ func _validate() -> void:
 	if slots.is_empty():
 		problems.append("No sides: add at least one HUMAN slot.")
 	var has_human := false
+	var human_seats := 0
 	for slot in slots:
 		if slot.kind == ScenarioSlot.Kind.HUMAN:
 			has_human = true
+			human_seats += 1
 		if slot.spawn_point_index < 0 and slot.placed_entities().is_empty() and slot.kind != ScenarioSlot.Kind.DEFENDERS:
 			problems.append("%s has no spawn point and nothing placed under it." % slot.name)
 	if not has_human:
 		problems.append("No HUMAN side: nobody would be playing this.")
+	## The menus and the lobby go by the ScenarioInfo, not the scene, so the
+	## two disagreeing is silent: seats nobody can fill, or a co-op mission
+	## that never appears in multiplayer.
+	for info in ScenarioInfo.list_all():
+		if info.scene_path != scenario.get_tree().edited_scene_root.scene_file_path:
+			continue
+		if info.human_slots != human_seats:
+			problems.append("%s says human_slots=%d but the scene has %d HUMAN slots." \
+					% [info.resource_path.get_file(), info.human_slots, human_seats])
+		if String(info.id).is_empty():
+			problems.append("%s has no id; campaign progress is saved against it." % info.resource_path.get_file())
 
 	var quests: Node = scenario.get_node_or_null(^"Quests")
 	var steps: Array[QuestStep] = []

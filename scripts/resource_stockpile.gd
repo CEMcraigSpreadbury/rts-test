@@ -9,6 +9,13 @@ signal changed(resource_name: String, amount: int)
 ## peer_id -> { ResourceType -> int }. Only meaningful on the host.
 var _totals: Dictionary = {}
 
+## Emptied at the start of every match (see Main._ready). This is an autoload,
+## so without it one match's totals are still sitting here when the next one
+## begins — a campaign mission would open with whatever the last one ended
+## with.
+func reset() -> void:
+	_totals.clear()
+
 func add(peer_id: int, resource_type: ResourceType, amount: int) -> void:
 	if amount <= 0 or resource_type == null:
 		return
