@@ -1,0 +1,19 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/tools/map_generator.gd" id="1_4rn1k"]
+
+[node name="MapGenerator" type="Node3D" unique_id=1079538454]
+script = ExtResource("1_4rn1k")
+map_name = "Aldmere Vale"
+map_seed = 1212
+map_size = 176
+base_clear_radius = 14.0
+base_gold_distance = Vector2(15, 18)
+base_trees = 20
+base_tree_distance = Vector2(20, 28)
+centre_site = 1
+plateau_height = 1
+forest_clusters_per_player = 8
+tree_spacing = 1.7
+props_per_player = 30
+overwrite_existing = true

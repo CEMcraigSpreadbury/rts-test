@@ -14,6 +14,12 @@ extends QuestAction
 @export var spread: float = 2.0
 ## Zone or marker to attack-move to; empty leaves them standing.
 @export var attack_move_to: StringName = &""
+## Names what arrives, the way a unit placed in the scene is named, so a later
+## step can refer to it — "slay the Skeleton Dragon" (DestroyTargets) when the
+## dragon only turns up mid-mission. One unit takes the name as it is; more
+## than one are numbered from 1 ("Raider1", "Raider2", ...). Host-side only,
+## like the conditions that read it.
+@export var name_as: String = ""
 
 func run(runner) -> void:
 	if unit_scene == null or count <= 0:
@@ -51,5 +57,7 @@ func run(runner) -> void:
 			continue
 		## Counted against population like anything else that side fields.
 		Population.reserve(peer_id, unit.population_cost)
+		if name_as != "":
+			runner.main.scenario_entities[name_as if wave == 1 else "%s%d" % [name_as, i + 1]] = unit
 		if attack_move_to != &"":
 			unit.command_attack_move(target)

@@ -1,0 +1,613 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/aldmere_vale.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/elapsed_time_condition.gd" id="cond_time"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/destroy_targets_condition.gd" id="cond_destroy"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/spawn_units_action.gd" id="act_spawn"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="act_ping"]
+[ext_resource type="Script" path="res://scripts/quests/actions/camera_pan_action.gd" id="act_camera"]
+[ext_resource type="Script" path="res://scripts/quests/actions/reveal_area_action.gd" id="act_reveal"]
+[ext_resource type="Script" path="res://scripts/quests/actions/world_marker_action.gd" id="act_marker"]
+[ext_resource type="Script" path="res://scripts/quests/actions/set_ai_mode_action.gd" id="act_ai_mode"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+[ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="archer"]
+[ext_resource type="PackedScene" path="res://scenes/units/spearman_unit.tscn" id="spearman"]
+[ext_resource type="PackedScene" path="res://scenes/units/cavalry_unit.tscn" id="cavalry"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_warrior_unit.tscn" id="warrior"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_raider_unit.tscn" id="raider"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_druid_unit.tscn" id="druid"]
+[ext_resource type="PackedScene" path="res://scenes/units/monsters/skeleton_dragon_unit.tscn" id="skeleton_dragon"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/wall_segment.tscn" id="wall"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/wall_gate.tscn" id="gate"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/watchtower_building.tscn" id="watchtower"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/barracks_building.tscn" id="barracks"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/blacksmith_building.tscn" id="blacksmith"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/house_building.tscn" id="house"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/beastmen_barracks_building.tscn" id="beastmen_barracks"]
+
+[sub_resource type="Resource" id="start_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 500
+
+[sub_resource type="Resource" id="start_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 400
+
+[sub_resource type="Resource" id="mods_lords"]
+script = ExtResource("mods_script")
+research_tier_cap = 3
+
+[sub_resource type="Resource" id="hold_time"]
+script = ExtResource("cond_time")
+seconds = 600.0
+label = "Held"
+
+[sub_resource type="Resource" id="wave_timer"]
+script = ExtResource("cond_time")
+seconds = 90.0
+
+[sub_resource type="Resource" id="north_razed"]
+script = ExtResource("cond_destroy")
+target_names = Array[String](["NorthHall", "NorthPen"])
+label = "Pens burned"
+
+[sub_resource type="Resource" id="east_razed"]
+script = ExtResource("cond_destroy")
+target_names = Array[String](["EastHall", "EastPen"])
+label = "Pens burned"
+
+[sub_resource type="Resource" id="dragon_slain"]
+script = ExtResource("cond_destroy")
+target_names = Array[String](["SiegeDragon"])
+label = "Dragon"
+
+[sub_resource type="Resource" id="say_captain_open"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "They are all around us, my lord — north and east, more than I can count. The King's riders are on the south road; until they come, the walls are all we have."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="say_captain_walls"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Keep the gates shut and the towers manned. Anything that gets over the wall, meet it in the square."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="ping_north"]
+script = ExtResource("act_ping")
+at = &"NorthCamp"
+hostile = true
+
+[sub_resource type="Resource" id="ping_east"]
+script = ExtResource("act_ping")
+at = &"EastCamp"
+hostile = true
+
+[sub_resource type="Resource" id="say_wave_one"]
+script = ExtResource("act_dialogue")
+speaker = "Scout"
+text = "Raiders out of the northern woods — testing the wall!"
+speaker_scene = ExtResource("archer")
+
+[sub_resource type="Resource" id="wave_one_raiders"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("raider")
+count = 3
+slot_index = 2
+at = &"NorthCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="say_wave_two"]
+script = ExtResource("act_dialogue")
+speaker = "Scout"
+text = "The eastern camp is moving!"
+speaker_scene = ExtResource("archer")
+
+[sub_resource type="Resource" id="wave_two_warriors"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("warrior")
+count = 2
+slot_index = 2
+at = &"EastCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="wave_two_raiders"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("raider")
+count = 2
+slot_index = 2
+at = &"EastCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="say_wave_three"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Shamans with them this time. Kill those first — they heal what we cut down."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="wave_three_warriors"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("warrior")
+count = 3
+slot_index = 2
+at = &"NorthCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="wave_three_druids"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("druid")
+count = 2
+slot_index = 2
+at = &"NorthCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="say_wave_four"]
+script = ExtResource("act_dialogue")
+speaker = "Scout"
+text = "Dragon! A dragon of bare bones, out of the east — and the warband behind it!"
+speaker_scene = ExtResource("archer")
+
+[sub_resource type="Resource" id="wave_four_dragon"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("skeleton_dragon")
+count = 1
+slot_index = 2
+at = &"EastCamp"
+attack_move_to = &"Capital"
+name_as = "SiegeDragon"
+
+[sub_resource type="Resource" id="wave_four_warriors"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("warrior")
+count = 3
+slot_index = 2
+at = &"EastCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="wave_four_raiders"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("raider")
+count = 2
+slot_index = 2
+at = &"EastCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="say_wave_five"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "This is everything they have left. Hold the wall — the riders cannot be far now!"
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="wave_five_warriors"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("warrior")
+count = 4
+slot_index = 2
+at = &"NorthCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="wave_five_druids"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("druid")
+count = 2
+slot_index = 2
+at = &"NorthCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="wave_five_raiders"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("raider")
+count = 3
+slot_index = 2
+at = &"EastCamp"
+attack_move_to = &"Capital"
+
+[sub_resource type="Resource" id="relief_cavalry"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("cavalry")
+count = 6
+slot_index = 0
+at = &"KingsRoad"
+
+[sub_resource type="Resource" id="relief_spearmen"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("spearman")
+count = 4
+slot_index = 0
+at = &"KingsRoad"
+
+[sub_resource type="Resource" id="pan_to_relief"]
+script = ExtResource("act_camera")
+at = &"KingsRoad"
+
+[sub_resource type="Resource" id="say_marshal"]
+script = ExtResource("act_dialogue")
+speaker = "Marshal Aldric"
+text = "Aldmere! The King's riders are here. Point us at them, my lord."
+speaker_scene = ExtResource("cavalry")
+
+[sub_resource type="Resource" id="say_captain_break"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Now we break them. Burn both camps, and bring that dragon down if it still flies."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="reveal_north"]
+script = ExtResource("act_reveal")
+at = &"NorthCamp"
+seconds = 20.0
+
+[sub_resource type="Resource" id="reveal_east"]
+script = ExtResource("act_reveal")
+at = &"EastCamp"
+seconds = 20.0
+
+[sub_resource type="Resource" id="mark_north"]
+script = ExtResource("act_marker")
+at = &"NorthCamp"
+marker_id = &"north"
+radius = 10.0
+
+[sub_resource type="Resource" id="clear_north_marker"]
+script = ExtResource("act_marker")
+at = &"NorthCamp"
+marker_id = &"north"
+clear = true
+
+[sub_resource type="Resource" id="mark_east"]
+script = ExtResource("act_marker")
+at = &"EastCamp"
+marker_id = &"east"
+radius = 10.0
+
+[sub_resource type="Resource" id="clear_east_marker"]
+script = ExtResource("act_marker")
+at = &"EastCamp"
+marker_id = &"east"
+clear = true
+
+[sub_resource type="Resource" id="neighbour_to_north"]
+script = ExtResource("act_ai_mode")
+slot_index = 1
+mode = 2
+attack_at = &"NorthCamp"
+
+[sub_resource type="Resource" id="say_captain_won"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The siege is broken. Vorgrath threw his army at our walls, and it broke on them."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="say_marshal_won"]
+script = ExtResource("act_dialogue")
+speaker = "Marshal Aldric"
+text = "Then we take the war to him. The King marches for the Ashen Peaks, and he wants you at his side."
+speaker_scene = ExtResource("cavalry")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "The Siege of Aldmere"
+briefing_title = "The Siege of Aldmere"
+briefing_text = "The Beastmen have come out of the woods in their thousands, and a Skeleton Dragon flies before them. The capital's walls must hold until the King's riders return from the south — then the siege must be broken for good."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+starting_units = Array[PackedScene]([ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("archer"), ExtResource("archer"), ExtResource("archer"), ExtResource("archer")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_lords")
+
+[node name="TowerNorthWest" parent="Scenario/Slots/Player" instance=ExtResource("watchtower")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -51.57, 0, 37.43)
+
+[node name="TowerNorth" parent="Scenario/Slots/Player" instance=ExtResource("watchtower")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.5, 0, 34.5)
+
+[node name="TowerNorthEast" parent="Scenario/Slots/Player" instance=ExtResource("watchtower")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -38.5, 0, 38.5)
+
+[node name="Barracks" parent="Scenario/Slots/Player" instance=ExtResource("barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37.57, 0, 48.5)
+
+[node name="Blacksmith" parent="Scenario/Slots/Player" instance=ExtResource("blacksmith")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42.17, 0, 53.19)
+
+[node name="HouseWest" parent="Scenario/Slots/Player" instance=ExtResource("house")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -54.64, 0, 47.22)
+
+[node name="HouseSouth" parent="Scenario/Slots/Player" instance=ExtResource("house")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 0, 54.03)
+
+[node name="Wall00" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -31.5, 0, 44.5)
+
+[node name="Wall01" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.15643, 0, -0.98769, 0, 1, 0, 0.98769, 0, -0.15643, -31.66, 0, 46.534)
+
+[node name="Wall02" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.30902, 0, -0.95106, 0, 1, 0, 0.95106, 0, -0.30902, -32.136, 0, 48.517)
+
+[node name="Wall03" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.45399, 0, -0.89101, 0, 1, 0, 0.89101, 0, -0.45399, -32.917, 0, 50.402)
+
+[node name="Wall04" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.58779, 0, -0.80902, 0, 1, 0, 0.80902, 0, -0.58779, -33.983, 0, 52.141)
+
+[node name="Wall05" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.70711, 0, -0.70711, 0, 1, 0, 0.70711, 0, -0.70711, -35.308, 0, 53.692)
+
+[node name="Wall06" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.80902, 0, -0.58779, 0, 1, 0, 0.58779, 0, -0.80902, -36.859, 0, 55.017)
+
+[node name="Wall07" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.89101, 0, -0.45399, 0, 1, 0, 0.45399, 0, -0.89101, -38.598, 0, 56.083)
+
+[node name="Wall08" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.95106, 0, -0.30902, 0, 1, 0, 0.30902, 0, -0.95106, -40.483, 0, 56.864)
+
+[node name="Wall09" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.98769, 0, -0.15643, 0, 1, 0, 0.15643, 0, -0.98769, -42.466, 0, 57.34)
+
+[node name="Wall10" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -44.5, 0, 57.5)
+
+[node name="Wall11" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.98769, 0, 0.15643, 0, 1, 0, -0.15643, 0, -0.98769, -46.534, 0, 57.34)
+
+[node name="Wall12" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.95106, 0, 0.30902, 0, 1, 0, -0.30902, 0, -0.95106, -48.517, 0, 56.864)
+
+[node name="Wall13" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.89101, 0, 0.45399, 0, 1, 0, -0.45399, 0, -0.89101, -50.402, 0, 56.083)
+
+[node name="Wall14" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.80902, 0, 0.58779, 0, 1, 0, -0.58779, 0, -0.80902, -52.141, 0, 55.017)
+
+[node name="Wall15" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.70711, 0, 0.70711, 0, 1, 0, -0.70711, 0, -0.70711, -53.692, 0, 53.692)
+
+[node name="Wall16" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.58779, 0, 0.80902, 0, 1, 0, -0.80902, 0, -0.58779, -55.017, 0, 52.141)
+
+[node name="Wall17" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.45399, 0, 0.89101, 0, 1, 0, -0.89101, 0, -0.45399, -56.083, 0, 50.402)
+
+[node name="Wall18" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.30902, 0, 0.95106, 0, 1, 0, -0.95106, 0, -0.30902, -56.864, 0, 48.517)
+
+[node name="Wall19" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(-0.15643, 0, 0.98769, 0, 1, 0, -0.98769, 0, -0.15643, -57.34, 0, 46.534)
+
+[node name="Wall20" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -57.5, 0, 44.5)
+
+[node name="Wall21" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.15643, 0, 0.98769, 0, 1, 0, -0.98769, 0, 0.15643, -57.34, 0, 42.466)
+
+[node name="Wall22" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.30902, 0, 0.95106, 0, 1, 0, -0.95106, 0, 0.30902, -56.864, 0, 40.483)
+
+[node name="Wall23" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.45399, 0, 0.89101, 0, 1, 0, -0.89101, 0, 0.45399, -56.083, 0, 38.598)
+
+[node name="Wall24" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.58779, 0, 0.80902, 0, 1, 0, -0.80902, 0, 0.58779, -55.017, 0, 36.859)
+
+[node name="GateWest" parent="Scenario/Slots/Player" instance=ExtResource("gate")]
+transform = Transform3D(0.70711, 0, 0.70711, 0, 1, 0, -0.70711, 0, 0.70711, -53.692, 0, 35.308)
+
+[node name="Wall26" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.80902, 0, 0.58779, 0, 1, 0, -0.58779, 0, 0.80902, -52.141, 0, 33.983)
+
+[node name="Wall27" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.89101, 0, 0.45399, 0, 1, 0, -0.45399, 0, 0.89101, -50.402, 0, 32.917)
+
+[node name="Wall28" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.95106, 0, 0.30902, 0, 1, 0, -0.30902, 0, 0.95106, -48.517, 0, 32.136)
+
+[node name="Wall29" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.98769, 0, 0.15643, 0, 1, 0, -0.15643, 0, 0.98769, -46.534, 0, 31.66)
+
+[node name="Wall30" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.5, 0, 31.5)
+
+[node name="Wall31" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.98769, 0, -0.15643, 0, 1, 0, 0.15643, 0, 0.98769, -42.466, 0, 31.66)
+
+[node name="Wall32" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.95106, 0, -0.30902, 0, 1, 0, 0.30902, 0, 0.95106, -40.483, 0, 32.136)
+
+[node name="Wall33" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.89101, 0, -0.45399, 0, 1, 0, 0.45399, 0, 0.89101, -38.598, 0, 32.917)
+
+[node name="Wall34" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.80902, 0, -0.58779, 0, 1, 0, 0.58779, 0, 0.80902, -36.859, 0, 33.983)
+
+[node name="GateNorthEast" parent="Scenario/Slots/Player" instance=ExtResource("gate")]
+transform = Transform3D(0.70711, 0, -0.70711, 0, 1, 0, 0.70711, 0, 0.70711, -35.308, 0, 35.308)
+
+[node name="Wall36" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.58779, 0, -0.80902, 0, 1, 0, 0.80902, 0, 0.58779, -33.983, 0, 36.859)
+
+[node name="Wall37" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.45399, 0, -0.89101, 0, 1, 0, 0.89101, 0, 0.45399, -32.917, 0, 38.598)
+
+[node name="Wall38" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.30902, 0, -0.95106, 0, 1, 0, 0.95106, 0, 0.30902, -32.136, 0, 40.483)
+
+[node name="Wall39" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
+transform = Transform3D(0.15643, 0, -0.98769, 0, 1, 0, 0.98769, 0, 0.15643, -31.66, 0, 42.466)
+
+[node name="Neighbour" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 3
+ai_difficulty = 1
+ai_mode = 2
+attack_at = &"Capital"
+spawn_point_index = 1
+fill_with_ai = true
+starting_units = Array[PackedScene]([ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("archer"), ExtResource("archer")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_lords")
+
+[node name="Horde" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 2
+team = 2
+color_index = 1
+defender_leash_radius = 14.0
+
+[node name="NorthHall" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, -40)
+
+[node name="NorthPen" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, -36)
+
+[node name="NorthGuard1" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 0, -44)
+
+[node name="NorthGuard2" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, -44)
+
+[node name="NorthGuard3" parent="Scenario/Slots/Horde" instance=ExtResource("druid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 0, -36)
+
+[node name="EastHall" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 47)
+
+[node name="EastPen" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 56)
+
+[node name="EastGuard1" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 42)
+
+[node name="EastGuard2" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 44)
+
+[node name="EastGuard3" parent="Scenario/Slots/Horde" instance=ExtResource("druid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 50)
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Capital" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.5, 0, 44.5)
+script = ExtResource("zone_script")
+radius = 14.0
+
+[node name="NorthCamp" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0, -40)
+script = ExtResource("zone_script")
+radius = 10.0
+
+[node name="EastCamp" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 50)
+script = ExtResource("zone_script")
+radius = 10.0
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="KingsRoad" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 44)
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="HoldAldmere" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Hold Aldmere until the King's riders come"
+conditions = Array[ExtResource("condition_script")]([SubResource("hold_time")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_captain_open"), SubResource("say_captain_walls")])
+on_complete = Array[ExtResource("action_script")]([SubResource("relief_cavalry"), SubResource("relief_spearmen"), SubResource("pan_to_relief"), SubResource("say_marshal"), SubResource("say_captain_break"), SubResource("reveal_north"), SubResource("reveal_east"), SubResource("mark_north"), SubResource("mark_east"), SubResource("neighbour_to_north")])
+
+[node name="RazeNorthCamp" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Burn the northern siege camp"
+requires = Array[NodePath]([NodePath("HoldAldmere")])
+conditions = Array[ExtResource("condition_script")]([SubResource("north_razed")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_north_marker")])
+
+[node name="RazeEastCamp" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Burn the eastern siege camp"
+requires = Array[NodePath]([NodePath("HoldAldmere")])
+conditions = Array[ExtResource("condition_script")]([SubResource("east_razed")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_east_marker")])
+
+[node name="SlayTheDragon" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Slay the Skeleton Dragon"
+requires = Array[NodePath]([NodePath("HoldAldmere")])
+conditions = Array[ExtResource("condition_script")]([SubResource("dragon_slain")])
+
+[node name="SiegeBroken" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Siege broken"
+hidden = true
+requires = Array[NodePath]([NodePath("RazeNorthCamp"), NodePath("RazeEastCamp"), NodePath("SlayTheDragon")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_captain_won"), SubResource("say_marshal_won"), SubResource("win")])
+
+[node name="WaveOne" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Wave one"
+hidden = true
+conditions = Array[ExtResource("condition_script")]([SubResource("wave_timer")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_wave_one"), SubResource("ping_north"), SubResource("wave_one_raiders")])
+
+[node name="WaveTwo" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Wave two"
+hidden = true
+requires = Array[NodePath]([NodePath("WaveOne")])
+conditions = Array[ExtResource("condition_script")]([SubResource("wave_timer")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_wave_two"), SubResource("ping_east"), SubResource("wave_two_warriors"), SubResource("wave_two_raiders")])
+
+[node name="WaveThree" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Wave three"
+hidden = true
+requires = Array[NodePath]([NodePath("WaveTwo")])
+conditions = Array[ExtResource("condition_script")]([SubResource("wave_timer")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_wave_three"), SubResource("ping_north"), SubResource("wave_three_warriors"), SubResource("wave_three_druids")])
+
+[node name="WaveFour" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "The dragon"
+hidden = true
+requires = Array[NodePath]([NodePath("WaveThree")])
+conditions = Array[ExtResource("condition_script")]([SubResource("wave_timer")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_wave_four"), SubResource("ping_east"), SubResource("wave_four_dragon"), SubResource("wave_four_warriors"), SubResource("wave_four_raiders")])
+
+[node name="WaveFive" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Wave five"
+hidden = true
+requires = Array[NodePath]([NodePath("WaveFour")])
+conditions = Array[ExtResource("condition_script")]([SubResource("wave_timer")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_wave_five"), SubResource("ping_north"), SubResource("ping_east"), SubResource("wave_five_warriors"), SubResource("wave_five_druids"), SubResource("wave_five_raiders")])

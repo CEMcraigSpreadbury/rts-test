@@ -4,11 +4,13 @@
 [ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="2_info_script"]
 [ext_resource type="Resource" path="res://resources/scenarios/emberford.tres" id="3_emberford"]
 [ext_resource type="Resource" path="res://resources/scenarios/the_beacon_road.tres" id="4_beacon_road"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_druids_grove.tres" id="5_druids_grove"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_siege_of_aldmere.tres" id="6_siege"]
 
 [resource]
 script = ExtResource("1_campaign")
 id = &"embers_on_the_border"
 campaign_name = "Embers on the Border"
 description = "The seal beneath the Ashen Peaks has failed and the Beastmen are moving. The war for Aldmere begins on its borders."
-missions = Array[ExtResource("2_info_script")]([ExtResource("3_emberford"), ExtResource("4_beacon_road")])
+missions = Array[ExtResource("2_info_script")]([ExtResource("3_emberford"), ExtResource("4_beacon_road"), ExtResource("5_druids_grove"), ExtResource("6_siege")])
 order = 1

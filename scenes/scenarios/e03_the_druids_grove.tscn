@@ -1,0 +1,381 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/greywood.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/units_in_zone_condition.gd" id="cond_zone"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/destroy_targets_condition.gd" id="cond_destroy"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/capture_points_condition.gd" id="cond_points"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/trained_units_condition.gd" id="cond_trained"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/elapsed_time_condition.gd" id="cond_time"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/world_marker_action.gd" id="act_marker"]
+[ext_resource type="Script" path="res://scripts/quests/actions/spawn_units_action.gd" id="act_spawn"]
+[ext_resource type="Script" path="res://scripts/quests/actions/reveal_area_action.gd" id="act_reveal"]
+[ext_resource type="Script" path="res://scripts/quests/actions/camera_pan_action.gd" id="act_camera"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="act_ping"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+[ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="archer"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_warrior_unit.tscn" id="warrior"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_raider_unit.tscn" id="raider"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_druid_unit.tscn" id="druid"]
+
+[sub_resource type="Resource" id="start_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 400
+
+[sub_resource type="Resource" id="start_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 300
+
+[sub_resource type="Resource" id="mods_scenario"]
+script = ExtResource("mods_script")
+allowed_monsters = Array[String](["Phoenix"])
+
+[sub_resource type="Resource" id="mods_lords"]
+script = ExtResource("mods_script")
+research_tier_cap = 2
+
+[sub_resource type="Resource" id="envoy_at_edge"]
+script = ExtResource("cond_zone")
+zone_name = &"GroveEdge"
+entity_name = "Envoy"
+label = "Isolde at the edge"
+
+[sub_resource type="Resource" id="ring_broken"]
+script = ExtResource("cond_destroy")
+target_names = Array[String](["Druid1", "Druid2", "Druid3", "Warrior1", "Warrior2"])
+label = "Druids"
+
+[sub_resource type="Resource" id="envoy_in_shrine"]
+script = ExtResource("cond_zone")
+zone_name = &"Shrine"
+entity_name = "Envoy"
+label = "Isolde at the shrine"
+
+[sub_resource type="Resource" id="shrine_taken"]
+script = ExtResource("cond_points")
+point_letter = "E"
+label = "Shrine taken"
+
+[sub_resource type="Resource" id="phoenix_called"]
+script = ExtResource("cond_trained")
+unit_name = "Phoenix"
+count = 1
+label = "Phoenix"
+
+[sub_resource type="Resource" id="phoenix_called_keep"]
+script = ExtResource("cond_trained")
+unit_name = "Phoenix"
+count = 1
+label = "Phoenix"
+
+[sub_resource type="Resource" id="envoy_lost"]
+script = ExtResource("cond_destroy")
+target_names = Array[String](["Envoy"])
+label = "Isolde"
+
+[sub_resource type="Resource" id="late_ambush_timer"]
+script = ExtResource("cond_time")
+seconds = 45.0
+
+[sub_resource type="Resource" id="say_isolde_open"]
+script = ExtResource("act_dialogue")
+speaker = "Envoy Isolde"
+text = "The Mystic sends her greetings, my lord, and her fears. The shrine at the heart of Greywood has gone dark — Beastman druids have fouled it. Bring me there and I can make it clean."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="say_captain_open"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Keep her in the middle of the column and walk her up the road to the grove. If Isolde falls, there is no one else who can do this."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="mark_edge"]
+script = ExtResource("act_marker")
+at = &"GroveEdge"
+marker_id = &"edge"
+radius = 6.0
+
+[sub_resource type="Resource" id="clear_edge_marker"]
+script = ExtResource("act_marker")
+at = &"GroveEdge"
+marker_id = &"edge"
+clear = true
+
+[sub_resource type="Resource" id="say_isolde_ambush"]
+script = ExtResource("act_dialogue")
+speaker = "Envoy Isolde"
+text = "The standing stones ahead are theirs — and they knew we were coming!"
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="ambush_ahead"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("raider")
+count = 3
+slot_index = 2
+at = &"AmbushAhead"
+attack_move_to = &"GroveEdge"
+
+[sub_resource type="Resource" id="ambush_flank"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("warrior")
+count = 2
+slot_index = 2
+at = &"AmbushFlank"
+attack_move_to = &"GroveEdge"
+
+[sub_resource type="Resource" id="ping_ambush"]
+script = ExtResource("act_ping")
+at = &"GroveEdge"
+hostile = true
+
+[sub_resource type="Resource" id="say_captain_ring"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Break their circle. Isolde stays behind the shields until the last of them is down."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="mark_ring"]
+script = ExtResource("act_marker")
+at = &"DruidRing"
+marker_id = &"ring"
+radius = 7.0
+
+[sub_resource type="Resource" id="clear_ring_marker"]
+script = ExtResource("act_marker")
+at = &"DruidRing"
+marker_id = &"ring"
+clear = true
+
+[sub_resource type="Resource" id="pan_to_grove"]
+script = ExtResource("act_camera")
+at = &"Grove"
+
+[sub_resource type="Resource" id="reveal_grove"]
+script = ExtResource("act_reveal")
+at = &"Grove"
+seconds = 20.0
+
+[sub_resource type="Resource" id="mark_shrine"]
+script = ExtResource("act_marker")
+at = &"Shrine"
+marker_id = &"shrine"
+radius = 5.0
+
+[sub_resource type="Resource" id="clear_shrine_marker"]
+script = ExtResource("act_marker")
+at = &"Shrine"
+marker_id = &"shrine"
+clear = true
+
+[sub_resource type="Resource" id="say_isolde_phoenix"]
+script = ExtResource("act_dialogue")
+speaker = "Envoy Isolde"
+text = "Its guardian is still there — the Phoenix itself, driven mad by what they did. Lay it to rest and take the shrine, then bring me into its ring. I will do the rest."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="say_captain_west"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "More of them, out of the western trees and making for the shrine! Hold it until she is done."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="late_ambush_warriors"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("warrior")
+count = 3
+slot_index = 2
+at = &"GroveWest"
+attack_move_to = &"Shrine"
+
+[sub_resource type="Resource" id="late_ambush_druids"]
+script = ExtResource("act_spawn")
+unit_scene = ExtResource("druid")
+count = 2
+slot_index = 2
+at = &"GroveWest"
+attack_move_to = &"Shrine"
+
+[sub_resource type="Resource" id="ping_west"]
+script = ExtResource("act_ping")
+at = &"GroveWest"
+hostile = true
+
+[sub_resource type="Resource" id="say_isolde_clean"]
+script = ExtResource("act_dialogue")
+speaker = "Envoy Isolde"
+text = "It is clean. Listen — it is answering. Select the shrine, my lord, and call it."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="say_isolde_end"]
+script = ExtResource("act_dialogue")
+speaker = "Envoy Isolde"
+text = "The Phoenix flies for Aldmere again. The Mystic will know what that means — and so will Vorgrath."
+speaker_scene = ExtResource("villager")
+
+[sub_resource type="Resource" id="say_captain_lost"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Isolde is dead. The grove stays dark, and so does our hope of it."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[sub_resource type="Resource" id="lose"]
+script = ExtResource("act_end")
+victory = false
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "The Druids' Grove"
+briefing_title = "The Druids' Grove"
+briefing_text = "The Mystic has sent her envoy, Isolde, to the heart of Greywood, where the old shrine of the Phoenix has been fouled by Beastman druids in Vorgrath's service. Bring her there alive. If the shrine can be cleansed, the Phoenix will answer Aldmere again."
+modifiers = SubResource("mods_scenario")
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+starting_units = Array[PackedScene]([ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("archer"), ExtResource("archer")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_lords")
+
+[node name="Envoy" parent="Scenario/Slots/Player" instance=ExtResource("villager")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 0, 33)
+display_name = "Envoy Isolde"
+max_health = 200
+
+[node name="Neighbour" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 3
+ai_difficulty = 1
+ai_mode = 2
+attack_at = &"Grove"
+spawn_point_index = 1
+fill_with_ai = true
+starting_units = Array[PackedScene]([ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("archer"), ExtResource("archer")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_lords")
+
+[node name="Corruptors" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 2
+team = 2
+color_index = 1
+defender_leash_radius = 12.0
+
+[node name="Druid1" parent="Scenario/Slots/Corruptors" instance=ExtResource("druid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, 18)
+
+[node name="Druid2" parent="Scenario/Slots/Corruptors" instance=ExtResource("druid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 20)
+
+[node name="Druid3" parent="Scenario/Slots/Corruptors" instance=ExtResource("druid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, 20)
+
+[node name="Warrior1" parent="Scenario/Slots/Corruptors" instance=ExtResource("warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, 18)
+
+[node name="Warrior2" parent="Scenario/Slots/Corruptors" instance=ExtResource("warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, 14)
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="GroveEdge" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -26, 0, 30)
+script = ExtResource("zone_script")
+radius = 6.0
+
+[node name="DruidRing" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -21, 0, 18)
+script = ExtResource("zone_script")
+radius = 7.0
+
+[node name="Grove" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone_script")
+radius = 12.0
+
+[node name="Shrine" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone_script")
+radius = 5.0
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="AmbushAhead" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 24)
+
+[node name="AmbushFlank" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -34, 0, 31)
+
+[node name="GroveWest" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, 0)
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="EscortToTheEdge" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Bring Isolde to the grove's edge"
+conditions = Array[ExtResource("condition_script")]([SubResource("envoy_at_edge")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_isolde_open"), SubResource("say_captain_open"), SubResource("mark_edge")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_edge_marker"), SubResource("say_isolde_ambush"), SubResource("ping_ambush"), SubResource("ambush_ahead"), SubResource("ambush_flank")])
+
+[node name="KeepIsolde" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Keep Envoy Isolde alive"
+conditions = Array[ExtResource("condition_script")]([SubResource("phoenix_called_keep")])
+fail_conditions = Array[ExtResource("condition_script")]([SubResource("envoy_lost")])
+on_fail = Array[ExtResource("action_script")]([SubResource("say_captain_lost"), SubResource("lose")])
+
+[node name="BreakTheRing" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Break the druids' ring"
+requires = Array[NodePath]([NodePath("EscortToTheEdge")])
+conditions = Array[ExtResource("condition_script")]([SubResource("ring_broken")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_captain_ring"), SubResource("mark_ring")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_ring_marker")])
+
+[node name="CleanseTheShrine" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Take the shrine with Isolde in its ring"
+requires = Array[NodePath]([NodePath("BreakTheRing")])
+conditions = Array[ExtResource("condition_script")]([SubResource("shrine_taken"), SubResource("envoy_in_shrine")])
+on_start = Array[ExtResource("action_script")]([SubResource("pan_to_grove"), SubResource("reveal_grove"), SubResource("mark_shrine"), SubResource("say_isolde_phoenix")])
+on_complete = Array[ExtResource("action_script")]([SubResource("clear_shrine_marker"), SubResource("say_isolde_clean")])
+
+[node name="CallThePhoenix" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Call the Phoenix from the shrine"
+requires = Array[NodePath]([NodePath("CleanseTheShrine")])
+conditions = Array[ExtResource("condition_script")]([SubResource("phoenix_called")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_isolde_end"), SubResource("win")])
+
+[node name="LateAmbush" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Western ambush"
+hidden = true
+requires = Array[NodePath]([NodePath("BreakTheRing")])
+conditions = Array[ExtResource("condition_script")]([SubResource("late_ambush_timer")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_captain_west"), SubResource("ping_west"), SubResource("late_ambush_warriors"), SubResource("late_ambush_druids")])

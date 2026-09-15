@@ -856,6 +856,17 @@ func _check_for_game_over() -> void:
 	if game_over:
 		return
 	var all_peers: Array = main_base_count_by_peer.keys()
+	## A mission's quest decides when it is won — so its closing lines play —
+	## and a team wiped out loses it. The enemy is often a garrison with no
+	## main base at all (DEFENDERS never count, see _spawn_scenario_sides), so
+	## "last team standing" would never fire here: the players are the only
+	## team with bases, and losing them all used to leave the match running.
+	if scenario != null:
+		var player_team: int = scenario.player_team()
+		var seats: Array = all_peers.filter(func(p): return Teams.team_of(p) == player_team)
+		if not seats.is_empty() and seats.filter(is_peer_active).is_empty():
+			end_mission(false, player_team)
+		return
 	if Teams.teams_of(all_peers).size() <= 1:
 		return
 	var remaining: Array[int] = Teams.teams_of(all_peers.filter(is_peer_active))

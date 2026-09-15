@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"e03_the_druids_grove"
+scenario_name = "The Druids' Grove"
+scene_path = "res://scenes/scenarios/e03_the_druids_grove.tscn"
+briefing_title = "The Druids' Grove"
+briefing_text = "The Mystic has sent her envoy, Isolde, to the heart of Greywood, where the old shrine of the Phoenix has been fouled by Beastman druids in Vorgrath's service. Bring her there alive. If the shrine can be cleansed, the Phoenix will answer Aldmere again."
+human_slots = 2

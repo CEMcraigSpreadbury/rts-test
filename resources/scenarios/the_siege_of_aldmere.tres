@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"e04_the_siege_of_aldmere"
+scenario_name = "The Siege of Aldmere"
+scene_path = "res://scenes/scenarios/e04_the_siege_of_aldmere.tscn"
+briefing_title = "The Siege of Aldmere"
+briefing_text = "The Beastmen have come out of the woods in their thousands, and a Skeleton Dragon flies before them. The capital's walls must hold until the King's riders return from the south — then the siege must be broken for good."
+human_slots = 2
