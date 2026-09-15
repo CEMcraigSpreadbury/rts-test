@@ -214,6 +214,8 @@ func play_select_sound() -> void:
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
 var _fill_base_scale_x: float = 1.0
+## Last fill fraction written, so the bar's transform is only touched on a change.
+var _shown_health_fraction: float = -1.0
 
 ## Squash/flash visuals. The model is a differently-named child in every
 ## building scene, so it's identified as "the direct children that actually
@@ -738,6 +740,9 @@ func _update_health_bar_visual() -> void:
 		return
 	var fraction: float = clampf(health_fraction, 0.0, 1.0)
 	health_bar.visible = fraction < 0.999 and not is_destroyed
+	if fraction == _shown_health_fraction:
+		return
+	_shown_health_fraction = fraction
 	## Scale from center only (no position offset) so Fill can't visually drift
 	## away from Background as the camera orbits.
 	health_bar_fill.scale.x = _fill_base_scale_x * maxf(fraction, 0.001)

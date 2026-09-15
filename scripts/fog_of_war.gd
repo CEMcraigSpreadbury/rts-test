@@ -56,12 +56,33 @@ const VISION_MERGE_CELL: float = 3.0
 ## GPU bilinear filtering alone wasn't enough of a blend across only ~1-2 grid
 ## cells to hide the grid at this resolution; baking the falloff into the
 ## data itself gives a properly anti-aliased edge instead of a hard step.
-const RGB_UNEXPLORED := Vector3(0.0, 0.0, 0.0)
-const RGB_EXPLORED := Vector3(5.0, 8.0, 5.0)
-const ALPHA_UNEXPLORED: float = 255.0
-const ALPHA_EXPLORED: float = 153.0
-
+## It's uploaded to fog_texture as-is (one byte per cell); the fog colour and
+## opacity it stands for are worked out in the shaders (fog_of_war.gdshader,
+## grass_wind.gdshader, and the minimap's) rather than in a per-pixel script loop.
 var explored: PackedByteArray = PackedByteArray()
+
+## How often the vision circles are re-gathered and pushed to the shaders. A
+## unit covers ~0.12m between pushes, well inside the circles' feathered edge.
+const VISION_UPDATE_INTERVAL: float = 1.0 / 30.0
+var _vision_timer: float = 0.0
+
+## Stamp shapes per vision radius. The falloff only depends on whole-cell
+## offsets from the source's own cell, so one radius always stamps the same
+## pattern wherever it lands: {dx, dy, value (PackedInt32Array), reach (Vector2i)}.
+var _stamp_kernels: Dictionary = {}
+## The (x, z, radius) of every source stamped last pass. One that hasn't moved
+## since (any building, any idle unit) would write exactly the same values
+## again — explored only ever grows — so it's skipped.
+var _last_stamp_keys: Dictionary = {}
+## Set whenever explored actually changes, so the texture is only re-uploaded then.
+var _explored_dirty: bool = true
+
+## Resource nodes and fog_static_props that haven't been seen yet. They never
+## move and explored never shrinks, so each only needs checking until it first
+## shows — after that it stays visible for the rest of the match. Untyped, as
+## it can hold nodes freed since (a tree cut down before it was ever seen).
+var _static_pending: Array = []
+var _static_tracking: bool = false
 ## Spectating (an eliminated player watching the rest of the match): the
 ## whole map is explored and in vision. Done as one map-sized vision source
 ## rather than every player's units, which would blow MAX_VISION_SOURCES.
@@ -84,10 +105,10 @@ var reveal_all: bool = false:
 		reveal_all = value
 		if value:
 			explored.fill(255)
+			_explored_dirty = true
 var fog_texture: ImageTexture
 
 var _image: Image
-var _pixel_data: PackedByteArray = PackedByteArray()
 var _explored_timer: float = 0.0
 
 ## The local player's own vision sources this frame — (x, z) position + radius,
@@ -179,11 +200,9 @@ func _fit_dust_to_map(particles: GPUParticles3D) -> void:
 	particles.visibility_aabb = AABB(Vector3(-half.x - 4.0, -6.0, -half.y - 4.0), Vector3(map_size.x + 8.0, 12.0, map_size.y + 8.0))
 
 func _ready() -> void:
-	var cell_count := grid_resolution * grid_resolution
-	explored.resize(cell_count)
-	_pixel_data.resize(cell_count * 4)
+	explored.resize(grid_resolution * grid_resolution)
 
-	_image = Image.create(grid_resolution, grid_resolution, false, Image.FORMAT_RGBA8)
+	_image = Image.create(grid_resolution, grid_resolution, false, Image.FORMAT_R8)
 	_image.fill(Color.BLACK)
 	fog_texture = ImageTexture.create_from_image(_image)
 
@@ -201,10 +220,13 @@ func _ready() -> void:
 	_update_explored()
 
 func _process(delta: float) -> void:
-	## Vision sources move every frame, so this (and the shader push) runs
-	## every frame too — it's just a handful of floats, not a texture rebuild.
-	_update_vision_sources()
-	_push_vision_to_shader()
+	## Vision sources move constantly, so this (and the shader push) runs at a
+	## steady VISION_UPDATE_INTERVAL rather than on the slower explored timer.
+	_vision_timer -= delta
+	if _vision_timer <= 0.0:
+		_vision_timer = VISION_UPDATE_INTERVAL
+		_update_vision_sources()
+		_push_vision_to_shader()
 
 	_explored_timer += delta
 	if _explored_timer < explored_update_interval:
@@ -339,18 +361,40 @@ func is_explored_at(world_pos: Vector3) -> bool:
 ## stronger stamp are never dimmed back down (max, not overwrite).
 func _stamp_explored(world_pos: Vector3, world_radius: float) -> void:
 	var center := _world_to_cell(world_pos)
+	var kernel := _stamp_kernel(world_radius)
+	var dxs: PackedInt32Array = kernel.dx
+	var dys: PackedInt32Array = kernel.dy
+	var values: PackedInt32Array = kernel.value
+	var reach: Vector2i = kernel.reach
+	var inside: bool = center.x - reach.x >= 0 and center.x + reach.x < grid_resolution \
+			and center.y - reach.y >= 0 and center.y + reach.y < grid_resolution
+	var changed := false
+	for k in dxs.size():
+		var x: int = center.x + dxs[k]
+		var y: int = center.y + dys[k]
+		if not inside and (x < 0 or x >= grid_resolution or y < 0 or y >= grid_resolution):
+			continue
+		var idx: int = y * grid_resolution + x
+		if explored[idx] < values[k]:
+			explored[idx] = values[k]
+			changed = true
+	if changed:
+		_explored_dirty = true
+
+## Every cell a circle of `world_radius` stamps, relative to its centre cell,
+## with the value it stamps there. Cells the falloff leaves at 0 are dropped,
+## since max() with 0 never changes anything.
+func _stamp_kernel(world_radius: float) -> Dictionary:
+	if _stamp_kernels.has(world_radius):
+		return _stamp_kernels[world_radius]
 	var cell_size_x: float = map_size.x / float(grid_resolution)
 	var cell_size_y: float = map_size.y / float(grid_resolution)
-	var cell_radius_x: int = int(ceil(world_radius / cell_size_x))
-	var cell_radius_y: int = int(ceil(world_radius / cell_size_y))
-	for dy in range(-cell_radius_y, cell_radius_y + 1):
-		var y := center.y + dy
-		if y < 0 or y >= grid_resolution:
-			continue
-		for dx in range(-cell_radius_x, cell_radius_x + 1):
-			var x := center.x + dx
-			if x < 0 or x >= grid_resolution:
-				continue
+	var reach := Vector2i(int(ceil(world_radius / cell_size_x)), int(ceil(world_radius / cell_size_y)))
+	var dxs := PackedInt32Array()
+	var dys := PackedInt32Array()
+	var values := PackedInt32Array()
+	for dy in range(-reach.y, reach.y + 1):
+		for dx in range(-reach.x, reach.x + 1):
 			var world_dx := dx * cell_size_x
 			var world_dy := dy * cell_size_y
 			var dist := sqrt(world_dx * world_dx + world_dy * world_dy)
@@ -358,31 +402,37 @@ func _stamp_explored(world_pos: Vector3, world_radius: float) -> void:
 				continue
 			var falloff := 1.0 - smoothstep(world_radius * 0.85, world_radius, dist)
 			var value := int(round(falloff * 255.0))
-			var idx := y * grid_resolution + x
-			explored[idx] = maxi(explored[idx], value)
+			if value <= 0:
+				continue
+			dxs.append(dx)
+			dys.append(dy)
+			values.append(value)
+	var kernel := {dx = dxs, dy = dys, value = values, reach = reach}
+	_stamp_kernels[world_radius] = kernel
+	return kernel
 
 func _update_explored() -> void:
 	## Already fully explored by reveal_all's setter — stamping a map-sized
 	## circle every tick would just redo that.
 	if not reveal_all:
+		var stamp_keys: Dictionary = {}
 		for i in _vision_count:
 			var pos := _vision_positions[i]
+			var key := Vector3(pos.x, pos.y, _vision_radii[i])
+			stamp_keys[key] = true
+			if _last_stamp_keys.has(key):
+				continue
 			_stamp_explored(Vector3(pos.x, 0.0, pos.y), _vision_radii[i])
+		_last_stamp_keys = stamp_keys
 
-	_rebuild_texture()
+	if _explored_dirty:
+		_explored_dirty = false
+		_rebuild_texture()
 	_update_node_visibility()
 	fog_updated.emit()
 
 func _rebuild_texture() -> void:
-	var cell_count := grid_resolution * grid_resolution
-	for i in range(cell_count):
-		var t: float = float(explored[i]) / 255.0
-		var offset := i * 4
-		_pixel_data[offset] = int(lerp(RGB_UNEXPLORED.x, RGB_EXPLORED.x, t))
-		_pixel_data[offset + 1] = int(lerp(RGB_UNEXPLORED.y, RGB_EXPLORED.y, t))
-		_pixel_data[offset + 2] = int(lerp(RGB_UNEXPLORED.z, RGB_EXPLORED.z, t))
-		_pixel_data[offset + 3] = int(lerp(ALPHA_UNEXPLORED, ALPHA_EXPLORED, t))
-	_image.set_data(grid_resolution, grid_resolution, false, Image.FORMAT_RGBA8, _pixel_data)
+	_image.set_data(grid_resolution, grid_resolution, false, Image.FORMAT_R8, explored)
 	fog_texture.update(_image)
 
 ## Allied units and buildings always render and always grant vision — a team
@@ -406,18 +456,47 @@ func _update_node_visibility() -> void:
 		if building:
 			building.visible = (i_am_valid_peer and Teams.is_friendly(my_peer, building.owner_peer_id)) or is_explored_at(building.global_position)
 
-	for node in get_tree().get_nodes_in_group("gatherables"):
-		var res := node as Gatherable
-		if res:
-			res.visible = is_explored_at(res.global_position)
+	## Resource nodes, plus purely decorative scenery (imported models with no
+	## Unit/ProductionBuilding script attached, e.g. an Objective's terrain
+	## dressing) — add "fog_static_props" to a node's Groups in the Inspector to
+	## have fog hide it too. Same "remembered map" rule as buildings above: once
+	## explored it stays visible, since it's static and being wrong about its
+	## remembered appearance never matters the way a stale unit position would.
+	## That's also why each is dropped from the check the moment it shows.
+	if not _static_tracking:
+		_start_static_tracking()
+	var i := _static_pending.size() - 1
+	while i >= 0:
+		var prop = _static_pending[i]
+		if not is_instance_valid(prop):
+			_drop_static_pending(i)
+		elif prop.is_inside_tree():
+			var seen := is_explored_at(prop.global_position)
+			prop.visible = seen
+			if seen:
+				_drop_static_pending(i)
+		i -= 1
 
-	## Purely decorative scenery (imported models with no Unit/ProductionBuilding
-	## script attached, e.g. an Objective's terrain dressing) — add "fog_static_props"
-	## to a node's Groups in the Inspector to have fog hide it too. Same "remembered
-	## map" rule as buildings/gatherables above: once explored it stays visible,
-	## since it's static and being wrong about its remembered appearance never
-	## matters the way a stale unit position would.
-	for node in get_tree().get_nodes_in_group("fog_static_props"):
-		var prop := node as Node3D
-		if prop:
-			prop.visible = is_explored_at(prop.global_position)
+## Swap-remove: order doesn't matter, and _update_node_visibility walks the
+## list backwards, so the entry swapped in has already been checked this pass.
+func _drop_static_pending(index: int) -> void:
+	_static_pending[index] = _static_pending[_static_pending.size() - 1]
+	_static_pending.pop_back()
+
+func _start_static_tracking() -> void:
+	_static_tracking = true
+	for node in get_tree().get_nodes_in_group(&"gatherables"):
+		_track_static(node)
+	for node in get_tree().get_nodes_in_group(&"fog_static_props"):
+		_track_static(node)
+	## Anything placed later (a Farm, an Objective's letter) — groups from a
+	## scene file or add_to_group-before-add_child are already set by now.
+	get_tree().node_added.connect(_on_node_added)
+
+func _on_node_added(node: Node) -> void:
+	if node.is_in_group(&"gatherables") or node.is_in_group(&"fog_static_props"):
+		_track_static(node)
+
+func _track_static(node: Node) -> void:
+	if node is Gatherable or (node is Node3D and node.is_in_group(&"fog_static_props")):
+		_static_pending.append(node)

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"e02_the_beacon_road"
+scenario_name = "The Beacon Road"
+scene_path = "res://scenes/scenarios/e02_the_beacon_road.tscn"
+briefing_title = "The Beacon Road"
+briefing_text = "Emberford's beacon was seen, and the Captain means to light every fire from the border to the capital. The old beacon towers along the road have stood cold for three hundred years, and the wild things of the woods have made their lairs in them."
+human_slots = 2

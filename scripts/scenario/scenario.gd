@@ -9,10 +9,17 @@ extends Node3D
 @export var scenario_name: String = "Scenario"
 @export var briefing_title: String = ""
 @export_multiline var briefing_text: String = ""
-## Favour is not scored in a scenario unless a mission wants a score race.
+## Favour is not scored in a scenario unless a mission wants it: points pay it
+## and the Conquest bar shows it. Quest steps can then count it (FavourCondition).
 @export var favour_enabled: bool = false
-## 0 = the map's default (MapInfo.FAVOUR_TARGET_PER_POINT per capture point).
+## The mark the Conquest bar measures towards. 0 = the map's default
+## (MapInfo.FAVOUR_TARGET_PER_POINT per capture point).
 @export var favour_target: int = 0
+## Whether the first team to favour_target simply wins, as in a Conquest
+## skirmish. Off, reaching it does nothing by itself and the quest decides —
+## so the mission can play its closing lines, or treat the enemy getting there
+## as a failed step.
+@export var favour_race_wins: bool = false
 ## Applies to any side without its own, and supplies the map-wide Shrine
 ## monster pool.
 @export var modifiers: ScenarioModifiers = null

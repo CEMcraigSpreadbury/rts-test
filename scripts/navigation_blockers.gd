@@ -162,16 +162,18 @@ func _process(delta: float) -> void:
 ## Instance ids cover spawns and frees, the quantized position covers a
 ## blocker that moved, and _is_blocking's destroyed check covers a building
 ## still in the tree playing its collapse animation but no longer in the way.
+## Resource nodes never move and only ever appear or go, which
+## Gatherable.tree_changes already counts — so the hundreds of trees on a
+## forest map are never walked here, only the buildings.
 func _blocker_state_hash() -> int:
-	var state: Array = []
-	for group in BLOCKER_GROUPS:
-		for node in get_tree().get_nodes_in_group(group):
-			var body := node as CollisionObject3D
-			if not _is_blocking(body):
-				continue
-			state.append(body.get_instance_id())
-			state.append(roundi(body.global_position.x * 4.0))
-			state.append(roundi(body.global_position.z * 4.0))
+	var state: Array = [Gatherable.tree_changes]
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var body := node as CollisionObject3D
+		if not _is_blocking(body):
+			continue
+		state.append(body.get_instance_id())
+		state.append(roundi(body.global_position.x * 4.0))
+		state.append(roundi(body.global_position.z * 4.0))
 	return state.hash()
 
 func _is_blocking(body: CollisionObject3D) -> bool:

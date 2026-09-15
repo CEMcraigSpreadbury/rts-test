@@ -15,7 +15,9 @@ const float DEPTH_PULL = 0.998;
 // Sampled by world-space XZ position rather than mesh UVs, so the overlay
 // always lines up with FogOfWar's grid regardless of how the plane mesh's
 // own UVs are laid out.
-uniform sampler2D fog_tex : source_color, filter_linear;
+// One byte per cell: how strongly explored (0 = never, 1 = fully) — see
+// FogOfWar.explored. Deliberately not source_color: it's data, not a colour.
+uniform sampler2D fog_tex : filter_linear;
 uniform vec2 map_origin;
 uniform vec2 map_size;
 
@@ -61,7 +63,7 @@ void fragment() {
 	}
 
 	vec2 uv = (world_pos.xz - map_origin) / map_size;
-	vec4 fog = texture(fog_tex, uv);
+	float explored = texture(fog_tex, uv).r;
 
 	float vis = 0.0;
 	for (int i = 0; i < vision_count; i++) {
@@ -71,6 +73,10 @@ void fragment() {
 		vis = max(vis, 1.0 - smoothstep(r * 0.85, r, d));
 	}
 
-	ALBEDO = fog.rgb;
-	ALPHA = fog.a * (1.0 - vis);
+	// Unexplored is black at full opacity; explored is a near-black green
+	// (5, 8, 5 in sRGB bytes) at 60%. Values that dark decode from sRGB to
+	// linear as exactly c / 12.92, which is what the old RGBA texture's
+	// source_color sampling produced.
+	ALBEDO = vec3(5.0, 8.0, 5.0) / 255.0 / 12.92 * explored;
+	ALPHA = mix(1.0, 0.6, explored) * (1.0 - vis);
 }

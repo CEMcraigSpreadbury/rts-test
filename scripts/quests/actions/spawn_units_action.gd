@@ -29,14 +29,23 @@ func run(runner) -> void:
 	var wave: int = count
 	if Teams.team_of(peer_id) != runner.player_team():
 		wave = maxi(1, roundi(count * MatchRules.enemy_scale()))
+	var nav_map: RID = runner.main.get_world_3d().navigation_map
+	var on_navmesh: bool = NavigationServer3D.map_get_iteration_id(nav_map) > 0
 	for i in wave:
 		var angle: float = TAU * float(i) / float(wave)
 		var offset := Vector3(cos(angle), 0.0, sin(angle)) * spread * (1.0 if wave > 1 else 0.0)
+		## A zone or marker sits wherever it was dropped, often at y = 0, and
+		## the ground is not flat: a unit spawned under a rise falls through the
+		## world for ever. The navmesh's nearest point is on the ground and clear
+		## of trees and buildings.
+		var spot: Vector3 = origin + offset
+		if on_navmesh:
+			spot = NavigationServer3D.map_get_closest_point(nav_map, spot)
 		var unit: Unit = runner.main.unit_spawner.spawn({
 			"scene_path": unit_scene.resource_path,
 			"peer_id": peer_id,
 			"tint": tint,
-			"position": origin + offset,
+			"position": spot,
 		})
 		if unit == null:
 			continue

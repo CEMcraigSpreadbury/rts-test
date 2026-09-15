@@ -321,6 +321,83 @@ aura).
 
 ## Status
 
+- 2026-09-15: **Embers on the Border, mission 2: The Beacon Road**
+  (`scenes/scenarios/e02_the_beacon_road.tscn`,
+  `resources/scenarios/the_beacon_road.tres`). The plan's "The Watchfires" name
+  was already the fourth tutorial's, hence the rename. Four Kingdoms again:
+  player south-west, Neighbour seat south-east (plain Normal AI when solo — it
+  capturing points helps here), a Beastmen **Warlord** ENEMY_AI in the
+  north-east with two Beastmen Barracks placed under his slot (his brain trains
+  from any military building it owns). He starts in **Defend**.
+  Steps: Light a beacon → Hold three beacons (Scout line, hostile ping and a
+  20s reveal of his camp) → on completion the mid-mission briefing **"The Seal
+  Is Broken"** (Vorgrath is free), the Warlord switched to **Normal**, then
+  **Reach 1000 Favour before the warlord** (fails if *his* Favour gets there
+  first) or the optional **Raze the warlord's camp**; either wins. Research
+  capped at tier 2. Ends on the Mystic's riders, leading into mission 3.
+  **Engine changes:**
+  - `Scenario.favour_race_wins` (default off). Until now a scenario with
+    Favour on also ran the Conquest race, so the first team to the target won
+    outright — contrary to the settled design, and it would have cut off a
+    mission's closing lines. Now Favour is paid and the bar drawn, but only
+    the quest ends the match unless the flag is set. (The Watchfires tutorial
+    was affected in principle; it wins through its quest anyway.)
+  - `FavourCondition.slot_index`: count one side's Favour instead of the
+    players', so "the enemy gets there first" is a fail condition.
+  Note: the enemy AI never consults MatchRules, so an AI side cannot be given
+  a restricted roster — its builder would keep trying to place what it isn't
+  allowed. The Warlord therefore builds an ordinary base beside his pens.
+  Verified headless: Warlord starts in Defend (mode 1), 1100 player Favour
+  with the race off did not end the match, three points taken completed both
+  lighting steps, showed the briefing and switched him to Normal; with the
+  players' Favour at 1000 the mission won and recorded, and with the
+  Warlord's at 1000 it failed the step and ended in Defeat.
+
+- 2026-09-15: **allied AI seats take orders** (owner's call after Emberford's
+  ally went off capturing points). `ScenarioSlot.ai_mode` / `attack_at` now
+  apply to every AI-played side — an ally filling an empty HUMAN seat as well
+  as an enemy — and `SetAiModeAction` works on either (it was already slot-
+  based; a seat a real person took has no brain, so the action does nothing
+  there). `AiCombat._update_attack_hold`: an ATTACK-mode wave goes to its spot
+  and **stays**, fighting whatever arrives, instead of treating arrival as done
+  and picking a fresh target off the map; it also skips the spawn-scouting
+  rules, which would otherwise count an ATTACK target as "already looked at"
+  and retarget at once. A changed `attack_position` re-aims the wave already in
+  the field; `_manage_home_units` keeps reinforcing it.
+  Emberford uses this: the Neighbour seat starts in Attack at `Emberford` (its
+  armies guard the village) and the Hold step's completion switches it to
+  Attack at `BeastmenCamp`. The ally still only launches once the normal AI
+  profile allows a wave (Normal: 2:30 with 6 spare soldiers).
+
+- 2026-09-15: **Embers on the Border, mission 1: Emberford**
+  (`scenes/scenarios/e01_emberford.tscn`, `resources/scenarios/emberford.tres`),
+  replacing the "Two Lords" placeholder in that campaign (its files stay on
+  disk, unlisted). Four Kingdoms, two human seats — the player's lord in the
+  south-west, a neighbouring lord in the south-east (an allied AI when solo).
+  Emberford is an allied DEFENDERS side in the south-west corner: the Beacon (a
+  Watchtower), two houses and two militia. The Beastmen camp is a DEFENDERS side
+  in the north-west clearing: two Beastmen Barracks and five guards.
+  Steps: Raise a Barracks, Build two Houses, Hold Emberford (8 minutes), Keep
+  the beacon standing (fails the mission if it falls), then Burn the Beastmen
+  camp. Three hidden timer steps send raids down the western road at 2:30, 4:30
+  and 6:30 (3, 4 and 7 Beastmen, scaled by difficulty). Holding pays 200 wood
+  and 200 gold and pans to the revealed camp. No Stables (no cavalry), research
+  capped at tier 1. The closing line names Vorgrath's black sun.
+  **Two engine fixes it forced:**
+  - `QuestRunner.player_peers()` / `team_units()` / `team_buildings()` now
+    count the **player seats** (every HUMAN slot, AI-filled or not), not the
+    whole team. An allied village's two houses satisfied "Build two Houses" the
+    moment the mission began.
+  - `SpawnUnitsAction` snaps spawns to the navmesh (see "The ground is not
+    flat" below). The first wave spawned under the western road's rise and fell
+    through the world.
+  Verified headless: slots 0-3 → peers 1-4 with teams 1/1/1/2, all twelve
+  placed entities adopted, Stables refused, each wave spawned on the ground and
+  reached the village within 8 seconds, the hold paid out, burning both pens
+  won and recorded the mission, and destroying the Beacon played the Elder's
+  line and ended in Defeat. Wave sizes and the 8-minute hold are untested
+  against a real player.
+
 - 2026-09-15: **step 10 started — the first three tutorial missions exist**,
   awaiting playtest. They live in the one Campaign, ahead of the co-op mission:
   1. **First Steps** (`t01_first_steps.tscn`) — move the view, select
@@ -572,8 +649,30 @@ aura).
   this, the sandbox's Gather step completed the instant its soldiers spawned
   and fired its briefing behind the Captain's line.
 - 2026-09-14: portraits are cut from the **figure**, not the cell.
-  `QuestUi._head_of` scans the first idle frame for its opaque bounding box and
-  keeps the top `PORTRAIT_HEAD_FRACTION` of that. A fixed crop off the top of
+  `UnitPortrait` (`scripts/unit_portrait.gd`, shared by the dialogue box and
+  the HUD's selection portrait since 2026-09-15 — a single unit, or the first
+  of a group) scans the first idle frame (the unit's own `idle_row`)
+  for its opaque bounding box, finds the head's centre from the top 40% of the
+  figure, and cuts a **square** around it, `PORTRAIT_HEAD_FRACTION` (0.8) of
+  the figure's height on a side. The first version kept the top half of the
+  whole outline, which on the Soldier — sword held out level — was a thin strip
+  of helmet and blade with the face cut off.
+  The head is found row by row as the widest solid run of pixels (runs under
+  `MIN_HEAD_WIDTH` are weapons or crests), and when the top half of the figure
+  has skin-coloured pixels the square centres on those — the human units face
+  right with a helmet back and sword behind them, so centring on the head's
+  outline left the face against the right edge. Monsters have no skin-toned
+  face and centre on the outline. A group selection's HUD portrait is its first
+  monster (`Hud._lead_unit`, the portrait grid's own order), else its first
+  unit.
+  Creatures drawn side-on — a cell at least `WIDE_CELL_RATIO` (2×) wider than
+  tall: the Skeleton Dragon, Black Dragon and Hydra — show their **whole
+  figure** instead; the head search found a wing tip on the Skeleton Dragon.
+  Any unit can set its own crop with **`Unit.portrait_region`** (a Rect2i of
+  the first idle frame, in cell pixels; empty = automatic).
+  **Currently every portrait is the whole figure** (`UnitPortrait.WHOLE_BODY`,
+  owner's call — it read better than head crops for now). The head-crop logic
+  above is kept behind that switch; set it false to bring it back. A fixed crop off the top of
   the cell gave a blank portrait, because the art sits low in its frame (the
   Soldier's figure starts 16px down a 32px cell).
 - 2026-09-14: `DestroyTargetsCondition` no longer counts a name the scenario
@@ -782,4 +881,10 @@ aura).
   minute of wall clock per match minute.
 - Never put `##` comment lines inside .tscn property blocks — they silently
   break parsing.
+- **The ground is not flat.** A zone, marker or placed unit authored at
+  y = 0 can sit *under* a rise in the terrain (Four Kingdoms' western road is
+  at y ≈ 1.04), and a unit put there falls through the world for ever.
+  `SpawnUnitsAction` snaps every spawn to the navmesh's nearest point for this
+  reason; anything else that puts a unit at an authored position should do the
+  same. A map-clearance sweep that reads the scene file only sees x/z.
 - Don't add tooltips, labels or hint text unless the owner asks.

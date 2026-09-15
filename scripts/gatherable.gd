@@ -57,6 +57,17 @@ var _squash_tween: Tween
 const SQUASH_COOLDOWN_MSEC: int = 400
 var _next_squash_msec: int = 0
 
+## Bumped whenever any resource node enters or leaves the tree (or starts to
+## deplete). Resource nodes never move, so this is all NavigationBlockers needs
+## to notice one change, instead of re-fingerprinting every tree on the map.
+static var tree_changes: int = 0
+
+func _enter_tree() -> void:
+	tree_changes += 1
+
+func _exit_tree() -> void:
+	tree_changes += 1
+
 func _ready() -> void:
 	for child in get_children():
 		if child is Node3D and not (child is CollisionShape3D or child is NavigationObstacle3D):
@@ -119,5 +130,7 @@ func _rpc_deplete() -> void:
 func _deplete() -> void:
 	if is_queued_for_deletion():
 		return
+	## Stops blocking the moment it's queued, not a frame later when it leaves.
+	tree_changes += 1
 	depleted.emit()
 	queue_free()

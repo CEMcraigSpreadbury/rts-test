@@ -273,6 +273,10 @@ static var monarch_count: int = 0
 @export var sprite_cell_size: Vector2i = Vector2i(32, 32)
 @export var idle_row: int = 0
 @export var idle_frame_count: int = 4
+## The HUD and dialogue portrait: a rectangle of the first idle frame, in
+## pixels within the cell. Left empty it is worked out from the art (see
+## UnitPortrait) — set it for a unit whose face that gets wrong.
+@export var portrait_region: Rect2i = Rect2i()
 @export var walk_row: int = 1
 @export var walk_frame_count: int = 5
 @export var attack_row: int = 3
@@ -665,6 +669,8 @@ func show_buff_tint(color: Color, seconds: float) -> void:
 
 ## Called every frame from _process; cheap when nothing is active.
 func _update_status_visuals(delta: float) -> void:
+	if _buff_tint_until_ms == 0 and _status_tint_until_ms == 0 and _dot_particles == null and _stun_stars == null:
+		return
 	var now := Time.get_ticks_msec()
 	if _buff_tint_until_ms != 0 and now >= _buff_tint_until_ms:
 		_buff_tint_until_ms = 0
@@ -1952,10 +1958,14 @@ func _physics_process(delta: float) -> void:
 	## unit's own move_speed even if it somehow got set wrong.
 	var effective_speed: float = minf(formation_speed, move_speed) if formation_speed > 0.0 else move_speed
 	_update_cohesion(delta, effective_speed)
-	effective_speed *= _cohesion_speed_scale * _slow_multiplier() * _buff_speed_multiplier()
+	var buff_speed := _buff_speed_multiplier()
+	effective_speed *= _cohesion_speed_scale * _slow_multiplier() * buff_speed
 	## The agent clamps what avoidance hands back to max_speed, so a speed-up
-	## (Charge!) has to lift the cap too or it would never show.
-	nav_agent.max_speed = move_speed * maxf(_buff_speed_multiplier(), 1.0)
+	## (Charge!) has to lift the cap too or it would never show. Each set is a
+	## NavigationServer call, so only on a real change.
+	var speed_cap: float = move_speed * maxf(buff_speed, 1.0)
+	if nav_agent.max_speed != speed_cap:
+		nav_agent.max_speed = speed_cap
 	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	## Added after avoidance (see _on_velocity_computed), not into the desired
@@ -2227,16 +2237,39 @@ func _process(delta: float) -> void:
 	## raw velocity directly — those are only reliable on the authoritative
 	## peer, while every peer already shows the right walk/idle animation.
 	if walk_dust:
-		walk_dust.emitting = sprite.animation == "walk"
+		var walking: bool = sprite.animation == &"walk"
+		if walk_dust.emitting != walking:
+			walk_dust.emitting = walking
 
-	var camera := get_viewport().get_camera_3d()
-	if not camera:
+	## Hidden by fog: nobody can see which way it's flipped, and it's worked
+	## out again the frame it shows.
+	if not visible:
+		return
+	var cam_right := _camera_right_vector()
+	if cam_right == Vector3.ZERO:
 		return
 	var forward := Vector3(sin(rotation.y), 0.0, cos(rotation.y))
-	var cam_right: Vector3 = camera.global_transform.basis.x
 	var screen_dot: float = forward.dot(cam_right)
 	if absf(screen_dot) > FLIP_DOT_THRESHOLD:
 		sprite.flip_h = screen_dot < 0.0
+
+## Every unit needs the camera's right vector each frame for its sprite flip,
+## and it's the same answer for all of them — so the first unit to ask in a
+## frame looks it up and the rest reuse it.
+static var _camera_right_frame: int = -1
+static var _camera_right: Vector3 = Vector3.ZERO
+
+func _camera_right_vector() -> Vector3:
+	var frame := Engine.get_process_frames()
+	if frame != _camera_right_frame:
+		_camera_right_frame = frame
+		var camera := get_viewport().get_camera_3d()
+		_camera_right = camera.global_transform.basis.x if camera else Vector3.ZERO
+	return _camera_right
+
+## Last fill fraction written to the bar, so the Fill's transform (which
+## re-propagates on every write) is only touched when health actually changes.
+var _shown_health_fraction: float = -1.0
 
 ## Reads from status_current_health, which is now a real synced property, so
 ## this displays correctly on every peer, not just the authoritative one.
@@ -2245,6 +2278,9 @@ func _update_health_bar_visual() -> void:
 		return
 	var fraction: float = clampf(float(status_current_health) / float(maxi(max_health, 1)), 0.0, 1.0)
 	health_bar.visible = fraction < 0.999 and status_activity != Activity.DEAD
+	if fraction == _shown_health_fraction:
+		return
+	_shown_health_fraction = fraction
 	## Scale from center only (no position offset) so Fill can't visually drift
 	## away from Background as the unit/camera rotates.
 	health_bar_fill.scale.x = _fill_base_scale_x * maxf(fraction, 0.001)

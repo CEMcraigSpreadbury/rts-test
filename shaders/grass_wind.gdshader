@@ -38,7 +38,8 @@ group_uniforms FogOfWar;
 // made every blade discard itself, which is exactly what made grass
 // disappear entirely both in the editor and anywhere fog isn't wired up.
 uniform bool fog_enabled = false;
-uniform sampler2D fog_tex : source_color, filter_linear;
+// One byte per cell, how strongly explored — see FogOfWar.explored.
+uniform sampler2D fog_tex : filter_linear;
 uniform vec2 fog_map_origin;
 uniform vec2 fog_map_size;
 const int FOG_MAX_VISION_SOURCES = 64;
@@ -125,7 +126,7 @@ void fragment() {
 	}
 
 	// Fog of war: identical math to fog_of_war.gdshader's terrain overlay
-	// (fog_tex's alpha channel encodes 1.0 = never explored down to ~0.6 =
+	// (fog_tex's explored strength maps to opacity 1.0 = never explored down to ~0.6 =
 	// explored, with vision carving a smooth currently-visible hole out of
 	// that), applied here as a multiply-and-discard on this blade's own
 	// alpha instead of a separate overlay pass — a next_pass tried first but
@@ -135,14 +136,14 @@ void fragment() {
 	// uniform's declaration for why this can't just run unconditionally.
 	if (fog_enabled) {
 		vec2 fog_uv = (world_pos.xz - fog_map_origin) / fog_map_size;
-		vec4 fog = texture(fog_tex, fog_uv);
+		float fog_alpha = mix(1.0, 0.6, texture(fog_tex, fog_uv).r);
 		float fog_vis = 0.0;
 		for (int i = 0; i < fog_vision_count; i++) {
 			float d = distance(world_pos.xz, fog_vision_positions[i]);
 			float r = fog_vision_radii[i];
 			fog_vis = max(fog_vis, 1.0 - smoothstep(r * 0.85, r, d));
 		}
-		ALPHA *= 1.0 - fog.a * (1.0 - fog_vis);
+		ALPHA *= 1.0 - fog_alpha * (1.0 - fog_vis);
 		if (ALPHA < 0.01) {
 			discard;
 		}

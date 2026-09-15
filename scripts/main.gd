@@ -632,12 +632,12 @@ func _spawn_scenario_sides() -> void:
 		if slot.kind == ScenarioSlot.Kind.ENEMY_AI or (slot.kind == ScenarioSlot.Kind.HUMAN and Network.is_ai(peer_id)):
 			_start_ai_player(peer_id)
 			var ai: AiPlayer = ai_players[peer_id]
-			## An ally filling a seat plays the whole game; only a scenario's
-			## own opponents take orders about how to behave.
-			if slot.kind == ScenarioSlot.Kind.ENEMY_AI:
-				ai.mode = slot.ai_mode as AiPlayer.Mode
-				if slot.attack_at != &"":
-					ai.attack_position = scenario.position_of(slot.attack_at)
+			## Enemies and allies alike: an ally left on Normal plays its own
+			## skirmish game (wandering off after capture points), so a mission
+			## can instead send its armies to guard the village the quest is about.
+			ai.mode = slot.ai_mode as AiPlayer.Mode
+			if slot.attack_at != &"":
+				ai.attack_position = scenario.position_of(slot.attack_at)
 
 ## Host-only: peer_id -> the AiPlayer brain playing that slot.
 var ai_players: Dictionary = {}
@@ -869,11 +869,16 @@ func _check_for_game_over() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server() or game_over or not conquest_enabled or favour_target <= 0:
 		return
+	## A mission scores Favour for its quest to count; it only ends the match
+	## by itself when the scenario asks for a plain race.
+	var race_wins: bool = scenario == null or scenario.favour_race_wins
 	var totals: Dictionary = _team_scores()
 	_score_broadcast_timer -= delta
 	if _score_broadcast_timer <= 0.0:
 		_score_broadcast_timer = SCORE_BROADCAST_INTERVAL
 		_rpc_scores.rpc(totals)
+	if not race_wins:
+		return
 	var winners: Array = []
 	for team in totals:
 		if totals[team].active and totals[team].score >= favour_target:

@@ -44,14 +44,56 @@ var _dragging: bool = false
 func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
+## Dots only move a pixel or so per redraw at this rate, and redrawing every
+## frame meant walking every unit and building on the map every frame.
+const REDRAW_INTERVAL: float = 1.0 / 30.0
+var _redraw_timer: float = 0.0
+
+## FogOfWar.fog_texture is one "how explored" byte per cell rather than a
+## colour, so the terrain and fog are drawn by this child through a shader
+## that turns it into the same colours the 3D fog uses. Behind the parent, so
+## the dots drawn in _draw go on top. The fog texture updates in place, so this
+## needs no redrawing of its own.
+const FOG_SHADER_CODE: String = """
+shader_type canvas_item;
+uniform vec4 terrain_color;
+void fragment() {
+	float explored = texture(TEXTURE, UV).r;
+	vec3 fog_rgb = vec3(5.0, 8.0, 5.0) / 255.0 * explored;
+	float fog_alpha = mix(1.0, 0.6, explored);
+	COLOR = vec4(mix(terrain_color.rgb, fog_rgb, fog_alpha), 1.0);
+}
+"""
+var _fog_rect: TextureRect = null
+
+func _ensure_fog_rect() -> void:
+	if _fog_rect != null or fog == null or fog.fog_texture == null:
+		return
+	var shader := Shader.new()
+	shader.code = FOG_SHADER_CODE
+	var fog_material := ShaderMaterial.new()
+	fog_material.shader = shader
+	fog_material.set_shader_parameter("terrain_color", TERRAIN_COLOR)
+	_fog_rect = TextureRect.new()
+	_fog_rect.texture = fog.fog_texture
+	_fog_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_fog_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	_fog_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fog_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fog_rect.show_behind_parent = true
+	_fog_rect.material = fog_material
+	add_child(_fog_rect)
+
 func _process(delta: float) -> void:
+	_ensure_fog_rect()
 	if _ping_time_left > 0.0:
 		_ping_time_left = maxf(_ping_time_left - delta, 0.0)
 	if _attack_ping_time_left > 0.0:
 		_attack_ping_time_left = maxf(_attack_ping_time_left - delta, 0.0)
-	## Fog only updates a few times a second, but unit dots should move
-	## smoothly, so just redraw every frame — this is a tiny Control.
-	queue_redraw()
+	_redraw_timer -= delta
+	if _redraw_timer <= 0.0:
+		_redraw_timer = REDRAW_INTERVAL
+		queue_redraw()
 
 ## Called by main.gd once a ping (this peer's own or a teammate's) has been
 ## confirmed by the host — see _rpc_show_ping.
@@ -76,9 +118,9 @@ func _local_to_world(local_pos: Vector2) -> Vector3:
 	return Vector3(fog.map_origin.x + u * fog.map_size.x, 0.0, fog.map_origin.y + v * fog.map_size.y)
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), TERRAIN_COLOR)
-	if fog and fog.fog_texture:
-		draw_texture_rect(fog.fog_texture, Rect2(Vector2.ZERO, size), false)
+	## Terrain and fog come from _fog_rect once the fog texture exists.
+	if _fog_rect == null:
+		draw_rect(Rect2(Vector2.ZERO, size), TERRAIN_COLOR)
 
 	var my_peer := _my_peer_id()
 

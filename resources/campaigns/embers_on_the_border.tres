@@ -2,12 +2,13 @@
 
 [ext_resource type="Script" path="res://scripts/campaign.gd" id="1_campaign"]
 [ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="2_info_script"]
-[ext_resource type="Resource" path="res://resources/scenarios/coop_sandbox.tres" id="3_coop"]
+[ext_resource type="Resource" path="res://resources/scenarios/emberford.tres" id="3_emberford"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_beacon_road.tres" id="4_beacon_road"]
 
 [resource]
 script = ExtResource("1_campaign")
 id = &"embers_on_the_border"
 campaign_name = "Embers on the Border"
 description = "The seal beneath the Ashen Peaks has failed and the Beastmen are moving. The war for Aldmere begins on its borders."
-missions = Array[ExtResource("2_info_script")]([ExtResource("3_coop")])
+missions = Array[ExtResource("2_info_script")]([ExtResource("3_emberford"), ExtResource("4_beacon_road")])
 order = 1

@@ -444,6 +444,9 @@ func _update_wave() -> void:
 		return
 	if is_instance_valid(_wave_target_objective) and _update_point_hold(centre):
 		return
+	if ai.mode == AiPlayer.Mode.ATTACK:
+		_update_attack_hold()
+		return
 	var target_gone: bool = _wave_target_node != null and (not is_instance_valid(_wave_target_node) or _wave_target_node.is_destroyed \
 			or _wave_target_node.owner_peer_id <= 0 or not Teams.is_enemy(ai.peer_id, _wave_target_node.owner_peer_id))
 	## Sent to look at a spawn point, and it's been looked at.
@@ -489,6 +492,23 @@ func _update_wave() -> void:
 		_wave_progress_time = ai.game_time
 		return
 	## Stragglers that finished a fight short of the target walk on.
+	var stragglers: Array[Unit] = []
+	for unit in wave:
+		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(wave_target) > WAVE_ARRIVE_RADIUS:
+			stragglers.append(unit)
+	ai.order_move(stragglers, wave_target, true)
+
+## ATTACK mode: the wave goes where it was sent and stays there. Neither the
+## scouting rules nor "arrived, find something else" apply — an ally sent to
+## guard a village stands in it and fights whatever comes, rather than
+## wandering off after capture points once it gets there. Home troops keep
+## joining it (see _manage_home_units). A new attack_position (SetAiModeAction
+## mid-mission: "now march on the camp") moves the wave that is already out.
+func _update_attack_hold() -> void:
+	var aim: Vector3 = ai.nearest_navmesh_point(ai.attack_position)
+	if Vector2(aim.x - wave_target.x, aim.z - wave_target.z).length() > 3.0:
+		_set_wave_target({pos = ai.attack_position, node = null, objective = null, peer = 0})
+		return
 	var stragglers: Array[Unit] = []
 	for unit in wave:
 		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(wave_target) > WAVE_ARRIVE_RADIUS:

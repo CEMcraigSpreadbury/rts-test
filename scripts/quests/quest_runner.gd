@@ -319,31 +319,45 @@ func _every_building_name() -> Array[String]:
 func player_team() -> int:
 	return _player_team
 
+## The seats the mission is played from: every HUMAN slot, including one an
+## allied AI has taken. An allied DEFENDERS side (a village to protect) shares
+## the team but belongs to the scenario, not the players — "build two houses"
+## must not be satisfied by the village's own.
 func player_peers() -> Array[int]:
-	return Teams.peers_on_team(_player_team)
+	if scenario == null:
+		return Teams.peers_on_team(_player_team)
+	var out: Array[int] = []
+	var slots := scenario.slots()
+	for i in slots.size():
+		if slots[i].kind == ScenarioSlot.Kind.HUMAN and main.scenario_peer_by_slot.has(i):
+			out.append(main.scenario_peer_by_slot[i])
+	return out
 
 ## The peer playing a scenario slot, or 0 for a slot nobody filled.
 func peer_for_slot(slot_index: int) -> int:
 	return main.scenario_peer_by_slot.get(slot_index, 0)
 
-## Every living unit on a team (the player team by default).
+## Every living unit the players field (see player_peers), or everything on
+## `team` when one is given.
 func team_units(team: int = -1) -> Array[Unit]:
-	var wanted: int = team if team >= 0 else _player_team
+	var seats: Array[int] = player_peers() if team < 0 else []
 	var out: Array[Unit] = []
 	for node in get_tree().get_nodes_in_group(&"units"):
 		var unit := node as Unit
-		if unit != null and unit.status_activity != Unit.Activity.DEAD \
-				and Teams.team_of(unit.owner_peer_id) == wanted:
+		if unit == null or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if seats.has(unit.owner_peer_id) if team < 0 else Teams.team_of(unit.owner_peer_id) == team:
 			out.append(unit)
 	return out
 
 func team_buildings(team: int = -1) -> Array[ProductionBuilding]:
-	var wanted: int = team if team >= 0 else _player_team
+	var seats: Array[int] = player_peers() if team < 0 else []
 	var out: Array[ProductionBuilding] = []
 	for node in get_tree().get_nodes_in_group(&"buildings"):
 		var building := node as ProductionBuilding
-		if building != null and not building.is_destroyed \
-				and Teams.team_of(building.owner_peer_id) == wanted:
+		if building == null or building.is_destroyed:
+			continue
+		if seats.has(building.owner_peer_id) if team < 0 else Teams.team_of(building.owner_peer_id) == team:
 			out.append(building)
 	return out
 

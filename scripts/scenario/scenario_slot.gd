@@ -27,10 +27,14 @@ enum Kind {
 @export_range(0, 3) var color_index: int = 0
 ## ENEMY_AI only: 0 Easy, 1 Normal, 2 Hard. Campaign difficulty shifts this.
 @export_enum("Easy", "Normal", "Hard") var ai_difficulty: int = 1
-## ENEMY_AI only: what the brain starts out doing (see AiPlayer.Mode). A quest
-## step can change it later, which is how "the enemy notices you" works.
+## Any side an AI plays — an enemy, or an ally filling an empty HUMAN seat:
+## what the brain starts out doing (see AiPlayer.Mode). A quest step can
+## change it later (SetAiModeAction), which is how "the enemy notices you" or
+## "your neighbour joins the assault" works.
 @export_enum("Normal", "Defend", "Attack") var ai_mode: int = 0
-## ENEMY_AI in Attack mode: the zone or marker its waves are aimed at.
+## Attack mode: the zone or marker its waves are sent to. For an ally, a zone
+## of your own (the village to guard) makes its armies stand there and fight
+## whatever comes.
 @export var attack_at: StringName = &""
 ## DEFENDERS only: how far a placed unit will chase before going back to where
 ## it was put. 0 lets them chase as far as they like.

@@ -231,7 +231,11 @@ func add_path_marker(unit: Unit, world_pos: Vector3) -> void:
 	markers.append(marker)
 	_path_markers[unit] = markers
 
-func clear_path_markers(unit: Unit) -> void:
+## Untyped on purpose, same as Unit._is_target_alive: update_path_markers
+## hands this units that have already been freed (died with waypoints still
+## pending), and a typed Unit parameter throws on a freed object before the
+## body even runs.
+func clear_path_markers(unit) -> void:
 	if not _path_markers.has(unit):
 		return
 	for marker in _path_markers[unit]:
@@ -931,9 +935,11 @@ func update_hover_ring() -> void:
 
 	_ensure_hover_ring()
 	var radius: float = _hover_ring_radius(target)
+	## Setting either radius regenerates the whole torus, so only on a change.
 	var mesh: TorusMesh = hover_ring.mesh
-	mesh.outer_radius = radius
-	mesh.inner_radius = maxf(radius - 0.08, 0.01)
+	if not is_equal_approx(mesh.outer_radius, radius):
+		mesh.outer_radius = radius
+		mesh.inner_radius = maxf(radius - 0.08, 0.01)
 	hover_ring.global_position = target.global_position + Vector3(0, 0.05, 0)
 	hover_ring.visible = true
 

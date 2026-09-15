@@ -1,0 +1,229 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/four_kingdoms.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone_script"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods_script"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold_type"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood_type"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition_script"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action_script"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/capture_points_condition.gd" id="cond_points"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/favour_condition.gd" id="cond_favour"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/eliminate_slot_condition.gd" id="cond_eliminate"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="act_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/actions/show_briefing_action.gd" id="act_briefing"]
+[ext_resource type="Script" path="res://scripts/quests/actions/set_ai_mode_action.gd" id="act_ai_mode"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="act_ping"]
+[ext_resource type="Script" path="res://scripts/quests/actions/reveal_area_action.gd" id="act_reveal"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="act_end"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="villager"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="soldier"]
+[ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="archer"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/beastmen_barracks_building.tscn" id="beastmen_barracks"]
+
+[sub_resource type="Resource" id="start_wood"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("wood_type")
+amount = 300
+
+[sub_resource type="Resource" id="start_gold"]
+script = ExtResource("cost_script")
+resource_type = ExtResource("gold_type")
+amount = 300
+
+[sub_resource type="Resource" id="mods_lords"]
+script = ExtResource("mods_script")
+research_tier_cap = 2
+
+[sub_resource type="Resource" id="light_one"]
+script = ExtResource("cond_points")
+count = 1
+label = "Beacons lit"
+
+[sub_resource type="Resource" id="light_three"]
+script = ExtResource("cond_points")
+count = 3
+label = "Beacons held"
+
+[sub_resource type="Resource" id="our_favour"]
+script = ExtResource("cond_favour")
+amount = 1000
+label = "Favour"
+
+[sub_resource type="Resource" id="warlord_favour"]
+script = ExtResource("cond_favour")
+amount = 1000
+slot_index = 2
+label = "Warlord's Favour"
+
+[sub_resource type="Resource" id="warlord_razed"]
+script = ExtResource("cond_eliminate")
+slot_index = 2
+buildings_only = true
+label = "Camp razed"
+
+[sub_resource type="Resource" id="say_captain_open"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Emberford's fire was seen, but one beacon is not enough. The old towers along this road are held by wild things now — clear the guards from one and stand in its ring until it takes your colours."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="say_scout_warlord"]
+script = ExtResource("act_dialogue")
+speaker = "Scout"
+text = "Smoke in the north-east, my lord. A Beastmen warlord has dug in there with his pens. He watches the road, but he has not moved — yet. Light two more."
+speaker_scene = ExtResource("archer")
+
+[sub_resource type="Resource" id="ping_warlord"]
+script = ExtResource("act_ping")
+at = &"WarlordCamp"
+hostile = true
+
+[sub_resource type="Resource" id="reveal_warlord"]
+script = ExtResource("act_reveal")
+at = &"WarlordCamp"
+seconds = 20.0
+
+[sub_resource type="Resource" id="briefing_seal"]
+script = ExtResource("act_briefing")
+title = "The Seal Is Broken"
+text = "As the third beacon caught, the sky over the Ashen Peaks turned the colour of a forge. The riders who answered the fires brought the news they were lit to carry: the seal that held Vorgrath for three hundred years has broken. The Dark Lord is free, and every Beastman in the wild woods has heard him."
+
+[sub_resource type="Resource" id="warlord_wakes"]
+script = ExtResource("act_ai_mode")
+slot_index = 2
+mode = 0
+
+[sub_resource type="Resource" id="say_captain_race"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "The warlord has seen it too, and he is coming for the beacons. Every fire held pays us in Favour — reach a thousand before he does, or burn his camp and end it."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="say_captain_won"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "Every beacon from the border to the capital is burning. Whatever comes down from the Peaks, Aldmere will see it coming."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="say_scout_envoy"]
+script = ExtResource("act_dialogue")
+speaker = "Scout"
+text = "Riders on the road, my lord — in the Mystic's colours. She asks for you by name."
+speaker_scene = ExtResource("archer")
+
+[sub_resource type="Resource" id="say_captain_razed"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "His pens are ash and his warband is scattered. The road is ours, and so are its fires."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="say_captain_lost"]
+script = ExtResource("act_dialogue")
+speaker = "Captain"
+text = "His fires are burning and ours are out. The road belongs to the Beastmen now."
+speaker_scene = ExtResource("soldier")
+
+[sub_resource type="Resource" id="win"]
+script = ExtResource("act_end")
+victory = true
+
+[sub_resource type="Resource" id="lose"]
+script = ExtResource("act_end")
+victory = false
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario_script")
+scenario_name = "The Beacon Road"
+briefing_title = "The Beacon Road"
+briefing_text = "Emberford's beacon was seen, and the Captain means to light every fire from the border to the capital. The old beacon towers along the road have stood cold for three hundred years, and the wild things of the woods have made their lairs in them."
+favour_enabled = true
+favour_target = 1000
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 0
+spawn_point_index = 0
+starting_units = Array[PackedScene]([ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_lords")
+
+[node name="Neighbour" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 0
+team = 1
+color_index = 3
+ai_difficulty = 1
+spawn_point_index = 3
+fill_with_ai = true
+starting_units = Array[PackedScene]([ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("villager"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier"), ExtResource("soldier")])
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+modifiers = SubResource("mods_lords")
+
+[node name="Warlord" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot_script")
+kind = 1
+team = 2
+color_index = 1
+ai_difficulty = 1
+ai_mode = 1
+spawn_point_index = 2
+starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
+
+[node name="WarPenWest" parent="Scenario/Slots/Warlord" instance=ExtResource("beastmen_barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56, 0, -52)
+
+[node name="WarPenEast" parent="Scenario/Slots/Warlord" instance=ExtResource("beastmen_barracks")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 72, 0, -60)
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="WarlordCamp" type="Node3D" parent="Scenario/Zones"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 63, 0, -58)
+script = ExtResource("zone_script")
+radius = 14.0
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="LightABeacon" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Light a beacon"
+conditions = Array[ExtResource("condition_script")]([SubResource("light_one")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_captain_open")])
+
+[node name="LightThree" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Hold three beacons"
+requires = Array[NodePath]([NodePath("LightABeacon")])
+conditions = Array[ExtResource("condition_script")]([SubResource("light_three")])
+on_start = Array[ExtResource("action_script")]([SubResource("say_scout_warlord"), SubResource("ping_warlord"), SubResource("reveal_warlord")])
+on_complete = Array[ExtResource("action_script")]([SubResource("briefing_seal"), SubResource("warlord_wakes"), SubResource("say_captain_race")])
+
+[node name="FavourRace" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Reach 1000 Favour before the warlord"
+requires = Array[NodePath]([NodePath("LightThree")])
+conditions = Array[ExtResource("condition_script")]([SubResource("our_favour")])
+fail_conditions = Array[ExtResource("condition_script")]([SubResource("warlord_favour")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_captain_won"), SubResource("say_scout_envoy"), SubResource("win")])
+on_fail = Array[ExtResource("action_script")]([SubResource("say_captain_lost"), SubResource("lose")])
+
+[node name="RazeTheWarlord" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step_script")
+title = "Raze the warlord's camp"
+optional = true
+requires = Array[NodePath]([NodePath("LightThree")])
+conditions = Array[ExtResource("condition_script")]([SubResource("warlord_razed")])
+on_complete = Array[ExtResource("action_script")]([SubResource("say_captain_razed"), SubResource("say_scout_envoy"), SubResource("win")])

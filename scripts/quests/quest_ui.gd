@@ -28,12 +28,8 @@ const OPTIONAL_COLOR: Color = Color(0.78, 0.74, 0.62)
 const HIGHLIGHT_COLOR: Color = Color(1.0, 0.85, 0.4)
 ## How far a highlight's outline sits outside what it is pointing at.
 const HIGHLIGHT_PADDING: float = 4.0
-## How much of the figure a portrait keeps, measured from the top of the art
-## itself: 0.5 is head and shoulders. Lower it for a tighter face.
-const PORTRAIT_HEAD_FRACTION: float = 0.5
+## The crop itself (how much of the figure) is UnitPortrait.HEAD_FRACTION.
 const PORTRAIT_SIZE: float = 72.0
-## A pixel counts as part of the figure above this alpha.
-const PORTRAIT_ALPHA_THRESHOLD: float = 0.15
 
 var main: Main
 var runner: QuestRunner
@@ -70,7 +66,6 @@ var _highlights: Dictionary = {}
 var _paused_by_us: bool = false
 
 ## Cropped heads, keyed by unit scene path.
-static var _portrait_cache: Dictionary = {}
 
 func _ready() -> void:
 	name = "QuestUi"
@@ -277,55 +272,8 @@ func _portrait_for(line: Dictionary) -> Texture2D:
 		return load(art_path) as Texture2D
 	var scene_path := String(line.get("speaker_scene", ""))
 	if scene_path != "":
-		return head_from_unit_scene(scene_path)
+		return UnitPortrait.of_scene(scene_path)
 	return null
-
-## The speaker's head, cut out of their unit's sprite sheet: the top slice of
-## the first idle frame. Stands in until there is real portrait art, and is
-## cached per unit scene because it never changes.
-static func head_from_unit_scene(scene_path: String) -> Texture2D:
-	if _portrait_cache.has(scene_path):
-		return _portrait_cache[scene_path]
-	var texture: Texture2D = null
-	if ResourceLoader.exists(scene_path):
-		var scene: PackedScene = load(scene_path)
-		var unit: Node = scene.instantiate()
-		if unit is Unit and unit.sprite_sheet != null:
-			texture = _head_of(unit.sprite_sheet, unit.sprite_cell_size)
-		unit.free()
-	_portrait_cache[scene_path] = texture
-	return texture
-
-## Works out where the character actually sits inside its first idle frame —
-## the art rarely fills the cell, and cutting a fixed slice off the top of the
-## cell gets you the empty space above their head — then keeps the top part of
-## the figure itself.
-static func _head_of(sheet: Texture2D, cell: Vector2i) -> Texture2D:
-	var image: Image = sheet.get_image()
-	if image == null:
-		return null
-	if image.is_compressed():
-		image.decompress()
-	var width: int = mini(cell.x, image.get_width())
-	var height: int = mini(cell.y, image.get_height())
-	var min_x: int = width
-	var max_x: int = -1
-	var min_y: int = height
-	var max_y: int = -1
-	for y in height:
-		for x in width:
-			if image.get_pixel(x, y).a > PORTRAIT_ALPHA_THRESHOLD:
-				min_x = mini(min_x, x)
-				max_x = maxi(max_x, x)
-				min_y = mini(min_y, y)
-				max_y = maxi(max_y, y)
-	if max_x < min_x or max_y < min_y:
-		return null
-	var atlas := AtlasTexture.new()
-	atlas.atlas = sheet
-	atlas.region = Rect2(min_x, min_y, max_x - min_x + 1,
-			maxf(float(max_y - min_y + 1) * PORTRAIT_HEAD_FRACTION, 4.0))
-	return atlas
 
 ## --- Briefing ---
 
@@ -484,9 +432,17 @@ func _set_marker(id: String, world_pos: Vector3, radius: float, shown: bool) -> 
 	ring_material.albedo_color = PANEL_BORDER
 	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring_material.no_depth_test = true
 	ring.material_override = ring_material
-	ring.position = world_pos + Vector3(0.0, 0.15, 0.0)
+	## Depth-tested, so buildings and trees stand in front of it — but the
+	## ground inside the ring is not flat, so the band is stretched tall rather
+	## than lying on it: rises in the terrain sink into it instead of hiding
+	## it. From above it reads as the same thin ring.
+	ring.scale = Vector3(1.0, 4.0, 1.0)
+	var ground: Vector3 = world_pos
+	var nav_map: RID = main.get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(nav_map) > 0:
+		ground.y = NavigationServer3D.map_get_closest_point(nav_map, world_pos).y
+	ring.position = ground + Vector3(0.0, 0.1, 0.0)
 	main.add_child(ring)
 	_markers[id] = ring
 

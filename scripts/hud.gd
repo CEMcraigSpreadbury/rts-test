@@ -66,6 +66,9 @@ var _info_unit_portrait_bars: Array[ProgressBar] = []
 ## The multi-selection in portrait-grid order — monsters first, so they aren't
 ## lost past SELECTION_PORTRAIT_LIMIT behind a crowd of regular units.
 var _info_portrait_units: Array[Unit] = []
+## The selected unit's face, drawn over portrait_rect's team colour. Built on
+## first use.
+var _portrait_head: TextureRect = null
 ## {"button": Button, "unit": Unit, "index": int, "sweep": ColorRect} per
 ## activated-ability button currently on the command card — see
 ## _refresh_ability_buttons.
@@ -388,10 +391,23 @@ func _clear_info_header() -> void:
 	portrait_frame.visible = false
 	portrait_health_label.visible = false
 
-func _update_portrait(tint: Color, health_text: String) -> void:
+## `head`: the selected unit's face (UnitPortrait) over its team colour;
+## null for a building, which shows the colour alone.
+func _update_portrait(tint: Color, health_text: String, head: Texture2D = null) -> void:
 	portrait_frame.visible = true
 	portrait_health_label.visible = true
 	portrait_rect.color = tint
+	if _portrait_head == null:
+		_portrait_head = TextureRect.new()
+		_portrait_head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_portrait_head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		## Pixel art: crisp rather than smeared when blown up.
+		_portrait_head.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_portrait_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		portrait_rect.add_child(_portrait_head)
+		_portrait_head.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_portrait_head.texture = head
+	_portrait_head.visible = head != null
 	portrait_health_label.text = health_text
 	_punch_control(portrait_frame)
 
@@ -528,6 +544,15 @@ func _refresh_producible_badges(building: ProductionBuilding) -> void:
 		if is_instance_valid(button):
 			button.disabled = building.synced_unit_limit_reached
 
+## Whose face a group selection shows: its first monster, the same order the
+## portrait grid below uses, so a Dark Lord leading a crowd of villagers isn't
+## represented by whichever villager the drag box caught first.
+func _lead_unit() -> Unit:
+	for unit in main.selected_units:
+		if not unit.abilities.is_empty():
+			return unit
+	return main.selected_units[0]
+
 ## Builds either a single unit's stat readout or a grid of portrait+health
 ## widgets for a multi-unit selection — structural, called once per selection
 ## change; _refresh_unit_info_values() updates values every frame after.
@@ -535,7 +560,7 @@ func _build_unit_info() -> void:
 	if main.selected_units.size() == 1:
 		var unit := main.selected_units[0]
 		info_panel_name_label.text = unit.display_name
-		_update_portrait(unit.team_tint, "")
+		_update_portrait(unit.team_tint, "", UnitPortrait.of_unit(unit))
 		_info_stats_label = Label.new()
 		_info_stats_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 		_info_stats_label.add_theme_font_size_override("font_size", 14)
@@ -543,7 +568,8 @@ func _build_unit_info() -> void:
 		return
 
 	info_panel_name_label.text = "%d units selected" % main.selected_units.size()
-	_update_portrait(main.selected_units[0].team_tint, "%d units" % main.selected_units.size())
+	var lead := _lead_unit()
+	_update_portrait(lead.team_tint, "%d units" % main.selected_units.size(), UnitPortrait.of_unit(lead))
 	var portrait_grid := GridContainer.new()
 	portrait_grid.columns = SELECTION_PORTRAIT_COLUMNS
 	## Shrink-to-fit, or the columns stretch across the panel and the square
