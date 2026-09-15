@@ -599,6 +599,13 @@ func _build_unit_info() -> void:
 		portrait.add_theme_stylebox_override("hover", _flat_bar_stylebox(unit.team_tint.lightened(0.3)))
 		portrait.add_theme_stylebox_override("pressed", _flat_bar_stylebox(unit.team_tint.darkened(0.2)))
 		portrait.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		## The unit's own portrait over its team colour, scaled to fit (aspect
+		## kept) and kept crisp — the same image the big portrait shows.
+		portrait.icon = UnitPortrait.of_unit(unit)
+		portrait.expand_icon = true
+		portrait.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		portrait.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		portrait.pressed.connect(main.select_only_unit.bind(unit))
 		cell.add_child(portrait)
 		var health_bar := ProgressBar.new()

@@ -873,6 +873,13 @@ const COHESION_HARD_STUCK_TIMEOUT: float = 0.6
 var target_resource: Gatherable = null
 var dropoff_point: Node3D = null
 var gather_timer: float = 0.0
+## What to look for, and where to look from, once target_resource runs out.
+## Null type = the node doesn't seek_replacement_when_depleted, so just stop.
+var _replacement_resource_type: ResourceType = null
+var _last_resource_position: Vector3 = Vector3.ZERO
+## How far from the felled node a replacement may be — past this the unit
+## idles rather than trekking off across the map on its own.
+const RESOURCE_RETARGET_RADIUS: float = 15.0
 ## Unit or ProductionBuilding — anything with owner_peer_id/current_health/take_damage().
 ## Setter keeps the target's melee_attackers count in step, whichever of the
 ## many code paths below retargets this unit.
@@ -1221,6 +1228,8 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	target_resource = resource_node
 	dropoff_point = dropoff
 	resource_node.add_gatherer(self)
+	_replacement_resource_type = resource_node.resource_type if resource_node.seek_replacement_when_depleted else null
+	_last_resource_position = resource_node.global_position
 	_head_to_resource()
 
 ## keep_assault: true when this fight was picked *by* a standing attack-move
@@ -2314,7 +2323,7 @@ func _on_attack_animation_finished() -> void:
 ## --- Gathering ---
 
 func _head_to_resource() -> void:
-	if not is_instance_valid(target_resource):
+	if not _has_live_resource() and not _retarget_resource():
 		_end_gather_command()
 		return
 	status_activity = Activity.TO_RESOURCE
@@ -2322,16 +2331,22 @@ func _head_to_resource() -> void:
 	move_to(target_resource.global_position)
 
 func _start_gathering() -> void:
-	if not is_instance_valid(target_resource):
-		_end_gather_command()
+	## Felled while this unit was still walking to it.
+	if not _has_live_resource():
+		_head_to_resource()
 		return
 	status_activity = Activity.GATHERING
 	gather_timer = 0.0
 	status_carried_type = target_resource.resource_type
 
 func _tick_gathering(delta: float) -> void:
-	if not is_instance_valid(target_resource):
-		_head_to_dropoff()
+	if not _has_live_resource():
+		## Not full yet: carry on at the next tree rather than walking a
+		## part-load home.
+		if status_carried_amount < carry_capacity and _retarget_resource():
+			_head_to_resource()
+		else:
+			_head_to_dropoff()
 		return
 
 	gather_timer += delta
@@ -2396,10 +2411,48 @@ func _deposit_and_continue() -> void:
 	status_carried_amount = 0
 	status_carried_type = null
 
-	if status_command == Command.GATHER and is_instance_valid(target_resource) and target_resource.amount_remaining > 0:
+	## _head_to_resource finds a replacement if this one ran out meanwhile,
+	## and ends the command itself if there's none.
+	if status_command == Command.GATHER:
 		_head_to_resource()
 	else:
 		_end_gather_command()
+
+func _has_live_resource() -> bool:
+	return is_instance_valid(target_resource) and not target_resource.is_queued_for_deletion() \
+			and target_resource.amount_remaining > 0
+
+## Swaps a spent target_resource for the nearest usable node of the same kind.
+## Measured from where the spent one stood rather than from this unit, so a
+## woodcutter works its way through the same forest instead of drifting toward
+## whichever tree is nearest its drop-off trip. Returns false (target left
+## untouched) when the node type doesn't seek, or nothing is in range.
+func _retarget_resource() -> bool:
+	if _replacement_resource_type == null:
+		return false
+	var best: Gatherable = null
+	var best_distance: float = RESOURCE_RETARGET_RADIUS
+	for node in get_tree().get_nodes_in_group(&"gatherables"):
+		var candidate := node as Gatherable
+		if candidate == null or candidate.is_queued_for_deletion() or candidate.amount_remaining <= 0:
+			continue
+		if not candidate.seek_replacement_when_depleted or candidate.resource_type != _replacement_resource_type:
+			continue
+		if candidate.owner_peer_id != 0 and candidate.owner_peer_id != owner_peer_id:
+			continue
+		if not candidate.can_be_gathered() or not candidate.can_accept_gatherer():
+			continue
+		var distance: float = _last_resource_position.distance_to(candidate.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = candidate
+	if best == null:
+		return false
+	_leave_gather_site()
+	target_resource = best
+	best.add_gatherer(self)
+	_last_resource_position = best.global_position
+	return true
 
 func _end_gather_command() -> void:
 	_leave_gather_site()

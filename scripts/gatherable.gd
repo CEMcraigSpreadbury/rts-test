@@ -36,6 +36,10 @@ var is_claimed: bool = false
 ## villagers don't all pile onto the same field.
 @export var max_gatherers: int = -1
 var gatherers: Array[Unit] = []
+## When true, a gatherer whose node runs out moves on to the nearest other node
+## of the same kind (see Unit._retarget_resource) instead of going idle. On for
+## trees only — gold deposits need a Mine each, so there's no "next one" to find.
+@export var seek_replacement_when_depleted: bool = false
 
 ## One is picked at random and played through select_audio_player whenever
 ## this node becomes newly selected (see main.gd's selection code). Shared by
