@@ -1,0 +1,57 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MiniDarkElves/Outline/MiniBallista-Sheet.png" id="2_ballista"]
+[ext_resource type="PackedScene" path="res://scenes/effects/projectile_ballista_bolt.tscn" id="3_projectile"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="4_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="5_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="6_gold"]
+[ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="7_crew"]
+
+[sub_resource type="Resource" id="ResourceCost_ballista_wood"]
+script = ExtResource("4_cost_script")
+resource_type = ExtResource("5_wood")
+amount = 60
+
+[sub_resource type="Resource" id="ResourceCost_ballista_gold"]
+script = ExtResource("4_cost_script")
+resource_type = ExtResource("6_gold")
+amount = 35
+
+[node name="Ballista" instance=ExtResource("1_unit")]
+display_name = "Ballista"
+costs = Array[Resource]([SubResource("ResourceCost_ballista_wood"), SubResource("ResourceCost_ballista_gold")])
+population_cost = 2
+team_tint = Color(0.35, 0.6, 1, 1)
+sprite_sheet = ExtResource("2_ballista")
+move_speed = 2.4
+idle_row = 0
+idle_frame_count = 1
+walk_row = 1
+walk_frame_count = 6
+attack_row = 2
+attack_frame_count = 8
+death_row = 3
+death_frame_count = 5
+gather_frame_count = 0
+crew_sprite_sheet = ExtResource("7_crew")
+crew_idle_row = 0
+crew_idle_frame_count = 4
+crew_walk_row = 1
+crew_walk_frame_count = 6
+crew_death_row = 5
+crew_death_frame_count = 4
+crew_offset = 0.7
+can_gather = false
+can_build = false
+max_health = 40
+attack_damage = 12
+attack_range = 18.0
+attack_cooldown = 3.0
+aggro_range = 20.0
+vision_range = 20.0
+building_damage_multiplier = 3.0
+projectile_scene = ExtResource("3_projectile")
+projectile_speed = 24.0
+damage_type = 3
+weak_to = 2

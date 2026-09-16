@@ -5,9 +5,9 @@ extends RefCounted
 
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 ## Neighbour-query radius for alert_nearby_allies: must cover the largest
-## Unit.aggro_range on any unit (9 as of writing), since each ally is still
-## checked against its own.
-const ALERT_QUERY_RADIUS: float = 10.0
+## Unit.aggro_range on any unit (20, the Ballista, as of writing), since each
+## ally is still checked against its own.
+const ALERT_QUERY_RADIUS: float = 20.0
 ## A unit being hit raises the alarm at most this often. Every hit used to
 ## re-scan the neighbourhood, and in a big melee that's hundreds a second for
 ## the same handful of allies, who are already fighting after the first one.

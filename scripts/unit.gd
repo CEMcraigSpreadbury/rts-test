@@ -8,6 +8,9 @@ const UnitGrid = preload("res://scripts/unit_grid.gd")
 const GRAVITY: float = 20.0
 ## The sheets in assets/art face right by default; flip_h mirrors them to face left.
 const FLIP_DOT_THRESHOLD: float = 0.15
+## Nudges the crew sprite (see crew_sprite_sheet) slightly away from the
+## camera so the machine it's pushing draws over it where they overlap.
+const CREW_DEPTH_OFFSET: float = 0.05
 ## Below this actual speed the unit is considered stopped (e.g. blocked by another unit).
 const MOVING_SPEED_THRESHOLD: float = 0.15
 const MOVE_ARRIVAL_DISTANCE: float = 0.5
@@ -250,6 +253,10 @@ func _update_team_tint_visual() -> void:
 		## Rebuilt here too so an Objective capture recolors the silhouette.
 		if sprite_sheet and not _death_playing:
 			sprite.material_overlay = UnitSilhouetteMaterial.build(sprite_sheet, team_tint)
+	if crew_sprite:
+		crew_sprite.modulate = sprite.modulate
+		if not _death_playing:
+			crew_sprite.material_overlay = UnitSilhouetteMaterial.build(crew_sprite_sheet, team_tint)
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 11.0
 ## One is picked at random and played through select_audio_player whenever
@@ -291,6 +298,18 @@ static var monarch_count: int = 0
 @export var cast_row: int = 4
 @export var cast_frame_count: int = 0
 @export var cast_fps: float = 12.0
+## Optional second sprite drawn behind this one on screen, animated alongside
+## it — e.g. the soldier pushing a siege weapon. Purely visual: it has no
+## health of its own and plays its death clip when this unit dies.
+@export var crew_sprite_sheet: Texture2D
+@export var crew_idle_row: int = 0
+@export var crew_idle_frame_count: int = 4
+@export var crew_walk_row: int = 1
+@export var crew_walk_frame_count: int = 6
+@export var crew_death_row: int = 5
+@export var crew_death_frame_count: int = 4
+## How far behind the main sprite, along the screen's horizontal, the crew stands.
+@export var crew_offset: float = 0.7
 
 @export_group("Gathering")
 @export var can_gather: bool = true
@@ -309,6 +328,9 @@ static var monarch_count: int = 0
 @export var attack_cooldown: float = 1.0
 ## After a target dies, how far to look for another enemy before giving up and going idle.
 @export var aggro_range: float = 6.0
+## Scales this unit's damage against buildings — siege weapons (Ballista,
+## Magic Cannon) set it well above 1.
+@export var building_damage_multiplier: float = 1.0
 ## What kind of damage this unit's attacks count as, for the weak_to rock-
 ## paper-scissors check below. NONE if this unit has no special damage type.
 @export var damage_type: DamageType = DamageType.NONE
@@ -385,6 +407,9 @@ static var monarch_count: int = 0
 
 @onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
 @onready var sprite: AnimatedSprite3D = $Sprite
+## Built in _ready when crew_sprite_sheet is set; a child of `sprite` so it
+## rides along with every recoil, squash and death-knockback tween.
+var crew_sprite: AnimatedSprite3D = null
 @onready var selection_ring: MeshInstance3D = $SelectionRing
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
@@ -1091,6 +1116,8 @@ func _ready() -> void:
 			animations["cast"] = {"row": cast_row, "frames": cast_frame_count, "fps": cast_fps, "loop": false}
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, animations)
 		sprite.play("idle")
+	if crew_sprite_sheet:
+		_build_crew_sprite()
 	sprite.animation_finished.connect(_on_attack_animation_finished)
 	_update_team_tint_visual()
 	nav_agent.path_desired_distance = 0.5
@@ -2322,6 +2349,41 @@ func _process(delta: float) -> void:
 	var screen_dot: float = forward.dot(cam_right)
 	if absf(screen_dot) > FLIP_DOT_THRESHOLD:
 		sprite.flip_h = screen_dot < 0.0
+	if crew_sprite:
+		_update_crew_sprite(cam_right)
+
+func _build_crew_sprite() -> void:
+	crew_sprite = AnimatedSprite3D.new()
+	crew_sprite.name = "CrewSprite"
+	crew_sprite.pixel_size = sprite.pixel_size
+	crew_sprite.billboard = sprite.billboard
+	crew_sprite.shaded = sprite.shaded
+	crew_sprite.alpha_cut = sprite.alpha_cut
+	crew_sprite.texture_filter = sprite.texture_filter
+	crew_sprite.sprite_frames = SpriteSheetFrames.build(crew_sprite_sheet, sprite_cell_size, {
+		"idle": {"row": crew_idle_row, "frames": crew_idle_frame_count, "fps": 5.0, "loop": true},
+		"walk": {"row": crew_walk_row, "frames": crew_walk_frame_count, "fps": 8.0, "loop": true},
+		"death": {"row": crew_death_row, "frames": crew_death_frame_count, "fps": 8.0, "loop": false},
+	})
+	sprite.add_child(crew_sprite)
+	crew_sprite.play("idle")
+
+## Keeps the crew behind the machine from this peer's own camera (so, like the
+## flip itself, worked out locally every frame), mirroring its facing, hit
+## flash and walk/idle state.
+func _update_crew_sprite(cam_right: Vector3) -> void:
+	crew_sprite.flip_h = sprite.flip_h
+	crew_sprite.modulate = sprite.modulate
+	if not _death_playing:
+		var anim: StringName = &"walk" if sprite.animation == &"walk" else &"idle"
+		if crew_sprite.animation != anim:
+			crew_sprite.play(anim)
+	var behind: Vector3 = cam_right * (crew_offset if sprite.flip_h else -crew_offset)
+	var camera := get_viewport().get_camera_3d()
+	if camera:
+		behind -= camera.global_transform.basis.z * CREW_DEPTH_OFFSET
+	## Y rotation only, so the basis inverse is exact (same as play_hit_reaction).
+	crew_sprite.position = global_transform.basis.inverse() * behind
 
 ## Every unit needs the camera's right vector each frame for its sprite flip,
 ## and it's the same answer for all of them — so the first unit to ask in a
@@ -2543,7 +2605,10 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 	if status_current_health < max_health * Research.LOW_HEALTH_FRACTION:
 		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
 	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
-	return roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
+	var result: int = roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
+	if target is ProductionBuilding and building_damage_multiplier != 1.0:
+		result = roundi(result * building_damage_multiplier)
+	return result
 
 func _head_to_target() -> void:
 	if not _is_target_alive(attack_target):
@@ -2982,6 +3047,10 @@ func _play_death_and_remove(away: Vector3) -> void:
 	_death_playing = true
 	## Corpses don't need picking out behind buildings.
 	sprite.material_overlay = null
+	if crew_sprite:
+		crew_sprite.material_overlay = null
+		crew_sprite.play("death")
+		crew_sprite.pause()
 	var has_death_anim: bool = sprite.sprite_frames and sprite.sprite_frames.has_animation("death")
 	## Held on the clip's first frame through the flight; played directly
 	## rather than via _set_animation, since every peer runs this RPC itself
@@ -2990,6 +3059,8 @@ func _play_death_and_remove(away: Vector3) -> void:
 		sprite.play("death")
 		sprite.pause()
 	await _play_death_knockback(away).finished
+	if crew_sprite:
+		crew_sprite.play()
 	if has_death_anim:
 		sprite.play()
 		var frame_count: int = sprite.sprite_frames.get_frame_count("death")
