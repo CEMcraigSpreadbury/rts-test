@@ -794,6 +794,11 @@ const MARCH_SQUEEZE_TRAIL: float = 0.8
 
 func _start_march(record: Dictionary, members: Array[Unit]) -> void:
 	var target: Vector3 = record["target"]
+	## One anchor can only walk at one pace, which would hold every member to
+	## the slowest one's speed — mixed-speed groups walk to their slots instead.
+	for unit in members:
+		if not is_equal_approx(unit.move_speed, members[0].move_speed):
+			return
 	var centroid := group_centroid(members)
 	if _flat_distance(centroid, target) < MARCH_MIN_DISTANCE:
 		return
