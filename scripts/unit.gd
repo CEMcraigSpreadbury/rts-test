@@ -819,6 +819,27 @@ var _funnel_forward: Vector3 = Vector3.FORWARD
 var _funnel_final_target: Vector3 = Vector3.ZERO
 var _funnel_timer: float = 0.0
 
+## Host-only: the right-drag formation this unit was last laid out in, if its
+## group is still using it — see GroupMovement.resolve_dragged_width.
+var dragged_formation: Dictionary = {}
+
+## Formation marching state (see GroupMovement's Marching section) — host-only.
+## While _march_active the unit holds its place relative to the group's moving
+## anchor, steering at _march_point and matching _march_velocity, rather than
+## walking straight to its slot; the slot itself is parked in
+## _march_final_target until end_march hands it back to the nav agent.
+var _march_active: bool = false
+var _march_point: Vector3 = Vector3.ZERO
+var _march_velocity: Vector3 = Vector3.ZERO
+var _march_final_target: Vector3 = Vector3.ZERO
+## Within this distance of its marching point a unit steers straight at it;
+## further out (knocked aside, or held up behind something) it paths there.
+const MARCH_DIRECT_DISTANCE: float = 2.0
+## How hard a marching unit is pulled back onto its point, per meter off it.
+const MARCH_CORRECTION_GAIN: float = 2.0
+## How far the marching point may drift from the nav target before re-pathing.
+const MARCH_REPATH_DISTANCE: float = 1.0
+
 const COHESION_RECHECK_INTERVAL: float = 0.2
 ## Most groupmates a unit averages over per recheck (see _update_cohesion).
 const COHESION_SAMPLE_SIZE: int = 24
@@ -966,6 +987,7 @@ func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> vo
 	_cohesion_stall_timer = 0.0
 	_cohesion_hard_stall_timer = 0.0
 	_cohesion_stalled = false
+	_march_active = false
 	## Any fresh move leg starts un-funnelled by definition; main.gd re-arms it
 	## immediately afterwards (via set_funnel_waypoint) if this particular leg's
 	## route actually needs one. Clearing here rather than only in command_move
@@ -975,6 +997,7 @@ func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> vo
 
 func _clear_formation_cohesion() -> void:
 	_funnel_active = false
+	_march_active = false
 	formation_group = []
 	formation_initial_distance = 0.0
 	_cohesion_target_speed_scale = 1.0
@@ -1181,7 +1204,43 @@ func is_funnelling() -> bool:
 ## Where this unit's current formation order is taking it, even while a
 ## funnel waypoint is steering it somewhere nearer first.
 func formation_slot() -> Vector3:
+	if _march_active:
+		return _march_final_target
 	return _funnel_final_target if _funnel_active else nav_agent.target_position
+
+## Arms (or updates) marching for this move leg — see _march_active. A no-op
+## once the unit has left the move, e.g. peeled off into a fight.
+func set_march_target(point: Vector3, anchor_velocity: Vector3) -> void:
+	if not _funnel_can_arm():
+		return
+	if not _march_active:
+		_march_final_target = nav_agent.target_position
+		_march_active = true
+	_march_point = point
+	_march_velocity = anchor_velocity
+
+## The group's anchor has arrived: walk the rest of the way to the real slot.
+func end_march() -> void:
+	if not _march_active:
+		return
+	_march_active = false
+	_path_end_timer = 0.0
+	nav_agent.target_position = _march_final_target
+
+## Desired velocity while marching: keep pace with the anchor and close on this
+## unit's own point, or path to that point when too far off to walk straight.
+func _march_desired_velocity(max_speed: float) -> Vector3:
+	var to_point := _march_point - global_position
+	to_point.y = 0.0
+	if to_point.length() > MARCH_DIRECT_DISTANCE:
+		if nav_agent.target_position.distance_to(_march_point) > MARCH_REPATH_DISTANCE:
+			nav_agent.target_position = _march_point
+		if not nav_agent.is_navigation_finished():
+			var next := nav_agent.get_next_path_position() - global_position
+			next.y = 0.0
+			if next.length_squared() > 0.0001:
+				return next.normalized() * max_speed
+	return (_march_velocity + to_point * MARCH_CORRECTION_GAIN).limit_length(max_speed)
 
 func _funnel_can_arm() -> bool:
 	return status_activity == Activity.MOVING \
@@ -1962,13 +2021,11 @@ func _physics_process(delta: float) -> void:
 		if direction.length_squared() > 0.0001:
 			direction = direction.normalized()
 
-	## formation_speed (see its declaration) caps a formation move to the
-	## group's slowest member — minf guards against it ever exceeding this
-	## unit's own move_speed even if it somehow got set wrong.
-	var effective_speed: float = minf(formation_speed, move_speed) if formation_speed > 0.0 else move_speed
-	_update_cohesion(delta, effective_speed)
+	## Units always travel at their own full speed, even in a mixed group —
+	## no slowest-member cap (formation_speed) and no cohesion throttle.
+	var effective_speed: float = move_speed
 	var buff_speed := _buff_speed_multiplier()
-	effective_speed *= _cohesion_speed_scale * _slow_multiplier() * buff_speed
+	effective_speed *= _slow_multiplier() * buff_speed
 	## The agent clamps what avoidance hands back to max_speed, so a speed-up
 	## (Charge!) has to lift the cap too or it would never show. Each set is a
 	## NavigationServer call, so only on a real change.
@@ -1977,6 +2034,8 @@ func _physics_process(delta: float) -> void:
 		nav_agent.max_speed = speed_cap
 	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
+	if _march_active:
+		desired_velocity = _march_desired_velocity(effective_speed)
 	## Added after avoidance (see _on_velocity_computed), not into the desired
 	## velocity: RVO boxed in by enemies returns a near-zero safe velocity and
 	## would cancel the push, leaving stacked units stacked.
@@ -2211,7 +2270,9 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## Without a way out the unit would stand there on its move order forever
 	## (never idle, so never re-formed, never scanning), so a path that has
 	## been over for PATH_END_GIVE_UP counts as arrived wherever it left the unit.
-	var path_over := status_activity == Activity.MOVING and nav_agent.is_navigation_finished()
+	## A marching unit's nav target is only its marching point, not the order's
+	## destination — reaching it isn't arriving (see end_march).
+	var path_over := status_activity == Activity.MOVING and nav_agent.is_navigation_finished() and not _march_active
 	var at_target := path_over and global_position.distance_to(nav_agent.target_position) <= nav_agent.target_desired_distance + 0.5
 	_path_end_timer = _path_end_timer + get_physics_process_delta_time() if path_over and not at_target else 0.0
 	if at_target or _path_end_timer >= PATH_END_GIVE_UP:

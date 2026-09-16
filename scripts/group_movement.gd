@@ -46,7 +46,12 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	var formation := Formation.new(units, formation_type, front_width)
 	var slots := formation.get_slot_positions(target_pos, forward, right)
 
-	return _assign_slots_to_units(units, slots)
+	## A group that is going to march (see _start_march) keeps its current
+	## arrangement: units are matched to slots by where they stand WITHIN the
+	## group rather than by raw distance, so the block translates instead of
+	## shuffling ranks on the way. A short hop still takes nearest slots.
+	var relative := _flat_distance(group_centroid(units), target_pos) >= MARCH_MIN_DISTANCE
+	return _assign_slots_to_units(units, slots, relative)
 
 ## The facing a dragged formation takes: square to the drag line, and pointing
 ## away from wherever the group currently stands — so ranks trail back toward
@@ -76,6 +81,37 @@ func drag_preview_slots(units: Array[Unit], line_start: Vector3, line_end: Vecto
 	var formation := Formation.new(units, Formation.DEFAULT_TYPE, front_width)
 	return formation.get_slot_positions(midpoint, facing, right)
 
+## Host-side memory of right-drag formations (see Unit.dragged_formation).
+## A dragged order (front_width >= 0) stamps its units with a fresh shared id,
+## its width and the formation type selected at the time. A later order without
+## a width reuses the remembered one only while every unit still carries the
+## same id — the selection is that dragged group, or what's left of it — and
+## the player hasn't picked a different formation type since; anything else
+## forms up in the selected type and forgets the dragged shape.
+var _next_dragged_formation_id: int = 1
+
+func resolve_dragged_width(units: Array[Unit], formation_type: Formation.Type, front_width: float) -> float:
+	if units.is_empty():
+		return front_width
+	if front_width >= 0.0:
+		var memory := {"id": _next_dragged_formation_id, "width": front_width, "type": formation_type}
+		_next_dragged_formation_id += 1
+		for unit in units:
+			unit.dragged_formation = memory
+		return front_width
+	var shared: Dictionary = units[0].dragged_formation
+	var keep: bool = not shared.is_empty() and shared["type"] == formation_type
+	if keep:
+		for unit in units:
+			if unit.dragged_formation.get("id", -1) != shared["id"]:
+				keep = false
+				break
+	if keep:
+		return shared["width"]
+	for unit in units:
+		unit.dragged_formation = {}
+	return front_width
+
 func group_centroid(units: Array[Unit]) -> Vector3:
 	var centroid := Vector3.ZERO
 	if units.is_empty():
@@ -98,11 +134,22 @@ func _group_forward(centroid: Vector3, target_pos: Vector3) -> Vector3:
 ## (unit, slot) pair until every unit has one. Not globally optimal (that's
 ## the Hungarian algorithm), but for RTS-sized selections this is more than
 ## good enough and avoids the crossing-paths problem a fixed index mapping has.
-func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3]) -> Array[Vector3]:
+func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3], relative: bool = false) -> Array[Vector3]:
+	var unit_origin := Vector3.ZERO
+	var slot_origin := Vector3.ZERO
+	if relative:
+		unit_origin = group_centroid(units)
+		for slot in slots:
+			slot_origin += slot
+		slot_origin /= slots.size()
 	var pairs: Array = []
 	for ui in units.size():
+		var from := units[ui].global_position - unit_origin
+		from.y = 0.0
 		for si in slots.size():
-			pairs.append([units[ui].global_position.distance_squared_to(slots[si]), ui, si])
+			var to := slots[si] - slot_origin
+			to.y = 0.0
+			pairs.append([from.distance_squared_to(to), ui, si])
 	pairs.sort_custom(func(a, b): return a[0] < b[0])
 
 	var result: Array[Vector3] = []
@@ -533,7 +580,7 @@ func register_formation(group: Array[Unit], target_pos: Vector3, formation_type:
 	## No need to hunt down an older record these units were in: they are
 	## carrying this new group array now, so they no longer read as live
 	## members of it and the next poll retires it on its own.
-	_active_formations.append({
+	var record := {
 		"group": group,
 		"slots": _slot_map(members),
 		"target": target_pos,
@@ -544,7 +591,10 @@ func register_formation(group: Array[Unit], target_pos: Vector3, formation_type:
 		"count": members.size(),
 		"timer": 0.0,
 		"dirty": false,
-	})
+		"march": false,
+	}
+	_start_march(record, members)
+	_active_formations.append(record)
 
 ## The members of `group` still actually walking this order: alive, still on a
 ## move/attack-move command, and still carrying this exact group array. A unit
@@ -586,6 +636,7 @@ func update_reformation(delta: float) -> void:
 			record["count"] = members.size()
 			record["dirty"] = true
 			record["timer"] = REFORM_DEBOUNCE
+		_advance_march(record, members, delta)
 		if not record["dirty"]:
 			continue
 		record["timer"] = float(record["timer"]) - delta
@@ -607,6 +658,11 @@ func update_reformation(delta: float) -> void:
 		## "moved on" on the very next poll.
 		record["group"] = members
 		record["slots"] = _slot_map(members)
+		## The re-issue dropped everyone off the march; pick it back up from
+		## where the anchor already is, with offsets for the re-solved slots.
+		if record["march"]:
+			_set_march_offsets(record, members)
+			record["march_timer"] = 0.0
 
 ## How near its slot an idle member has to be standing to count as having
 ## arrived there (MOVE_ARRIVAL_DISTANCE plus room for a separation nudge),
@@ -686,3 +742,233 @@ func group_facing(units: Array[Unit]) -> Vector3:
 		facing += Vector3(sin(unit.rotation.y), 0.0, cos(unit.rotation.y))
 	facing.y = 0.0
 	return facing.normalized() if facing.length_squared() > 0.0001 else REFORM_DEFAULT_FORWARD
+
+## ---------------------------------------------------------------------------
+## Marching
+##
+## Without this every unit paths to its own slot independently, so the shape
+## only exists at the two ends of a move and smears out in between. A marching
+## record instead walks one virtual anchor (the front-centre of the formation)
+## along a single navmesh route, and every member steers at its own offset from
+## that anchor: ranks trail back ALONG the route (so the block wheels round
+## corners rather than cutting them) and flank offsets are measured across it.
+## Where the navmesh narrows, a rank first slides sideways into whatever room
+## there is and only then squeezes its flanks inward, and squeezed units drop
+## back behind their rank — so a gate or a gap between buildings turns the
+## block into a column and it opens back out on the far side. The anchor paces
+## itself to how far behind the members are, so a scattered group forms up
+## before it marches off and a jam at a gap holds the front back instead of
+## the front running away from it. Once the anchor reaches the destination the
+## members are released onto their real slots (Unit.end_march).
+## ---------------------------------------------------------------------------
+
+## Moves shorter than this just walk to their slots — marching needs some route
+## to march along, and a short hop keeps its shape well enough on its own.
+const MARCH_MIN_DISTANCE: float = 6.0
+## Anchor pace as a fraction of the slowest member's speed, leaving the members
+## a little slack to catch up to their offsets while moving.
+const MARCH_SPEED_FACTOR: float = 0.9
+## Average member lag (meters from their steering point) the anchor ignores,
+## and the lag at which it slows to MARCH_MIN_SCALE.
+const MARCH_LAG_FREE: float = 1.0
+const MARCH_LAG_STOP: float = 4.0
+## Never fully halted, so one unit that can't keep up can't freeze the group.
+const MARCH_MIN_SCALE: float = 0.15
+## How often members' steering points are re-solved. The anchor itself moves
+## every frame and members extrapolate with its velocity in between.
+const MARCH_UPDATE_INTERVAL: float = 0.1
+## Route heading is read across this many meters either side of a point so a
+## sharp path corner turns the block smoothly instead of snapping it.
+const MARCH_HEADING_SPAN: float = 1.5
+## Over the last stretch the heading blends into the order's final facing, so
+## the block arrives already oriented to its slots.
+const MARCH_BLEND_DISTANCE: float = 6.0
+## Spacing of the navmesh samples used to measure room across the route.
+const MARCH_PROBE_STEP: float = 0.5
+## Extra room probed past a rank's own width, for sliding it sideways.
+const MARCH_PROBE_EXTRA: float = 3.0
+## A sample whose nearest navmesh point is further than this is off the mesh.
+const MARCH_BLOCKED_DISTANCE: float = 0.3
+## How far behind its rank a squeezed unit falls, per meter squeezed inward.
+const MARCH_SQUEEZE_TRAIL: float = 0.8
+
+func _start_march(record: Dictionary, members: Array[Unit]) -> void:
+	var target: Vector3 = record["target"]
+	var centroid := group_centroid(members)
+	if _flat_distance(centroid, target) < MARCH_MIN_DISTANCE:
+		return
+	var map: RID = members[0].nav_agent.get_navigation_map()
+	if not map.is_valid():
+		return
+	var forward: Vector3 = record["forward"]
+	if forward == Vector3.ZERO:
+		forward = _group_forward(centroid, target)
+	record["march_forward"] = forward
+	record["map"] = map
+	_set_march_offsets(record, members)
+
+	## The anchor starts where the front-centre of a formation centred on the
+	## group's current position would be.
+	var offsets: Dictionary = record["offsets"]
+	var average_back := 0.0
+	for unit in offsets:
+		average_back += (offsets[unit] as Vector2).y
+	average_back /= maxi(offsets.size(), 1)
+	var start := NavigationServer3D.map_get_closest_point(map, centroid + forward * average_back)
+	var route := NavigationServer3D.map_get_path(map, start, target, true)
+	if route.size() < 2:
+		return
+	var cumulative: Array[float] = [0.0]
+	for i in route.size() - 1:
+		cumulative.append(cumulative[i] + _flat_distance(route[i], route[i + 1]))
+	var length: float = cumulative[cumulative.size() - 1]
+	if length < MARCH_MIN_DISTANCE:
+		return
+
+	record["route"] = route
+	record["cumulative"] = cumulative
+	record["length"] = length
+	record["arc"] = 0.0
+	record["speed"] = slowest_move_speed(members) * MARCH_SPEED_FACTOR
+	record["march_scale"] = MARCH_MIN_SCALE
+	record["march_timer"] = 0.0
+	record["march"] = true
+	_steer_march(record, members)
+
+## Each member's slot as (lateral, back) against the order's final facing —
+## lateral along `right`, back measured behind the front rank — plus each
+## rank's reach to either side, which _steer_march needs to slide it whole.
+func _set_march_offsets(record: Dictionary, members: Array[Unit]) -> void:
+	var target: Vector3 = record["target"]
+	var forward: Vector3 = record["march_forward"]
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	var slots: Dictionary = record["slots"]
+	var offsets: Dictionary = {}
+	var ranks: Dictionary = {}
+	var widest := 0.0
+	for unit in members:
+		if not slots.has(unit):
+			continue
+		var offset: Vector3 = slots[unit] - target
+		var lateral: float = offset.dot(right)
+		var back: float = maxf(-offset.dot(forward), 0.0)
+		offsets[unit] = Vector2(lateral, back)
+		var rank := roundi(back * 10.0)
+		var reach: Vector2 = ranks.get(rank, Vector2.ZERO)
+		ranks[rank] = Vector2(maxf(reach.x, -lateral), maxf(reach.y, lateral))
+		widest = maxf(widest, absf(lateral))
+	record["offsets"] = offsets
+	record["rank_reach"] = ranks
+	record["probe_reach"] = widest + MARCH_PROBE_EXTRA
+
+func _advance_march(record: Dictionary, members: Array[Unit], delta: float) -> void:
+	if not record["march"]:
+		return
+	var walking: Array[Unit] = []
+	for unit in members:
+		if _is_walking(record, unit):
+			walking.append(unit)
+	var length: float = record["length"]
+	var arc: float = minf(float(record["arc"]) + float(record["speed"]) * float(record["march_scale"]) * delta, length)
+	record["arc"] = arc
+	if arc >= length:
+		record["march"] = false
+		for unit in walking:
+			unit.end_march()
+		return
+	record["march_timer"] = float(record["march_timer"]) - delta
+	if record["march_timer"] > 0.0:
+		return
+	record["march_timer"] = MARCH_UPDATE_INTERVAL
+	_steer_march(record, walking)
+
+## Re-solves every member's steering point off the anchor's current position.
+func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
+	var map: RID = record["map"]
+	var arc: float = record["arc"]
+	var offsets: Dictionary = record["offsets"]
+	var ranks: Dictionary = record["rank_reach"]
+	var probe_reach: float = record["probe_reach"]
+	var anchor_speed: float = float(record["speed"]) * float(record["march_scale"])
+	## Rank key -> [left room, right room, sideways shift], probed once per rank.
+	var rank_room: Dictionary = {}
+	var lag_total := 0.0
+	var lag_count := 0
+	for unit in units:
+		if not offsets.has(unit):
+			continue
+		var offset: Vector2 = offsets[unit]
+		var rank := roundi(offset.y * 10.0)
+		var frame := _march_frame(record, arc - offset.y)
+		var base: Vector3 = frame["position"]
+		var heading: Vector3 = frame["forward"]
+		var right := Vector3(heading.z, 0.0, -heading.x)
+
+		if not rank_room.has(rank):
+			var reach: Vector2 = ranks.get(rank, Vector2.ZERO)
+			var left_room := _probe_room(map, base, -right, probe_reach)
+			var right_room := _probe_room(map, base, right, probe_reach)
+			## Slide the whole rank toward the open side before squeezing anyone.
+			var shift := 0.0
+			if right_room < reach.y:
+				shift = -minf(reach.y - right_room, maxf(left_room - reach.x, 0.0))
+			elif left_room < reach.x:
+				shift = minf(reach.x - left_room, maxf(right_room - reach.y, 0.0))
+			rank_room[rank] = [left_room, right_room, shift]
+		var room: Array = rank_room[rank]
+
+		var wanted: float = offset.x + float(room[2])
+		var lateral: float = clampf(wanted, -float(room[0]), float(room[1]))
+		var trail: float = absf(wanted - lateral) * MARCH_SQUEEZE_TRAIL
+		if trail > 0.05:
+			var trailed := _march_frame(record, arc - offset.y - trail)
+			base = trailed["position"]
+			heading = trailed["forward"]
+			right = Vector3(heading.z, 0.0, -heading.x)
+		var point := NavigationServer3D.map_get_closest_point(map, base + right * lateral)
+		unit.set_march_target(point, heading * anchor_speed)
+		lag_total += minf(_flat_distance(unit.global_position, point), MARCH_LAG_STOP * 2.0)
+		lag_count += 1
+
+	if lag_count > 0:
+		var lag: float = lag_total / lag_count
+		record["march_scale"] = clampf(1.0 - (lag - MARCH_LAG_FREE) / (MARCH_LAG_STOP - MARCH_LAG_FREE), MARCH_MIN_SCALE, 1.0)
+
+## Position `arc` meters along the march route and the formation's heading
+## there. Negative arcs (ranks still behind the route's start) extend straight
+## back from it.
+func _march_frame(record: Dictionary, arc: float) -> Dictionary:
+	var route: PackedVector3Array = record["route"]
+	var cumulative: Array[float] = record["cumulative"]
+	var length: float = record["length"]
+	var final_forward: Vector3 = record["march_forward"]
+	var position := _march_position(route, cumulative, arc)
+	var heading := _march_position(route, cumulative, minf(arc + MARCH_HEADING_SPAN, length)) \
+			- _march_position(route, cumulative, arc - MARCH_HEADING_SPAN)
+	heading.y = 0.0
+	heading = heading.normalized() if heading.length_squared() > 0.0001 else final_forward
+	var blend: float = clampf(1.0 - (length - arc) / MARCH_BLEND_DISTANCE, 0.0, 1.0)
+	if blend > 0.0:
+		var blended := heading.lerp(final_forward, blend)
+		heading = blended.normalized() if blended.length_squared() > 0.0001 else final_forward
+	return {"position": position, "forward": heading}
+
+func _march_position(route: PackedVector3Array, cumulative: Array[float], arc: float) -> Vector3:
+	if arc >= 0.0:
+		return _route_point_at(route, cumulative, arc)["position"]
+	var start_forward: Vector3 = _route_point_at(route, cumulative, 0.0)["forward"]
+	return route[0] + start_forward * arc
+
+## Walkable distance from `base` along `direction`, up to `reach`, sampled
+## against the navmesh (which buildings are already carved out of).
+func _probe_room(map: RID, base: Vector3, direction: Vector3, reach: float) -> float:
+	var room := 0.0
+	var distance := MARCH_PROBE_STEP
+	while room < reach:
+		var sample := base + direction * minf(distance, reach)
+		var nearest := NavigationServer3D.map_get_closest_point(map, sample)
+		if _flat_distance(nearest, sample) > MARCH_BLOCKED_DISTANCE:
+			return room
+		room = minf(distance, reach)
+		distance += MARCH_PROBE_STEP
+	return reach

@@ -1,4 +1,4 @@
-[gd_scene format=3]
+﻿[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/options_menu.tscn" id="2_options"]
@@ -42,7 +42,7 @@ alignment = 1
 [node name="Title" type="Label" parent="Menu"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 48
-text = "RTS Test"
+text = "Crowns of Aldmere"
 horizontal_alignment = 1
 
 [node name="TitleDivider" type="TextureRect" parent="Menu"]

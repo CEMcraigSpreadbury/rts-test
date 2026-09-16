@@ -1920,24 +1920,14 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
 
+	## A group the player laid out by right-dragging keeps that shape for its
+	## later click orders too, rather than snapping back to the selected type.
+	if target_node == null:
+		front_width = group_movement.resolve_dragged_width(units, formation_type, front_width)
 	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type, facing, front_width)
-	## Chokepoint funnelling: if the route to the destination has to thread
-	## something narrower than this formation is wide (a gate, a slot between
-	## buildings), every unit heads for a shared waypoint just past that gap
-	## first and only disperses to its own slot once through — otherwise the
-	## flanks of a wide shape each path to their own slot independently and the
-	## group smears itself along the wall instead of columning up. Empty (the
-	## common case: open ground, or a single/small group) leaves dispatch
-	## exactly as it was. Host-side and one-shot, same as the formation shape
-	## itself — see find_funnel_point.
-	##
-	## Computed lazily, at the first unit that actually gets an immediate
-	## ground-move dispatch: the analysis costs a navmesh path query plus a pass
-	## over every building, and a gather/attack/build order (target_node set —
-	## those ignore world_pos entirely) or a wholly shift-queued one would throw
-	## the answer away.
-	var funnel: Dictionary = {}
-	var funnel_resolved: bool = target_node != null
+	## Chokepoints are handled by the march itself (see register_formation
+	## below and GroupMovement's Marching section), which squeezes the block
+	## into a column wherever the route narrows.
 	## Capping the whole group to its slowest member's speed is what actually
 	## keeps a mixed-speed selection's formation shape intact throughout the
 	## move — the nearest-slot assignment above already gets everyone to the
@@ -1968,19 +1958,6 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		else:
 			unit.clear_order_queue()
 			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
-			## Only on the immediately-dispatched branch, never on a queued one:
-			## the gap geometry was measured against where the group is standing
-			## right now, and a shift-queued leg doesn't start until some
-			## unknown amount of movement later, by which point that waypoint
-			## could be anywhere relative to the unit. set_funnel_waypoint is
-			## itself a no-op unless the dispatch above actually resulted in a
-			## move/attack-move (a gather/attack/build target ignores the slot
-			## position entirely, so it has no funnel leg to run).
-			if not funnel_resolved:
-				funnel_resolved = true
-				funnel = group_movement.find_funnel_point(units, group_movement.group_centroid(units), world_pos, formation_positions)
-			if not funnel.is_empty():
-				group_movement.apply_funnel(unit, funnel)
 	## Reformation bookkeeping: remember this group's destination and shape so
 	## the host can close ranks around whoever is still walking it when members
 	## die en route (see update_reformation). Registered from the units'
@@ -2034,8 +2011,9 @@ func _rpc_issue_reform(unit_paths: Array[NodePath], formation_type: Formation.Ty
 
 	var centroid := group_movement.group_centroid(units)
 	var facing := group_movement.group_facing(units)
-	group_movement.reform_group(units, centroid, formation_type, false, facing)
-	group_movement.register_formation(units, centroid, formation_type, false, facing)
+	var front_width: float = group_movement.resolve_dragged_width(units, formation_type, -1.0)
+	group_movement.reform_group(units, centroid, formation_type, false, facing, front_width)
+	group_movement.register_formation(units, centroid, formation_type, false, facing, front_width)
 
 ## Fires whenever a unit's current command runs its own natural course (a
 ## move arrives, a fight runs out of enemies, a build finishes) — see
