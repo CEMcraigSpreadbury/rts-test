@@ -479,6 +479,10 @@ func _update_wave() -> void:
 		_wave_progress_pos = centre
 		_wave_progress_time = ai.game_time
 	elif ai.game_time - _wave_progress_time > WAVE_STALL_SECONDS:
+		if _breach(wave):
+			_wave_progress_pos = centre
+			_wave_progress_time = ai.game_time
+			return
 		## Already re-sent everyone once and still wedged: this target can't be
 		## got at from here — take the next one.
 		if _wave_resent:
@@ -491,12 +495,7 @@ func _update_wave() -> void:
 		_wave_progress_pos = centre
 		_wave_progress_time = ai.game_time
 		return
-	## Stragglers that finished a fight short of the target walk on.
-	var stragglers: Array[Unit] = []
-	for unit in wave:
-		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(wave_target) > WAVE_ARRIVE_RADIUS:
-			stragglers.append(unit)
-	ai.order_move(stragglers, wave_target, true)
+	_send_stragglers_on()
 
 ## ATTACK mode: the wave goes where it was sent and stays there. Neither the
 ## scouting rules nor "arrived, find something else" apply — an ally sent to
@@ -509,11 +508,75 @@ func _update_attack_hold() -> void:
 	if Vector2(aim.x - wave_target.x, aim.z - wave_target.z).length() > 3.0:
 		_set_wave_target({pos = ai.attack_position, node = null, objective = null, peer = 0})
 		return
+	_send_stragglers_on()
+
+## Soldiers standing idle short of the target (a fight finished, or the path
+## ran out against a wall) walk on — or break through what's in the way.
+func _send_stragglers_on() -> void:
 	var stragglers: Array[Unit] = []
 	for unit in wave:
 		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(wave_target) > WAVE_ARRIVE_RADIUS:
 			stragglers.append(unit)
+	if stragglers.is_empty() or _breach(stragglers):
+		return
 	ai.order_move(stragglers, wave_target, true)
+
+## --- Breaching ---
+
+## An enemy building within this of where a path runs out (past its own
+## footprint) counts as what's blocking it.
+const BREACH_SEARCH_RADIUS: float = 5.0
+## A path ending this close to a spawn/position target isn't blocked.
+const BREACH_REACH_TOLERANCE: float = 4.0
+
+## When the walk from `units` to the wave target runs out short of it, orders
+## them to attack the enemy building (a wall, a gate) standing in the way.
+## Returns whether it did. Once it falls they go idle and are sent on again,
+## which re-checks the path.
+func _breach(units: Array) -> bool:
+	var blocker := find_blocker(units[0].global_position, wave_target, _wave_reach_tolerance())
+	if blocker == null:
+		return false
+	ai.order_target(units, blocker)
+	return true
+
+func _wave_reach_tolerance() -> float:
+	if is_instance_valid(_wave_target_objective):
+		return POINT_REACH_TOLERANCE
+	if is_instance_valid(_wave_target_node):
+		return _wave_target_node.get_footprint_radius() + TARGET_REACH_SLACK
+	return BREACH_REACH_TOLERANCE
+
+## The attackable enemy building blocking the way from `from` to `to`, or
+## null when a path gets within `tolerance` of `to` or nothing hostile is in
+## the way (a cliff, our own or an ally's wall). Picks the building nearest
+## where the path runs out, leaning towards the target side.
+func find_blocker(from: Vector3, to: Vector3, tolerance: float) -> ProductionBuilding:
+	if not ai.nav_ready():
+		return null
+	var nav_map: RID = ai.main.get_world_3d().navigation_map
+	var path: PackedVector3Array = NavigationServer3D.map_get_path(nav_map, ai.nearest_navmesh_point(from), to, true)
+	if path.is_empty():
+		return null
+	var end: Vector3 = path[path.size() - 1]
+	if Vector2(end.x - to.x, end.z - to.z).length() <= tolerance:
+		return null
+	var best: ProductionBuilding = null
+	var best_score := INF
+	for node in ai.get_tree().get_nodes_in_group("buildings"):
+		var building := node as ProductionBuilding
+		if building == null or not building.can_be_attacked() or building.owner_peer_id <= 0 \
+				or not Teams.is_enemy(ai.peer_id, building.owner_peer_id):
+			continue
+		var pos: Vector3 = building.global_position
+		var gap: float = Vector2(pos.x - end.x, pos.z - end.z).length() - building.get_footprint_radius()
+		if gap > BREACH_SEARCH_RADIUS:
+			continue
+		var score: float = gap + Vector2(pos.x - to.x, pos.z - to.z).length() * 0.25
+		if score < best_score:
+			best_score = score
+			best = building
+	return best
 
 ## The wave's point is taken (or can't be): move on. At the point: keep
 ## everyone inside the capture zone and watch the flag. Returns whether it
@@ -628,7 +691,7 @@ func _choose_target(from: Vector3, strength: float, points: bool = true, bases: 
 		candidates.sort_custom(func(a, b): return a[0] < b[0])
 		for i in mini(candidates.size(), TARGET_REACH_CHECKS):
 			var target: Dictionary = candidates[i][1]
-			if ai.is_reachable(target.pos, candidates[i][2], from):
+			if ai.is_reachable(target.pos, candidates[i][2], from) or find_blocker(from, target.pos, candidates[i][2]) != null:
 				return target
 			_unreachable_until[_target_key(target)] = ai.game_time + UNREACHABLE_RETRY_SECONDS
 	return {}
