@@ -23,6 +23,14 @@ static func apply_to_trees_in(node: Node) -> void:
 	for child in node.get_children():
 		apply_to_trees_in(child)
 
+## Re-applies the Wind setting to every tree material already built.
+static func refresh() -> void:
+	for material: ShaderMaterial in _cache.values():
+		material.set_shader_parameter("wind_strength", _strength())
+
+static func _strength() -> float:
+	return STRENGTH if Settings.get_value(&"wind") else 0.0
+
 static func _apply(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mesh_instance: MeshInstance3D = node
@@ -56,7 +64,7 @@ static func _windy_for(source: Material, height: float) -> Material:
 		material.set_shader_parameter("metallic", standard.metallic)
 	else:
 		return null
-	material.set_shader_parameter("wind_strength", STRENGTH)
+	material.set_shader_parameter("wind_strength", _strength())
 	material.set_shader_parameter("wind_height", height)
 	material.set_meta(&"tree_wind", true)
 	_cache[key] = material

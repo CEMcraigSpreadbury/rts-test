@@ -27,6 +27,7 @@ const DEFAULTS := {
 	&"render_scale": 1.0,
 	&"depth_of_field": true,
 	&"clouds": true,
+	&"wind": true,
 }
 
 ## Only the fixed, per-player hotkeys. Ability/production/building hotkeys are

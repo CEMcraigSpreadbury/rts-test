@@ -4,7 +4,7 @@
 // names and math as grass_wind.gdshader, so fog_of_war.gd wires both alike.
 // fog_enabled stays off in the editor, where nothing drives these uniforms.
 uniform bool fog_enabled = false;
-uniform sampler2D fog_tex : filter_linear;
+uniform sampler2D fog_tex : filter_linear, repeat_disable;
 uniform vec2 fog_map_origin;
 uniform vec2 fog_map_size;
 const int FOG_MAX_VISION_SOURCES = 64;
@@ -21,7 +21,11 @@ float fog_amount(vec2 world_xz, out float explored) {
 	if (!fog_enabled) {
 		return 0.0;
 	}
-	explored = texture(fog_tex, (world_xz - fog_map_origin) / fog_map_size).r;
+	vec2 fog_uv = (world_xz - fog_map_origin) / fog_map_size;
+	// Past the map edge (e.g. the sea plane) nothing can ever be explored.
+	if (all(greaterThanEqual(fog_uv, vec2(0.0))) && all(lessThanEqual(fog_uv, vec2(1.0)))) {
+		explored = texture(fog_tex, fog_uv).r;
+	}
 	float vis = 0.0;
 	for (int i = 0; i < fog_vision_count; i++) {
 		float r = fog_vision_radii[i];

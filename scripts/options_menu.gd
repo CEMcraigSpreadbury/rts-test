@@ -114,6 +114,7 @@ func _build_visuals_page(page: Control) -> void:
 			func(v: float): Settings.set_value(&"render_scale", v / 100.0), func(v: float): return "%d%%" % v)
 	_add_check(page, "Depth of Field", &"depth_of_field")
 	_add_check(page, "Clouds", &"clouds")
+	_add_check(page, "Wind", &"wind")
 
 func _build_sound_page(page: Control) -> void:
 	for bus_name in Settings.BUSES:

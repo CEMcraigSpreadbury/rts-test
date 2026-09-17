@@ -240,6 +240,7 @@ func _ready() -> void:
 	_material.set_shader_parameter("map_size", map_size)
 
 	call_deferred("_setup_fogged_materials")
+	Settings.changed.connect(_on_settings_changed)
 
 	_vision_positions.resize(MAX_VISION_SOURCES)
 	_vision_radii.resize(MAX_VISION_SOURCES)
@@ -275,10 +276,16 @@ func _update_wind(delta: float) -> void:
 	_wind_strength = lerpf(_wind_strength, _wind_target_strength, blend)
 	_wind_direction = lerp_angle(_wind_direction, _wind_target_direction, blend)
 	var velocity := Vector2(cos(_wind_direction), sin(_wind_direction)) * _wind_strength
+	if not Settings.get_value(&"wind"):
+		velocity = Vector2.ZERO
 	_wind_offset += velocity * 0.01 * delta
 	for material in _grass_materials:
 		material.set_shader_parameter("wind_velocity", velocity)
 		material.set_shader_parameter("wind_offset", _wind_offset)
+
+func _on_settings_changed(key: StringName) -> void:
+	if key == &"wind":
+		TreeWind.refresh()
 
 ## Peer 0 is the neutral/AI-owner sentinel (Gatherable, Objective guards
 ## before capture) — never a real player, so it must never be treated as

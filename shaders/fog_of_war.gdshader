@@ -17,7 +17,7 @@ const float DEPTH_PULL = 0.998;
 // own UVs are laid out.
 // One byte per cell: how strongly explored (0 = never, 1 = fully) — see
 // FogOfWar.explored. Deliberately not source_color: it's data, not a colour.
-uniform sampler2D fog_tex : filter_linear;
+uniform sampler2D fog_tex : filter_linear, repeat_disable;
 uniform vec2 map_origin;
 uniform vec2 map_size;
 
