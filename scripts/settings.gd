@@ -28,6 +28,7 @@ const DEFAULTS := {
 	&"depth_of_field": true,
 	&"clouds": true,
 	&"wind": true,
+	&"water_reflections": true,
 }
 
 ## Only the fixed, per-player hotkeys. Ability/production/building hotkeys are
@@ -119,6 +120,8 @@ func _apply(key: StringName, at_startup: bool) -> void:
 			Engine.max_fps = values[&"max_fps"]
 		&"render_scale":
 			get_tree().root.scaling_3d_scale = values[&"render_scale"]
+		&"water_reflections":
+			RenderingServer.global_shader_parameter_set(&"water_reflections", values[&"water_reflections"])
 
 ## At startup, "windowed" leaves the window alone — forcing it would undo a
 ## maximized window or whatever the editor's embedded game view asked for.

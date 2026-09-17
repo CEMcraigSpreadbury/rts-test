@@ -10,9 +10,7 @@ render_mode shadows_disabled;
 #define FRESNEL
 //#define PLAYER_WAVES
 #define DISPLACEMENT
-// Off: screen-space rays can't resolve the thin billboard unit sprites, which
-// reflected as broken fragments.
-//#define SSR
+#define SSR
 
 group_uniforms FogOfWar;
 #include "res://shaders/terrain/binbun_fog.gdshaderinc"
@@ -85,6 +83,10 @@ uniform vec2 flow_direction = vec2(0.6, 0.8);
 uniform float flow_speed : hint_range(0.0, 2.0, 0.01) = 0.6;
 
 // Hidden Uniforms
+#ifdef SSR
+// The Water Reflections option (Settings).
+global uniform bool water_reflections;
+#endif
 #ifdef PLAYER_WAVES
 global uniform vec3 player_position;
 #endif
@@ -304,21 +306,44 @@ void fragment() {
 	float current_stepD = 0.0;
 	float current_depth = 0.0;
 	float alpha_hit = 0.0;
-	for (float i = 0.01; i < ssr_travel; i++) {
-		current_stepD = mix(ssr_resolution_near, ssr_resolution_far, float(i) / float(ssr_travel));
+	vec3 previous_view_pos = current_view_pos;
+	// Steps grow with the distance actually travelled. The original counter also
+	// added 1 per iteration, so steps were already ~1.5 m by the time a ray
+	// reached a unit's upper half, and thin parts like a sword were skipped.
+	float travelled = water_reflections ? 0.0 : ssr_travel;
+	for (int n = 0; n < 128 && travelled < ssr_travel; n++) {
+		current_stepD = mix(ssr_resolution_near, ssr_resolution_far, travelled / ssr_travel);
+		previous_view_pos = current_view_pos;
 		current_view_pos += reflacted_path * current_stepD;
+		travelled += current_stepD;
 		current_screen_pos = get_uv_from_view_position(current_view_pos, PROJECTION_MATRIX);
 		if (!in_bounds(current_screen_pos)) { break; }
-		current_depth = get_view_position_from_uv(current_screen_pos, texture(depth_texture, current_screen_pos).x, INV_PROJECTION_MATRIX).z - current_view_pos.z;
+		current_depth = get_view_position_from_uv(current_screen_pos, textureLod(depth_texture, current_screen_pos, 0.0).x, INV_PROJECTION_MATRIX).z - current_view_pos.z;
 
-		if (current_depth > -0.0001 && current_depth <= ssr_tolerance * current_stepD) {
+		// A step can end further behind a thin surface (a unit's sprite) than the
+		// tolerance allows, depending on where the crossing falls between steps.
+		// Across a reflection that varies smoothly, so misses came in bands. The
+		// window is doubled and the hit refined by bisecting the last step.
+		if (current_depth > -0.0001 && current_depth <= ssr_tolerance * current_stepD * 2.0) {
+			vec3 front = previous_view_pos;
+			vec3 behind = current_view_pos;
+			for (int b = 0; b < 6; b++) {
+				vec3 middle = (front + behind) * 0.5;
+				vec2 middle_uv = get_uv_from_view_position(middle, PROJECTION_MATRIX);
+				float middle_depth = get_view_position_from_uv(middle_uv, textureLod(depth_texture, middle_uv, 0.0).x, INV_PROJECTION_MATRIX).z - middle.z;
+				if (middle_depth > -0.0001) {
+					behind = middle;
+				} else {
+					front = middle;
+				}
+			}
+			current_screen_pos = get_uv_from_view_position(behind, PROJECTION_MATRIX);
 			sampled_color = textureLod(screen_texture, current_screen_pos, 0.5).rgb;
 			vec2 ruv = 1.0 - abs(current_screen_pos * 2.0 - 1.0);
 			ruv = pow(ruv, vec2(0.5));
 			alpha_hit = clamp(min(ruv.x, ruv.y), 0.0, 1.0);
 			break;
 		}
-		i += current_stepD;
 	}
 	#endif
 

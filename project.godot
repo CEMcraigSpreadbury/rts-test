@@ -98,3 +98,7 @@ cloud_diverge_angle={
 "type": "float",
 "value": 20.0
 }
+water_reflections={
+"type": "bool",
+"value": true
+}

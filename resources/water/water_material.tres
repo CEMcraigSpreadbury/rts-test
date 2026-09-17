@@ -47,6 +47,7 @@ shader = ExtResource("1_water")
 shader_parameter/displacement_strength = 0.08
 shader_parameter/edge_thickness = 0.12
 shader_parameter/foam_opacity = 0.55
+shader_parameter/ssr_resolution_near = 0.1
 shader_parameter/displacement_texture = SubResource("NoiseTexture2D_displacement")
 shader_parameter/edge_noise = SubResource("NoiseTexture2D_edge")
 shader_parameter/edge_ramp = SubResource("GradientTexture1D_edge_ramp")

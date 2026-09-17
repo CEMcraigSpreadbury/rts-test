@@ -115,6 +115,7 @@ func _build_visuals_page(page: Control) -> void:
 	_add_check(page, "Depth of Field", &"depth_of_field")
 	_add_check(page, "Clouds", &"clouds")
 	_add_check(page, "Wind", &"wind")
+	_add_check(page, "Water Reflections", &"water_reflections")
 
 func _build_sound_page(page: Control) -> void:
 	for bus_name in Settings.BUSES:
