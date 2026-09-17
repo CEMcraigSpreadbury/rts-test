@@ -4,10 +4,11 @@
 
 [node name="MapGenerator" type="Node3D" unique_id=654162614]
 script = ExtResource("1_map_generator")
-map_name = "Trial Forest"
+map_name = "Aethermoor Creek"
 map_seed = 862959
-map_size = 240
 shrines_per_player = 2
 paths_to_centre = false
+import_heightmap = "C:/Users/craig/Documents/rts-test/assets/Heightmaps/aethermoor_creek_1.0.sd7"
+import_height_range = 25.0
 forest_clusters_per_player = 10
 overwrite_existing = true

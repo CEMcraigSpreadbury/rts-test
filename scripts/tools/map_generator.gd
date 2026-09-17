@@ -89,6 +89,13 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_range(0, 4) var fords_per_river: int = 1
 @export_range(3.0, 12.0, 0.5) var ford_width: float = 6.0
 
+@export_group("Heightmap Import")
+@export_global_file("*.sd7", "*.smf", "*.png", "*.exr", "*.r16", "*.raw") var import_heightmap: String = ""
+@export_range(2.0, 80.0, 0.5) var import_height_range: float = 16.0
+@export_range(0.0, 1.0, 0.01) var import_image_water_height: float = 0.2
+@export_range(0, 6) var import_smoothing: int = 1
+@export var import_metal_as_gold: bool = true
+
 @export_group("Colours")
 @export var grass_light: Color = Color(0.658824, 0.792157, 0.345098):
 	set(value):

@@ -19,8 +19,10 @@ const GRASS: int = 0
 const DIRT: int = 1
 const ROCK: int = 2
 const SAND: int = 3
-## Ground lower than this above the water is sand.
+## Ground lower than this above the water, and within SAND_REACH pixels
+## (metres) of it, is sand — so low-lying plains away from water stay grass.
 const SAND_HEIGHT: float = 0.6
+const SAND_REACH: int = 6
 ## A height step between neighbouring corners above this is a cliff face;
 ## hills and ramps (MapGenerator.ramp_slope) stay below it.
 const ROCK_STEP: float = 0.6
@@ -51,6 +53,7 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 		w.resize(n * n)
 		weights.append(w)
 	var corners: int = layout.size + 1
+	var shore: PackedInt32Array = _distance_to_water(heights, n, layout.water_level)
 	for py in n:
 		for px in n:
 			var i: int = py * n + px
@@ -58,7 +61,7 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 			var channel: int = GRASS
 			if _max_step(heights, n, px, py) > ROCK_STEP:
 				channel = ROCK
-			elif heights[i] < layout.water_level + SAND_HEIGHT:
+			elif heights[i] < layout.water_level + SAND_HEIGHT and shore[i] <= SAND_REACH:
 				channel = SAND
 			else:
 				var cx: int = px - offset
@@ -106,6 +109,7 @@ static func build_minimap_image(layout: MapLayout) -> Image:
 	var high: float = layout.water_level + 1.0
 	for h in layout.heights:
 		high = maxf(high, h)
+	var shore: PackedInt32Array = _distance_to_water(layout.heights, layout.size + 1, low)
 	for z in layout.size:
 		for x in layout.size:
 			var c := Vector2i(x, z)
@@ -115,7 +119,7 @@ static func build_minimap_image(layout: MapLayout) -> Image:
 				color = Color(0.16, 0.34, 0.42).lerp(Color(0.06, 0.16, 0.26), clampf((low - h) / 3.0, 0.0, 1.0))
 			elif layout.cliff[layout.index(c)] == 1:
 				color = Color(0.3, 0.29, 0.27)
-			elif h < low + SAND_HEIGHT:
+			elif h < low + SAND_HEIGHT and shore[z * (layout.size + 1) + x] <= SAND_REACH:
 				color = Color(0.55, 0.5, 0.36)
 			else:
 				color = Color(0.17, 0.26, 0.14).lerp(Color(0.3, 0.4, 0.22), clampf((h - low) / (high - low), 0.0, 1.0))
@@ -185,6 +189,32 @@ static func _palette_texture(colors: PackedColorArray) -> GradientTexture2D:
 
 static func corner_height(layout: MapLayout, corner: Vector2i) -> float:
 	return layout.corner_height(corner)
+
+## Steps (4-connected, capped just past SAND_REACH) from each pixel to the
+## nearest one under water.
+static func _distance_to_water(heights: PackedFloat32Array, n: int, water_level: float) -> PackedInt32Array:
+	var distance := PackedInt32Array()
+	distance.resize(n * n)
+	distance.fill(SAND_REACH + 1)
+	var frontier: Array[int] = []
+	for i in n * n:
+		if heights[i] < water_level:
+			distance[i] = 0
+			frontier.append(i)
+	var head: int = 0
+	while head < frontier.size():
+		var i: int = frontier[head]
+		head += 1
+		var next: int = distance[i] + 1
+		if next > SAND_REACH:
+			continue
+		var x: int = i % n
+		var y: int = i / n
+		for neighbour in [i - 1 if x > 0 else -1, i + 1 if x < n - 1 else -1, i - n if y > 0 else -1, i + n if y < n - 1 else -1]:
+			if neighbour >= 0 and distance[neighbour] > next:
+				distance[neighbour] = next
+				frontier.append(neighbour)
+	return distance
 
 static func _max_step(heights: PackedFloat32Array, n: int, px: int, py: int) -> float:
 	var h: float = heights[py * n + px]
