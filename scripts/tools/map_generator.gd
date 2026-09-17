@@ -10,6 +10,8 @@ const MAP_SCENE_DIR: String = "res://scenes/maps/"
 const MAP_INFO_DIR: String = "res://resources/maps/"
 const PREVIEW_TERRAIN_NAME: String = "PreviewTerrain"
 const PREVIEW_OBJECTS_NAME: String = "PreviewObjects"
+const PREVIEW_WATER_NAME: String = "PreviewWater"
+const MINIMAP_NODE_PATH: String = "UI/BottomBar/MinimapFrame"
 
 enum CentreSite { NONE, OBJECTIVE, SHRINE }
 
@@ -66,6 +68,14 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_range(1.0, 6.0, 0.5) var path_width: float = 3.0
 @export_range(0, 12) var dirt_patches_per_player: int = 3
 @export_range(0, 12) var grass_patches_per_player: int = 4
+
+@export_group("Water")
+@export_range(-10.0, 5.0, 0.1) var water_level: float = -2.5
+@export_range(0.0, 1.0, 0.05) var coast_fraction: float = 0.5
+@export_range(0.0, 20.0, 0.5) var coast_wobble: float = 8.0
+@export_range(0.05, 0.6, 0.01) var beach_slope: float = 0.2
+@export_range(1.0, 12.0, 0.5) var sea_depth: float = 4.0
+@export_range(2.0, 20.0, 0.5) var shore_drop: float = 6.0
 
 @export_group("Colours")
 @export var grass_light: Color = Color(0.658824, 0.792157, 0.345098):
@@ -127,7 +137,6 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 ]
 @export_range(1.5, 8.0, 0.1) var border_tree_spacing: float = 2.4
 @export var border_tree_scenes: Array[PackedScene] = [
-	preload("res://assets/art/Models/Tree/tree.glb"),
 	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_1.glb"),
 	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_2.glb"),
 ]
@@ -165,6 +174,9 @@ func generate() -> bool:
 	var terrain: TerraBrush = MapTerrainBuilder.make_terrain(MapTerrainBuilder.build_zone(layout), MapTerrainBuilder.zones_size(layout), MapTerrainBuilder.PREVIEW_DATA_PATH, grass_palette(), ground_palette(), grass_height, grass_brightness)
 	terrain.name = PREVIEW_TERRAIN_NAME
 	add_child(terrain)
+	var water: MeshInstance3D = MapTerrainBuilder.make_water(layout)
+	water.name = PREVIEW_WATER_NAME
+	add_child(water)
 	var objects := Node3D.new()
 	objects.name = PREVIEW_OBJECTS_NAME
 	add_child(objects)
@@ -188,7 +200,7 @@ func _apply_colours_to_preview() -> void:
 		MapTerrainBuilder.set_palettes(get_preview_terrain(), grass_palette(), ground_palette(), grass_height, grass_brightness)
 
 func clear_preview() -> void:
-	for child_name in [PREVIEW_TERRAIN_NAME, PREVIEW_OBJECTS_NAME]:
+	for child_name in [PREVIEW_TERRAIN_NAME, PREVIEW_OBJECTS_NAME, PREVIEW_WATER_NAME]:
 		var child := get_node_or_null(NodePath(child_name))
 		if child != null:
 			remove_child(child)
@@ -242,6 +254,9 @@ func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
 		return false
 	if not _save_resource(nav_mesh, data_dir + "navigation_mesh.res"):
 		return false
+	var minimap_path: String = data_dir + "minimap_terrain.res"
+	if not _save_resource(ImageTexture.create_from_image(MapTerrainBuilder.build_minimap_image(layout)), minimap_path):
+		return false
 	var saved_zone := ZoneResource.new()
 	saved_zone.zonePosition = Vector2i.ZERO
 	saved_zone.heightMapImage = heightmap
@@ -257,7 +272,7 @@ func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
 	if err != OK:
 		push_error("MapGenerator: failed to pack map scene (error %d)." % err)
 		return false
-	if not _save_inherited_scene(packed, scene_path):
+	if not _save_inherited_scene(packed, scene_path, minimap_path):
 		return false
 
 	var info := MapInfo.new()
@@ -278,6 +293,10 @@ func _assemble_map(root: Node3D, terrain: TerraBrush, nav_mesh: NavigationMesh) 
 
 	terrain.name = "Terrain"
 	_add_owned(nav_region, terrain, root)
+
+	var water: MeshInstance3D = MapTerrainBuilder.make_water(layout)
+	water.name = "Water"
+	_add_owned(root, water, root)
 
 	var spawns := Node3D.new()
 	spawns.name = "PlayerSpawnPoints"
@@ -316,7 +335,7 @@ func _assemble_map(root: Node3D, terrain: TerraBrush, nav_mesh: NavigationMesh) 
 ## sets that state internally), so the packed content is serialised normally
 ## and its text rewritten: the root becomes an instance of map_base.tscn and
 ## the base's own nodes become overrides.
-func _save_inherited_scene(packed: PackedScene, scene_path: String) -> bool:
+func _save_inherited_scene(packed: PackedScene, scene_path: String, minimap_path: String) -> bool:
 	var temp_path: String = "user://map_generator_tmp.tscn"
 	var err: int = ResourceSaver.save(packed, temp_path)
 	if err != OK:
@@ -338,11 +357,12 @@ func _save_inherited_scene(packed: PackedScene, scene_path: String) -> bool:
 	var head_end: int = first_ext if first_ext >= 0 else first_sub
 	if head_end < 0:
 		head_end = text.find("[node")
-	text = text.insert(head_end, "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"map_base\"]\n" % MAP_BASE_SCENE)
+	text = text.insert(head_end, "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"map_base\"]\n[ext_resource type=\"Texture2D\" path=\"%s\" id=\"minimap_terrain\"]\n" % [MAP_BASE_SCENE, minimap_path])
 	var cloud_size: int = layout.size + 80
 	text = text.insert(text.find("[node"), "[sub_resource type=\"PlaneMesh\" id=\"PlaneMesh_map_clouds\"]\nsize = Vector2(%d, %d)\n\n" % [cloud_size, cloud_size])
 	text += "\n[node name=\"FogOfWar\" parent=\".\"]\nmap_origin = Vector2(%s, %s)\nmap_size = Vector2(%d, %d)\nterrain_mesh_path = NodePath(\"\")\n" % [-layout.half, -layout.half, layout.size, layout.size]
 	text += "\n[node name=\"CloudShadowLayer\" parent=\".\"]\nmesh = SubResource(\"PlaneMesh_map_clouds\")\n"
+	text += "\n[node name=\"Minimap\" parent=\"%s\"]\nterrain_texture = ExtResource(\"minimap_terrain\")\n" % MINIMAP_NODE_PATH
 
 	var file := FileAccess.open(scene_path, FileAccess.WRITE)
 	if file == null:

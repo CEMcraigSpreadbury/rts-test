@@ -1122,7 +1122,7 @@ func _ready() -> void:
 	_update_team_tint_visual()
 	## Waypoints sit on the navmesh, which on hilly terrain can be a few tenths
 	## of a metre off the ground the unit stands on, and the agent measures this
-	## in 3D: much tighter and a unit never "reaches" a waypoint it has walked
+	## in 3D: too tight and a unit can fail to "reach" a waypoint it has walked
 	## past, turning back to it and sticking on the slope.
 	nav_agent.path_desired_distance = 1.0
 	## Keeps a unit on the ground walking down hills instead of briefly

@@ -35,10 +35,18 @@ const RISE_OBJECTIVE: float = 0.5
 const RISE_GOLD: float = 0.7
 const RISE_TREE: float = 0.9
 const RISE_PROP: float = 1.2
+## Land is kept at least this far above the water unless the coast (or, later,
+## a lake or river) deliberately takes it under.
+const DRY_MARGIN: float = 0.5
+## Water shallower than this is walkable (and navigable); deeper blocks.
+const WADE_DEPTH: float = 0.3
+## Objects and pads need their ground at least this far above the water.
+const PLACE_ABOVE_WATER: float = 0.25
 
 var size: int
 var half: float
 var players: int
+var water_level: float
 ## Horizontal room a ramp needs for the tallest possible climb, landings included.
 var ramp_length: float
 ## (size + 1)^2 corner heights, row by row; corner (i, j) sits at (i - half, j - half).
@@ -60,6 +68,9 @@ var _rng := RandomNumberGenerator.new()
 var _noise := FastNoiseLite.new()
 var _hill_noise := FastNoiseLite.new()
 var _outline_noise := FastNoiseLite.new()
+var _coast_noise := FastNoiseLite.new()
+## Phases of the waves deciding which stretches of the map edge are coast.
+var _coast_phases := Vector2.ZERO
 var _angle0: float
 var _step: float
 ## {centre, half: Vector2, radius, angle, symmetric, steps: Array[float] (height change per tier)}
@@ -86,6 +97,7 @@ func generate() -> bool:
 	size = _gen.map_size
 	half = size * 0.5
 	players = _gen.player_count
+	water_level = _gen.water_level
 	_step = TAU / players
 	_angle0 = deg_to_rad(_gen.layout_rotation_degrees)
 	_rng.seed = _gen.map_seed
@@ -98,6 +110,12 @@ func generate() -> bool:
 	_outline_noise.seed = _gen.map_seed + 202
 	_outline_noise.frequency = 0.06
 	_outline_noise.fractal_octaves = 2
+	_coast_noise.seed = _gen.map_seed + 303
+	_coast_noise.frequency = 0.04
+	_coast_noise.fractal_octaves = 2
+	var coast_rng := RandomNumberGenerator.new()
+	coast_rng.seed = _gen.map_seed + 404
+	_coast_phases = Vector2(coast_rng.randf() * TAU, coast_rng.randf() * TAU)
 	var tallest: float = maxf(_gen.plateau_height_range.y, _gen.valley_depth_range.y)
 	ramp_length = maxf(tallest / _gen.ramp_slope, _gen.cliff_width + 2.0) + RAMP_LANDING * 2.0
 
@@ -116,6 +134,7 @@ func generate() -> bool:
 	_add_features()
 	_place_ramps()
 	_flatten_objectives()
+	_shape_coast()
 	_compute_cells()
 	for i in spawn_positions.size():
 		spawn_positions[i].y = surface_height(Vector2(spawn_positions[i].x, spawn_positions[i].z))
@@ -153,13 +172,31 @@ func is_playable_cell(c: Vector2i) -> bool:
 	return in_bounds(c) and playable[index(c)] == 1
 
 ## Signed distance (in metres) from p to the playable boundary: positive inside.
+## Along coast the boundary is the waterline, pulled inland by a wobble.
 func edge_distance(p: Vector2) -> float:
 	var limit: float = half - _gen.border_width
 	var best: float = INF
 	for k in players:
 		var q: Vector2 = rot(p, k)
 		best = minf(best, limit - maxf(absf(q.x), absf(q.y)))
+	var coast: float = coast_weight(p)
+	if coast > 0.0:
+		best -= coast * _gen.coast_wobble * clampf(_symmetric_noise(_coast_noise, p) * 0.6 + 0.5, 0.0, 1.0)
 	return best
+
+## How much the map edge nearest p is coast (1) rather than forest border (0).
+## Two waves around the map repeating once per player, so every slice matches;
+## coast_fraction moves the threshold.
+func coast_weight(p: Vector2) -> float:
+	if _gen.coast_fraction <= 0.0:
+		return 0.0
+	var angle: float = p.angle() * players
+	var wave: float = (sin(angle + _coast_phases.x) + 0.6 * sin(angle * 2.0 + _coast_phases.y)) / 1.6
+	var threshold: float = 1.0 - 2.0 * _gen.coast_fraction
+	return smoothstep(threshold - 0.15, threshold + 0.15, wave)
+
+func is_deep_water(c: Vector2i) -> bool:
+	return water_level - _cell_height(c) > WADE_DEPTH
 
 func is_playable(p: Vector2) -> bool:
 	return edge_distance(p) > 0.0
@@ -175,10 +212,18 @@ func _edge_distance_along(angle: float) -> float:
 	_reach_cache[bucket] = r
 	return r
 
-## Corners outside the grid take the nearest edge corner's height.
+## Corners outside the grid take the nearest edge corner's height, sinking to
+## the sea floor over shore_drop where that edge is coast, so the sea carries on
+## past the map instead of stopping in straight strips.
 func corner_height(corner: Vector2i) -> float:
 	var c: Vector2i = corner.clamp(Vector2i.ZERO, Vector2i(size, size))
-	return heights[c.y * (size + 1) + c.x]
+	var h: float = heights[c.y * (size + 1) + c.x]
+	if c == corner:
+		return h
+	var p: Vector2 = _corner_position(corner.x, corner.y)
+	var outside: float = (Vector2(corner) - Vector2(c)).length()
+	var sea_floor: float = water_level - _gen.sea_depth
+	return lerpf(h, minf(h, sea_floor), coast_weight(p) * smoothstep(0.0, _gen.shore_drop, outside))
 
 func surface_height(p: Vector2) -> float:
 	var x: float = clampf(p.x + half, 0.0, size)
@@ -594,6 +639,49 @@ func _flatten(centre: Vector2, radius: float, falloff: float) -> void:
 			if weight > 0.0:
 				heights[j * corners + i] = lerpf(heights[j * corners + i], level, weight)
 
+## Keeps land above the water, then along the coast lowers the ground onto a
+## beach sloping to the waterline (edge_distance 0) and down to the sea floor.
+## Only ever lowers, so plateaus by the sea end in cliffs rather than beaches.
+func _shape_coast() -> void:
+	var corners: int = size + 1
+	var dry: float = water_level + DRY_MARGIN
+	var pads: Array[Vector3] = _flat_pads()
+	for j in corners:
+		for i in corners:
+			var index_ij: int = j * corners + i
+			var h: float = maxf(heights[index_ij], dry)
+			var p: Vector2 = _corner_position(i, j)
+			var coast: float = coast_weight(p)
+			if coast > 0.0:
+				var d: float = edge_distance(p)
+				var profile: float = water_level + d * _gen.beach_slope if d >= 0.0 \
+						else water_level - _gen.sea_depth * smoothstep(0.0, _gen.shore_drop, -d)
+				h = lerpf(h, minf(h, profile), coast * (1.0 - _pad_cover(pads, p)))
+			heights[index_ij] = h
+
+## Every flattened pad as (x, z, radius including falloff): bases, building
+## pockets and objective sites, in every copy.
+func _flat_pads() -> Array[Vector3]:
+	var pads: Array[Vector3] = []
+	for base in base_centres:
+		pads.append(Vector3(base.x, base.y, _base_flat_reach()))
+	for pocket in _pockets:
+		for k in players:
+			var p: Vector2 = rot(pocket.pos, k)
+			pads.append(Vector3(p.x, p.y, pocket.radius + POCKET_FALLOFF))
+	for site in _objective_sites:
+		for k in (1 if site.symmetric else players):
+			var p: Vector2 = site.pos if site.symmetric else rot(site.pos, k)
+			pads.append(Vector3(p.x, p.y, _gen.objective_clear_radius + 2.5))
+	return pads
+
+## 1 inside a pad, easing to 0 over a few metres past its edge.
+func _pad_cover(pads: Array[Vector3], p: Vector2) -> float:
+	var cover: float = 0.0
+	for pad in pads:
+		cover = maxf(cover, 1.0 - smoothstep(pad.z, pad.z + 3.0, p.distance_to(Vector2(pad.x, pad.y))))
+	return cover
+
 ## Per-cell rise and cliff flags, plus BFS distance (in cells) to the nearest cliff.
 func _compute_cells() -> void:
 	var corners: int = size + 1
@@ -683,6 +771,8 @@ func _footprint_ok(p: Vector2, radius: float, max_rise: float, cliff_clearance: 
 			if not is_playable_cell(c) or cliff[index(c)] == 1:
 				return false
 			var h: float = _cell_height(c)
+			if h < water_level + PLACE_ABOVE_WATER:
+				return false
 			low = minf(low, h)
 			high = maxf(high, h)
 	return high - low <= max_rise
@@ -897,7 +987,7 @@ func _place_edge_forest() -> void:
 		for gx in steps:
 			grid_points.append(Vector2(-limit + (gx + 0.5) * pitch, -limit + (gz + 0.5) * pitch) + Vector2(_rng.randf_range(-0.2, 0.2), _rng.randf_range(-0.2, 0.2)) * spacing)
 	for p in grid_points:
-		if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5:
+		if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5 or coast_weight(p) > 0.3:
 			continue
 		var inside: float = edge_distance(p)
 		if inside <= 0.0:
@@ -918,7 +1008,7 @@ func _place_border_trees() -> void:
 	var attempts: int = int(size * size / (spacing * spacing) * 8.0 / players)
 	for n in attempts:
 		var p := Vector2(_rng.randf_range(-half + 0.4, half - 0.4), _rng.randf_range(-half + 0.4, half - 0.4))
-		if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5 or edge_distance(p) > -0.6:
+		if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5 or edge_distance(p) > -0.6 or coast_weight(p) > 0.3:
 			continue
 		var copies_ok: bool = true
 		var pending: Array = []
@@ -1033,7 +1123,7 @@ func _check_connectivity() -> void:
 		head += 1
 		for d in 4:
 			var n: Vector2i = c + DIRS[d]
-			if not is_playable_cell(n) or seen[index(n)] == 1 or blocked[index(n)] == 1 or cliff[index(n)] == 1:
+			if not is_playable_cell(n) or seen[index(n)] == 1 or blocked[index(n)] == 1 or cliff[index(n)] == 1 or is_deep_water(n):
 				continue
 			if absf(_cell_height(c) - _cell_height(n)) > WALK_STEP:
 				continue

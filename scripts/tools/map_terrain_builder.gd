@@ -11,12 +11,16 @@ extends RefCounted
 const TERRAIN_MATERIAL: ShaderMaterial = preload("res://resources/terrain/binbun/binbun_terrain_material.tres")
 const TEXTURE_SETS: Resource = preload("res://resources/terrain/binbun/binbun_texture_sets.tres")
 const GRASS_FOLIAGE: Resource = preload("res://resources/terrain/binbun/binbun_grass_foliage.tres")
+const WATER_SHADER: Shader = preload("res://shaders/terrain/water_placeholder.gdshader")
 
 ## Splatmap channels, in TEXTURE_SETS order. Grass is also where the Binbun
 ## blades grow (binbun_grass_foliage.tres applies on texture 0).
 const GRASS: int = 0
 const DIRT: int = 1
 const ROCK: int = 2
+const SAND: int = 3
+## Ground lower than this above the water is sand.
+const SAND_HEIGHT: float = 0.6
 ## A height step between neighbouring corners above this is a cliff face;
 ## hills and ramps (MapGenerator.ramp_slope) stay below it.
 const ROCK_STEP: float = 0.6
@@ -42,7 +46,7 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 
 	var heightmap := Image.create_empty(n, n, false, Image.FORMAT_RGF)
 	var weights: Array[PackedFloat32Array] = []
-	for channel in 3:
+	for channel in 4:
 		var w := PackedFloat32Array()
 		w.resize(n * n)
 		weights.append(w)
@@ -54,6 +58,8 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 			var channel: int = GRASS
 			if _max_step(heights, n, px, py) > ROCK_STEP:
 				channel = ROCK
+			elif heights[i] < layout.water_level + SAND_HEIGHT:
+				channel = SAND
 			else:
 				var cx: int = px - offset
 				var cy: int = py - offset
@@ -65,7 +71,7 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 	for py in n:
 		for px in n:
 			var blended := Color(0, 0, 0, 0)
-			for channel in 3:
+			for channel in 4:
 				blended[channel] = _box_blur(weights[channel], n, px, py)
 			splatmap.set_pixel(px, py, blended)
 
@@ -75,6 +81,45 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 	zone.splatmapsImage = [splatmap]
 	zone.foliagesImage = [Image.create_empty(n, n, false, Image.FORMAT_RGBA8)]
 	return zone
+
+## A flat placeholder water surface at the water level, covering the whole
+## terrain zone. Fog of war finds it by its shader, like the terrain.
+static func make_water(layout: MapLayout) -> MeshInstance3D:
+	var plane := PlaneMesh.new()
+	var span: float = zones_size(layout) - 1
+	plane.size = Vector2(span, span)
+	var material := ShaderMaterial.new()
+	material.shader = WATER_SHADER
+	var water := MeshInstance3D.new()
+	water.mesh = plane
+	water.material_override = material
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	water.position = Vector3(0.0, layout.water_level, 0.0)
+	return water
+
+## One pixel per cell for the minimap: water shaded by depth, sand, rock on
+## cliffs, and grass lighter the higher it stands.
+static func build_minimap_image(layout: MapLayout) -> Image:
+	var image := Image.create_empty(layout.size, layout.size, false, Image.FORMAT_RGB8)
+	var low: float = layout.water_level
+	var high: float = layout.water_level + 1.0
+	for h in layout.heights:
+		high = maxf(high, h)
+	for z in layout.size:
+		for x in layout.size:
+			var c := Vector2i(x, z)
+			var h: float = layout.surface_height(layout.cell_centre(c))
+			var color: Color
+			if h < low:
+				color = Color(0.16, 0.34, 0.42).lerp(Color(0.06, 0.16, 0.26), clampf((low - h) / 3.0, 0.0, 1.0))
+			elif layout.cliff[layout.index(c)] == 1:
+				color = Color(0.3, 0.29, 0.27)
+			elif h < low + SAND_HEIGHT:
+				color = Color(0.55, 0.5, 0.36)
+			else:
+				color = Color(0.17, 0.26, 0.14).lerp(Color(0.3, 0.4, 0.22), clampf((h - low) / (high - low), 0.0, 1.0))
+			image.set_pixel(x, z, color)
+	return image
 
 ## Offsets of BinbunGrass/src/palette/palette_01.tres, which the palettes replace.
 const PALETTE_OFFSETS: PackedFloat32Array = [0.166667, 0.5, 0.833333]
@@ -163,7 +208,7 @@ static func bake_navigation_mesh(layout: MapLayout) -> NavigationMesh:
 	for z in layout.size:
 		for x in layout.size:
 			var c := Vector2i(x, z)
-			if not layout.is_playable_cell(c):
+			if not layout.is_playable_cell(c) or layout.is_deep_water(c):
 				continue
 			var corners: Array[Vector3] = []
 			for offset in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1)]:
@@ -178,11 +223,10 @@ static func bake_navigation_mesh(layout: MapLayout) -> NavigationMesh:
 	nav_mesh.cell_height = 0.01
 	nav_mesh.agent_radius = NavigationBlockers.UNIT_BODY_RADIUS
 	nav_mesh.agent_max_slope = NAV_MAX_SLOPE_DEGREES
-	## The default detail (6m samples, 1m error) is fine on flat ground but
-	## floats or sinks the mesh up to ~1.7m on hills, far enough that units
-	## never register reaching a waypoint (unit.gd's path_desired_distance).
-	nav_mesh.detail_sample_distance = 2.0
-	nav_mesh.detail_sample_max_error = 0.2
+	## Default detail on purpose: NavigationBlockers rebakes this mesh at match
+	## start from its own triangles, which already hugs hills to ~0.3m, while
+	## finer detail here multiplied the rebaked polygon count (~3.7x) and made
+	## every rebake and unit repath visibly hitch.
 	NavigationServer3D.bake_from_source_geometry_data(nav_mesh, geometry)
 	return nav_mesh
 

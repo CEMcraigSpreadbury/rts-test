@@ -5,6 +5,9 @@ extends Control
 ## rough camera-frustum outline, and click/drag-to-pan.
 
 const TERRAIN_COLOR: Color = Color(0.22, 0.32, 0.19, 1.0)
+## Per-map terrain picture (water, sand, rock, grass by height) saved by
+## MapGenerator; maps without one draw flat TERRAIN_COLOR instead.
+@export var terrain_texture: Texture2D
 const OWN_OUTLINE_COLOR: Color = Color(1, 1, 1, 0.9)
 const UNIT_DOT_RADIUS: float = 2.5
 const BUILDING_DOT_RADIUS: float = 4.0
@@ -57,11 +60,14 @@ var _redraw_timer: float = 0.0
 const FOG_SHADER_CODE: String = """
 shader_type canvas_item;
 uniform vec4 terrain_color;
+uniform sampler2D terrain_tex : source_color, filter_linear;
+uniform bool use_terrain_tex = false;
 void fragment() {
 	float explored = texture(TEXTURE, UV).r;
 	vec3 fog_rgb = vec3(5.0, 8.0, 5.0) / 255.0 * explored;
 	float fog_alpha = mix(1.0, 0.6, explored);
-	COLOR = vec4(mix(terrain_color.rgb, fog_rgb, fog_alpha), 1.0);
+	vec3 ground = use_terrain_tex ? texture(terrain_tex, UV).rgb : terrain_color.rgb;
+	COLOR = vec4(mix(ground, fog_rgb, fog_alpha), 1.0);
 }
 """
 var _fog_rect: TextureRect = null
@@ -74,6 +80,9 @@ func _ensure_fog_rect() -> void:
 	var fog_material := ShaderMaterial.new()
 	fog_material.shader = shader
 	fog_material.set_shader_parameter("terrain_color", TERRAIN_COLOR)
+	if terrain_texture != null:
+		fog_material.set_shader_parameter("terrain_tex", terrain_texture)
+		fog_material.set_shader_parameter("use_terrain_tex", true)
 	_fog_rect = TextureRect.new()
 	_fog_rect.texture = fog.fog_texture
 	_fog_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
