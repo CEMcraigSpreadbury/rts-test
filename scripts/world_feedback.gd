@@ -50,16 +50,7 @@ func play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 	torus.inner_radius = 0.35
 	torus.outer_radius = 0.55
 	ring.mesh = torus
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(1.0, 0.3, 0.25, 0.9) if is_attack else Color(1.0, 1.0, 1.0, 0.9)
-	## render_priority controls draw order between transparent objects
-	## (higher draws later/on top, independent of distance sorting) — this is
-	## what keeps the ring drawing over dense grass, without no_depth_test,
-	## which would also make it ignore the unit/building's own opaque sprite
-	## and draw in front of that too.
-	mat.render_priority = 10
+	var mat := GroundRingMaterial.build(Color(1.0, 0.3, 0.25, 0.9) if is_attack else Color(1.0, 1.0, 1.0, 0.9))
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = world_pos + Vector3(0, 0.1, 0)
@@ -68,7 +59,7 @@ func play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
 	tween.set_parallel(true)
 	tween.tween_property(ring, "scale", Vector3.ONE * 1.6, 0.35) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(mat, "albedo_color:a", 0.0, 0.35)
+	tween.tween_method(GroundRingMaterial.set_alpha.bind(mat), 0.9, 0.0, 0.35)
 	tween.set_parallel(false)
 	tween.tween_callback(ring.queue_free)
 
@@ -220,11 +211,7 @@ func add_path_marker(unit: Unit, world_pos: Vector3) -> void:
 	torus.inner_radius = 0.18
 	torus.outer_radius = 0.28
 	flag_mesh.mesh = torus
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = PATH_MARKER_COLOR
-	mat.render_priority = 10
+	var mat := GroundRingMaterial.build(PATH_MARKER_COLOR)
 	flag_mesh.material_override = mat
 	marker.add_child(flag_mesh)
 
@@ -892,15 +879,7 @@ func _ensure_hover_ring() -> void:
 	mesh.outer_radius = 1.0
 	hover_ring = MeshInstance3D.new()
 	hover_ring.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = HOVER_RING_COLOR
-	## render_priority (not no_depth_test — that would also draw this in
-	## front of the unit/building's own opaque sprite) forces this to draw
-	## after dense grass in the transparent pass, on top of it, while still
-	## depth-testing normally against opaque geometry.
-	material.render_priority = 10
+	var material := GroundRingMaterial.build(HOVER_RING_COLOR)
 	hover_ring.set_surface_override_material(0, material)
 	hover_ring.visible = false
 	add_child(hover_ring)
@@ -1009,10 +988,7 @@ func play_ping_effect(world_pos: Vector3) -> void:
 	torus.inner_radius = 0.5
 	torus.outer_radius = 0.8
 	ring.mesh = torus
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(1.0, 0.85, 0.1, 0.9)
+	var mat := GroundRingMaterial.build(Color(1.0, 0.85, 0.1, 0.9))
 	ring.material_override = mat
 	add_child(ring)
 	ring.global_position = world_pos + Vector3(0, 0.1, 0)
@@ -1021,7 +997,7 @@ func play_ping_effect(world_pos: Vector3) -> void:
 	tween.set_parallel(true)
 	tween.tween_property(ring, "scale", Vector3.ONE * 4.0, 1.2) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_property(mat, "albedo_color:a", 0.0, 1.2)
+	tween.tween_method(GroundRingMaterial.set_alpha.bind(mat), 0.9, 0.0, 1.2)
 	tween.set_parallel(false)
 	tween.tween_callback(ring.queue_free)
 

@@ -428,12 +428,9 @@ func _set_marker(id: String, world_pos: Vector3, radius: float, shown: bool) -> 
 	mesh.inner_radius = maxf(radius - 0.35, 0.1)
 	mesh.outer_radius = radius
 	ring.mesh = mesh
-	var ring_material := StandardMaterial3D.new()
-	ring_material.albedo_color = PANEL_BORDER
-	ring_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var ring_material := GroundRingMaterial.build(PANEL_BORDER)
 	ring.material_override = ring_material
-	## Depth-tested, so buildings and trees stand in front of it — but the
+	## Depth-tested (with a grass bias), so buildings and trees stand in front of it — but the
 	## ground inside the ring is not flat, so the band is stretched tall rather
 	## than lying on it: rises in the terrain sink into it instead of hiding
 	## it. From above it reads as the same thin ring.

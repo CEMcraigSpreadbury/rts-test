@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c8n1w7q1yj0kx"]
 
 [ext_resource type="Script" uid="uid://btq158nw3psko" path="res://scripts/unit.gd" id="1_script"]
+[ext_resource type="Shader" path="res://shaders/ground_ring.gdshader" id="99_ground_ring"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
@@ -47,14 +48,13 @@ radius = 0.4
 height = 1.6
 
 [sub_resource type="TorusMesh" id="TorusMesh_1"]
-inner_radius = 0.55
-outer_radius = 0.7
+inner_radius = 0.61
+outer_radius = 0.64
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ring"]
-shading_mode = 0
-transparency = 1
-albedo_color = Color(0.2, 1, 0.3, 1)
+[sub_resource type="ShaderMaterial" id="StandardMaterial3D_ring"]
 render_priority = 10
+shader = ExtResource("99_ground_ring")
+shader_parameter/albedo_color = Color(0.2, 1, 0.3, 1)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_walkdust"]
 emission_shape = 1
