@@ -1,15 +1,15 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://gd14orimtart"]
 
-[ext_resource type="Shader" path="res://shaders/terrain/binbun_foliage.gdshader" id="1_8dx2u"]
-[ext_resource type="Texture2D" path="res://BinbunGrass/src/palette/palette_01.tres" id="2_sb365"]
-[ext_resource type="Texture2D" path="res://BinbunGrass/src/texture/basic/grass_basic_atlas.png" id="3_07a5i"]
+[ext_resource type="Shader" uid="uid://dd650cj0qosyd" path="res://shaders/terrain/binbun_foliage.gdshader" id="1_8dx2u"]
+[ext_resource type="Texture2D" uid="uid://di62ixsr75dl2" path="res://BinbunGrass/src/palette/palette_01.tres" id="2_sb365"]
+[ext_resource type="Texture2D" uid="uid://dv6g2qxppq3ec" path="res://BinbunGrass/src/texture/basic/grass_basic_atlas.png" id="3_07a5i"]
 
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_1bvp3"]
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_yi24e"]
 seed = 6
 frequency = 0.008
 
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_lquwl"]
-noise = SubResource("FastNoiseLite_1bvp3")
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_nf4t2"]
+noise = SubResource("FastNoiseLite_yi24e")
 seamless = true
 seamless_blend_skirt = 0.2
 
@@ -30,35 +30,46 @@ seamless_blend_skirt = 0.2
 [resource]
 render_priority = 0
 shader = ExtResource("1_8dx2u")
-shader_parameter/GlobalPosition = null
-shader_parameter/OffsetPosition = null
-shader_parameter/InitialCellWidth = null
-shader_parameter/LODRowsPerLevel = null
-shader_parameter/LODLevels = null
-shader_parameter/WindStrength = null
-shader_parameter/FoliageAlbedo = null
-shader_parameter/FoliageNumberOfTexture = null
-shader_parameter/UseGroundColor = null
-shader_parameter/MeshScale = null
-shader_parameter/UseBrushScale = null
-shader_parameter/RandomPlacementRange = null
-shader_parameter/ApplyOnTextureIndexes = null
-shader_parameter/NumberOfTexturesToApplyOn = null
-shader_parameter/NearestFilter = null
-shader_parameter/TextureDetail = null
-shader_parameter/NumberOfTextures = null
-shader_parameter/WaterFactor = null
-shader_parameter/ZonesSize = null
-shader_parameter/Resolution = null
-shader_parameter/NumberOfZones = null
+shader_parameter/GlobalPosition = Vector3(0, 0, 0)
+shader_parameter/OffsetPosition = Vector3(0, 0, 0)
+shader_parameter/InitialCellWidth = 1.0
+shader_parameter/LODRowsPerLevel = 10
+shader_parameter/LODLevels = 5
+shader_parameter/WindStrength = 0.1
+shader_parameter/FoliageAlbedo = Color(1, 1, 1, 1)
+shader_parameter/FoliageNumberOfTexture = 0
+shader_parameter/UseGroundColor = true
+shader_parameter/MeshScale = Vector3(1, 1, 1)
+shader_parameter/UseBrushScale = true
+shader_parameter/RandomPlacementRange = 2.0
+shader_parameter/ApplyOnTextureIndexes = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/NumberOfTexturesToApplyOn = 0
+shader_parameter/NearestFilter = false
+shader_parameter/TextureDetail = 0
+shader_parameter/NumberOfTextures = 0
+shader_parameter/WaterFactor = 0.0
+shader_parameter/ZonesSize = 0.0
+shader_parameter/Resolution = 0.0
+shader_parameter/NumberOfZones = 0.0
 shader_parameter/billboard = true
+shader_parameter/blade_scale_range = Vector2(0, 2)
+shader_parameter/lod_size_compensation = 0.5
+shader_parameter/max_focus_distance = 60.0
 shader_parameter/shape_atlas = ExtResource("3_07a5i")
-shader_parameter/atlas_size = null
-shader_parameter/noise_texture = SubResource("NoiseTexture2D_lquwl")
+shader_parameter/atlas_size = 2
+shader_parameter/noise_texture = SubResource("NoiseTexture2D_nf4t2")
 shader_parameter/color_gradient = ExtResource("2_sb365")
+shader_parameter/brightness = 1.0
 shader_parameter/random_variation = 0.0
 shader_parameter/wind_texture = SubResource("NoiseTexture2D_7mycd")
 shader_parameter/wind_velocity = Vector2(0, 0)
+shader_parameter/wind_offset = Vector2(0, 0)
 shader_parameter/alpha_cut_start = 0.4
 shader_parameter/alpha_cut_end = 0.6
 shader_parameter/alpha_mode = 0
+shader_parameter/fog_enabled = false
+shader_parameter/fog_map_origin = Vector2(0, 0)
+shader_parameter/fog_map_size = Vector2(0, 0)
+shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_count = 0

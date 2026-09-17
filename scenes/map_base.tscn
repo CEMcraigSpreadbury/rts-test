@@ -1,37 +1,37 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bhf0o0nkw8muy"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_fk3n2"]
-[ext_resource type="Script" path="res://scripts/faction.gd" id="2_ger18"]
-[ext_resource type="Resource" path="res://resources/factions/faction_one.tres" id="3_mrodp"]
-[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/05_hover.wav" id="4_xrok2"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Start_1.wav" id="5_vxmhd"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Start_2.wav" id="6_7uhv8"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Complete_1.wav" id="7_7lkwq"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Complete_2.wav" id="8_hgas2"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Construction/Building_Denied.wav" id="9_culs1"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Market_2.wav" id="10_68px0"]
-[ext_resource type="Script" path="res://scripts/music_player.gd" id="11_ahdgl"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Music/Early/Castle Courtyard Bloom.mp3" id="12_8ikes"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Music/Early/Spring Begins.mp3" id="13_7vi2c"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Music/Mid/A Battle Cometh.mp3" id="14_wjqro"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Music/Mid/Bastion at Dawn.mp3" id="15_iog2k"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Music/End/Iron Banner.mp3" id="16_dcn27"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Music/End/Triumphant March.mp3" id="17_nafme"]
-[ext_resource type="Script" path="res://scripts/ambience_player.gd" id="18_1uxtg"]
-[ext_resource type="AudioStream" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="19_5lcou"]
-[ext_resource type="Script" path="res://scripts/light_follow_camera_yaw.gd" id="20_dtl52"]
-[ext_resource type="Shader" path="res://shaders/cloud_shadows.gdshader" id="21_lsodw"]
-[ext_resource type="PackedScene" path="res://scenes/rts_camera.tscn" id="22_80dis"]
-[ext_resource type="Script" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
-[ext_resource type="Shader" path="res://shaders/ambient_dust.gdshader" id="ambient_dust_shader"]
-[ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/bar_band.png" id="24_i2k1h"]
-[ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/panel_stone.png" id="25_lrrmx"]
-[ext_resource type="Script" path="res://scripts/minimap.gd" id="26_vqeq8"]
-[ext_resource type="Texture2D" path="res://assets/ui/HUD/scaled/panel_gold.png" id="27_1mebi"]
-[ext_resource type="Texture2D" path="res://assets/ui/HUD/elements/square_frame_gold_2.png" id="28_wabaf"]
-[ext_resource type="Texture2D" path="res://assets/ui/HUD/elements/ornate_divider_gold_a.png" id="29_dk18d"]
-[ext_resource type="Texture2D" path="res://assets/ui/HUD/elements/lion_shield_badge.png" id="30_7taj2"]
+[ext_resource type="Script" uid="uid://k0dgxjac4h20" path="res://scripts/main.gd" id="1_fk3n2"]
+[ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="2_ger18"]
+[ext_resource type="Resource" uid="uid://div8xt53m6s3p" path="res://resources/factions/faction_one.tres" id="3_mrodp"]
+[ext_resource type="AudioStream" uid="uid://b5bdp2dructhi" path="res://assets/sfx/UI SFX/05_hover.wav" id="4_xrok2"]
+[ext_resource type="AudioStream" uid="uid://bt3ak5a280hyg" path="res://assets/sfx/Construction/Building_Start_1.wav" id="5_vxmhd"]
+[ext_resource type="AudioStream" uid="uid://d0spp60nh17lf" path="res://assets/sfx/Construction/Building_Start_2.wav" id="6_7uhv8"]
+[ext_resource type="AudioStream" uid="uid://dte3fk0x4o1gq" path="res://assets/sfx/Construction/Building_Complete_1.wav" id="7_7lkwq"]
+[ext_resource type="AudioStream" uid="uid://247wt3i2k1mq" path="res://assets/sfx/Construction/Building_Complete_2.wav" id="8_hgas2"]
+[ext_resource type="AudioStream" uid="uid://g411r1l0iguv" path="res://assets/sfx/Construction/Building_Denied.wav" id="9_culs1"]
+[ext_resource type="AudioStream" uid="uid://b2b2qsrp7ikag" path="res://assets/sfx/Facilities/Market_2.wav" id="10_68px0"]
+[ext_resource type="Script" uid="uid://t74fnmnykn6s" path="res://scripts/music_player.gd" id="11_ahdgl"]
+[ext_resource type="AudioStream" uid="uid://csdot2d6k8m88" path="res://assets/sfx/Music/Early/Castle Courtyard Bloom.mp3" id="12_8ikes"]
+[ext_resource type="AudioStream" uid="uid://pdoobln6beg6" path="res://assets/sfx/Music/Early/Spring Begins.mp3" id="13_7vi2c"]
+[ext_resource type="AudioStream" uid="uid://dkwm6fjby2pgh" path="res://assets/sfx/Music/Mid/A Battle Cometh.mp3" id="14_wjqro"]
+[ext_resource type="AudioStream" uid="uid://dy6v4vdfb6hbq" path="res://assets/sfx/Music/Mid/Bastion at Dawn.mp3" id="15_iog2k"]
+[ext_resource type="AudioStream" uid="uid://cqdwxl7rn3mbb" path="res://assets/sfx/Music/End/Iron Banner.mp3" id="16_dcn27"]
+[ext_resource type="AudioStream" uid="uid://bbbqruyuvt1mg" path="res://assets/sfx/Music/End/Triumphant March.mp3" id="17_nafme"]
+[ext_resource type="Script" uid="uid://fwe5mgixubk0" path="res://scripts/ambience_player.gd" id="18_1uxtg"]
+[ext_resource type="AudioStream" uid="uid://dl6usc5kn2487" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="19_5lcou"]
+[ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="20_dtl52"]
+[ext_resource type="Shader" uid="uid://bjd8hje8sk71w" path="res://shaders/cloud_shadows.gdshader" id="21_lsodw"]
+[ext_resource type="PackedScene" uid="uid://fjbl5xhrvk7l" path="res://scenes/rts_camera.tscn" id="22_80dis"]
+[ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
+[ext_resource type="Texture2D" uid="uid://ciuuow8nb4saa" path="res://assets/ui/HUD/scaled/bar_band.png" id="24_i2k1h"]
+[ext_resource type="Texture2D" uid="uid://cj073ts2i4676" path="res://assets/ui/HUD/scaled/panel_stone.png" id="25_lrrmx"]
+[ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="26_vqeq8"]
+[ext_resource type="Texture2D" uid="uid://dsspfeyaupfm4" path="res://assets/ui/HUD/scaled/panel_gold.png" id="27_1mebi"]
+[ext_resource type="Texture2D" uid="uid://bvgou06qtnrst" path="res://assets/ui/HUD/elements/square_frame_gold_2.png" id="28_wabaf"]
+[ext_resource type="Texture2D" uid="uid://b332nk4ryjtma" path="res://assets/ui/HUD/elements/ornate_divider_gold_a.png" id="29_dk18d"]
+[ext_resource type="Texture2D" uid="uid://bla58o01p357l" path="res://assets/ui/HUD/elements/lion_shield_badge.png" id="30_7taj2"]
 [ext_resource type="Texture2D" path="res://assets/ui/theme/divider.tres" id="31_nrmib"]
+[ext_resource type="Shader" uid="uid://3jy7355quai3" path="res://shaders/ambient_dust.gdshader" id="ambient_dust_shader"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -82,6 +82,16 @@ shader_parameter/coverage = 0.6000000285
 shader_parameter/cloud_color = Color(0.95686275, 0.92941177, 0.9098039, 1)
 shader_parameter/visible_opacity = 0.1210000057475
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dust"]
+render_priority = 0
+shader = ExtResource("ambient_dust_shader")
+shader_parameter/dust_color = Color(1, 0.97, 0.86, 0.9)
+shader_parameter/twinkle_speed = 1.6
+shader_parameter/fog_enabled = false
+shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_count = 0
+
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_dust"]
 emission_shape = 3
 emission_box_extents = Vector3(30, 4, 30)
@@ -95,10 +105,6 @@ orbit_velocity_min = 0.02
 orbit_velocity_max = 0.08
 gravity = Vector3(0, 0, 0)
 scale_min = 0.4
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_dust"]
-render_priority = 0
-shader = ExtResource("ambient_dust_shader")
 
 [sub_resource type="SphereMesh" id="SphereMesh_dust"]
 radius = 0.06
@@ -173,6 +179,7 @@ script = ExtResource("23_fvor6")
 map_origin = Vector2(-84, -75)
 map_size = Vector2(168, 150)
 terrain_mesh_path = NodePath("../NavigationRegion3D/TileMapLayer3D_Baked")
+wind_strength_range = Vector2(0.5, 5)
 
 [node name="PlayerSpawnPoints" type="Node3D" parent="." unique_id=453093757]
 
@@ -372,8 +379,8 @@ offset_left = -112.0
 offset_top = 104.0
 offset_right = -12.0
 offset_bottom = 126.0
-theme_override_font_sizes/font_size = 15
 theme_override_colors/font_color = Color(0.42, 0.85, 0.35, 1)
+theme_override_font_sizes/font_size = 15
 horizontal_alignment = 1
 
 [node name="Margin" type="MarginContainer" parent="UI/BottomBar/InfoPanel" unique_id=2083440396]
@@ -481,8 +488,8 @@ offset_bottom = -51.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
-theme_override_font_sizes/normal_font_size = 15
 theme_override_colors/default_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/normal_font_size = 15
 scroll_following = true
 
 [node name="ChatInput" type="LineEdit" parent="UI/BottomBar" unique_id=1666054379]

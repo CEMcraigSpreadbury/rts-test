@@ -31,6 +31,8 @@ uniform float random_variation : hint_range(0.0, 1.0, 0.001) = 0.002;
 group_uniforms Wind;
 uniform sampler2D wind_texture;
 uniform vec2 wind_velocity;
+// Accumulated noise scroll, driven by FogOfWar so velocity changes stay seamless.
+uniform vec2 wind_offset;
 
 group_uniforms Transparency;
 uniform float alpha_cut_start : hint_range(0.0, 1.0, 0.05) = 0.4;
@@ -52,7 +54,7 @@ vec2 atlas_uv(vec2 uv, int index, int size) {
 }
 
 vec3 wind(vec2 uv) {
-	float wind_noise = texture(wind_texture, (world_pos.xz * 0.03) - (vec2(TIME * 0.01) * wind_velocity)).r;
+	float wind_noise = texture(wind_texture, (world_pos.xz * 0.03) - wind_offset).r;
 	float wind_affect = pow(1.0 - uv.y, 2.0);
 	return vec3(wind_noise * wind_velocity.x, 0.0, wind_noise * wind_velocity.y) * 0.25 * wind_affect;
 }
@@ -116,6 +118,11 @@ void fragment() {
 		alpha = step(bayer4(FRAGCOORD.xy) + 0.01, alpha);
 	}
 	if (alpha < 0.1) discard;
+
+	// Wind can bend a blade's tip past its base on screen, flipping those triangles
+	// to back faces; cull_disabled then flips NORMAL downward and the unclamped
+	// light() turns them black. Keep every face lit as straight up.
+	NORMAL = mat3(VIEW_MATRIX) * vec3(0.0, 1.0, 0.0);
 }
 
 // Binbun's unclamped wrap lighting, scaled by the light's colour/energy like

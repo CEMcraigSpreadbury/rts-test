@@ -168,6 +168,24 @@ const DUST_SHADER: Shader = preload("res://shaders/ambient_dust.gdshader")
 const DUST_DENSITY: float = 200.0 / 3600.0
 var _dust_materials: Array[ShaderMaterial] = []
 
+## Grass wind ramps between random strengths for the whole match, its direction
+## drifting slowly. The shaders scroll their wind noise by wind_offset, which is
+## integrated here rather than derived from TIME, so changing velocity mid-match
+## doesn't jump the noise pattern.
+@export var wind_strength_range: Vector2 = Vector2(1.5, 7.0)
+## Seconds between picking a new target strength/direction.
+@export var wind_change_interval: Vector2 = Vector2(6.0, 20.0)
+## How quickly strength eases toward its target (higher = sharper gusts).
+@export var wind_ramp_rate: float = 0.3
+## Most the direction can swing, in degrees, each time a new target is picked.
+@export var wind_direction_swing: float = 40.0
+var _wind_direction: float = randf() * TAU
+var _wind_target_direction: float = _wind_direction
+var _wind_strength: float = 0.0
+var _wind_target_strength: float = 0.0
+var _wind_timer: float = 0.0
+var _wind_offset: Vector2 = Vector2.ZERO
+
 func _setup_terrain_fog_material() -> ShaderMaterial:
 	var fog_material := ShaderMaterial.new()
 	fog_material.shader = preload("res://shaders/fog_of_war.gdshader")
@@ -231,6 +249,8 @@ func _ready() -> void:
 	_update_explored()
 
 func _process(delta: float) -> void:
+	_update_wind(delta)
+
 	## Vision sources move constantly, so this (and the shader push) runs at a
 	## steady VISION_UPDATE_INTERVAL rather than on the slower explored timer.
 	_vision_timer -= delta
@@ -244,6 +264,21 @@ func _process(delta: float) -> void:
 		return
 	_explored_timer = 0.0
 	_update_explored()
+
+func _update_wind(delta: float) -> void:
+	_wind_timer -= delta
+	if _wind_timer <= 0.0:
+		_wind_timer = randf_range(wind_change_interval.x, wind_change_interval.y)
+		_wind_target_strength = randf_range(wind_strength_range.x, wind_strength_range.y)
+		_wind_target_direction += deg_to_rad(randf_range(-wind_direction_swing, wind_direction_swing))
+	var blend := 1.0 - exp(-wind_ramp_rate * delta)
+	_wind_strength = lerpf(_wind_strength, _wind_target_strength, blend)
+	_wind_direction = lerp_angle(_wind_direction, _wind_target_direction, blend)
+	var velocity := Vector2(cos(_wind_direction), sin(_wind_direction)) * _wind_strength
+	_wind_offset += velocity * 0.01 * delta
+	for material in _grass_materials:
+		material.set_shader_parameter("wind_velocity", velocity)
+		material.set_shader_parameter("wind_offset", _wind_offset)
 
 ## Peer 0 is the neutral/AI-owner sentinel (Gatherable, Objective guards
 ## before capture) — never a real player, so it must never be treated as

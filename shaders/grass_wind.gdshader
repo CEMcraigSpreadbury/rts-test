@@ -19,6 +19,8 @@ uniform float random_variation : hint_range(0.0, 1.0, 0.001) = 0.002;
 group_uniforms Wind;
 uniform sampler2D wind_texture;
 uniform vec2 wind_velocity;
+// Accumulated noise scroll, driven by FogOfWar so velocity changes stay seamless.
+uniform vec2 wind_offset;
 
 group_uniforms Transparency;
 uniform float alpha_cut_start : hint_range(0.0, 1.0, 0.05) = 0.1;
@@ -67,7 +69,7 @@ float randomf(int index, int seed){
 }
 
 float wind_noise(){
-	float value = texture(wind_texture, (world_pos.xz*0.03) - (vec2(TIME * 0.01) * wind_velocity)).r;
+	float value = texture(wind_texture, (world_pos.xz*0.03) - wind_offset).r;
 	return value;
 }
 

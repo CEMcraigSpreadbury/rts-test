@@ -1,7 +1,7 @@
-[gd_resource type="ShaderMaterial" format=3]
+[gd_resource type="ShaderMaterial" format=4 uid="uid://ecavhoe74e8q"]
 
-[ext_resource type="Shader" path="res://shaders/terrain/binbun_terrain.gdshader" id="1_htm5s"]
-[ext_resource type="Texture2D" path="res://BinbunGrass/src/palette/palette_01.tres" id="2_xrla4"]
+[ext_resource type="Shader" uid="uid://btuas428cwk2m" path="res://shaders/terrain/binbun_terrain.gdshader" id="1_htm5s"]
+[ext_resource type="Texture2D" uid="uid://di62ixsr75dl2" path="res://BinbunGrass/src/palette/palette_01.tres" id="2_xrla4"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_1bvp3"]
 seed = 6
@@ -15,33 +15,40 @@ seamless_blend_skirt = 0.2
 [resource]
 render_priority = 0
 shader = ExtResource("1_htm5s")
-shader_parameter/InitialCellWidth = null
-shader_parameter/OffsetPosition = null
-shader_parameter/ZonesSize = null
-shader_parameter/Resolution = null
-shader_parameter/NumberOfZones = null
-shader_parameter/ApplyLockTextures = null
-shader_parameter/WaterFactor = null
-shader_parameter/TexturesDetail = null
-shader_parameter/NumberOfTextures = null
-shader_parameter/HasNormalTextures = null
-shader_parameter/HasRoughnessTextures = null
-shader_parameter/HasHeightTextures = null
-shader_parameter/UseAntitile = null
-shader_parameter/BlendFactor = null
-shader_parameter/NearestFilter = null
-shader_parameter/AlbedoAlphaChannelUsage = null
-shader_parameter/NormalAlphaChannelUsage = null
-shader_parameter/Triplanar = null
-shader_parameter/TexturesTriplanar = null
-shader_parameter/TexturesMetallic = null
-shader_parameter/TexturesSpecular = null
-shader_parameter/UseSharpTransitions = null
-shader_parameter/SlopeTexturing = null
-shader_parameter/SlopeTextureIndex = null
-shader_parameter/SlopeTextureThreshold = null
-shader_parameter/ApplyMetaInfoTextures = null
-shader_parameter/MetaInfoColors = null
+shader_parameter/InitialCellWidth = 1.0
+shader_parameter/OffsetPosition = Vector3(0, 0, 0)
+shader_parameter/ZonesSize = 0.0
+shader_parameter/Resolution = 0.0
+shader_parameter/NumberOfZones = 0.0
+shader_parameter/ApplyLockTextures = false
+shader_parameter/WaterFactor = 1.0
+shader_parameter/TexturesDetail = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/NumberOfTextures = 0
+shader_parameter/HasNormalTextures = false
+shader_parameter/HasRoughnessTextures = false
+shader_parameter/HasHeightTextures = false
+shader_parameter/UseAntitile = true
+shader_parameter/BlendFactor = 0.0
+shader_parameter/NearestFilter = false
+shader_parameter/AlbedoAlphaChannelUsage = 0
+shader_parameter/NormalAlphaChannelUsage = 0
+shader_parameter/Triplanar = true
+shader_parameter/TexturesTriplanar = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/TexturesMetallic = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/TexturesSpecular = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/UseSharpTransitions = false
+shader_parameter/SlopeTexturing = false
+shader_parameter/SlopeTextureIndex = 1
+shader_parameter/SlopeTextureThreshold = 0.2
+shader_parameter/ApplyMetaInfoTextures = false
+shader_parameter/MetaInfoColors = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_enabled = false
+shader_parameter/fog_map_origin = Vector2(0, 0)
+shader_parameter/fog_map_size = Vector2(0, 0)
+shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_count = 0
 shader_parameter/ground_texture_index = 0
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_lquwl")
 shader_parameter/color_gradient = ExtResource("2_xrla4")
+shader_parameter/brightness = 1.0

@@ -1,6 +1,6 @@
 [gd_resource type="FoliageDefinitionResource" format=3 uid="uid://p1hs4pw14oi0"]
 
-[ext_resource type="Material" path="res://resources/terrain/binbun/binbun_grass_material.tres" id="1_ahh7m"]
+[ext_resource type="Material" uid="uid://gd14orimtart" path="res://resources/terrain/binbun/binbun_grass_material.tres" id="1_ahh7m"]
 
 [sub_resource type="QuadMesh" id="QuadMesh_48dlu"]
 size = Vector2(0.4, 0.4)
