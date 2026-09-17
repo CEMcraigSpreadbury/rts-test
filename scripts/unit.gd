@@ -864,6 +864,9 @@ const MARCH_DIRECT_DISTANCE: float = 2.0
 const MARCH_CORRECTION_GAIN: float = 2.0
 ## How far the marching point may drift from the nav target before re-pathing.
 const MARCH_REPATH_DISTANCE: float = 1.0
+## Fewest milliseconds between those re-paths — each is a full navmesh query.
+const MARCH_REPATH_INTERVAL_MS: int = 500
+var _march_repath_at: int = 0
 
 const COHESION_RECHECK_INTERVAL: float = 0.2
 ## Most groupmates a unit averages over per recheck (see _update_cohesion).
@@ -1267,7 +1270,9 @@ func _march_desired_velocity(max_speed: float) -> Vector3:
 	var to_point := _march_point - global_position
 	to_point.y = 0.0
 	if to_point.length() > MARCH_DIRECT_DISTANCE:
-		if nav_agent.target_position.distance_to(_march_point) > MARCH_REPATH_DISTANCE:
+		if nav_agent.target_position.distance_to(_march_point) > MARCH_REPATH_DISTANCE \
+				and Time.get_ticks_msec() >= _march_repath_at:
+			_march_repath_at = Time.get_ticks_msec() + MARCH_REPATH_INTERVAL_MS
 			nav_agent.target_position = _march_point
 		if not nav_agent.is_navigation_finished():
 			var next := nav_agent.get_next_path_position() - global_position

@@ -100,6 +100,7 @@ func setup(region: NavigationRegion3D) -> void:
 		## rather than replacing it with an empty mesh.
 		set_process(false)
 		return
+	_build_walkability(authored)
 	_clearance = maxf(authored.agent_radius, UNIT_BODY_RADIUS)
 	_bake_template = authored.duplicate()
 	_bake_template.agent_radius = 0.0
@@ -216,9 +217,27 @@ func _on_bake_finished(mesh: NavigationMesh) -> void:
 	if is_instance_valid(_region) and mesh.get_polygon_count() > 0:
 		_region.navigation_mesh = mesh
 		_repath_units()
+		_build_walkability(mesh)
 	if _rebake_queued:
 		_rebake_queued = false
 		_rebake()
+
+## NavWalkability.current for `mesh`, built on a worker thread — indexing a
+## map's worth of polygons is ~20 ms of GDScript, which on the main thread
+## would hitch every building placement.
+func _build_walkability(mesh: NavigationMesh) -> void:
+	var region_transform := _region.global_transform
+	WorkerThreadPool.add_task(func() -> void:
+		var built := NavWalkability.new(mesh, region_transform)
+		_apply_walkability.call_deferred(built))
+
+func _apply_walkability(built: NavWalkability) -> void:
+	## A slower build for an older bake must not replace a newer one.
+	if is_instance_valid(_region) and _region.navigation_mesh == built.mesh:
+		NavWalkability.current = built
+
+func _exit_tree() -> void:
+	NavWalkability.current = null
 
 ## A unit already walking somewhere is holding a path planned against the
 ## previous navmesh — through the doorway that just got walled up, or the long

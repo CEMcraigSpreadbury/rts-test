@@ -324,145 +324,145 @@ starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"
 modifiers = SubResource("mods_lords")
 
 [node name="TowerNorthWest" parent="Scenario/Slots/Player" instance=ExtResource("watchtower")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -51.57, 0, 37.43)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -69.219, 0.056, 55.079)
 
 [node name="TowerNorth" parent="Scenario/Slots/Player" instance=ExtResource("watchtower")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.5, 0, 34.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -62.149, 0.056, 52.149)
 
 [node name="TowerNorthEast" parent="Scenario/Slots/Player" instance=ExtResource("watchtower")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -38.5, 0, 38.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -56.149, 0.056, 56.149)
 
 [node name="Barracks" parent="Scenario/Slots/Player" instance=ExtResource("barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37.57, 0, 48.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -55.219, 0.056, 66.149)
 
 [node name="Blacksmith" parent="Scenario/Slots/Player" instance=ExtResource("blacksmith")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -42.17, 0, 53.19)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -59.819, 0.056, 70.839)
 
 [node name="HouseWest" parent="Scenario/Slots/Player" instance=ExtResource("house")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -54.64, 0, 47.22)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -72.289, 0.056, 64.869)
 
 [node name="HouseSouth" parent="Scenario/Slots/Player" instance=ExtResource("house")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50, 0, 54.03)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -67.649, 0.056, 71.679)
 
 [node name="Wall00" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -31.5, 0, 44.5)
+transform = Transform3D(0.0, 0.0, -1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, -49.149, 0.056, 62.149)
 
 [node name="Wall01" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.15643, 0, -0.98769, 0, 1, 0, 0.98769, 0, -0.15643, -31.66, 0, 46.534)
+transform = Transform3D(-0.15643, 0.0, -0.98769, 0.0, 1.0, 0.0, 0.98769, 0.0, -0.15643, -49.309, 0.056, 64.183)
 
 [node name="Wall02" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.30902, 0, -0.95106, 0, 1, 0, 0.95106, 0, -0.30902, -32.136, 0, 48.517)
+transform = Transform3D(-0.30902, 0.0, -0.95106, 0.0, 1.0, 0.0, 0.95106, 0.0, -0.30902, -49.785, 0.056, 66.166)
 
 [node name="Wall03" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.45399, 0, -0.89101, 0, 1, 0, 0.89101, 0, -0.45399, -32.917, 0, 50.402)
+transform = Transform3D(-0.45399, 0.0, -0.89101, 0.0, 1.0, 0.0, 0.89101, 0.0, -0.45399, -50.566, 0.056, 68.051)
 
 [node name="Wall04" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.58779, 0, -0.80902, 0, 1, 0, 0.80902, 0, -0.58779, -33.983, 0, 52.141)
+transform = Transform3D(-0.58779, 0.0, -0.80902, 0.0, 1.0, 0.0, 0.80902, 0.0, -0.58779, -51.632, 0.056, 69.79)
 
 [node name="Wall05" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.70711, 0, -0.70711, 0, 1, 0, 0.70711, 0, -0.70711, -35.308, 0, 53.692)
+transform = Transform3D(-0.70711, 0.0, -0.70711, 0.0, 1.0, 0.0, 0.70711, 0.0, -0.70711, -52.957, 0.056, 71.341)
 
 [node name="Wall06" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.80902, 0, -0.58779, 0, 1, 0, 0.58779, 0, -0.80902, -36.859, 0, 55.017)
+transform = Transform3D(-0.80902, 0.0, -0.58779, 0.0, 1.0, 0.0, 0.58779, 0.0, -0.80902, -54.508, 0.056, 72.666)
 
 [node name="Wall07" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.89101, 0, -0.45399, 0, 1, 0, 0.45399, 0, -0.89101, -38.598, 0, 56.083)
+transform = Transform3D(-0.89101, 0.0, -0.45399, 0.0, 1.0, 0.0, 0.45399, 0.0, -0.89101, -56.247, 0.056, 73.732)
 
 [node name="Wall08" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.95106, 0, -0.30902, 0, 1, 0, 0.30902, 0, -0.95106, -40.483, 0, 56.864)
+transform = Transform3D(-0.95106, 0.0, -0.30902, 0.0, 1.0, 0.0, 0.30902, 0.0, -0.95106, -58.132, 0.056, 74.513)
 
 [node name="Wall09" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.98769, 0, -0.15643, 0, 1, 0, 0.15643, 0, -0.98769, -42.466, 0, 57.34)
+transform = Transform3D(-0.98769, 0.0, -0.15643, 0.0, 1.0, 0.0, 0.15643, 0.0, -0.98769, -60.115, 0.056, 74.989)
 
 [node name="Wall10" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -44.5, 0, 57.5)
+transform = Transform3D(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0, -62.149, 0.056, 75.149)
 
 [node name="Wall11" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.98769, 0, 0.15643, 0, 1, 0, -0.15643, 0, -0.98769, -46.534, 0, 57.34)
+transform = Transform3D(-0.98769, 0.0, 0.15643, 0.0, 1.0, 0.0, -0.15643, 0.0, -0.98769, -64.183, 0.056, 74.989)
 
 [node name="Wall12" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.95106, 0, 0.30902, 0, 1, 0, -0.30902, 0, -0.95106, -48.517, 0, 56.864)
+transform = Transform3D(-0.95106, 0.0, 0.30902, 0.0, 1.0, 0.0, -0.30902, 0.0, -0.95106, -66.166, 0.056, 74.513)
 
 [node name="Wall13" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.89101, 0, 0.45399, 0, 1, 0, -0.45399, 0, -0.89101, -50.402, 0, 56.083)
+transform = Transform3D(-0.89101, 0.0, 0.45399, 0.0, 1.0, 0.0, -0.45399, 0.0, -0.89101, -68.051, 0.056, 73.732)
 
 [node name="Wall14" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.80902, 0, 0.58779, 0, 1, 0, -0.58779, 0, -0.80902, -52.141, 0, 55.017)
+transform = Transform3D(-0.80902, 0.0, 0.58779, 0.0, 1.0, 0.0, -0.58779, 0.0, -0.80902, -69.79, 0.056, 72.666)
 
 [node name="Wall15" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.70711, 0, 0.70711, 0, 1, 0, -0.70711, 0, -0.70711, -53.692, 0, 53.692)
+transform = Transform3D(-0.70711, 0.0, 0.70711, 0.0, 1.0, 0.0, -0.70711, 0.0, -0.70711, -71.341, 0.056, 71.341)
 
 [node name="Wall16" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.58779, 0, 0.80902, 0, 1, 0, -0.80902, 0, -0.58779, -55.017, 0, 52.141)
+transform = Transform3D(-0.58779, 0.0, 0.80902, 0.0, 1.0, 0.0, -0.80902, 0.0, -0.58779, -72.666, 0.056, 69.79)
 
 [node name="Wall17" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.45399, 0, 0.89101, 0, 1, 0, -0.89101, 0, -0.45399, -56.083, 0, 50.402)
+transform = Transform3D(-0.45399, 0.0, 0.89101, 0.0, 1.0, 0.0, -0.89101, 0.0, -0.45399, -73.732, 0.056, 68.051)
 
 [node name="Wall18" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.30902, 0, 0.95106, 0, 1, 0, -0.95106, 0, -0.30902, -56.864, 0, 48.517)
+transform = Transform3D(-0.30902, 0.0, 0.95106, 0.0, 1.0, 0.0, -0.95106, 0.0, -0.30902, -74.513, 0.056, 66.166)
 
 [node name="Wall19" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(-0.15643, 0, 0.98769, 0, 1, 0, -0.98769, 0, -0.15643, -57.34, 0, 46.534)
+transform = Transform3D(-0.15643, 0.0, 0.98769, 0.0, 1.0, 0.0, -0.98769, 0.0, -0.15643, -74.989, 0.056, 64.183)
 
 [node name="Wall20" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -57.5, 0, 44.5)
+transform = Transform3D(0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, -75.149, 0.056, 62.149)
 
 [node name="Wall21" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.15643, 0, 0.98769, 0, 1, 0, -0.98769, 0, 0.15643, -57.34, 0, 42.466)
+transform = Transform3D(0.15643, 0.0, 0.98769, 0.0, 1.0, 0.0, -0.98769, 0.0, 0.15643, -74.989, 0.056, 60.115)
 
 [node name="Wall22" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.30902, 0, 0.95106, 0, 1, 0, -0.95106, 0, 0.30902, -56.864, 0, 40.483)
+transform = Transform3D(0.30902, 0.0, 0.95106, 0.0, 1.0, 0.0, -0.95106, 0.0, 0.30902, -74.513, 0.056, 58.132)
 
 [node name="Wall23" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.45399, 0, 0.89101, 0, 1, 0, -0.89101, 0, 0.45399, -56.083, 0, 38.598)
+transform = Transform3D(0.45399, 0.0, 0.89101, 0.0, 1.0, 0.0, -0.89101, 0.0, 0.45399, -73.732, 0.056, 56.247)
 
 [node name="Wall24" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.58779, 0, 0.80902, 0, 1, 0, -0.80902, 0, 0.58779, -55.017, 0, 36.859)
+transform = Transform3D(0.58779, 0.0, 0.80902, 0.0, 1.0, 0.0, -0.80902, 0.0, 0.58779, -72.666, 0.056, 54.508)
 
 [node name="GateWest" parent="Scenario/Slots/Player" instance=ExtResource("gate")]
-transform = Transform3D(0.70711, 0, 0.70711, 0, 1, 0, -0.70711, 0, 0.70711, -53.692, 0, 35.308)
+transform = Transform3D(0.70711, 0.0, 0.70711, 0.0, 1.0, 0.0, -0.70711, 0.0, 0.70711, -71.341, 0.056, 52.957)
 
 [node name="Wall26" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.80902, 0, 0.58779, 0, 1, 0, -0.58779, 0, 0.80902, -52.141, 0, 33.983)
+transform = Transform3D(0.80902, 0.0, 0.58779, 0.0, 1.0, 0.0, -0.58779, 0.0, 0.80902, -69.79, 0.056, 51.632)
 
 [node name="Wall27" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.89101, 0, 0.45399, 0, 1, 0, -0.45399, 0, 0.89101, -50.402, 0, 32.917)
+transform = Transform3D(0.89101, 0.0, 0.45399, 0.0, 1.0, 0.0, -0.45399, 0.0, 0.89101, -68.051, 0.056, 50.566)
 
 [node name="Wall28" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.95106, 0, 0.30902, 0, 1, 0, -0.30902, 0, 0.95106, -48.517, 0, 32.136)
+transform = Transform3D(0.95106, 0.0, 0.30902, 0.0, 1.0, 0.0, -0.30902, 0.0, 0.95106, -66.166, 0.056, 49.785)
 
 [node name="Wall29" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.98769, 0, 0.15643, 0, 1, 0, -0.15643, 0, 0.98769, -46.534, 0, 31.66)
+transform = Transform3D(0.98769, 0.0, 0.15643, 0.0, 1.0, 0.0, -0.15643, 0.0, 0.98769, -64.183, 0.054, 49.309)
 
 [node name="Wall30" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.5, 0, 31.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -62.149, 0.049, 49.149)
 
 [node name="Wall31" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.98769, 0, -0.15643, 0, 1, 0, 0.15643, 0, 0.98769, -42.466, 0, 31.66)
+transform = Transform3D(0.98769, 0.0, -0.15643, 0.0, 1.0, 0.0, 0.15643, 0.0, 0.98769, -60.115, 0.046, 49.309)
 
 [node name="Wall32" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.95106, 0, -0.30902, 0, 1, 0, 0.30902, 0, 0.95106, -40.483, 0, 32.136)
+transform = Transform3D(0.95106, 0.0, -0.30902, 0.0, 1.0, 0.0, 0.30902, 0.0, 0.95106, -58.132, 0.048, 49.785)
 
 [node name="Wall33" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.89101, 0, -0.45399, 0, 1, 0, 0.45399, 0, 0.89101, -38.598, 0, 32.917)
+transform = Transform3D(0.89101, 0.0, -0.45399, 0.0, 1.0, 0.0, 0.45399, 0.0, 0.89101, -56.247, 0.048, 50.566)
 
 [node name="Wall34" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.80902, 0, -0.58779, 0, 1, 0, 0.58779, 0, 0.80902, -36.859, 0, 33.983)
+transform = Transform3D(0.80902, 0.0, -0.58779, 0.0, 1.0, 0.0, 0.58779, 0.0, 0.80902, -54.508, 0.046, 51.632)
 
 [node name="GateNorthEast" parent="Scenario/Slots/Player" instance=ExtResource("gate")]
-transform = Transform3D(0.70711, 0, -0.70711, 0, 1, 0, 0.70711, 0, 0.70711, -35.308, 0, 35.308)
+transform = Transform3D(0.70711, 0.0, -0.70711, 0.0, 1.0, 0.0, 0.70711, 0.0, 0.70711, -52.957, 0.043, 52.957)
 
 [node name="Wall36" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.58779, 0, -0.80902, 0, 1, 0, 0.80902, 0, 0.58779, -33.983, 0, 36.859)
+transform = Transform3D(0.58779, 0.0, -0.80902, 0.0, 1.0, 0.0, 0.80902, 0.0, 0.58779, -51.632, 0.041, 54.508)
 
 [node name="Wall37" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.45399, 0, -0.89101, 0, 1, 0, 0.89101, 0, 0.45399, -32.917, 0, 38.598)
+transform = Transform3D(0.45399, 0.0, -0.89101, 0.0, 1.0, 0.0, 0.89101, 0.0, 0.45399, -50.566, 0.038, 56.247)
 
 [node name="Wall38" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.30902, 0, -0.95106, 0, 1, 0, 0.95106, 0, 0.30902, -32.136, 0, 40.483)
+transform = Transform3D(0.30902, 0.0, -0.95106, 0.0, 1.0, 0.0, 0.95106, 0.0, 0.30902, -49.785, 0.041, 58.132)
 
 [node name="Wall39" parent="Scenario/Slots/Player" instance=ExtResource("wall")]
-transform = Transform3D(0.15643, 0, -0.98769, 0, 1, 0, 0.98769, 0, 0.15643, -31.66, 0, 42.466)
+transform = Transform3D(0.15643, 0.0, -0.98769, 0.0, 1.0, 0.0, 0.98769, 0.0, 0.15643, -49.309, 0.049, 60.115)
 
 [node name="Neighbour" type="Node3D" parent="Scenario/Slots"]
 script = ExtResource("slot_script")
@@ -486,56 +486,56 @@ color_index = 1
 defender_leash_radius = 14.0
 
 [node name="NorthHall" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0, -40)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -65.953, -0.129, -55.297)
 
 [node name="NorthPen" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, -36)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -71.407, -0.043, -49.843)
 
 [node name="NorthGuard1" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 0, -44)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -60.498, 2.428, -60.752)
 
 [node name="NorthGuard2" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -48, 0, -44)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -71.407, -0.221, -60.752)
 
 [node name="NorthGuard3" parent="Scenario/Slots/Horde" instance=ExtResource("druid")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 0, -36)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -60.498, -0.08, -49.843)
 
 [node name="EastHall" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 47)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -3.225, -0.287, 63.339)
 
 [node name="EastPen" parent="Scenario/Slots/Horde" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 56)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 4.956, 0.509, 75.612)
 
 [node name="EastGuard1" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 42)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -0.498, 0.252, 56.521)
 
 [node name="EastGuard2" parent="Scenario/Slots/Horde" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 44)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -8.68, -0.165, 59.248)
 
 [node name="EastGuard3" parent="Scenario/Slots/Horde" instance=ExtResource("druid")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 50)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.865, 0.402, 67.43)
 
 [node name="Zones" type="Node3D" parent="Scenario"]
 
 [node name="Capital" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44.5, 0, 44.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -62.149, 0.056, 62.149)
 script = ExtResource("zone_script")
 radius = 14.0
 
 [node name="NorthCamp" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0, -40)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -67.316, -0.079, -55.297)
 script = ExtResource("zone_script")
 radius = 10.0
 
 [node name="EastCamp" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, 50)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -0.498, 0.193, 67.43)
 script = ExtResource("zone_script")
 radius = 10.0
 
 [node name="Markers" type="Node3D" parent="Scenario"]
 
 [node name="KingsRoad" type="Marker3D" parent="Scenario/Markers"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, 44)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -37.649, 0.155, 61.649)
 
 [node name="Quests" type="Node" parent="Scenario"]
 

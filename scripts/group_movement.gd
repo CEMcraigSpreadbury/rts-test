@@ -787,7 +787,8 @@ const MARCH_BLEND_DISTANCE: float = 6.0
 const MARCH_PROBE_STEP: float = 0.5
 ## Extra room probed past a rank's own width, for sliding it sideways.
 const MARCH_PROBE_EXTRA: float = 3.0
-## A sample whose nearest navmesh point is further than this is off the mesh.
+## Length of route one cached room measurement covers (see _route_room).
+const MARCH_ROOM_BIN: float = 1.0## A sample whose nearest navmesh point is further than this is off the mesh.
 const MARCH_BLOCKED_DISTANCE: float = 0.3
 ## How far behind its rank a squeezed unit falls, per meter squeezed inward.
 const MARCH_SQUEEZE_TRAIL: float = 0.8
@@ -894,8 +895,7 @@ func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
 	var offsets: Dictionary = record["offsets"]
 	var ranks: Dictionary = record["rank_reach"]
 	var probe_reach: float = record["probe_reach"]
-	var anchor_speed: float = float(record["speed"]) * float(record["march_scale"])
-	## Rank key -> [left room, right room, sideways shift], probed once per rank.
+	var anchor_speed: float = float(record["speed"]) * float(record["march_scale"])	## Rank key -> [left room, right room, sideways shift], probed once per rank.
 	var rank_room: Dictionary = {}
 	var lag_total := 0.0
 	var lag_count := 0
@@ -911,8 +911,9 @@ func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
 
 		if not rank_room.has(rank):
 			var reach: Vector2 = ranks.get(rank, Vector2.ZERO)
-			var left_room := _probe_room(map, base, -right, probe_reach)
-			var right_room := _probe_room(map, base, right, probe_reach)
+			var measured := _route_room(record, map, arc - offset.y, probe_reach)
+			var left_room: float = measured.x
+			var right_room: float = measured.y
 			## Slide the whole rank toward the open side before squeezing anyone.
 			var shift := 0.0
 			if right_room < reach.y:
@@ -925,12 +926,16 @@ func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
 		var wanted: float = offset.x + float(room[2])
 		var lateral: float = clampf(wanted, -float(room[0]), float(room[1]))
 		var trail: float = absf(wanted - lateral) * MARCH_SQUEEZE_TRAIL
+		## Only a squeezed unit can be steered at somewhere off the navmesh; one
+		## within its rank's measured room is already on walkable ground, so it
+		## skips the closest-point query.
+		var point := base + right * lateral
 		if trail > 0.05:
 			var trailed := _march_frame(record, arc - offset.y - trail)
 			base = trailed["position"]
 			heading = trailed["forward"]
 			right = Vector3(heading.z, 0.0, -heading.x)
-		var point := NavigationServer3D.map_get_closest_point(map, base + right * lateral)
+			point = NavigationServer3D.map_get_closest_point(map, base + right * lateral)
 		unit.set_march_target(point, heading * anchor_speed)
 		lag_total += minf(_flat_distance(unit.global_position, point), MARCH_LAG_STOP * 2.0)
 		lag_count += 1
@@ -964,15 +969,40 @@ func _march_position(route: PackedVector3Array, cumulative: Array[float], arc: f
 	var start_forward: Vector3 = _route_point_at(route, cumulative, 0.0)["forward"]
 	return route[0] + start_forward * arc
 
+## Room either side of the route (left, right) at `arc`, measured once per
+## MARCH_ROOM_BIN of route and cached on the record. Every rank walks the same
+## route, so trailing ranks reuse what the front rank already measured, and a
+## re-steer only probes the ground the anchor has newly reached — probing
+## per rank per re-steer was hundreds of navmesh queries a second.
+func _route_room(record: Dictionary, map: RID, arc: float, reach: float) -> Vector2:
+	if not record.has("room_cache"):
+		record["room_cache"] = {}
+	var cache: Dictionary = record["room_cache"]
+	var bin := floori(arc / MARCH_ROOM_BIN)
+	if cache.has(bin):
+		return cache[bin]
+	var frame := _march_frame(record, (bin + 0.5) * MARCH_ROOM_BIN)
+	var base: Vector3 = frame["position"]
+	var heading: Vector3 = frame["forward"]
+	var right := Vector3(heading.z, 0.0, -heading.x)
+	var room := Vector2(_probe_room(map, base, -right, reach), _probe_room(map, base, right, reach))
+	cache[bin] = room
+	return room
+
 ## Walkable distance from `base` along `direction`, up to `reach`, sampled
 ## against the navmesh (which buildings are already carved out of).
+## Uses NavWalkability's polygon index when it's built: a closest-point query
+## scans every polygon on the map, and this runs many of them per rank.
 func _probe_room(map: RID, base: Vector3, direction: Vector3, reach: float) -> float:
+	var walkability := NavWalkability.current
 	var room := 0.0
 	var distance := MARCH_PROBE_STEP
 	while room < reach:
 		var sample := base + direction * minf(distance, reach)
-		var nearest := NavigationServer3D.map_get_closest_point(map, sample)
-		if _flat_distance(nearest, sample) > MARCH_BLOCKED_DISTANCE:
+		if walkability != null:
+			if not walkability.is_walkable(sample):
+				return room
+		elif _flat_distance(NavigationServer3D.map_get_closest_point(map, sample), sample) > MARCH_BLOCKED_DISTANCE:
 			return room
 		room = minf(distance, reach)
 		distance += MARCH_PROBE_STEP

@@ -11,7 +11,7 @@ center_offset = Vector3(0, 0.2, 0)
 [resource]
 mesh = SubResource("QuadMesh_48dlu")
 windStrength = 0.0
-lodRowsPerLevel = 101
+lodRowsPerLevel = 161
 lodInitialCellWidth = 0.15
 randomPlacementRange = 0.15
 applyOnTextureIndexes = Array[int]([0])

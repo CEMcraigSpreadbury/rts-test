@@ -33,7 +33,7 @@ const PREVIEW_DATA_PATH: String = "user://map_generator_preview"
 ## Odd so corners land on whole metres: a zone of N pixels spans N - 1 metres
 ## centred on the origin, putting pixel p at world p - (N - 1) / 2.
 static func zones_size(layout: MapLayout) -> int:
-	return nearest_po2(layout.size + 2) + 1
+	return nearest_po2(layout.size + MapLayout.OUTER_PADDING * 2) + 1
 
 static func build_zone(layout: MapLayout) -> ZoneResource:
 	var n: int = zones_size(layout)
@@ -86,7 +86,8 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 ## terrain zone. Fog of war finds it by its shader, like the terrain.
 static func make_water(layout: MapLayout) -> MeshInstance3D:
 	var plane := PlaneMesh.new()
-	var span: float = zones_size(layout) - 1
+	## Well past the terrain, so the horizon is sea rather than the terrain's cut edge.
+	var span: float = (zones_size(layout) - 1) * 4.0
 	plane.size = Vector2(span, span)
 	var material := ShaderMaterial.new()
 	material.shader = WATER_SHADER
@@ -126,11 +127,14 @@ const PALETTE_OFFSETS: PackedFloat32Array = [0.166667, 0.5, 0.833333]
 
 ## The terrain material and grass foliage definition are duplicated per map so
 ## each map keeps its own palettes (saved inline in the map scene).
-static func make_terrain(zone: ZoneResource, zone_size: int, data_path: String, grass_palette: PackedColorArray, ground_palette: PackedColorArray, grass_height: float, grass_brightness: float) -> TerraBrush:
+static func make_terrain(zone: ZoneResource, zone_size: int, data_path: String, grass_palette: PackedColorArray, ground_palette: PackedColorArray, grass_height: float, grass_brightness: float, grass_detail_distance: float) -> TerraBrush:
 	var zones := ZonesResource.new()
 	zones.zones = [zone]
 	var definition: FoliageDefinitionResource = GRASS_FOLIAGE.duplicate()
 	definition.customShader = definition.customShader.duplicate()
+	## Width of the full-density ring of blades (the clipmap's first LOD level);
+	## the blade count grows with its square. Rows must be odd.
+	definition.lodRowsPerLevel = int(ceil(grass_detail_distance / definition.lodInitialCellWidth)) | 1
 	var foliage := FoliageResource.new()
 	foliage.definition = definition
 	var terrain := TerraBrush.new()

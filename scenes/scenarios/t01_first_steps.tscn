@@ -100,7 +100,7 @@ modifiers = SubResource("mods_player")
 [node name="Zones" type="Node3D" parent="Scenario"]
 
 [node name="OldRoad" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, 40)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -48.474, 0.277, 66.474)
 script = ExtResource("zone_script")
 radius = 6.0
 

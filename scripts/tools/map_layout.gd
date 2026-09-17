@@ -2,15 +2,19 @@
 class_name MapLayout
 extends RefCounted
 ## The data half of MapGenerator: a height field on cell corners (rolling
-## hills, organic plateaus and valleys joined by ramps, flattened pads), decal
-## corner fields, and every object placement, all derived from the seed.
+## hills, organic plateaus and valleys joined by ramps, flattened pads, coast,
+## lakes and rivers), decal corner fields, and every object placement, all
+## derived from the seed.
 ##
-## Fairness comes from rotational symmetry. Every feature is authored once for
-## player 0's slice (the "template") and then rotated by TAU / players for
-## everyone else, so each base gets the same terrain, resources and distances.
-## Object placements are only accepted if every rotated copy is valid. Noise is
-## either read in the template frame or averaged over every rotation, so the
-## terrain itself matches between copies too.
+## Everything is authored in player 0's slice (the "template" frame) and
+## stamped into the map at one or more player rotations, listed in the item's
+## `copies`. With MapGenerator.symmetric on, each item is stamped for every
+## player, so every base gets the same terrain, resources and distances, and
+## placements are only accepted if every copy is valid. With it off, each
+## player rolls their own items, stamped only into their own slice: the map is
+## unique, and fairness comes from equal counts and parameter ranges, equal base
+## distances and flat base areas, and gold and objectives being placed for
+## every player or none (objectives at matching distances from each base).
 
 const DIRS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
 const TC_OFFSET: Vector2 = Vector2(-4.0, 4.0)
@@ -35,17 +39,36 @@ const RISE_OBJECTIVE: float = 0.5
 const RISE_GOLD: float = 0.7
 const RISE_TREE: float = 0.9
 const RISE_PROP: float = 1.2
-## Land is kept at least this far above the water unless the coast (or, later,
-## a lake or river) deliberately takes it under.
+## Land is kept at least this far above the water unless the coast, a lake or a
+## river deliberately takes it under.
 const DRY_MARGIN: float = 0.5
 ## Water shallower than this is walkable (and navigable); deeper blocks.
 const WADE_DEPTH: float = 0.3
+## A ford's bed sits this far under the water: shallow enough to walk.
+const FORD_DEPTH: float = 0.12
+## Spacing of the points a river's course is sampled at.
+const RIVER_STEP: float = 3.0
+## The terrain always reaches at least this far past the map square on every
+## side (MapTerrainBuilder.zones_size), room for the land to drop into the sea.
+const OUTER_PADDING: int = 8
+## Forest (non-coast) edges: the land ends at a wobbly line this far inside the
+## map boundary, plus up to FOREST_EDGE_WOBBLE of the border width more, then
+## drops steeply (FOREST_BANK_SLOPE per metre above water, FOREST_BANK_DROP
+## metres to the sea floor below it).
+const FOREST_EDGE_INSET: float = 1.5
+const FOREST_EDGE_WOBBLE: float = 0.55
+const FOREST_BANK_SLOPE: float = 0.8
+const FOREST_BANK_DROP: float = 3.0
 ## Objects and pads need their ground at least this far above the water.
 const PLACE_ABOVE_WATER: float = 0.25
+## Unsymmetric maps: how far (as a fraction) each player's copy of an objective
+## may differ from the first player's in distance from its own base.
+const OBJECTIVE_DISTANCE_TOLERANCE: float = 0.15
 
 var size: int
 var half: float
 var players: int
+var symmetric: bool
 var water_level: float
 ## Horizontal room a ramp needs for the tallest possible climb, landings included.
 var ramp_length: float
@@ -73,17 +96,29 @@ var _coast_noise := FastNoiseLite.new()
 var _coast_phases := Vector2.ZERO
 var _angle0: float
 var _step: float
-## {centre, half: Vector2, radius, angle, symmetric, steps: Array[float] (height change per tier)}
+## Every planned item below is in the template frame with `copies`: the player
+## rotations it is stamped at. Items marked `symmetric` (the centre site and
+## its plateau) sit on the rotation centre and are stamped once, unrotated.
+## {centre, half: Vector2, radius, angle, symmetric, steps: Array[float] (height change per tier), copies}
 var _features: Array[Dictionary] = []
+## Ramps are in world space: {outer, inner, entrance, landing, tier, copy, on_centre}.
 var _ramps: Array[Dictionary] = []
+## {pos, scene, symmetric, footprint, props, copies}
 var _objective_sites: Array[Dictionary] = []
-## Flattened spots to build on away from base: {pos, radius}, template frame.
+## Flattened spots to build on away from base: {pos, radius, copies}.
 var _pockets: Array[Dictionary] = []
+## Lakes and ponds: {pos, radius, copies}.
+var _lakes: Array[Dictionary] = []
+## Rivers: {points: PackedVector2Array, arcs: PackedFloat32Array (distance along
+## the river at each point), width, fords: Array[float] (arc positions), copies},
+## running from the map edge inland.
+var _rivers: Array[Dictionary] = []
+## Decal strokes {a, b, width, copies}.
 var _paths: Array[Dictionary] = []
 var _dirt_shapes: Array[Dictionary] = []
 var _grass_shapes: Array[Dictionary] = []
 var _cliff_distance := PackedInt32Array()
-## Spatial hash of placed bodies: {pos, radius, gap, group, solid}
+## Spatial hash of placed bodies: {pos, radius, gap, group, solid}, world space.
 var _bodies: Array[Dictionary] = []
 var _hash: Dictionary = {}
 var _next_group: int = 1
@@ -97,6 +132,7 @@ func generate() -> bool:
 	size = _gen.map_size
 	half = size * 0.5
 	players = _gen.player_count
+	symmetric = _gen.symmetric
 	water_level = _gen.water_level
 	_step = TAU / players
 	_angle0 = deg_to_rad(_gen.layout_rotation_degrees)
@@ -127,14 +163,18 @@ func generate() -> bool:
 
 	_place_bases()
 	_plan_objectives()
+	_plan_rivers()
 	_plan_features()
 	_plan_pockets()
+	_plan_lakes()
 	_build_hills()
 	_flatten_building_ground()
 	_add_features()
 	_place_ramps()
 	_flatten_objectives()
 	_shape_coast()
+	_carve_lakes()
+	_carve_rivers()
 	_compute_cells()
 	for i in spawn_positions.size():
 		spawn_positions[i].y = surface_height(Vector2(spawn_positions[i].x, spawn_positions[i].z))
@@ -148,7 +188,7 @@ func generate() -> bool:
 	_place_border_trees()
 	_place_props()
 	_rasterize_decals()
-	_check_connectivity()
+	_ensure_connected()
 	return true
 
 ## --- Geometry helpers ---
@@ -171,6 +211,22 @@ func rot(p: Vector2, k: int) -> Vector2:
 func is_playable_cell(c: Vector2i) -> bool:
 	return in_bounds(c) and playable[index(c)] == 1
 
+func _all_copies() -> Array:
+	var copies: Array = []
+	for k in players:
+		copies.append(k)
+	return copies
+
+## One entry per item a count setting ("per player") produces: symmetric maps
+## author one item stamped for everyone, others one item per player.
+func _copy_sets() -> Array:
+	if symmetric:
+		return [_all_copies()]
+	var sets: Array = []
+	for k in players:
+		sets.append([k])
+	return sets
+
 ## Signed distance (in metres) from p to the playable boundary: positive inside.
 ## Along coast the boundary is the waterline, pulled inland by a wobble.
 func edge_distance(p: Vector2) -> float:
@@ -181,19 +237,32 @@ func edge_distance(p: Vector2) -> float:
 		best = minf(best, limit - maxf(absf(q.x), absf(q.y)))
 	var coast: float = coast_weight(p)
 	if coast > 0.0:
-		best -= coast * _gen.coast_wobble * clampf(_symmetric_noise(_coast_noise, p) * 0.6 + 0.5, 0.0, 1.0)
+		best -= coast * _gen.coast_wobble * clampf(_rotation_noise(_coast_noise, p) * 0.6 + 0.5, 0.0, 1.0)
 	return best
 
 ## How much the map edge nearest p is coast (1) rather than forest border (0).
-## Two waves around the map repeating once per player, so every slice matches;
-## coast_fraction moves the threshold.
+## Two waves around the map, repeating once per player on symmetric maps so
+## every slice matches; coast_fraction moves the threshold.
 func coast_weight(p: Vector2) -> float:
 	if _gen.coast_fraction <= 0.0:
 		return 0.0
-	var angle: float = p.angle() * players
-	var wave: float = (sin(angle + _coast_phases.x) + 0.6 * sin(angle * 2.0 + _coast_phases.y)) / 1.6
+	var wave: float
+	if symmetric:
+		var angle: float = p.angle() * players
+		wave = (sin(angle + _coast_phases.x) + 0.6 * sin(angle * 2.0 + _coast_phases.y)) / 1.6
+	else:
+		wave = (sin(p.angle() * 2.0 + _coast_phases.x) + 0.6 * sin(p.angle() * 3.0 + _coast_phases.y)) / 1.6
 	var threshold: float = 1.0 - 2.0 * _gen.coast_fraction
 	return smoothstep(threshold - 0.15, threshold + 0.15, wave)
+
+## Signed distance from p to the map's outer boundary (the same rotated-square
+## shape edge_distance uses, without the border or coast): positive inside.
+func _boundary_distance(p: Vector2) -> float:
+	var best: float = INF
+	for k in players:
+		var q: Vector2 = rot(p, k)
+		best = minf(best, half - maxf(absf(q.x), absf(q.y)))
+	return best
 
 func is_deep_water(c: Vector2i) -> bool:
 	return water_level - _cell_height(c) > WADE_DEPTH
@@ -212,18 +281,17 @@ func _edge_distance_along(angle: float) -> float:
 	_reach_cache[bucket] = r
 	return r
 
-## Corners outside the grid take the nearest edge corner's height, sinking to
-## the sea floor over shore_drop where that edge is coast, so the sea carries on
-## past the map instead of stopping in straight strips.
+## Corners outside the grid take the nearest edge corner's height and sink to
+## the sea floor within OUTER_PADDING, so every edge of the map (coast or forest
+## border) falls away into the sea instead of ending in a cut-off wall.
 func corner_height(corner: Vector2i) -> float:
 	var c: Vector2i = corner.clamp(Vector2i.ZERO, Vector2i(size, size))
 	var h: float = heights[c.y * (size + 1) + c.x]
 	if c == corner:
 		return h
-	var p: Vector2 = _corner_position(corner.x, corner.y)
 	var outside: float = (Vector2(corner) - Vector2(c)).length()
 	var sea_floor: float = water_level - _gen.sea_depth
-	return lerpf(h, minf(h, sea_floor), coast_weight(p) * smoothstep(0.0, _gen.shore_drop, outside))
+	return lerpf(h, minf(h, sea_floor), smoothstep(0.0, minf(_gen.shore_drop, OUTER_PADDING - 1.0), outside))
 
 func surface_height(p: Vector2) -> float:
 	var x: float = clampf(p.x + half, 0.0, size)
@@ -242,9 +310,12 @@ func _cell_height(c: Vector2i) -> float:
 	var top: int = c.y * corners + c.x
 	return (heights[top] + heights[top + 1] + heights[top + corners] + heights[top + corners + 1]) * 0.25
 
-func _rand_in_sector(r_min: float, r_max: float) -> Vector2:
+## A template-frame point in player 0's slice, scaled to how far the playable
+## ground reaches in player k's slice (the coast differs between slices on
+## unsymmetric maps).
+func _rand_in_sector(r_min: float, r_max: float, k: int = 0) -> Vector2:
 	var angle: float = _angle0 + _rng.randf_range(-0.5, 0.5) * _step
-	var reach: float = _edge_distance_along(angle)
+	var reach: float = _edge_distance_along(angle + k * _step)
 	return Vector2.from_angle(angle) * _rng.randf_range(r_min, r_max) * reach
 
 func _noise01(p: Vector2) -> float:
@@ -258,11 +329,19 @@ func _symmetric_noise(noise: FastNoiseLite, p: Vector2) -> float:
 		total += noise.get_noise_2dv(rot(p, k))
 	return total / sqrt(float(players))
 
+## Noise for map-wide terrain: rotation-symmetric on symmetric maps.
+func _rotation_noise(noise: FastNoiseLite, p: Vector2) -> float:
+	return _symmetric_noise(noise, p) if symmetric else noise.get_noise_2dv(p)
+
 ## --- Bases ---
 
+## Bases always sit at the same distance from the centre, in every mode, so
+## the shortest reach of any slice decides it.
 func _place_bases() -> void:
-	var r: float = _gen.spawn_distance * _edge_distance_along(_angle0)
-	var base0: Vector2 = Vector2.from_angle(_angle0) * r
+	var reach: float = INF
+	for k in players:
+		reach = minf(reach, _edge_distance_along(_angle0 + k * _step))
+	var base0: Vector2 = Vector2.from_angle(_angle0) * _gen.spawn_distance * reach
 	for k in players:
 		var centre: Vector2 = rot(base0, k)
 		base_centres.append(centre)
@@ -270,7 +349,7 @@ func _place_bases() -> void:
 		spawn_positions.append(Vector3(spawn.x, 0.0, spawn.y))
 		_add_body(centre, _gen.base_clear_radius, 0.0, _new_group(), false)
 
-## --- Objectives, plateaus & valleys (template frame) ---
+## --- Objectives, plateaus & valleys ---
 
 ## Width of the ledge a lower tier keeps around the tier above it: room for
 ## that tier's ramp and a little walking space.
@@ -292,7 +371,7 @@ func _plan_objectives() -> void:
 		MapGenerator.CentreSite.SHRINE:
 			centre_scene = _gen.shrine_scene
 	if centre_scene != null:
-		_objective_sites.append({pos = Vector2.ZERO, scene = centre_scene, symmetric = true, footprint = footprint, props = {favour_per_second = _gen.centre_favour_per_second}})
+		_objective_sites.append({pos = Vector2.ZERO, scene = centre_scene, symmetric = true, footprint = footprint, props = {favour_per_second = _gen.centre_favour_per_second}, copies = [0]})
 	var requests: Array[Dictionary] = []
 	if not scenes.is_empty():
 		for j in _gen.objectives_per_player:
@@ -301,42 +380,60 @@ func _plan_objectives() -> void:
 		for j in _gen.shrines_per_player:
 			requests.append({scene = _gen.shrine_scene, props = {roll_group = StringName("shrine_%d" % j)}})
 	for request in requests:
-		var placed: bool = false
-		for attempt in 300:
-			var p: Vector2 = _rand_in_sector(0.25, 0.9)
-			if edge_distance(p) < footprint + 4.0:
-				continue
-			if not _clear_of_bases(p, _gen.objective_min_base_distance):
-				continue
-			if not _clear_of_sites(p, footprint + 6.0):
-				continue
-			if _self_copies_too_close(p, footprint * 2.0 + 6.0):
-				continue
-			_objective_sites.append({pos = p, scene = request.scene, symmetric = false, footprint = footprint, props = request.props})
-			placed = true
-			break
-		if not placed:
-			push_warning("MapGenerator: no room for every objective/shrine — lower the per-player counts or Objective Min Base Distance, or use a bigger map.")
+		## Every player gets this objective or nobody does, and on unsymmetric
+		## maps each copy stands about as far from its own base as the first.
+		var added: Array[Dictionary] = []
+		var first_distance: float = -1.0
+		for copies in _copy_sets():
+			var placed: bool = false
+			for attempt in 300:
+				var p: Vector2 = _rand_in_sector(0.25, 0.9, copies[0])
+				if edge_distance(rot(p, copies[0])) < footprint + 4.0:
+					continue
+				if not _clear_of_bases(p, _gen.objective_min_base_distance, copies):
+					continue
+				if not _clear_of_sites(p, footprint + 6.0, copies):
+					continue
+				if _self_copies_too_close(p, footprint * 2.0 + 6.0, copies):
+					continue
+				var distance: float = rot(p, copies[0]).distance_to(base_centres[copies[0]])
+				if first_distance >= 0.0 and absf(distance - first_distance) > first_distance * OBJECTIVE_DISTANCE_TOLERANCE:
+					continue
+				var site := {pos = p, scene = request.scene, symmetric = false, footprint = footprint, props = request.props, copies = copies}
+				_objective_sites.append(site)
+				added.append(site)
+				if first_distance < 0.0:
+					first_distance = distance
+				placed = true
+				break
+			if not placed:
+				for site in added:
+					_objective_sites.erase(site)
+				push_warning("MapGenerator: no room for every objective/shrine — lower the per-player counts or Objective Min Base Distance, or use a bigger map.")
+				break
 
-func _clear_of_bases(p: Vector2, min_distance: float) -> bool:
-	for k in players:
+func _clear_of_bases(p: Vector2, min_distance: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
 		for base in base_centres:
-			if rot(p, k).distance_to(base) < min_distance:
+			if q.distance_to(base) < min_distance:
 				return false
 	return true
 
-func _clear_of_sites(p: Vector2, extra: float) -> bool:
-	for site in _objective_sites:
-		for k in players:
-			var q: Vector2 = rot(p, k)
-			if q.distance_to(site.pos) < site.footprint + extra:
-				return false
+func _clear_of_sites(p: Vector2, extra: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for site in _objective_sites:
+			for sk in site.copies:
+				if q.distance_to(rot(site.pos, sk)) < site.footprint + extra:
+					return false
 	return true
 
-func _self_copies_too_close(p: Vector2, min_distance: float) -> bool:
-	for k in range(1, players):
-		if rot(p, k).distance_to(p) < min_distance:
-			return true
+func _self_copies_too_close(p: Vector2, min_distance: float, copies: Array) -> bool:
+	for a in copies:
+		for b in copies:
+			if a < b and rot(p, a).distance_to(rot(p, b)) < min_distance:
+				return true
 	return false
 
 ## Height change per tier. Objectives always stand on raised ground; other
@@ -354,34 +451,37 @@ func _plan_features() -> void:
 	if _gen.objectives_on_plateaus:
 		var h: float = _objective_plateau_half()
 		for site in _objective_sites:
-			var feature := {centre = site.pos, half = Vector2(h, h), radius = 3.0, angle = _rng.randf() * TAU, symmetric = site.symmetric, steps = _roll_steps(_gen.objective_plateau_tiers, false)}
+			var feature := {centre = site.pos, half = Vector2(h, h), radius = 3.0, angle = _rng.randf() * TAU, symmetric = site.symmetric, steps = _roll_steps(_gen.objective_plateau_tiers, false), copies = site.copies}
 			if site.symmetric:
 				feature.half = Vector2(h, h) * 1.05
 				feature.radius = feature.half.x
 			_features.append(feature)
 	var min_half: float = maxf(_gen.plateau_half_size.x, ramp_length * 0.5 + 3.0 + (_gen.plateau_tiers - 1) * _tier_ring())
 	var max_half: float = maxf(_gen.plateau_half_size.y, min_half)
-	for n in _gen.plateaus_per_player:
-		var placed: bool = false
-		for attempt in 300:
-			var extents := Vector2(_rng.randf_range(min_half, max_half), _rng.randf_range(min_half, max_half))
-			var reach: float = extents.length() + _gen.plateau_outline_noise
-			var p: Vector2 = _rand_in_sector(0.2, 0.95)
-			if edge_distance(p) < reach + 6.0:
-				continue
-			if not _clear_of_bases(p, _gen.base_clear_radius + reach + 10.0):
-				continue
-			if not _clear_of_sites(p, reach + 5.0):
-				continue
-			if not _clear_of_features(p, reach):
-				continue
-			if _self_copies_too_close(p, reach * 2.0 + 6.0):
-				continue
-			_features.append({centre = p, half = extents, radius = minf(extents.x, extents.y) * _rng.randf_range(0.3, 0.8), angle = _rng.randf() * TAU, symmetric = false, steps = _roll_steps(_gen.plateau_tiers, true)})
-			placed = true
-			break
-		if not placed:
-			push_warning("MapGenerator: no room for extra plateau/valley %d." % (n + 1))
+	for copies in _copy_sets():
+		for n in _gen.plateaus_per_player:
+			var placed: bool = false
+			for attempt in 300:
+				var extents := Vector2(_rng.randf_range(min_half, max_half), _rng.randf_range(min_half, max_half))
+				var reach: float = extents.length() + _gen.plateau_outline_noise
+				var p: Vector2 = _rand_in_sector(0.2, 0.95, copies[0])
+				if edge_distance(rot(p, copies[0])) < reach + 6.0:
+					continue
+				if not _clear_of_bases(p, _gen.base_clear_radius + reach + 10.0, copies):
+					continue
+				if not _clear_of_sites(p, reach + 5.0, copies):
+					continue
+				if not _clear_of_features(p, reach, copies):
+					continue
+				if not _clear_of_rivers(p, reach, copies):
+					continue
+				if _self_copies_too_close(p, reach * 2.0 + 6.0, copies):
+					continue
+				_features.append({centre = p, half = extents, radius = minf(extents.x, extents.y) * _rng.randf_range(0.3, 0.8), angle = _rng.randf() * TAU, symmetric = false, steps = _roll_steps(_gen.plateau_tiers, true), copies = copies})
+				placed = true
+				break
+			if not placed:
+				push_warning("MapGenerator: no room for extra plateau/valley %d." % (n + 1))
 
 func _base_flat_reach() -> float:
 	return maxf(_gen.base_flat_radius, _gen.base_clear_radius + 2.0) + BASE_FLAT_FALLOFF
@@ -389,49 +489,291 @@ func _base_flat_reach() -> float:
 ## Spots flattened for building on, away from bases, objectives and features.
 ## Each gets a non-solid body so trees and gold leave the space free.
 func _plan_pockets() -> void:
-	for n in _gen.building_pockets_per_player:
-		var placed: bool = false
-		for attempt in 200:
-			var radius: float = _rng.randf_range(_gen.building_pocket_radius.x, maxf(_gen.building_pocket_radius.y, _gen.building_pocket_radius.x))
-			var reach: float = radius + POCKET_FALLOFF
-			var p: Vector2 = _rand_in_sector(0.2, 0.9)
-			if edge_distance(p) < reach + 4.0:
-				continue
-			if not _clear_of_bases(p, _base_flat_reach() + reach):
-				continue
-			if not _clear_of_sites(p, reach + 4.0):
-				continue
-			if not _clear_of_features(p, reach):
-				continue
-			if not _clear_of_pockets(p, reach):
-				continue
-			if _self_copies_too_close(p, reach * 2.0 + 4.0):
-				continue
-			_pockets.append({pos = p, radius = radius})
-			for k in players:
-				_add_body(rot(p, k), radius, 0.0, _new_group(), false)
-			placed = true
-			break
-		if not placed:
-			push_warning("MapGenerator: no room for building pocket %d." % (n + 1))
+	for copies in _copy_sets():
+		for n in _gen.building_pockets_per_player:
+			var placed: bool = false
+			for attempt in 200:
+				var radius: float = _rng.randf_range(_gen.building_pocket_radius.x, maxf(_gen.building_pocket_radius.y, _gen.building_pocket_radius.x))
+				var reach: float = radius + POCKET_FALLOFF
+				var p: Vector2 = _rand_in_sector(0.2, 0.9, copies[0])
+				if edge_distance(rot(p, copies[0])) < reach + 4.0:
+					continue
+				if not _clear_of_bases(p, _base_flat_reach() + reach, copies):
+					continue
+				if not _clear_of_sites(p, reach + 4.0, copies):
+					continue
+				if not _clear_of_features(p, reach, copies):
+					continue
+				if not _clear_of_pockets(p, reach, copies):
+					continue
+				if not _clear_of_rivers(p, reach, copies):
+					continue
+				if _self_copies_too_close(p, reach * 2.0 + 4.0, copies):
+					continue
+				_pockets.append({pos = p, radius = radius, copies = copies})
+				for k in copies:
+					_add_body(rot(p, k), radius, 0.0, _new_group(), false)
+				placed = true
+				break
+			if not placed:
+				push_warning("MapGenerator: no room for building pocket %d." % (n + 1))
 
-func _clear_of_pockets(p: Vector2, reach: float) -> bool:
-	for pocket in _pockets:
-		for k in players:
-			if rot(p, k).distance_to(pocket.pos) < reach + pocket.radius + POCKET_FALLOFF + 4.0:
-				return false
+## Lakes and ponds, kept off bases, objectives, features, pockets and each
+## other. Each gets a non-solid body so trees and gold stay out of the water.
+func _plan_lakes() -> void:
+	for copies in _copy_sets():
+		for n in _gen.lakes_per_player:
+			var placed: bool = false
+			for attempt in 200:
+				var radius: float = _rng.randf_range(_gen.lake_radius.x, maxf(_gen.lake_radius.y, _gen.lake_radius.x))
+				var reach: float = radius * 1.35
+				var p: Vector2 = _rand_in_sector(0.15, 0.9, copies[0])
+				if edge_distance(rot(p, copies[0])) < reach + 4.0:
+					continue
+				if not _clear_of_bases(p, _gen.base_flat_radius + reach, copies):
+					continue
+				## Objective plateaus are covered by the feature check; only the
+				## objective's own clearing matters here.
+				if not _clear_of_objective_pads(p, reach + 4.0, copies):
+					continue
+				if not _clear_of_features(p, reach, copies):
+					continue
+				if not _clear_of_pockets(p, reach, copies):
+					continue
+				if not _clear_of_lakes(p, reach, copies):
+					continue
+				if not _clear_of_rivers(p, reach, copies):
+					continue
+				if _gen.paths_to_centre and _near_centre_route(p, reach + _gen.path_width, copies):
+					continue
+				if _self_copies_too_close(p, reach * 2.0 + 8.0, copies):
+					continue
+				_lakes.append({pos = p, radius = radius, copies = copies})
+				for k in copies:
+					_add_body(rot(p, k), reach, 0.0, _new_group(), false)
+				placed = true
+				break
+			if not placed:
+				push_warning("MapGenerator: no room for lake %d." % (n + 1))
+
+## --- Rivers ---
+
+## Each river starts past the map edge between two bases (at the most coastal
+## angle there, so it tends to run out to sea) and winds inland toward the
+## middle, stopping river_length of the way. Rejected if its course comes near
+## a base, an objective, a base-to-centre route, another river, or its own
+## rotated copies.
+func _plan_rivers() -> void:
+	for copies in _copy_sets():
+		for n in _gen.rivers_per_player:
+			var placed: bool = false
+			for attempt in 60:
+				var river: Dictionary = _roll_river(n, attempt, copies)
+				if river.is_empty() or not _river_valid(river):
+					continue
+				_rivers.append(river)
+				for k in copies:
+					for p in river.points:
+						_add_body(rot(p, k), river.width * 0.5 + 2.0, 0.0, _new_group(), false)
+				placed = true
+				break
+			if not placed:
+				push_warning("MapGenerator: no room for river %d." % (n + 1))
+
+func _roll_river(n: int, attempt: int, copies: Array) -> Dictionary:
+	var k: int = copies[0]
+	var sector: float = _angle0 + _step * 0.5
+	var spread: float = _step * 0.3
+	var best_angle: float = sector + _rng.randf_range(-spread, spread)
+	var best_coast: float = -1.0
+	for i in 8:
+		var angle: float = sector + _rng.randf_range(-spread, spread)
+		var coast: float = coast_weight(Vector2.from_angle(angle + k * _step) * half)
+		if coast > best_coast + 0.05:
+			best_coast = coast
+			best_angle = angle
+	var reach: float = _edge_distance_along(best_angle + k * _step)
+	if reach <= 0.0:
+		return {}
+	var start: Vector2 = Vector2.from_angle(best_angle) * (reach + _gen.border_width + 4.0)
+	var finish: Vector2 = Vector2.from_angle(best_angle + _rng.randf_range(-0.3, 0.3)) * reach * (1.0 - _gen.river_length)
+	var length: float = start.distance_to(finish)
+	var count: int = maxi(2, ceili(length / RIVER_STEP))
+	var across: Vector2 = (finish - start).normalized().orthogonal()
+	var phase: float = _rng.randf_range(0.0, 1000.0) + n * 137.0 + attempt * 11.0
+	var points := PackedVector2Array()
+	var arcs := PackedFloat32Array()
+	for i in count + 1:
+		var t: float = float(i) / count
+		var wander: float = _outline_noise.get_noise_2d(t * length * 0.08, phase) * _gen.river_meander * smoothstep(0.0, 0.25, t)
+		var p: Vector2 = start.lerp(finish, t) + across * wander
+		arcs.append(0.0 if points.is_empty() else arcs[arcs.size() - 1] + points[points.size() - 1].distance_to(p))
+		points.append(p)
+	var fords: Array[float] = []
+	var total: float = arcs[arcs.size() - 1]
+	for f in _gen.fords_per_river:
+		fords.append(total * lerpf(0.3, 0.75, (f + 1.0) / (_gen.fords_per_river + 1.0)))
+	return {points = points, arcs = arcs, width = _rng.randf_range(_gen.river_width.x, maxf(_gen.river_width.y, _gen.river_width.x)), fords = fords, copies = copies}
+
+func _river_valid(river: Dictionary) -> bool:
+	var margin: float = river.width * 0.5 + 4.0
+	var copies: Array = river.copies
+	for p in river.points:
+		if not _clear_of_bases(p, _gen.base_flat_radius + margin, copies):
+			return false
+		if not _clear_of_sites(p, margin, copies):
+			return false
+		if _near_centre_route(p, margin + _gen.path_width, copies):
+			return false
+		for a in copies:
+			for b in copies:
+				if a < b:
+					for q in river.points:
+						if rot(q, b).distance_to(rot(p, a)) < river.width * 2.0 + 8.0:
+							return false
+		for other in _rivers:
+			for a in copies:
+				for b in other.copies:
+					for q in other.points:
+						if rot(q, b).distance_to(rot(p, a)) < (river.width + other.width) * 0.5 + 8.0:
+							return false
 	return true
 
-func _clear_of_features(p: Vector2, reach: float) -> bool:
-	for feature in _features:
-		var other: float = (feature.half as Vector2).length() + _gen.plateau_outline_noise
-		for k in players:
-			if rot(p, k).distance_to(feature.centre) < reach + other + 6.0:
-				return false
+func _clear_of_rivers(p: Vector2, reach: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for river in _rivers:
+			for rk in river.copies:
+				var local: Vector2 = q.rotated(-rk * _step)
+				for point in river.points:
+					if point.distance_to(local) < reach + river.width * 0.5 + 3.0:
+						return false
 	return true
 
-func _feature_copies(feature: Dictionary) -> int:
-	return 1 if feature.symmetric else players
+## Half-width at a point along the river: narrows over its last stretch inland.
+func _river_half_width(river: Dictionary, arc: float) -> float:
+	var total: float = river.arcs[river.arcs.size() - 1]
+	return river.width * 0.5 * lerpf(1.0, 0.35, smoothstep(0.7, 1.0, arc / total))
+
+## For every corner near copy k of the river: {corner index: [signed distance
+## to the bank (negative in the water), arc position along the river]}.
+func _river_field(river: Dictionary, k: int, reach: float) -> Dictionary:
+	var field: Dictionary = {}
+	var corners: int = size + 1
+	var points: PackedVector2Array = river.points
+	for s in points.size() - 1:
+		var a: Vector2 = rot(points[s], k)
+		var b: Vector2 = rot(points[s + 1], k)
+		var lo: Vector2i = cell_at(Vector2(minf(a.x, b.x), minf(a.y, b.y)) - Vector2(reach, reach)).clamp(Vector2i.ZERO, Vector2i(size, size))
+		var hi: Vector2i = cell_at(Vector2(maxf(a.x, b.x), maxf(a.y, b.y)) + Vector2(reach, reach)).clamp(Vector2i.ZERO, Vector2i(size, size))
+		var segment: float = a.distance_to(b)
+		for j in range(lo.y, hi.y + 1):
+			for i in range(lo.x, hi.x + 1):
+				var p: Vector2 = _corner_position(i, j)
+				var closest: Vector2 = Geometry2D.get_closest_point_to_segment(p, a, b)
+				var t: float = a.distance_to(closest) / segment if segment > 0.0 else 0.0
+				var arc: float = lerpf(river.arcs[s], river.arcs[s + 1], t)
+				var d: float = p.distance_to(closest) - _river_half_width(river, arc)
+				var key: int = j * corners + i
+				if not field.has(key) or d < field[key][0]:
+					field[key] = [d, arc]
+	return field
+
+## Lowers a channel along each river copy, banks sloping like a lake shore,
+## then raises the fords back up to wading depth.
+func _carve_rivers() -> void:
+	var pads: Array[Vector3] = _flat_pads()
+	var shore: float = (_gen.hill_height + DRY_MARGIN + 2.0) / _gen.lake_shore_slope
+	for river in _rivers:
+		for k in river.copies:
+			var field: Dictionary = _river_field(river, k, river.width + shore)
+			for key in field:
+				var d: float = field[key][0]
+				var arc: float = field[key][1]
+				var half_width: float = _river_half_width(river, arc)
+				var profile: float = water_level + d * _gen.lake_shore_slope if d >= 0.0 \
+						else water_level - _gen.river_depth * smoothstep(0.0, half_width, -d)
+				var h: float = heights[key]
+				var p: Vector2 = _corner_position(key % (size + 1), key / (size + 1))
+				heights[key] = lerpf(h, minf(h, profile), 1.0 - _pad_cover(pads, p))
+			_raise_fords(river, k, river.fords, field)
+
+func _raise_fords(river: Dictionary, k: int, fords: Array, field: Dictionary = {}) -> void:
+	if fords.is_empty():
+		return
+	if field.is_empty():
+		field = _river_field(river, k, river.width)
+	var ford_level: float = water_level - FORD_DEPTH
+	for key in field:
+		if field[key][0] > 1.0:
+			continue
+		var arc: float = field[key][1]
+		var weight: float = 0.0
+		for ford in fords:
+			weight = maxf(weight, 1.0 - smoothstep(_gen.ford_width * 0.5, _gen.ford_width * 0.5 + 2.0, absf(arc - ford)))
+		if weight > 0.0:
+			heights[key] = lerpf(heights[key], maxf(heights[key], ford_level), weight)
+
+## Adds a ford halfway along every river and re-checks, once, if a base or
+## objective can't be reached. Fords only raise the riverbed, which nothing
+## has been placed in.
+func _ensure_connected() -> void:
+	if _check_connectivity(false) or _rivers.is_empty():
+		_check_connectivity(true)
+		return
+	for river in _rivers:
+		var middle: float = river.arcs[river.arcs.size() - 1] * 0.5
+		river.fords.append(middle)
+		for k in river.copies:
+			_raise_fords(river, k, [middle])
+	_compute_cells()
+	_check_connectivity(true)
+
+## Paths are planned later, but always run from a base toward the middle.
+func _near_centre_route(p: Vector2, clearance: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for base in base_centres:
+			if Geometry2D.get_closest_point_to_segment(q, base, Vector2.ZERO).distance_to(q) < clearance:
+				return true
+	return false
+
+func _clear_of_objective_pads(p: Vector2, reach: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for site in _objective_sites:
+			for sk in site.copies:
+				if q.distance_to(rot(site.pos, sk)) < _gen.objective_clear_radius + reach:
+					return false
+	return true
+
+func _clear_of_lakes(p: Vector2, reach: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for lake in _lakes:
+			for lk in lake.copies:
+				if q.distance_to(rot(lake.pos, lk)) < reach + lake.radius * 1.35 + 8.0:
+					return false
+	return true
+
+func _clear_of_pockets(p: Vector2, reach: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for pocket in _pockets:
+			for pk in pocket.copies:
+				if q.distance_to(rot(pocket.pos, pk)) < reach + pocket.radius + POCKET_FALLOFF + 4.0:
+					return false
+	return true
+
+func _clear_of_features(p: Vector2, reach: float, copies: Array) -> bool:
+	for k in copies:
+		var q: Vector2 = rot(p, k)
+		for feature in _features:
+			var other: float = (feature.half as Vector2).length() + _gen.plateau_outline_noise
+			for fk in feature.copies:
+				if q.distance_to(_feature_centre(feature, fk)) < reach + other + 6.0:
+					return false
+	return true
 
 func _feature_centre(feature: Dictionary, k: int) -> Vector2:
 	return feature.centre if feature.symmetric else rot(feature.centre, k)
@@ -448,7 +790,7 @@ func _feature_distance(feature: Dictionary, k: int, t: int, p: Vector2) -> float
 	var r: float = minf(feature.radius, minf(extents.x, extents.y))
 	var d: Vector2 = q.abs() - (extents - Vector2(r, r))
 	var distance: float = Vector2(maxf(d.x, 0.0), maxf(d.y, 0.0)).length() + minf(maxf(d.x, d.y), 0.0) - r
-	var wobble: float = _symmetric_noise(_outline_noise, p) if feature.symmetric else _outline_noise.get_noise_2dv(rot(p, -k))
+	var wobble: float = _rotation_noise(_outline_noise, p) if feature.symmetric else _outline_noise.get_noise_2dv(rot(p, -k))
 	return distance + wobble * _gen.plateau_outline_noise
 
 ## How far into tier t's raised/sunk area p is: 0 outside, 1 inside, easing
@@ -467,7 +809,7 @@ func _build_hills() -> void:
 	heights.resize(corners * corners)
 	for j in corners:
 		for i in corners:
-			heights[j * corners + i] = _symmetric_noise(_hill_noise, _corner_position(i, j)) * _gen.hill_height
+			heights[j * corners + i] = _rotation_noise(_hill_noise, _corner_position(i, j)) * _gen.hill_height
 
 ## Plateaus and valleys are added on top of the hills, so flattening before
 ## them levels bases and pockets without shaving off a nearby cliff.
@@ -475,7 +817,7 @@ func _add_features() -> void:
 	var corners: int = size + 1
 	for feature in _features:
 		var reach: float = (feature.half as Vector2).length() + _gen.plateau_outline_noise + _gen.cliff_width
-		for k in _feature_copies(feature):
+		for k in feature.copies:
 			var centre: Vector2 = _feature_centre(feature, k)
 			var lo: Vector2i = cell_at(centre - Vector2(reach, reach)).clamp(Vector2i.ZERO, Vector2i(size, size))
 			var hi: Vector2i = cell_at(centre + Vector2(reach, reach)).clamp(Vector2i.ZERO, Vector2i(size, size))
@@ -491,17 +833,20 @@ func _add_features() -> void:
 					heights[j * corners + i] += offset
 
 ## Each tier's ramps turn a quarter (or, on the centre, half a slice) from
-## the tier below, so climbing means walking round the ledge in between.
+## the tier below, so climbing means walking round the ledge in between. The
+## centre feature gets one ramp facing each base, in every mode.
 func _place_ramps() -> void:
 	for feature in _features:
 		var turn: float = _step * 0.5 if feature.symmetric else PI * 0.5
 		for t in (feature.steps as Array).size():
 			for base_dir in _ramp_directions(feature):
 				var v: Vector2 = base_dir.rotated(turn * t)
-				for k in players:
-					var copy: int = 0 if feature.symmetric else k
-					var ramp: Dictionary = _find_ramp(feature, copy, t, rot(v, k))
-					_commit_ramp(ramp, k, feature.symmetric)
+				if feature.symmetric:
+					for k in players:
+						_commit_ramp(_find_ramp(feature, 0, t, rot(v, k)), k, true)
+				else:
+					for k in feature.copies:
+						_commit_ramp(_find_ramp(feature, k, t, rot(v, k)), k, false)
 
 ## Template-frame directions a feature's ramps leave by: the first faces the
 ## nearest base (or, for the centre, one ramp per player).
@@ -616,14 +961,14 @@ func _flatten_building_ground() -> void:
 	for base in base_centres:
 		_flatten(base, _base_flat_reach() - BASE_FLAT_FALLOFF, BASE_FLAT_FALLOFF)
 	for pocket in _pockets:
-		for k in players:
+		for k in pocket.copies:
 			_flatten(rot(pocket.pos, k), pocket.radius, POCKET_FALLOFF)
 
 ## Levels the pad each objective stands on (a plateau top has hills too).
 func _flatten_objectives() -> void:
 	for site in _objective_sites:
-		for k in (1 if site.symmetric else players):
-			_flatten(rot(site.pos, k) if not site.symmetric else site.pos, _gen.objective_clear_radius + 0.5, 2.0)
+		for k in site.copies:
+			_flatten(rot(site.pos, k), _gen.objective_clear_radius + 0.5, 2.0)
 
 ## Pulls corners within `radius` to the height at `centre`, easing back into
 ## the surrounding terrain over `falloff` metres.
@@ -640,7 +985,8 @@ func _flatten(centre: Vector2, radius: float, falloff: float) -> void:
 				heights[j * corners + i] = lerpf(heights[j * corners + i], level, weight)
 
 ## Keeps land above the water, then along the coast lowers the ground onto a
-## beach sloping to the waterline (edge_distance 0) and down to the sea floor.
+## beach sloping to the waterline (edge_distance 0) and down to the sea floor;
+## along forest edges, a steep bank at a wobbly line inside the border strip.
 ## Only ever lowers, so plateaus by the sea end in cliffs rather than beaches.
 func _shape_coast() -> void:
 	var corners: int = size + 1
@@ -652,12 +998,47 @@ func _shape_coast() -> void:
 			var h: float = maxf(heights[index_ij], dry)
 			var p: Vector2 = _corner_position(i, j)
 			var coast: float = coast_weight(p)
+			var cover: float = _pad_cover(pads, p)
 			if coast > 0.0:
 				var d: float = edge_distance(p)
 				var profile: float = water_level + d * _gen.beach_slope if d >= 0.0 \
 						else water_level - _gen.sea_depth * smoothstep(0.0, _gen.shore_drop, -d)
-				h = lerpf(h, minf(h, profile), coast * (1.0 - _pad_cover(pads, p)))
+				h = lerpf(h, minf(h, profile), coast * (1.0 - cover))
+			if coast < 1.0:
+				var wobble: float = clampf(_rotation_noise(_coast_noise, p * 1.7) * 0.6 + 0.5, 0.0, 1.0) * _gen.border_width * FOREST_EDGE_WOBBLE
+				var bank: float = _boundary_distance(p) - FOREST_EDGE_INSET - wobble
+				if bank < (h - water_level) / FOREST_BANK_SLOPE:
+					var profile: float = water_level + bank * FOREST_BANK_SLOPE if bank >= 0.0 \
+							else water_level - _gen.sea_depth * smoothstep(0.0, FOREST_BANK_DROP, -bank)
+					h = lerpf(h, minf(h, profile), (1.0 - coast) * (1.0 - cover))
 			heights[index_ij] = h
+
+## Signed distance (negative inside) from p to copy k of a lake's shoreline,
+## wobbled by noise read in the template frame.
+func _lake_distance(lake: Dictionary, k: int, p: Vector2) -> float:
+	var wobble: float = _outline_noise.get_noise_2dv(rot(p, -k) * 1.3) * lake.radius * 0.35
+	return p.distance_to(rot(lake.pos, k)) - lake.radius - wobble
+
+## Lowers the ground into each lake: a shore sloping to the waterline, then
+## down to lake_depth. Only ever lowers, and never under a flattened pad.
+func _carve_lakes() -> void:
+	var corners: int = size + 1
+	var pads: Array[Vector3] = _flat_pads()
+	var shore: float = (_gen.hill_height + DRY_MARGIN + 2.0) / _gen.lake_shore_slope
+	for lake in _lakes:
+		var reach: float = lake.radius * 1.35 + shore
+		for k in lake.copies:
+			var centre: Vector2 = rot(lake.pos, k)
+			var lo: Vector2i = cell_at(centre - Vector2(reach, reach)).clamp(Vector2i.ZERO, Vector2i(size, size))
+			var hi: Vector2i = cell_at(centre + Vector2(reach, reach)).clamp(Vector2i.ZERO, Vector2i(size, size))
+			for j in range(lo.y, hi.y + 1):
+				for i in range(lo.x, hi.x + 1):
+					var p: Vector2 = _corner_position(i, j)
+					var d: float = _lake_distance(lake, k, p)
+					var profile: float = water_level + d * _gen.lake_shore_slope if d >= 0.0 \
+							else water_level - _gen.lake_depth * smoothstep(0.0, lake.radius * 0.6, -d)
+					var h: float = heights[j * corners + i]
+					heights[j * corners + i] = lerpf(h, minf(h, profile), 1.0 - _pad_cover(pads, p))
 
 ## Every flattened pad as (x, z, radius including falloff): bases, building
 ## pockets and objective sites, in every copy.
@@ -666,12 +1047,12 @@ func _flat_pads() -> Array[Vector3]:
 	for base in base_centres:
 		pads.append(Vector3(base.x, base.y, _base_flat_reach()))
 	for pocket in _pockets:
-		for k in players:
+		for k in pocket.copies:
 			var p: Vector2 = rot(pocket.pos, k)
 			pads.append(Vector3(p.x, p.y, pocket.radius + POCKET_FALLOFF))
 	for site in _objective_sites:
-		for k in (1 if site.symmetric else players):
-			var p: Vector2 = site.pos if site.symmetric else rot(site.pos, k)
+		for k in site.copies:
+			var p: Vector2 = rot(site.pos, k)
 			pads.append(Vector3(p.x, p.y, _gen.objective_clear_radius + 2.5))
 	return pads
 
@@ -739,6 +1120,8 @@ func _body_conflict(p: Vector2, radius: float, gap: float, group: int, pending: 
 				if _bodies_touch(p, radius, gap, group, body):
 					return true
 	for body in pending:
+		if own_group_only and body.group != group:
+			continue
 		if _bodies_touch(p, radius, gap, group, body):
 			return true
 	return false
@@ -779,45 +1162,47 @@ func _footprint_ok(p: Vector2, radius: float, max_rise: float, cliff_clearance: 
 
 func _near_path(p: Vector2, clearance: float) -> bool:
 	for path in _paths:
-		for k in players:
+		for k in path.copies:
 			var a: Vector2 = rot(path.a, k)
 			var b: Vector2 = rot(path.b, k)
 			if Geometry2D.get_closest_point_to_segment(p, a, b).distance_to(p) < path.width * 0.5 + clearance:
 				return true
 	return false
 
-## Validates every rotated copy of the template points together; commits all
-## or nothing. `spec`: {radius, gap, rise, cliff, solid, avoid_paths}.
-func _try_place_symmetric(points: Array[Vector2], spec: Dictionary) -> bool:
-	var pending: Array = []
-	var groups: Array[int] = []
-	for k in players:
-		groups.append(_new_group())
-	for k in players:
+## Validates the template points at every rotation in `copies` together. On
+## success appends their bodies to `pending` (commit with _commit_bodies); on
+## failure leaves it untouched. `spec`: {radius, gap, rise, cliff, solid, avoid_paths}.
+func _try_place(points: Array[Vector2], spec: Dictionary, copies: Array, pending: Array) -> bool:
+	var local: Array = []
+	for k in copies:
+		var group: int = _new_group()
 		for p in points:
 			var q: Vector2 = rot(p, k)
 			if not _footprint_ok(q, spec.radius, spec.rise, spec.cliff):
 				return false
 			if spec.get("avoid_paths", false) and _near_path(q, spec.radius + 1.0):
 				return false
-			if _body_conflict(q, spec.radius, spec.gap, groups[k], pending):
+			if _body_conflict(q, spec.radius, spec.gap, group, pending + local):
 				return false
-			pending.append({pos = q, radius = spec.radius, gap = spec.gap, group = groups[k], solid = spec.solid})
-	for body in pending:
-		_add_body(body.pos, body.radius, body.gap, body.group, body.solid)
+			local.append({pos = q, radius = spec.radius, gap = spec.gap, group = group, solid = spec.solid})
+	pending.append_array(local)
 	return true
 
-## Like _try_place_symmetric but drops individual points that fail (in every
-## copy at once) instead of rejecting the whole set. Returns accepted points.
-func _place_symmetric_each(points: Array[Vector2], spec: Dictionary) -> Array[Vector2]:
+func _commit_bodies(bodies: Array) -> void:
+	for body in bodies:
+		_add_body(body.pos, body.radius, body.gap, body.group, body.solid)
+
+## Like _try_place but drops individual points that fail (in any of `copies`)
+## instead of rejecting the whole set, committing the rest. Returns accepted points.
+func _place_each(points: Array[Vector2], spec: Dictionary, copies: Array) -> Array[Vector2]:
 	var accepted: Array[Vector2] = []
-	var groups: Array[int] = []
-	for k in players:
-		groups.append(spec.get("group", _new_group()) if k == 0 else _new_group())
+	var groups: Dictionary = {}
+	for k in copies:
+		groups[k] = spec.get("group", _new_group()) if k == copies[0] else _new_group()
 	for p in points:
 		var pending: Array = []
 		var ok: bool = true
-		for k in players:
+		for k in copies:
 			var q: Vector2 = rot(p, k)
 			if not _footprint_ok(q, spec.radius, spec.rise, spec.cliff) \
 					or (spec.get("avoid_paths", false) and _near_path(q, spec.radius + 1.0)) \
@@ -827,14 +1212,13 @@ func _place_symmetric_each(points: Array[Vector2], spec: Dictionary) -> Array[Ve
 			pending.append({pos = q, radius = spec.radius, gap = spec.gap, group = groups[k], solid = spec.solid})
 		if not ok:
 			continue
-		for body in pending:
-			_add_body(body.pos, body.radius, body.gap, body.group, body.solid)
+		_commit_bodies(pending)
 		accepted.append(p)
 	return accepted
 
 ## Node yaw turns the opposite way to Vector2.rotated() in the XZ plane.
-func _emit(kind: StringName, scene: PackedScene, template_point: Vector2, yaw: float, scale: float = 1.0, symmetric: bool = false, props: Dictionary = {}) -> void:
-	for k in (1 if symmetric else players):
+func _emit(kind: StringName, scene: PackedScene, template_point: Vector2, yaw: float, scale: float, copies: Array, props: Dictionary = {}) -> void:
+	for k in copies:
 		var q: Vector2 = rot(template_point, k)
 		objects.append({kind = kind, scene = scene, position = Vector3(q.x, surface_height(q), q.y), yaw = yaw - k * _step, scale = scale, props = props})
 
@@ -842,49 +1226,62 @@ func _emit(kind: StringName, scene: PackedScene, template_point: Vector2, yaw: f
 ## only need their flattened pad, not the usual body check.
 func _place_objectives() -> void:
 	for site in _objective_sites:
-		var pos: Vector2 = site.pos
-		var copies: int = 1 if site.symmetric else players
 		var ok: bool = true
-		for k in copies:
-			if not _footprint_ok(rot(pos, k), _gen.objective_clear_radius, RISE_OBJECTIVE, 0):
+		for k in site.copies:
+			if not _footprint_ok(rot(site.pos, k), _gen.objective_clear_radius, RISE_OBJECTIVE, 0):
 				ok = false
 		if not ok:
 			push_warning("MapGenerator: an objective lost its flat ground and was skipped.")
 			continue
-		for k in copies:
-			_add_body(rot(pos, k), _gen.objective_clear_radius, 0.0, _new_group(), false)
-		_emit(&"objective", site.scene, pos, 0.0, 1.0, site.symmetric, site.props)
+		for k in site.copies:
+			_add_body(rot(site.pos, k), _gen.objective_clear_radius, 0.0, _new_group(), false)
+		_emit(&"objective", site.scene, site.pos, 0.0, 1.0, site.copies, site.props)
 
+## Template point around player 0's base; stamping rotates it to the others.
 func _around_base(distance: Vector2) -> Vector2:
 	return base_centres[0] + Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(distance.x, distance.y)
 
 func _place_base_resources() -> void:
 	var gold_spec := {radius = GOLD_RADIUS, gap = 1.5, rise = RISE_GOLD, cliff = CLIFF_CLEARANCE_OBJECTS, solid = true, avoid_paths = true}
 	for n in _gen.base_gold_mines:
-		_place_with_retries(&"gold", _gen.gold_mine_scene, func(): return [_around_base(_gen.base_gold_distance)], gold_spec)
+		_place_fair(&"gold", _gen.gold_mine_scene, func(_copies: Array): return [_around_base(_gen.base_gold_distance)], gold_spec)
 	if _gen.base_trees > 0:
 		var per_clump: int = maxi(1, int(float(_gen.base_trees) / _gen.base_tree_clumps))
-		for n in _gen.base_tree_clumps:
-			for attempt in SPAWN_ATTEMPTS:
-				var centre: Vector2 = _around_base(_gen.base_tree_distance)
-				var placed: Array[Vector2] = _place_tree_clump(centre, per_clump)
-				if placed.size() >= per_clump * 0.6:
-					break
+		for copies in _copy_sets():
+			for n in _gen.base_tree_clumps:
+				for attempt in SPAWN_ATTEMPTS:
+					var centre: Vector2 = _around_base(_gen.base_tree_distance)
+					var placed: Array[Vector2] = _place_tree_clump(centre, per_clump, copies)
+					if placed.size() >= per_clump * 0.6:
+						break
 
-func _place_with_retries(kind: StringName, scene: PackedScene, candidates: Callable, spec: Dictionary) -> bool:
-	for attempt in SPAWN_ATTEMPTS:
-		var points: Array[Vector2] = []
-		points.assign(candidates.call())
-		if _try_place_symmetric(points, spec):
-			for p in points:
-				_emit(kind, scene, p, _rng.randf() * TAU)
-			return true
-	push_warning("MapGenerator: could not fit %s — try another seed or lower counts." % kind)
-	return false
+## Places one set of points for every copy set (every player, or all at once
+## when symmetric), each rolled from `candidates.call(copies)`, and commits
+## only if all of them fit — so every player gets it or nobody does.
+func _place_fair(kind: StringName, scene: PackedScene, candidates: Callable, spec: Dictionary) -> bool:
+	var pending: Array = []
+	var plans: Array = []
+	for copies in _copy_sets():
+		var found: bool = false
+		for attempt in SPAWN_ATTEMPTS:
+			var points: Array[Vector2] = []
+			points.assign(candidates.call(copies))
+			if _try_place(points, spec, copies, pending):
+				plans.append([points, copies])
+				found = true
+				break
+		if not found:
+			push_warning("MapGenerator: could not fit %s for every player — try another seed or lower counts." % kind)
+			return false
+	_commit_bodies(pending)
+	for plan in plans:
+		for p in plan[0]:
+			_emit(kind, scene, p, _rng.randf() * TAU, 1.0, plan[1])
+	return true
 
 ## Grows an organic blob of trunk positions, then keeps whichever points are
-## valid in every rotated copy.
-func _place_tree_clump(centre: Vector2, count: int) -> Array[Vector2]:
+## valid in every copy.
+func _place_tree_clump(centre: Vector2, count: int, copies: Array) -> Array[Vector2]:
 	var spacing: float = _gen.tree_spacing
 	var points: Array[Vector2] = [centre]
 	var tries: int = 0
@@ -900,23 +1297,23 @@ func _place_tree_clump(centre: Vector2, count: int) -> Array[Vector2]:
 		if clear:
 			points.append(candidate)
 	var spec := {radius = spacing * 0.5, gap = _gen.forest_corridor, rise = RISE_TREE, cliff = CLIFF_CLEARANCE_TREES, solid = true, avoid_paths = true}
-	var accepted: Array[Vector2] = _place_symmetric_each(points, spec)
+	var accepted: Array[Vector2] = _place_each(points, spec, copies)
 	for p in accepted:
-		_emit(&"tree", _gen.tree_scene, p, _rng.randf() * TAU)
+		_emit(&"tree", _gen.tree_scene, p, _rng.randf() * TAU, 1.0, copies)
 	return accepted
 
 func _place_neutral_resources() -> void:
 	var keep_out: float = _gen.base_clear_radius + 16.0
 	var gold_spec := {radius = GOLD_RADIUS, gap = 2.0, rise = RISE_GOLD, cliff = CLIFF_CLEARANCE_OBJECTS, solid = true, avoid_paths = true}
 	for n in _gen.neutral_gold_per_player:
-		_place_with_retries(&"gold", _gen.gold_mine_scene, func(): return [_neutral_point(keep_out)], gold_spec)
+		_place_fair(&"gold", _gen.gold_mine_scene, func(copies: Array): return [_neutral_point(keep_out, copies)], gold_spec)
 
-func _neutral_point(keep_out: float) -> Vector2:
+func _neutral_point(keep_out: float, copies: Array) -> Vector2:
 	for attempt in 40:
-		var p: Vector2 = _rand_in_sector(0.2, 0.9)
-		if _clear_of_bases(p, keep_out):
+		var p: Vector2 = _rand_in_sector(0.2, 0.9, copies[0])
+		if _clear_of_bases(p, keep_out, copies):
 			return p
-	return _rand_in_sector(0.2, 0.9)
+	return _rand_in_sector(0.2, 0.9, copies[0])
 
 ## Woodland patches sized by radius: a noise-edged disc filled at tree
 ## spacing. A site is only used if most of the patch fits, so failed attempts
@@ -926,18 +1323,19 @@ func _place_forest_clusters() -> void:
 	var max_radius: float = maxf(_gen.forest_cluster_radius.y, min_radius)
 	var spacing: float = _gen.tree_spacing
 	var spec := {radius = spacing * 0.5, gap = _gen.forest_corridor, rise = RISE_TREE, cliff = CLIFF_CLEARANCE_TREES, solid = true, avoid_paths = true}
-	for n in _gen.forest_clusters_per_player:
-		for attempt in SPAWN_ATTEMPTS:
-			var radius: float = _rng.randf_range(min_radius, max_radius)
-			var centre: Vector2 = _rand_in_sector(0.15, 0.95)
-			if not _clear_of_bases(centre, _gen.base_clear_radius + radius + 8.0):
-				continue
-			var points: Array[Vector2] = _forest_blob(centre, radius, spacing)
-			if _count_fitting(points, spec) < points.size() * 0.7:
-				continue
-			for p in _place_symmetric_each(points, spec):
-				_emit(&"tree", _gen.tree_scene, p, _rng.randf() * TAU)
-			break
+	for copies in _copy_sets():
+		for n in _gen.forest_clusters_per_player:
+			for attempt in SPAWN_ATTEMPTS:
+				var radius: float = _rng.randf_range(min_radius, max_radius)
+				var centre: Vector2 = _rand_in_sector(0.15, 0.95, copies[0])
+				if not _clear_of_bases(centre, _gen.base_clear_radius + radius + 8.0, copies):
+					continue
+				var points: Array[Vector2] = _forest_blob(centre, radius, spacing)
+				if _count_fitting(points, spec, copies) < points.size() * 0.7:
+					continue
+				for p in _place_each(points, spec, copies):
+					_emit(&"tree", _gen.tree_scene, p, _rng.randf() * TAU, 1.0, copies)
+				break
 
 func _forest_blob(centre: Vector2, radius: float, spacing: float) -> Array[Vector2]:
 	var points: Array[Vector2] = []
@@ -956,12 +1354,12 @@ func _forest_blob(centre: Vector2, radius: float, spacing: float) -> Array[Vecto
 
 ## How many template points would pass placement checks in every copy,
 ## ignoring the points' effect on each other (they share one group).
-func _count_fitting(points: Array[Vector2], spec: Dictionary) -> int:
+func _count_fitting(points: Array[Vector2], spec: Dictionary, copies: Array) -> int:
 	var probe_group: int = _new_group()
 	var fitting: int = 0
 	for p in points:
 		var ok: bool = true
-		for k in players:
+		for k in copies:
 			var q: Vector2 = rot(p, k)
 			if not _footprint_ok(q, spec.radius, spec.rise, spec.cliff) or _near_path(q, spec.radius + 1.0) \
 					or _body_conflict(q, spec.radius, spec.gap, probe_group, []):
@@ -971,14 +1369,13 @@ func _count_fitting(points: Array[Vector2], spec: Dictionary) -> int:
 			fitting += 1
 	return fitting
 
-## Gatherable trees hugging the playable edge, with noise-varied depth and gaps.
+## Gatherable trees hugging the playable edge (not along the coast), with
+## noise-varied depth and gaps.
 func _place_edge_forest() -> void:
 	var depth: float = _gen.edge_forest_depth
 	if depth <= 0.0:
 		return
 	var spacing: float = _gen.tree_spacing
-	var spec := {radius = spacing * 0.5, gap = _gen.forest_corridor, rise = RISE_TREE, cliff = CLIFF_CLEARANCE_TREES, solid = true, avoid_paths = true, group = _new_group()}
-	var candidates: Array[Vector2] = []
 	var limit: float = half - _gen.border_width
 	var pitch: float = spacing * 1.08
 	var steps: int = ceili(limit * 2.0 / pitch)
@@ -986,17 +1383,24 @@ func _place_edge_forest() -> void:
 	for gz in steps:
 		for gx in steps:
 			grid_points.append(Vector2(-limit + (gx + 0.5) * pitch, -limit + (gz + 0.5) * pitch) + Vector2(_rng.randf_range(-0.2, 0.2), _rng.randf_range(-0.2, 0.2)) * spacing)
-	for p in grid_points:
-		if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5 or coast_weight(p) > 0.3:
-			continue
-		var inside: float = edge_distance(p)
-		if inside <= 0.0:
-			continue
-		var local_depth: float = depth * lerpf(0.3, 1.0, clampf(_noise01(p * 0.6) * 1.6 - 0.3, 0.0, 1.0))
-		if inside < local_depth:
-			candidates.append(p)
-	for p in _place_symmetric_each(candidates, spec):
-		_emit(&"tree", _gen.tree_scene, p, _rng.randf() * TAU)
+	for copies in _copy_sets():
+		var spec := {radius = spacing * 0.5, gap = _gen.forest_corridor, rise = RISE_TREE, cliff = CLIFF_CLEARANCE_TREES, solid = true, avoid_paths = true, group = _new_group()}
+		var candidates: Array[Vector2] = []
+		for p in grid_points:
+			if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5:
+				continue
+			var local_depth: float = depth * lerpf(0.3, 1.0, clampf(_noise01(p * 0.6) * 1.6 - 0.3, 0.0, 1.0))
+			var fits: bool = true
+			for k in copies:
+				var q: Vector2 = rot(p, k)
+				var inside: float = edge_distance(q)
+				if coast_weight(q) > 0.3 or inside <= 0.0 or inside >= local_depth:
+					fits = false
+					break
+			if fits:
+				candidates.append(p)
+		for p in _place_each(candidates, spec, copies):
+			_emit(&"tree", _gen.tree_scene, p, _rng.randf() * TAU, 1.0, copies)
 
 func _place_border_trees() -> void:
 	var scenes: Array[PackedScene] = []
@@ -1006,23 +1410,25 @@ func _place_border_trees() -> void:
 	var spacing: float = _gen.border_tree_spacing
 	var group: int = _new_group()
 	var attempts: int = int(size * size / (spacing * spacing) * 8.0 / players)
-	for n in attempts:
-		var p := Vector2(_rng.randf_range(-half + 0.4, half - 0.4), _rng.randf_range(-half + 0.4, half - 0.4))
-		if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5 or edge_distance(p) > -0.6 or coast_weight(p) > 0.3:
-			continue
-		var copies_ok: bool = true
-		var pending: Array = []
-		for k in players:
-			var q: Vector2 = rot(p, k)
-			if absf(q.x) > half - 0.4 or absf(q.y) > half - 0.4 or _body_conflict(q, spacing * 0.5, 0.0, group, pending, true):
-				copies_ok = false
-				break
-			pending.append({pos = q, radius = spacing * 0.5, gap = 0.0, group = group, solid = false})
-		if not copies_ok:
-			continue
-		for body in pending:
-			_add_body(body.pos, body.radius, body.gap, body.group, body.solid)
-		_emit(&"border_tree", scenes[_rng.randi() % scenes.size()], p, _rng.randf() * TAU, _rng.randf_range(0.85, 1.25))
+	for copies in _copy_sets():
+		for n in attempts:
+			var p := Vector2(_rng.randf_range(-half + 0.4, half - 0.4), _rng.randf_range(-half + 0.4, half - 0.4))
+			if absf(wrapf(p.angle() - _angle0, -PI, PI)) > _step * 0.5:
+				continue
+			var copies_ok: bool = true
+			var pending: Array = []
+			for k in copies:
+				var q: Vector2 = rot(p, k)
+				if absf(q.x) > half - 0.4 or absf(q.y) > half - 0.4 or edge_distance(q) > -0.6 or coast_weight(q) > 0.3 \
+						or surface_height(q) < water_level + PLACE_ABOVE_WATER \
+						or _body_conflict(q, spacing * 0.5, 0.0, group, pending, true):
+					copies_ok = false
+					break
+				pending.append({pos = q, radius = spacing * 0.5, gap = 0.0, group = group, solid = false})
+			if not copies_ok:
+				continue
+			_commit_bodies(pending)
+			_emit(&"border_tree", scenes[_rng.randi() % scenes.size()], p, _rng.randf() * TAU, _rng.randf_range(0.85, 1.25), copies)
 
 func _place_props() -> void:
 	var scenes: Array[PackedScene] = []
@@ -1030,44 +1436,52 @@ func _place_props() -> void:
 	if scenes.is_empty():
 		return
 	var spec := {radius = PROP_RADIUS, gap = 0.4, rise = RISE_PROP, cliff = 1, solid = false}
-	var placed: int = 0
-	for attempt in _gen.props_per_player * 12:
-		if placed >= _gen.props_per_player:
-			break
-		var points: Array[Vector2] = [_rand_in_sector(0.05, 1.0)]
-		if _try_place_symmetric(points, spec):
-			_emit(&"prop", scenes[_rng.randi() % scenes.size()], points[0], _rng.randf() * TAU, _rng.randf_range(0.8, 1.2))
-			placed += 1
+	for copies in _copy_sets():
+		var placed: int = 0
+		for attempt in _gen.props_per_player * 12:
+			if placed >= _gen.props_per_player:
+				break
+			var points: Array[Vector2] = [_rand_in_sector(0.05, 1.0, copies[0])]
+			var pending: Array = []
+			if _try_place(points, spec, copies, pending):
+				_commit_bodies(pending)
+				_emit(&"prop", scenes[_rng.randi() % scenes.size()], points[0], _rng.randf() * TAU, _rng.randf_range(0.8, 1.2), copies)
+				placed += 1
 
 ## --- Decals ---
 
-## Paths run from each base to the nearest centre-feature ramp (or the middle).
+## Paths run from each base to its nearest centre-feature ramp (or the middle).
 func _plan_paths() -> void:
 	if not _gen.paths_to_centre:
 		return
 	var base0: Vector2 = base_centres[0]
-	var target: Vector2 = Vector2.ZERO
-	for ramp in _ramps:
-		if ramp.on_centre and ramp.tier == 0 and (ramp.entrance as Vector2).distance_to(base0) < target.distance_to(base0):
-			target = ramp.entrance
-	_paths.append({a = base0, b = target, width = _gen.path_width, symmetric = false})
+	for copies in _copy_sets():
+		var k: int = copies[0]
+		var target: Vector2 = Vector2.ZERO
+		for ramp in _ramps:
+			if ramp.on_centre and ramp.tier == 0 and ramp.copy == k:
+				var entrance: Vector2 = (ramp.entrance as Vector2).rotated(-k * _step)
+				if entrance.distance_to(base0) < target.distance_to(base0):
+					target = entrance
+		_paths.append({a = base0, b = target, width = _gen.path_width, copies = copies})
 
 func _plan_decals() -> void:
 	var base0: Vector2 = base_centres[0]
-	_dirt_shapes.append({a = base0, b = base0, width = _gen.base_clear_radius * 1.5, symmetric = false})
+	_dirt_shapes.append({a = base0, b = base0, width = _gen.base_clear_radius * 1.5, copies = _all_copies()})
 	_dirt_shapes.append_array(_paths)
 	for ramp in _ramps:
-		if ramp.copy == 0 and ramp.tier == 0:
-			_dirt_shapes.append({a = ramp.entrance, b = ramp.entrance, width = _gen.ramp_width + 2.0, symmetric = false})
+		if ramp.tier == 0:
+			_dirt_shapes.append({a = ramp.entrance, b = ramp.entrance, width = _gen.ramp_width + 2.0, copies = [0]})
 	if not _gen.objectives_on_plateaus:
 		for site in _objective_sites:
-			_dirt_shapes.append({a = site.pos, b = site.pos, width = _gen.objective_clear_radius * 1.3, symmetric = site.symmetric})
-	for n in _gen.dirt_patches_per_player:
-		var p: Vector2 = _rand_in_sector(0.1, 0.95)
-		_dirt_shapes.append({a = p, b = p + Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(0.0, 5.0), width = _rng.randf_range(3.0, 7.0), symmetric = false})
-	for n in _gen.grass_patches_per_player:
-		var p: Vector2 = _rand_in_sector(0.05, 1.0)
-		_grass_shapes.append({a = p, b = p + Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(0.0, 8.0), width = _rng.randf_range(4.0, 10.0), symmetric = false})
+			_dirt_shapes.append({a = site.pos, b = site.pos, width = _gen.objective_clear_radius * 1.3, copies = site.copies})
+	for copies in _copy_sets():
+		for n in _gen.dirt_patches_per_player:
+			var p: Vector2 = _rand_in_sector(0.1, 0.95, copies[0])
+			_dirt_shapes.append({a = p, b = p + Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(0.0, 5.0), width = _rng.randf_range(3.0, 7.0), copies = copies})
+		for n in _gen.grass_patches_per_player:
+			var p: Vector2 = _rand_in_sector(0.05, 1.0, copies[0])
+			_grass_shapes.append({a = p, b = p + Vector2.from_angle(_rng.randf() * TAU) * _rng.randf_range(0.0, 8.0), width = _rng.randf_range(4.0, 10.0), copies = copies})
 
 func _rasterize_decals() -> void:
 	dirt = _corner_field(_dirt_shapes)
@@ -1083,9 +1497,9 @@ func _corner_field(shapes: Array[Dictionary]) -> PackedByteArray:
 	for shape in shapes:
 		var radius: float = shape.width * 0.5
 		var reach: float = radius * 1.35 + 1.0
-		for k in (1 if shape.symmetric else players):
-			var a: Vector2 = rot(shape.a, k) if not shape.symmetric else shape.a
-			var b: Vector2 = rot(shape.b, k) if not shape.symmetric else shape.b
+		for k in shape.copies:
+			var a: Vector2 = rot(shape.a, k)
+			var b: Vector2 = rot(shape.b, k)
 			var lo := Vector2(minf(a.x, b.x), minf(a.y, b.y)) - Vector2(reach, reach)
 			var hi := Vector2(maxf(a.x, b.x), maxf(a.y, b.y)) + Vector2(reach, reach)
 			for j in range(maxi(0, floori(lo.y + half)), mini(corners - 1, ceili(hi.y + half)) + 1):
@@ -1094,14 +1508,15 @@ func _corner_field(shapes: Array[Dictionary]) -> PackedByteArray:
 					var d: float = Geometry2D.get_closest_point_to_segment(p, a, b).distance_to(p)
 					if d > reach:
 						continue
-					var q: Vector2 = rot(p, -k) if not shape.symmetric else p
-					if d < radius * (0.7 + 0.6 * _noise01(q * 1.7)):
+					if d < radius * (0.7 + 0.6 * _noise01(rot(p, -k) * 1.7)):
 						field[j * corners + i] = 1
 	return field
 
 ## --- Validation ---
 
-func _check_connectivity() -> void:
+## True if every base and objective is reachable from player 1's base; with
+## `report`, warns about each one that isn't.
+func _check_connectivity(report: bool) -> bool:
 	var blocked := PackedByteArray()
 	blocked.resize(size * size)
 	blocked.fill(0)
@@ -1133,6 +1548,10 @@ func _check_connectivity() -> void:
 	for entry in objects:
 		if entry.kind == &"objective":
 			targets.append(Vector2(entry.position.x, entry.position.z))
+	var connected: bool = true
 	for t in targets:
 		if seen[index(cell_at(t))] == 0:
-			push_warning("MapGenerator: %s is not reachable from player 1's base on this seed." % t)
+			connected = false
+			if report:
+				push_warning("MapGenerator: %s is not reachable from player 1's base on this seed." % t)
+	return connected

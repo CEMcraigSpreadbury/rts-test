@@ -19,7 +19,8 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export var map_name: String = "Generated Map"
 @export var map_seed: int = 1
 @export_range(2, 8) var player_count: int = 2
-@export_range(96, 320, 16) var map_size: int = 160
+@export var symmetric: bool = true
+@export_range(128, 480, 16) var map_size: int = 240
 @export_range(0, 24) var border_width: int = 6
 @export_range(0.3, 0.95, 0.01) var spawn_distance: float = 0.78
 @export_range(0.0, 360.0, 1.0) var layout_rotation_degrees: float = 135.0
@@ -76,6 +77,17 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_range(0.05, 0.6, 0.01) var beach_slope: float = 0.2
 @export_range(1.0, 12.0, 0.5) var sea_depth: float = 4.0
 @export_range(2.0, 20.0, 0.5) var shore_drop: float = 6.0
+@export_range(0, 6) var lakes_per_player: int = 1
+@export var lake_radius: Vector2 = Vector2(5.0, 11.0)
+@export_range(0.5, 6.0, 0.1) var lake_depth: float = 2.5
+@export_range(0.05, 1.0, 0.01) var lake_shore_slope: float = 0.35
+@export_range(0, 3) var rivers_per_player: int = 1
+@export var river_width: Vector2 = Vector2(4.0, 7.0)
+@export_range(0.5, 5.0, 0.1) var river_depth: float = 1.8
+@export_range(0.2, 0.9, 0.05) var river_length: float = 0.55
+@export_range(0.0, 20.0, 0.5) var river_meander: float = 6.0
+@export_range(0, 4) var fords_per_river: int = 1
+@export_range(3.0, 12.0, 0.5) var ford_width: float = 6.0
 
 @export_group("Colours")
 @export var grass_light: Color = Color(0.658824, 0.792157, 0.345098):
@@ -94,6 +106,7 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 	set(value):
 		grass_height = value
 		_apply_colours_to_preview()
+@export_range(10.0, 40.0, 1.0) var grass_detail_distance: float = 24.0
 @export_range(0.1, 1.5, 0.05) var grass_brightness: float = 0.5:
 	set(value):
 		grass_brightness = value
@@ -171,7 +184,7 @@ func generate() -> bool:
 		push_error("MapGenerator: layout generation failed (see warnings above) — try another seed or smaller counts.")
 		layout = null
 		return false
-	var terrain: TerraBrush = MapTerrainBuilder.make_terrain(MapTerrainBuilder.build_zone(layout), MapTerrainBuilder.zones_size(layout), MapTerrainBuilder.PREVIEW_DATA_PATH, grass_palette(), ground_palette(), grass_height, grass_brightness)
+	var terrain: TerraBrush = MapTerrainBuilder.make_terrain(MapTerrainBuilder.build_zone(layout), MapTerrainBuilder.zones_size(layout), MapTerrainBuilder.PREVIEW_DATA_PATH, grass_palette(), ground_palette(), grass_height, grass_brightness, grass_detail_distance)
 	terrain.name = PREVIEW_TERRAIN_NAME
 	add_child(terrain)
 	var water: MeshInstance3D = MapTerrainBuilder.make_water(layout)
@@ -265,7 +278,7 @@ func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
 
 	var root := Node3D.new()
 	root.name = "Main"
-	_assemble_map(root, MapTerrainBuilder.make_terrain(saved_zone, MapTerrainBuilder.zones_size(layout), data_dir.trim_suffix("/"), grass_palette(), ground_palette(), grass_height, grass_brightness), nav_mesh)
+	_assemble_map(root, MapTerrainBuilder.make_terrain(saved_zone, MapTerrainBuilder.zones_size(layout), data_dir.trim_suffix("/"), grass_palette(), ground_palette(), grass_height, grass_brightness, grass_detail_distance), nav_mesh)
 	var packed := PackedScene.new()
 	var err: int = packed.pack(root)
 	root.free()

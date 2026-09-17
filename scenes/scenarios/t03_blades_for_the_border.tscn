@@ -120,18 +120,18 @@ color_index = 1
 defender_leash_radius = 10.0
 
 [node name="Raider1" parent="Scenario/Slots/Raiders" index="0" unique_id=1686682883 instance=ExtResource("beastman")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -39, 0, 13)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -65.474, 0.079, 39.474)
 
 [node name="Raider2" parent="Scenario/Slots/Raiders" index="1" unique_id=1350446799 instance=ExtResource("beastman")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -41.5, 0, 14.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -67.974, 0.112, 40.974)
 
 [node name="Raider3" parent="Scenario/Slots/Raiders" index="2" unique_id=786374690 instance=ExtResource("beastman")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -37, 0, 15)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -63.474, 0.036, 41.474)
 
 [node name="Zones" type="Node3D" parent="Scenario" index="1" unique_id=1758332440]
 
 [node name="RaidersCamp" type="Node3D" parent="Scenario/Zones" index="0" unique_id=415801135]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -39, 0, 14)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -65.474, 0.082, 40.474)
 script = ExtResource("zone_script")
 radius = 7.0
 

@@ -86,6 +86,7 @@ void vertex() {
 
 	float blade_scale = mix(blade_scale_range.x, blade_scale_range.y, hash_noise_range(grid_position + vec3(17.0)).x * 0.5 + 0.5);
 	blade_scale *= pow(cell_width / InitialCellWidth, lod_size_compensation);
+
 	vec3 offset = VERTEX * blade_scale;
 	if (billboard) {
 		offset = MAIN_CAM_INV_VIEW_MATRIX[0].xyz * offset.x + MAIN_CAM_INV_VIEW_MATRIX[1].xyz * offset.y;

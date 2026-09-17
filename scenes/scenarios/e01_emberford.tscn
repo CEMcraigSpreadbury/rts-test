@@ -318,19 +318,19 @@ color_index = 2
 defender_leash_radius = 10.0
 
 [node name="Beacon" parent="Scenario/Slots/Emberford" instance=ExtResource("watchtower")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -79, 0, 79)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -110.947, 0.073, 108.826)
 
 [node name="HouseEast" parent="Scenario/Slots/Emberford" instance=ExtResource("house")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -74, 0, 80)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -105.947, 0.067, 109.826)
 
 [node name="HouseNorth" parent="Scenario/Slots/Emberford" instance=ExtResource("house")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, 73)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -111.947, 0.066, 102.826)
 
 [node name="Militia1" parent="Scenario/Slots/Emberford" instance=ExtResource("soldier")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -76, 0, 76)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -107.947, 0.108, 105.826)
 
 [node name="Militia2" parent="Scenario/Slots/Emberford" instance=ExtResource("soldier")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -77.5, 0, 77.5)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -109.447, 0.112, 107.326)
 
 [node name="Raiders" type="Node3D" parent="Scenario/Slots"]
 script = ExtResource("slot_script")
@@ -340,42 +340,42 @@ color_index = 1
 defender_leash_radius = 14.0
 
 [node name="CampHall" parent="Scenario/Slots/Raiders" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -58, 0, -58)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -88.886, 0.139, -88.886)
 
 [node name="CampPens" parent="Scenario/Slots/Raiders" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -58, 0, -64)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -88.886, 0.139, -94.886)
 
 [node name="GuardWarrior1" parent="Scenario/Slots/Raiders" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -55, 0, -54)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -85.886, 0.139, -84.886)
 
 [node name="GuardWarrior2" parent="Scenario/Slots/Raiders" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -61, 0, -54)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -91.886, 0.139, -84.886)
 
 [node name="GuardWarrior3" parent="Scenario/Slots/Raiders" instance=ExtResource("warrior")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -53, 0, -60)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -83.886, 0.139, -90.886)
 
 [node name="GuardDruid1" parent="Scenario/Slots/Raiders" instance=ExtResource("druid")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -66, 0, -58)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -96.886, 0.139, -88.886)
 
 [node name="GuardDruid2" parent="Scenario/Slots/Raiders" instance=ExtResource("druid")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -63, 0, -62)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -93.886, 0.139, -92.886)
 
 [node name="Zones" type="Node3D" parent="Scenario"]
 
 [node name="Emberford" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -78, 0, 78)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -109.947, 0.105, 107.826)
 script = ExtResource("zone_script")
 radius = 9.0
 
 [node name="BeastmenCamp" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -59, 0, -59)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -89.886, 0.139, -89.886)
 script = ExtResource("zone_script")
 radius = 10.0
 
 [node name="Markers" type="Node3D" parent="Scenario"]
 
 [node name="WestRoad" type="Marker3D" parent="Scenario/Markers"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -80, 0, 30)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -123.077, -0.538, 46.154)
 
 [node name="Quests" type="Node" parent="Scenario"]
 

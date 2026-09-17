@@ -1,0 +1,11 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://clihxex5g10pr" path="res://scripts/tools/map_generator.gd" id="1_map_generator"]
+
+[node name="MapGenerator" type="Node3D"]
+script = ExtResource("1_map_generator")
+map_name = "Four Kingdoms"
+map_seed = 4404
+player_count = 4
+map_size = 320
+overwrite_existing = true

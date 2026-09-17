@@ -6,7 +6,7 @@
 script = ExtResource("1_4rn1k")
 map_name = "Aldmere Vale"
 map_seed = 1212
-map_size = 176
+map_size = 240
 base_clear_radius = 14.0
 base_gold_distance = Vector2(15, 18)
 base_trees = 20

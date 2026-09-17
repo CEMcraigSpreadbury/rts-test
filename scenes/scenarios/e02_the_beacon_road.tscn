@@ -181,15 +181,15 @@ spawn_point_index = 2
 starting_resources = Array[ExtResource("cost_script")]([SubResource("start_wood"), SubResource("start_gold")])
 
 [node name="WarPenWest" parent="Scenario/Slots/Warlord" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 56, 0, -52)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 87.947, 0.139, -81.826)
 
 [node name="WarPenEast" parent="Scenario/Slots/Warlord" instance=ExtResource("beastmen_barracks")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 72, 0, -60)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 103.947, 0.139, -89.826)
 
 [node name="Zones" type="Node3D" parent="Scenario"]
 
 [node name="WarlordCamp" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 63, 0, -58)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 94.947, 0.139, -87.826)
 script = ExtResource("zone_script")
 radius = 14.0
 

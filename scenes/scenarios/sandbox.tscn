@@ -202,15 +202,15 @@ color_index = 1
 spawn_point_index = -1
 
 [node name="Guard1" parent="Scenario/Slots/Garrison" instance=ExtResource("soldier")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0, 22)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -48.474, 0.004, 48.474)
 
 [node name="Guard2" parent="Scenario/Slots/Garrison" instance=ExtResource("soldier")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, 22)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -51.474, 0.023, 48.474)
 
 [node name="Zones" type="Node3D" parent="Scenario"]
 
 [node name="Crossroads" type="Node3D" parent="Scenario/Zones"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, 30)
+transform = Transform3D(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, -56.474, 0.277, 56.474)
 script = ExtResource("zone_script")
 radius = 10.0
 
