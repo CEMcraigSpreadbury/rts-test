@@ -1,0 +1,53 @@
+[gd_resource type="ShaderMaterial" load_steps=11 format=3]
+
+[ext_resource type="Shader" path="res://shaders/terrain/water.gdshader" id="1_water"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_displacement"]
+noise_type = 1
+frequency = 0.008
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_displacement"]
+width = 256
+height = 256
+seamless = true
+noise = SubResource("FastNoiseLite_displacement")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_edge"]
+noise_type = 2
+frequency = 0.02
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_edge"]
+width = 512
+height = 512
+seamless = true
+noise = SubResource("FastNoiseLite_edge")
+
+[sub_resource type="Gradient" id="Gradient_edge_ramp"]
+offsets = PackedFloat32Array(0, 0.08)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_edge_ramp"]
+gradient = SubResource("Gradient_edge_ramp")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_normal"]
+noise_type = 2
+frequency = 0.015
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_normal"]
+width = 512
+height = 512
+seamless = true
+as_normal_map = true
+bump_strength = 4.0
+noise = SubResource("FastNoiseLite_normal")
+
+[resource]
+render_priority = 0
+shader = ExtResource("1_water")
+shader_parameter/displacement_strength = 0.08
+shader_parameter/edge_thickness = 0.12
+shader_parameter/foam_opacity = 0.55
+shader_parameter/displacement_texture = SubResource("NoiseTexture2D_displacement")
+shader_parameter/edge_noise = SubResource("NoiseTexture2D_edge")
+shader_parameter/edge_ramp = SubResource("GradientTexture1D_edge_ramp")
+shader_parameter/normal_map = SubResource("NoiseTexture2D_normal")

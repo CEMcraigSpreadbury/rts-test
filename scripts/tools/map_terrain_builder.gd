@@ -11,7 +11,7 @@ extends RefCounted
 const TERRAIN_MATERIAL: ShaderMaterial = preload("res://resources/terrain/binbun/binbun_terrain_material.tres")
 const TEXTURE_SETS: Resource = preload("res://resources/terrain/binbun/binbun_texture_sets.tres")
 const GRASS_FOLIAGE: Resource = preload("res://resources/terrain/binbun/binbun_grass_foliage.tres")
-const WATER_SHADER: Shader = preload("res://shaders/terrain/water_placeholder.gdshader")
+const WATER_MATERIAL: ShaderMaterial = preload("res://resources/water/water_material.tres")
 
 ## Splatmap channels, in TEXTURE_SETS order. Grass is also where the Binbun
 ## blades grow (binbun_grass_foliage.tres applies on texture 0).
@@ -85,18 +85,19 @@ static func build_zone(layout: MapLayout) -> ZoneResource:
 	zone.foliagesImage = [Image.create_empty(n, n, false, Image.FORMAT_RGBA8)]
 	return zone
 
-## A flat placeholder water surface at the water level, covering the whole
+## A water surface at the water level, covering the whole
 ## terrain zone. Fog of war finds it by its shader, like the terrain.
 static func make_water(layout: MapLayout) -> MeshInstance3D:
 	var plane := PlaneMesh.new()
 	## Well past the terrain, so the horizon is sea rather than the terrain's cut edge.
 	var span: float = (zones_size(layout) - 1) * 4.0
 	plane.size = Vector2(span, span)
-	var material := ShaderMaterial.new()
-	material.shader = WATER_SHADER
+	## About 4 m between vertices, for the shader's wave displacement.
+	plane.subdivide_width = int(span / 4.0)
+	plane.subdivide_depth = int(span / 4.0)
 	var water := MeshInstance3D.new()
 	water.mesh = plane
-	water.material_override = material
+	water.material_override = WATER_MATERIAL
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	water.position = Vector3(0.0, layout.water_level, 0.0)
 	return water

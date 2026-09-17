@@ -10,7 +10,7 @@
 [ext_resource type="Image" uid="uid://cxapgwn6e1sdq" path="res://scenes/maps/aethermoor_creek_data/Foliage_0_0_0.res" id="6_blih1"]
 [ext_resource type="Image" uid="uid://ccad37mv8k6x" path="res://scenes/maps/aethermoor_creek_data/Heightmap_0_0.res" id="7_lvyni"]
 [ext_resource type="Image" uid="uid://dmpm01nbst5jv" path="res://scenes/maps/aethermoor_creek_data/Splatmap_0_0_0.res" id="8_os7os"]
-[ext_resource type="Shader" uid="uid://dn441cpa03du" path="res://shaders/terrain/water_placeholder.gdshader" id="9_t5yhn"]
+[ext_resource type="Material" path="res://resources/water/water_material.tres" id="9_t5yhn"]
 [ext_resource type="PackedScene" uid="uid://brsv0midh8i3s" path="res://scenes/player_spawn_point.tscn" id="10_q422c"]
 [ext_resource type="PackedScene" uid="uid://c10y275vh27ta" path="res://scenes/resource_nodes/gold_deposit.tscn" id="11_8ngm4"]
 [ext_resource type="PackedScene" uid="uid://capdkcqswrjn6" path="res://scenes/resource_nodes/gatherable.tscn" id="12_g6bug"]
@@ -191,21 +191,10 @@ foliagesImage = Array[Image]([ExtResource("6_blih1")])
 [sub_resource type="ZonesResource" id="ZonesResource_q422c"]
 zones = Array[ZoneResource]([SubResource("ZoneResource_t5yhn")])
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_8ngm4"]
-render_priority = 0
-shader = ExtResource("9_t5yhn")
-shader_parameter/fog_enabled = false
-shader_parameter/fog_map_origin = Vector2(0, 0)
-shader_parameter/fog_map_size = Vector2(0, 0)
-shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-shader_parameter/fog_vision_count = 0
-shader_parameter/shallow_color = Color(0.32, 0.62, 0.66, 0.45)
-shader_parameter/deep_color = Color(0.06, 0.22, 0.36, 0.9)
-shader_parameter/depth_fade = 3.0
-
 [sub_resource type="PlaneMesh" id="PlaneMesh_g6bug"]
 size = Vector2(1024, 1024)
+subdivide_width = 255
+subdivide_depth = 255
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_map_clouds"]
 size = Vector2(320, 320)
@@ -226,7 +215,7 @@ terrainZones = SubResource("ZonesResource_q422c")
 
 [node name="Water" type="MeshInstance3D" parent="." unique_id=1809501702]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.5, 0)
-material_override = SubResource("ShaderMaterial_8ngm4")
+material_override = ExtResource("9_t5yhn")
 cast_shadow = 0
 mesh = SubResource("PlaneMesh_g6bug")
 

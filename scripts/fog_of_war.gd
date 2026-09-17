@@ -154,7 +154,7 @@ const FOGGED_SHADERS: Array[Shader] = [
 	GRASS_SHADER,
 	preload("res://shaders/terrain/binbun_terrain.gdshader"),
 	preload("res://shaders/terrain/binbun_foliage.gdshader"),
-	preload("res://shaders/terrain/water_placeholder.gdshader"),
+	preload("res://shaders/terrain/water.gdshader"),
 ]
 var _grass_materials: Array[ShaderMaterial] = []
 
