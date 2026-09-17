@@ -28,6 +28,15 @@ extends Node3D
 @export_range(0.0, 1.0) var focus_band_top: float = 0.2
 @export_range(0.0, 1.0) var focus_band_bottom: float = 0.8
 @export_range(0.01, 1.0) var focus_ramp: float = 0.15
+## Minimum gap kept between the camera and the ground directly beneath it.
+@export var ground_clearance: float = 2.0
+## How quickly the rig's height chases the ground. Rising is faster than
+## falling so hills never clip through the lens mid-pan.
+@export var height_rise_smoothing: float = 20.0
+@export var height_fall_smoothing: float = 6.0
+
+## Skips units (layer 3, value 4), same as ai_player's ground rays.
+const GROUND_RAY_MASK: int = 0xFFFFFFFF & ~4
 
 @onready var yaw: Node3D = $Yaw
 @onready var pitch: Node3D = $Yaw/Pitch
@@ -163,7 +172,33 @@ func _update_pan(input_dir: Vector2, delta: float) -> void:
 		_pan_velocity = desired
 
 	global_position += _pan_velocity * delta
+	_update_height(delta)
 	_report_camera_use(_pan_velocity.length() * delta)
+
+## Lifts the rig pivot onto the ground under it, and further still if the
+## terrain under the camera itself (e.g. a hill behind the pivot) would
+## otherwise poke through the lens.
+func _update_height(delta: float) -> void:
+	var boom := pitch.global_transform.basis * Vector3(0.0, 0.0, zoom_distance)
+	var target_y := global_position.y
+	var pivot_ground: Variant = _ground_y_at(global_position)
+	if pivot_ground != null:
+		target_y = pivot_ground
+	var camera_ground: Variant = _ground_y_at(global_position + boom)
+	if camera_ground != null:
+		target_y = maxf(target_y, camera_ground + ground_clearance - boom.y)
+	var smoothing := height_rise_smoothing if target_y > global_position.y else height_fall_smoothing
+	global_position.y = lerpf(global_position.y, target_y, 1.0 - exp(-smoothing * delta))
+	## Never let smoothing leave the lens below the clearance line.
+	if camera_ground != null:
+		global_position.y = maxf(global_position.y, camera_ground + ground_clearance - boom.y)
+
+func _ground_y_at(pos: Vector3) -> Variant:
+	var query := PhysicsRayQueryParameters3D.create(Vector3(pos.x, 200.0, pos.z), Vector3(pos.x, -100.0, pos.z), GROUND_RAY_MASK)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty() or hit.collider is ProductionBuilding or hit.collider is Gatherable:
+		return null
+	return hit.position.y
 
 ## --- Tutorial reporting ---
 ##

@@ -4,11 +4,11 @@
 
 [node name="MapGenerator" type="Node3D" unique_id=654162614]
 script = ExtResource("1_map_generator")
-map_name = "Aethermoor Creek"
+map_name = "Angel Crossing"
 map_seed = 862959
 shrines_per_player = 2
 paths_to_centre = false
-import_heightmap = "C:/Users/craig/Downloads/aethermoor_creek_1.0.sd7"
+import_heightmap = "C:/Users/craig/Downloads/angel_crossing_1.5.1.sd7"
 import_height_range = 25.0
 forest_clusters_per_player = 10
 overwrite_existing = true

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MapInfo" format=3 uid="uid://b7h42l4y3xxed"]
+
+[ext_resource type="Script" uid="uid://cy6qtp2uryluf" path="res://scripts/map_info.gd" id="1_4eyjk"]
+
+[resource]
+script = ExtResource("1_4eyjk")
+map_name = "Angel Crossing"
+scene_path = "res://scenes/maps/angel_crossing.tscn"
+max_players = 2
+capture_points = 5
