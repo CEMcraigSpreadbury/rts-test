@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MapInfo" format=3 uid="uid://dkcjjnkt31qd2"]
+
+[ext_resource type="Script" uid="uid://cy6qtp2uryluf" path="res://scripts/map_info.gd" id="1_2rt7v"]
+
+[resource]
+script = ExtResource("1_2rt7v")
+map_name = "heightmap test 2"
+scene_path = "res://scenes/maps/heightmap_test_2.tscn"
+max_players = 2
+capture_points = 3

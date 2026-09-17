@@ -1,0 +1,20 @@
+[gd_resource type="TextureSetsResource" format=3 uid="uid://pcxydl1eahfo"]
+
+[ext_resource type="Texture2D" uid="uid://bodvfshd433sx" path="res://resources/terrain/binbun/textures/grass.png" id="1_poo15"]
+[ext_resource type="Texture2D" uid="uid://ddoij6xvgegfn" path="res://resources/terrain/binbun/textures/dirt.png" id="2_3u6a1"]
+[ext_resource type="Texture2D" uid="uid://c44gs6yvm5k2y" path="res://resources/terrain/binbun/textures/rock.png" id="3_sc4km"]
+
+[sub_resource type="TextureSetResource" id="TextureSetResource_pckcb"]
+name = "Binbun Grass"
+albedoTexture = ExtResource("1_poo15")
+
+[sub_resource type="TextureSetResource" id="TextureSetResource_rk2oh"]
+name = "Dirt"
+albedoTexture = ExtResource("2_3u6a1")
+
+[sub_resource type="TextureSetResource" id="TextureSetResource_1glm3"]
+name = "Rock"
+albedoTexture = ExtResource("3_sc4km")
+
+[resource]
+textureSets = Array[TextureSetResource]([SubResource("TextureSetResource_pckcb"), SubResource("TextureSetResource_rk2oh"), SubResource("TextureSetResource_1glm3")])

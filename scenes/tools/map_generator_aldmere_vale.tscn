@@ -12,7 +12,6 @@ base_gold_distance = Vector2(15, 18)
 base_trees = 20
 base_tree_distance = Vector2(20, 28)
 centre_site = 1
-plateau_height = 1
 forest_clusters_per_player = 8
 tree_spacing = 1.7
 props_per_player = 30

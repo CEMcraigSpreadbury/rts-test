@@ -1120,7 +1120,14 @@ func _ready() -> void:
 		_build_crew_sprite()
 	sprite.animation_finished.connect(_on_attack_animation_finished)
 	_update_team_tint_visual()
-	nav_agent.path_desired_distance = 0.5
+	## Waypoints sit on the navmesh, which on hilly terrain can be a few tenths
+	## of a metre off the ground the unit stands on, and the agent measures this
+	## in 3D: much tighter and a unit never "reaches" a waypoint it has walked
+	## past, turning back to it and sticking on the slope.
+	nav_agent.path_desired_distance = 1.0
+	## Keeps a unit on the ground walking down hills instead of briefly
+	## leaving it (and falling) each time the slope steepens.
+	floor_snap_length = 0.4
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	nav_agent.radius = FORMATION_BASE_RADIUS
 	nav_agent.avoidance_priority = 1.0

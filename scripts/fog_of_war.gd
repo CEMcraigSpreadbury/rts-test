@@ -45,7 +45,7 @@ signal fog_updated
 @export var explored_update_interval: float = 0.15
 
 ## Must match MAX_VISION_SOURCES in fog_of_war.gdshader and
-## FOG_MAX_VISION_SOURCES in grass_wind.gdshader.
+## FOG_MAX_VISION_SOURCES in grass_wind.gdshader and shaders/terrain/binbun_fog.gdshaderinc.
 const MAX_VISION_SOURCES: int = 64
 ## Units within one cell of this size share a vision source (see _update_vision_sources).
 const VISION_MERGE_CELL: float = 3.0
@@ -145,7 +145,16 @@ var _vision_count: int = 0
 ## selected/created in the dock, silently leaving every layer painted before
 ## this fix (or a scene resave) unfogged forever. Matching by shader instead
 ## means every grass layer gets fog for free, with nothing to remember to redo.
+##
+## TerraBrush maps have no terrain mesh to chain the overlay onto: their terrain
+## and Binbun grass shaders take the same fog_ uniforms instead, set on the
+## material copies TerraBrush renders its internal nodes with.
 const GRASS_SHADER: Shader = preload("res://shaders/grass_wind.gdshader")
+const FOGGED_SHADERS: Array[Shader] = [
+	GRASS_SHADER,
+	preload("res://shaders/terrain/binbun_terrain.gdshader"),
+	preload("res://shaders/terrain/binbun_foliage.gdshader"),
+]
 var _grass_materials: Array[ShaderMaterial] = []
 
 ## Ambient dust (ForestDust in map_base.tscn) floats above the terrain, so the
@@ -159,10 +168,11 @@ const DUST_DENSITY: float = 200.0 / 3600.0
 var _dust_materials: Array[ShaderMaterial] = []
 
 func _setup_terrain_fog_material() -> ShaderMaterial:
-	var terrain_material: Material = get_node(terrain_mesh_path).get_active_material(0)
 	var fog_material := ShaderMaterial.new()
 	fog_material.shader = preload("res://shaders/fog_of_war.gdshader")
-	terrain_material.next_pass = fog_material
+	var terrain_mesh := get_node_or_null(terrain_mesh_path) as MeshInstance3D
+	if terrain_mesh != null:
+		terrain_mesh.get_active_material(0).next_pass = fog_material
 	return fog_material
 
 func _setup_fogged_materials() -> void:
@@ -171,9 +181,9 @@ func _setup_fogged_materials() -> void:
 	_find_fogged_materials(get_tree().root)
 
 func _find_fogged_materials(node: Node) -> void:
-	if node is MultiMeshInstance3D:
-		var grass_material := (node as MultiMeshInstance3D).material_override as ShaderMaterial
-		if grass_material and grass_material.shader == GRASS_SHADER:
+	if node is MeshInstance3D or node is MultiMeshInstance3D:
+		var grass_material := (node as GeometryInstance3D).material_override as ShaderMaterial
+		if grass_material and grass_material.shader in FOGGED_SHADERS:
 			grass_material.set_shader_parameter("fog_enabled", true)
 			grass_material.set_shader_parameter("fog_tex", fog_texture)
 			grass_material.set_shader_parameter("fog_map_origin", map_origin)
@@ -185,7 +195,7 @@ func _find_fogged_materials(node: Node) -> void:
 			dust_material.set_shader_parameter("fog_enabled", true)
 			_dust_materials.append(dust_material)
 			_fit_dust_to_map(node as GPUParticles3D)
-	for child in node.get_children():
+	for child in node.get_children(true):
 		_find_fogged_materials(child)
 
 func _fit_dust_to_map(particles: GPUParticles3D) -> void:

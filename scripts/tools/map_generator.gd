@@ -24,6 +24,7 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 
 @export_group("Player Bases")
 @export_range(5.0, 16.0, 0.5) var base_clear_radius: float = 7.0
+@export_range(8.0, 40.0, 0.5) var base_flat_radius: float = 18.0
 @export_range(0, 4) var base_gold_mines: int = 1
 @export var base_gold_distance: Vector2 = Vector2(11.0, 14.0)
 @export_range(0, 120) var base_trees: int = 30
@@ -46,16 +47,59 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_range(10.0, 80.0, 1.0) var objective_min_base_distance: float = 30.0
 
 @export_group("Terrain")
-@export_range(1, 4) var plateau_height: int = 2
+@export_range(0.0, 6.0, 0.1) var hill_height: float = 1.5
+@export_range(0.005, 0.08, 0.001) var hill_frequency: float = 0.02
 @export_range(0, 6) var plateaus_per_player: int = 1
 @export_range(1, 3) var plateau_tiers: int = 1
 @export var plateau_half_size: Vector2 = Vector2(6.0, 10.0)
+@export var plateau_height_range: Vector2 = Vector2(1.5, 3.5)
+@export_range(0.0, 1.0, 0.05) var valley_chance: float = 0.35
+@export var valley_depth_range: Vector2 = Vector2(1.5, 3.0)
+@export_range(0.0, 6.0, 0.1) var plateau_outline_noise: float = 2.0
+@export_range(0.6, 3.0, 0.1) var cliff_width: float = 1.2
+@export_range(0, 8) var building_pockets_per_player: int = 2
+@export var building_pocket_radius: Vector2 = Vector2(5.0, 8.0)
 @export_range(1, 4) var ramps_per_plateau: int = 2
-@export_range(1, 7, 2) var ramp_width: int = 3
+@export_range(2.0, 8.0, 0.5) var ramp_width: float = 3.0
+@export_range(0.15, 0.6, 0.01) var ramp_slope: float = 0.45
 @export var paths_to_centre: bool = true
 @export_range(1.0, 6.0, 0.5) var path_width: float = 3.0
 @export_range(0, 12) var dirt_patches_per_player: int = 3
 @export_range(0, 12) var grass_patches_per_player: int = 4
+
+@export_group("Colours")
+@export var grass_light: Color = Color(0.658824, 0.792157, 0.345098):
+	set(value):
+		grass_light = value
+		_apply_colours_to_preview()
+@export var grass_mid: Color = Color(0.458824, 0.654902, 0.262745):
+	set(value):
+		grass_mid = value
+		_apply_colours_to_preview()
+@export var grass_dark: Color = Color(0.27451, 0.509804, 0.196078):
+	set(value):
+		grass_dark = value
+		_apply_colours_to_preview()
+@export_range(0.1, 2.0, 0.05) var grass_height: float = 0.8:
+	set(value):
+		grass_height = value
+		_apply_colours_to_preview()
+@export_range(0.1, 1.5, 0.05) var grass_brightness: float = 0.5:
+	set(value):
+		grass_brightness = value
+		_apply_colours_to_preview()
+@export var ground_light: Color = Color(0.658824, 0.792157, 0.345098):
+	set(value):
+		ground_light = value
+		_apply_colours_to_preview()
+@export var ground_mid: Color = Color(0.458824, 0.654902, 0.262745):
+	set(value):
+		ground_mid = value
+		_apply_colours_to_preview()
+@export var ground_dark: Color = Color(0.27451, 0.509804, 0.196078):
+	set(value):
+		ground_dark = value
+		_apply_colours_to_preview()
 
 @export_group("Forests")
 @export_range(0, 30) var forest_clusters_per_player: int = 3
@@ -93,15 +137,6 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export var tree_scene: PackedScene = preload("res://scenes/resource_nodes/gatherable.tscn")
 @export var gold_mine_scene: PackedScene = preload("res://scenes/resource_nodes/gold_deposit.tscn")
 
-@export_group("Tiles")
-@export var tileset: TileSet = preload("res://resources/terrain/terrain_tileset.tres")
-@export var ground_tiles: Array[Vector2i] = [Vector2i(22, 7)]
-@export var plateau_template: Vector2i = Vector2i(15, 10)
-@export var cliff_tiles: Array[Vector2i] = [Vector2i(16, 15), Vector2i(17, 15), Vector2i(18, 15)]
-@export var ramp_tiles: Array[Vector2i] = [Vector2i(12, 2), Vector2i(12, 3)]
-@export var dirt_template: Vector2i = Vector2i(10, 5)
-@export var grass_template: Vector2i = Vector2i(0, 5)
-
 @export_group("Output")
 @export var overwrite_existing: bool = false
 
@@ -127,10 +162,8 @@ func generate() -> bool:
 		push_error("MapGenerator: layout generation failed (see warnings above) — try another seed or smaller counts.")
 		layout = null
 		return false
-	var terrain := TileMapLayer3D.new()
+	var terrain: TerraBrush = MapTerrainBuilder.make_terrain(MapTerrainBuilder.build_zone(layout), MapTerrainBuilder.zones_size(layout), MapTerrainBuilder.PREVIEW_DATA_PATH, grass_palette(), ground_palette(), grass_height, grass_brightness)
 	terrain.name = PREVIEW_TERRAIN_NAME
-	terrain.settings = make_tile_settings()
-	terrain.tile_map_data = MapTerrainBuilder.build_tile_data(layout, self, terrain)
 	add_child(terrain)
 	var objects := Node3D.new()
 	objects.name = PREVIEW_OBJECTS_NAME
@@ -141,8 +174,18 @@ func generate() -> bool:
 		var spawn: Node3D = spawn_point_scene.instantiate()
 		spawn.position = layout.spawn_positions[i]
 		objects.add_child(spawn)
-	print("MapGenerator: '%s' seed %d — %d tiles, %d objects." % [map_name, map_seed, terrain.get_tile_count(), layout.objects.size()])
+	print("MapGenerator: '%s' seed %d — %d objects." % [map_name, map_seed, layout.objects.size()])
 	return true
+
+func grass_palette() -> PackedColorArray:
+	return PackedColorArray([grass_light, grass_mid, grass_dark])
+
+func ground_palette() -> PackedColorArray:
+	return PackedColorArray([ground_light, ground_mid, ground_dark])
+
+func _apply_colours_to_preview() -> void:
+	if is_inside_tree() and get_preview_terrain() != null:
+		MapTerrainBuilder.set_palettes(get_preview_terrain(), grass_palette(), ground_palette(), grass_height, grass_brightness)
 
 func clear_preview() -> void:
 	for child_name in [PREVIEW_TERRAIN_NAME, PREVIEW_OBJECTS_NAME]:
@@ -151,8 +194,8 @@ func clear_preview() -> void:
 			remove_child(child)
 			child.queue_free()
 
-func get_preview_terrain() -> TileMapLayer3D:
-	return get_node_or_null(NodePath(PREVIEW_TERRAIN_NAME)) as TileMapLayer3D
+func get_preview_terrain() -> TerraBrush:
+	return get_node_or_null(NodePath(PREVIEW_TERRAIN_NAME)) as TerraBrush
 
 func map_id() -> String:
 	var id: String = map_name.strip_edges().to_snake_case().validate_filename().replace(" ", "_")
@@ -180,25 +223,7 @@ func save_map() -> void:
 			Engine.get_singleton(&"EditorInterface").get_resource_filesystem().scan()
 
 func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
-	var terrain: TileMapLayer3D = get_preview_terrain()
-	var options := RegionBakeOptions.new()
-	var baked_instance: MeshInstance3D = await RegionBaker.bake_mesh(terrain, null, options)
-	if baked_instance == null:
-		push_error("MapGenerator: terrain mesh bake failed.")
-		return false
-	var terrain_mesh: Mesh = baked_instance.mesh
-	baked_instance.free()
-
-	terrain.clear_collision_shapes(Vector3i.MAX)
-	var collision: Array = []
-	for region in TileMeshMerger.get_collision_regions(terrain, true):
-		var shape: ConcavePolygonShape3D = await RegionBaker.bake_collision(terrain, region, options)
-		if shape != null:
-			collision.append([region.region_key, shape])
-	if collision.is_empty():
-		push_error("MapGenerator: collision bake produced no shapes.")
-		return false
-
+	var zone: ZoneResource = get_preview_terrain().terrainZones.zones[0]
 	var nav_mesh: NavigationMesh = MapTerrainBuilder.bake_navigation_mesh(layout)
 	if nav_mesh.get_polygon_count() == 0:
 		push_error("MapGenerator: navigation mesh bake produced no polygons.")
@@ -206,21 +231,26 @@ func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
 
 	_clear_data_dir(data_dir)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(data_dir))
-	var tile_data: TileMapLayerData = terrain.tile_map_data.duplicate()
-	if not _save_resource(tile_data, data_dir + "terrain_tiles.res"):
+	var heightmap: Image = zone.heightMapImage.duplicate()
+	var splatmap: Image = zone.splatmapsImage[0].duplicate()
+	var foliage: Image = zone.foliagesImage[0].duplicate()
+	if not _save_resource(heightmap, data_dir + "Heightmap_0_0.res"):
 		return false
-	if not _save_resource(terrain_mesh, data_dir + "terrain_mesh.res"):
+	if not _save_resource(splatmap, data_dir + "Splatmap_0_0_0.res"):
+		return false
+	if not _save_resource(foliage, data_dir + "Foliage_0_0_0.res"):
 		return false
 	if not _save_resource(nav_mesh, data_dir + "navigation_mesh.res"):
 		return false
-	for entry in collision:
-		var key: Vector3i = entry[0]
-		if not _save_resource(entry[1], data_dir + "collision_%d_%d_%d.res" % [key.x, key.y, key.z]):
-			return false
+	var saved_zone := ZoneResource.new()
+	saved_zone.zonePosition = Vector2i.ZERO
+	saved_zone.heightMapImage = heightmap
+	saved_zone.splatmapsImage = [splatmap]
+	saved_zone.foliagesImage = [foliage]
 
 	var root := Node3D.new()
 	root.name = "Main"
-	_assemble_map(root, tile_data, terrain_mesh, nav_mesh, collision)
+	_assemble_map(root, MapTerrainBuilder.make_terrain(saved_zone, MapTerrainBuilder.zones_size(layout), data_dir.trim_suffix("/"), grass_palette(), ground_palette(), grass_height, grass_brightness), nav_mesh)
 	var packed := PackedScene.new()
 	var err: int = packed.pack(root)
 	root.free()
@@ -240,32 +270,14 @@ func _save_map(scene_path: String, data_dir: String, info_path: String) -> bool:
 ## Builds only what the map adds on top of map_base.tscn. The three shared
 ## containers are created here as stand-ins and turned into overrides of the
 ## base's own nodes by _save_inherited_scene().
-func _assemble_map(root: Node3D, tile_data: TileMapLayerData, terrain_mesh: Mesh, nav_mesh: NavigationMesh, collision: Array) -> void:
+func _assemble_map(root: Node3D, terrain: TerraBrush, nav_mesh: NavigationMesh) -> void:
 	var nav_region := NavigationRegion3D.new()
 	nav_region.name = "NavigationRegion3D"
 	nav_region.navigation_mesh = nav_mesh
 	_add_owned(root, nav_region, root)
 
-	var terrain := TileMapLayer3D.new()
-	terrain.name = "TileMapLayer3D"
-	terrain.settings = make_tile_settings()
-	terrain.tile_map_data = tile_data
+	terrain.name = "Terrain"
 	_add_owned(nav_region, terrain, root)
-	var body := StaticCollisionBody3D.new()
-	body.name = "TileMapLayer3D_Collision"
-	_add_owned(terrain, body, root)
-	for entry in collision:
-		var key: Vector3i = entry[0]
-		var shape_node := RegionCollisionShape.new()
-		shape_node.name = "Region_%d_%d_%d" % [key.x, key.y, key.z]
-		shape_node.region_key = key
-		shape_node.shape = entry[1]
-		_add_owned(body, shape_node, root)
-
-	var baked := MeshInstance3D.new()
-	baked.name = "TileMapLayer3D_Baked"
-	baked.mesh = terrain_mesh
-	_add_owned(nav_region, baked, root)
 
 	var spawns := Node3D.new()
 	spawns.name = "PlayerSpawnPoints"
@@ -329,7 +341,7 @@ func _save_inherited_scene(packed: PackedScene, scene_path: String) -> bool:
 	text = text.insert(head_end, "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"map_base\"]\n" % MAP_BASE_SCENE)
 	var cloud_size: int = layout.size + 80
 	text = text.insert(text.find("[node"), "[sub_resource type=\"PlaneMesh\" id=\"PlaneMesh_map_clouds\"]\nsize = Vector2(%d, %d)\n\n" % [cloud_size, cloud_size])
-	text += "\n[node name=\"FogOfWar\" parent=\".\"]\nmap_origin = Vector2(%s, %s)\nmap_size = Vector2(%d, %d)\nterrain_mesh_path = NodePath(\"../NavigationRegion3D/TileMapLayer3D_Baked\")\n" % [-layout.half, -layout.half, layout.size, layout.size]
+	text += "\n[node name=\"FogOfWar\" parent=\".\"]\nmap_origin = Vector2(%s, %s)\nmap_size = Vector2(%d, %d)\nterrain_mesh_path = NodePath(\"\")\n" % [-layout.half, -layout.half, layout.size, layout.size]
 	text += "\n[node name=\"CloudShadowLayer\" parent=\".\"]\nmesh = SubResource(\"PlaneMesh_map_clouds\")\n"
 
 	var file := FileAccess.open(scene_path, FileAccess.WRITE)
@@ -352,15 +364,6 @@ func _instantiate_object(entry: Dictionary, edit_state: int) -> Node3D:
 	if entry.scale != 1.0:
 		node.scale = Vector3.ONE * entry.scale
 	return node
-
-func make_tile_settings() -> TileMapLayerSettings:
-	var settings := TileMapLayerSettings.new()
-	settings._settings_format_version = 1
-	settings.tileset_texture = MapTerrainBuilder.atlas_texture(tileset)
-	settings.tile_size = tileset.tile_size
-	settings.autotile_tileset = tileset
-	settings.mesh_mode = GlobalConstants.MeshMode.FLAT_SQUARE
-	return settings
 
 func _add_owned(parent: Node, child: Node, root: Node) -> void:
 	parent.add_child(child)

@@ -7,7 +7,6 @@ script = ExtResource("1_414lh")
 map_name = "Greywood"
 map_seed = 4242
 shrines_per_player = 1
-plateau_height = 1
 forest_clusters_per_player = 12
 tree_spacing = 1.7
 overwrite_existing = true

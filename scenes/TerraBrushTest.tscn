@@ -1,3 +1,42 @@
-[gd_scene format=3 uid="uid://bqts1hdyeoyrg"]
+[gd_scene format=3]
 
-[node name="TerraBrushTest" type="Node3D" unique_id=1127887469]
+[ext_resource type="Material" path="res://resources/terrain/binbun/binbun_terrain_material.tres" id="1_jj3f7"]
+[ext_resource type="TextureSetsResource" path="res://resources/terrain/binbun/binbun_texture_sets.tres" id="2_ooan8"]
+[ext_resource type="FoliageDefinitionResource" path="res://resources/terrain/binbun/binbun_grass_foliage.tres" id="3_6jo5b"]
+[ext_resource type="Image" path="res://scenes/TerraBrushTest/Heightmap_0_0.res" id="4_cf2nx"]
+[ext_resource type="Image" path="res://scenes/TerraBrushTest/Splatmap_0_0_0.res" id="5_7qov6"]
+
+[sub_resource type="FoliageResource" id="FoliageResource_jkh77"]
+definition = ExtResource("3_6jo5b")
+
+[sub_resource type="ZoneResource" id="ZoneResource_0hgsx"]
+heightMapImage = ExtResource("4_cf2nx")
+splatmapsImage = Array[Image]([ExtResource("5_7qov6")])
+
+[sub_resource type="ZonesResource" id="ZonesResource_j23ti"]
+zones = Array[ZoneResource]([SubResource("ZoneResource_0hgsx")])
+
+[sub_resource type="Environment" id="Environment_jj3f7"]
+background_mode = 1
+background_color = Color(1, 1, 1, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.695381, 0.644979, 0.598817, 1)
+
+[node name="TerraBrushTest" type="Node3D" unique_id=973362906]
+
+[node name="TerraBrush" type="TerraBrush" parent="." unique_id=797899327]
+dataPath = "res://scenes/TerraBrushTest"
+customShader = ExtResource("1_jj3f7")
+textureSets = ExtResource("2_ooan8")
+foliages = Array[FoliageResource]([SubResource("FoliageResource_jkh77")])
+terrainZones = SubResource("ZonesResource_j23ti")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=802321959]
+transform = Transform3D(1, 0, 0, 0, 0.70710677, 0.70710677, 0, -0.70710677, 0.70710677, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1334256730]
+transform = Transform3D(1, 0, 0, 0, 0.76604444, 0.6427876, 0, -0.6427876, 0.76604444, 0, 6, 8)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=818216076]
+environment = SubResource("Environment_jj3f7")
