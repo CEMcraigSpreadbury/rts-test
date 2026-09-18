@@ -112,7 +112,8 @@ const ASSAULT_AREA_RADIUS: float = 12.0
 ## _update_avoidance_team) and units don't physically collide with other units,
 ## so without this nothing stops two units standing in exactly the same spot —
 ## which is what a melee scrum collapses into. Any two living units closer than
-## SEPARATION_DISTANCE (a little over two 0.4 body capsules) get nudged apart.
+## SEPARATION_DISTANCE (a little over two 0.4 body capsules) get nudged apart —
+## except that between enemies only the attacker yields (see _update_separation).
 ## Only overlapping bodies are pushed, so formation slots (Formation.SPACING
 ## apart) and melee contact (attack_range apart) are never disturbed by it.
 const SEPARATION_DISTANCE: float = 0.85
@@ -2092,6 +2093,11 @@ func _update_separation(delta: float) -> Vector3:
 	var push := Vector3.ZERO
 	for other in UnitGrid.units_near(get_tree(), global_position, SEPARATION_DISTANCE):
 		if other == self:
+			continue
+		## An enemy only pushes the unit going for it, never the other way round:
+		## otherwise every attacker crowding a target sums into one big shove and
+		## a mobbed unit gets bulldozed across the field.
+		if Teams.is_enemy(owner_peer_id, other.owner_peer_id) and other != attack_target:
 			continue
 		var away := global_position - other.global_position
 		away.y = 0.0
