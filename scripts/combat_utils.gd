@@ -38,6 +38,9 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 		## pulling that unit into a neighbor's fight would silently override it.
 		if ally.status_command == Unit.Command.MOVE or ally.status_command == Unit.Command.CAST:
 			continue
+		## Holding its ground: it fights whatever reaches it, not a neighbor's fight.
+		if ally.hold_position and ally.status_command == Unit.Command.NONE:
+			continue
 		if ally.global_position.distance_to(from_position) <= ally.aggro_range:
 			ally.command_attack(attacker)
 

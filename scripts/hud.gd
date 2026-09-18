@@ -73,6 +73,9 @@ var _portrait_head: TextureRect = null
 ## activated-ability button currently on the command card — see
 ## _refresh_ability_buttons.
 var _ability_buttons: Array[Dictionary] = []
+## Toggle-mode command button; its pressed look follows the selection's
+## replicated hold_position every frame rather than the click itself.
+var _hold_button: Button = null
 const COOLDOWN_SWEEP_SHADER: Shader = preload("res://shaders/cooldown_sweep.gdshader")
 var _info_resource_label: Label = null
 
@@ -622,6 +625,8 @@ func _build_unit_info() -> void:
 
 func _refresh_unit_info_values() -> void:
 	_refresh_ability_buttons()
+	if is_instance_valid(_hold_button):
+		_hold_button.set_pressed_no_signal(main.selection_holds_position())
 	if main.selected_units.size() == 1:
 		var unit := main.selected_units[0]
 		portrait_health_label.text = "%d / %d" % [unit.status_current_health, unit.max_health]
@@ -651,6 +656,10 @@ func _populate_unit_command_buttons() -> void:
 		_make_command_button(OS.get_keycode_string(Main.UNIT_ATTACK_KEY), "Attack", null, main.arm_attack_mode),
 		_make_command_button(OS.get_keycode_string(Main.UNIT_PATROL_KEY), "Patrol", null, main.arm_patrol_mode),
 	]
+	_hold_button = _make_command_button(OS.get_keycode_string(Main.UNIT_HOLD_KEY), "Hold Position", null, main.toggle_hold_position)
+	_hold_button.toggle_mode = true
+	_hold_button.set_pressed_no_signal(main.selection_holds_position())
+	buttons.append(_hold_button)
 	if main.any_selected_can_build():
 		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_BUILD_KEY), "Build", null, open_build_submenu))
 

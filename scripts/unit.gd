@@ -849,6 +849,12 @@ var _funnel_timer: float = 0.0
 ## group is still using it — see GroupMovement.resolve_dragged_width.
 var dragged_formation: Dictionary = {}
 
+## Host-only: the way this unit's last formation order faced (see
+## GroupMovement.order_facing), or ZERO once it has had a solo move or a
+## non-formation order. An idle unit turns back to it, so a block stands facing
+## its front however it walked there and the next order reads that front.
+var formation_facing: Vector3 = Vector3.ZERO
+
 ## Formation marching state (see GroupMovement's Marching section) — host-only.
 ## While _march_active the unit holds its place relative to the group's moving
 ## anchor, steering at _march_point and matching _march_velocity, rather than
@@ -1007,6 +1013,8 @@ func clear_order_queue() -> void:
 ## out on an empty formation_group.
 func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> void:
 	formation_group = group
+	if group.is_empty():
+		formation_facing = Vector3.ZERO
 	formation_initial_distance = global_position.distance_to(target_position) if not group.is_empty() else 0.0
 	_cohesion_recheck_timer = 0.0
 	_cohesion_progress = 0.0
@@ -1040,6 +1048,14 @@ func _clear_formation_cohesion() -> void:
 ## instead of following a fleeing/kiting target indefinitely.
 var leash_origin: Node3D = null
 var leash_radius: float = 0.0
+## Player-toggled stance (see Main.toggle_hold_position): while standing idle
+## the unit only takes on enemies already within attack_range and never walks
+## out to meet them. Replicated so every peer's command card shows the state.
+## Explicit orders (move, attack, attack-move, patrol) still behave as normal.
+var hold_position: bool = false
+## Set when a holding unit picked its current fight up by itself rather than
+## being ordered into it, so it lets the target go instead of chasing it.
+var _hold_engagement: bool = false
 ## Counts down while attack-moving/patrolling; scanning for enemies every frame
 ## would be an unthrottled O(units x units) group scan, so this paces it instead.
 var _enemy_scan_timer: float = 0.0
@@ -1319,6 +1335,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	formation_facing = Vector3.ZERO
 	status_command = Command.GATHER
 	attack_target = null
 	assault_active = false
@@ -1343,6 +1360,7 @@ func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 	_leave_gather_site()
 	if not keep_assault:
 		assault_active = false
+	_hold_engagement = false
 	status_command = Command.ATTACK
 	attack_target = target
 	formation_speed = -1.0
@@ -1378,6 +1396,7 @@ func command_patrol(points: Array[Vector3]) -> void:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	formation_facing = Vector3.ZERO
 	status_command = Command.PATROL
 	attack_target = null
 	assault_active = false
@@ -1406,6 +1425,7 @@ func command_wander(origin: Node3D, radius: float) -> void:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	formation_facing = Vector3.ZERO
 	status_command = Command.PATROL
 	attack_target = null
 	assault_active = false
@@ -1416,6 +1436,17 @@ func command_wander(origin: Node3D, radius: float) -> void:
 	wander_origin = origin
 	wander_radius = radius
 	_begin_wander_leg()
+
+## Takes on an enemy already within reach without leaving the spot — the
+## holding-unit counterpart to the idle scan's command_attack.
+func _engage_from_hold(target: Node3D) -> void:
+	command_attack(target, true)
+	_hold_engagement = true
+
+## Only while that self-picked fight is still the unit's order — any other
+## command either replaces Command.ATTACK or comes back through command_attack.
+func _in_hold_fight() -> bool:
+	return _hold_engagement and status_command == Command.ATTACK
 
 func command_stop() -> void:
 	if status_activity == Activity.DEAD:
@@ -1442,6 +1473,7 @@ func command_build(building: ProductionBuilding) -> void:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	formation_facing = Vector3.ZERO
 	status_command = Command.BUILD
 	attack_target = null
 	assault_active = false
@@ -1896,6 +1928,9 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		## before the unit escapes range, undoing the retreat entirely.
 		## Command.CAST is the same kind of deliberate order: a monster walking
 		## in to cast shouldn't be talked out of it by the first thing to hit it.
+		elif hold_position and status_command == Command.NONE:
+			if _flat_distance(global_position, attacker.global_position) <= attack_range:
+				_engage_from_hold(attacker)
 		elif status_command != Command.ATTACK and status_command != Command.MOVE and status_command != Command.CAST:
 			## keep_assault: being shot at while marching on an assault target
 			## makes this unit fight back, but must not quietly cancel the
@@ -2043,10 +2078,15 @@ func _physics_process(delta: float) -> void:
 			## A unit holding a cleared assault area watches that whole area
 			## (buildings included), not just its own aggro bubble — it was told
 			## to take the place, and only Stop or another order calls it off.
-			var enemy: Node3D = _find_assault_target() if assault_active \
-					else _find_nearest_enemy_in_range(aggro_range)
-			if enemy:
-				command_attack(enemy, true)
+			if hold_position:
+				var in_reach := _find_nearest_enemy_in_range(attack_range)
+				if in_reach:
+					_engage_from_hold(in_reach)
+			else:
+				var enemy: Node3D = _find_assault_target() if assault_active \
+						else _find_nearest_enemy_in_range(aggro_range)
+				if enemy:
+					command_attack(enemy, true)
 
 	## Before the steering read below, so a unit released from its funnel
 	## waypoint this frame immediately starts steering at its real slot instead
@@ -2286,6 +2326,9 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 		var move_dir := Vector3(velocity.x, 0.0, velocity.z) / flat_speed
 		var target_angle: float = atan2(move_dir.x, move_dir.z)
 		rotation.y = lerp_angle(rotation.y, target_angle, rotation_speed * get_physics_process_delta_time())
+	elif status_activity == Activity.IDLE and formation_facing != Vector3.ZERO:
+		var front_angle: float = atan2(formation_facing.x, formation_facing.z)
+		rotation.y = lerp_angle(rotation.y, front_angle, rotation_speed * get_physics_process_delta_time())
 
 	if sprite.sprite_frames:
 		_set_animation("walk" if is_moving else "idle")
@@ -2629,7 +2672,7 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 	return result
 
 func _head_to_target() -> void:
-	if not _is_target_alive(attack_target):
+	if not _is_target_alive(attack_target) or (_in_hold_fight() and not _target_in_reach()):
 		_find_new_target_or_idle()
 		return
 	status_activity = Activity.TO_TARGET
@@ -2839,6 +2882,20 @@ func _is_target_alive(target) -> bool:
 	return false
 
 func _find_new_target_or_idle() -> void:
+	## A holding unit's own fight: switch to anything else already in reach,
+	## otherwise settle back into its stance where it stands.
+	if _in_hold_fight():
+		var in_reach := _find_nearest_enemy_in_range(attack_range)
+		if in_reach and _flat_distance(global_position, in_reach.global_position) <= attack_range:
+			attack_target = in_reach
+			_start_attacking()
+			return
+		_hold_engagement = false
+		attack_target = null
+		status_command = Command.NONE
+		status_activity = Activity.IDLE
+		nav_agent.target_position = global_position
+		return
 	if status_command == Command.ATTACK:
 		var nearest: Node3D = _find_assault_target() if assault_active \
 				else _find_nearest_enemy_in_range(aggro_range)

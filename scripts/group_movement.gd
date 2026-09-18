@@ -40,7 +40,7 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	if units.size() == 1:
 		return [target_pos]
 
-	var forward := forward_override if forward_override != Vector3.ZERO else _group_forward(group_centroid(units), target_pos)
+	var forward := order_facing(units, target_pos, forward_override)
 	var right := Vector3(forward.z, 0.0, -forward.x)
 
 	var formation := Formation.new(units, formation_type, front_width)
@@ -52,6 +52,34 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	## shuffling ranks on the way. A short hop still takes nearest slots.
 	var relative := _flat_distance(group_centroid(units), target_pos) >= MARCH_MIN_DISTANCE
 	return _assign_slots_to_units(units, slots, relative)
+
+## Which way a formation order faces. An explicit facing (a drag, a re-form)
+## always wins. Otherwise a group already holding a front keeps it for anything
+## ahead of or beside it and about-faces for anything behind it — the rear rank
+## becomes the front and everyone just turns round, rather than the whole block
+## pivoting to point at the click. A group with no shared front (fresh from
+## training, or pulled together from different places) faces its way of travel.
+func order_facing(units: Array[Unit], target_pos: Vector3, forward_override: Vector3 = Vector3.ZERO) -> Vector3:
+	if forward_override != Vector3.ZERO:
+		return forward_override
+	var travel := _group_forward(group_centroid(units), target_pos)
+	var held := held_facing(units)
+	if held == Vector3.ZERO:
+		return travel
+	return held if travel.dot(held) >= 0.0 else -held
+
+## The front every member of `units` is holding from its last formation order
+## (see Unit.formation_facing), or ZERO if they don't all share one.
+func held_facing(units: Array[Unit]) -> Vector3:
+	if units.is_empty():
+		return Vector3.ZERO
+	var shared: Vector3 = units[0].formation_facing
+	if shared == Vector3.ZERO:
+		return Vector3.ZERO
+	for unit in units:
+		if unit.formation_facing.dot(shared) < 0.99:
+			return Vector3.ZERO
+	return shared
 
 ## The facing a dragged formation takes: square to the drag line, and pointing
 ## away from wherever the group currently stands — so ranks trail back toward
@@ -568,15 +596,18 @@ const REFORM_DEFAULT_FORWARD: Vector3 = Vector3.FORWARD
 ## different (or empty) formation_group, which is what _formation_record_members
 ## uses to tell "still walking this order" from "has moved on". Single-unit and
 ## non-formation dispatches carry an empty group and are never tracked.
-## `forward`/`front_width` are kept for a dragged formation (or an explicit
-## re-form's facing) so closing ranks keeps the shape the player laid out
-## rather than falling back to the default one.
+## `forward` is the order's resolved facing (see order_facing): kept so closing
+## ranks keeps the block's front, and stamped on every member as the front it
+## now holds. `front_width` is kept for a dragged formation so closing ranks
+## keeps the shape the player laid out rather than falling back to the default.
 func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward: Vector3 = Vector3.ZERO, front_width: float = -1.0) -> void:
 	if not multiplayer.is_server() or group.size() < 2:
 		return
 	var members := _formation_record_members(group)
 	if members.size() < 2:
 		return
+	for unit in members:
+		unit.formation_facing = forward
 	## No need to hunt down an older record these units were in: they are
 	## carrying this new group array now, so they no longer read as live
 	## members of it and the next poll retires it on its own.
@@ -737,6 +768,9 @@ func _issue_slots(units: Array[Unit], slots: Array[Vector3], attack_move: bool) 
 ## meaningless midpoint — a group facing every which way after a brawl falls
 ## back to the default instead of inheriting one member's spin.
 func group_facing(units: Array[Unit]) -> Vector3:
+	var held := held_facing(units)
+	if held != Vector3.ZERO:
+		return held
 	var facing := Vector3.ZERO
 	for unit in units:
 		facing += Vector3(sin(unit.rotation.y), 0.0, cos(unit.rotation.y))
@@ -750,8 +784,12 @@ func group_facing(units: Array[Unit]) -> Vector3:
 ## only exists at the two ends of a move and smears out in between. A marching
 ## record instead walks one virtual anchor (the front-centre of the formation)
 ## along a single navmesh route, and every member steers at its own offset from
-## that anchor: ranks trail back ALONG the route (so the block wheels round
-## corners rather than cutting them) and flank offsets are measured across it.
+## that anchor. The block holds the order's facing the whole way rather than
+## wheeling with every bend in the path: each steer re-expresses a member's
+## fixed offset as (across, behind) the current direction of travel, and places
+## it `behind` meters back ALONG the route and `across` it. On a straight stretch
+## that is an exact rigid slide; at a bend the part of the block still short of
+## it follows the route round instead of cutting the corner.
 ## Where the navmesh narrows, a rank first slides sideways into whatever room
 ## there is and only then squeezes its flanks inward, and squeezed units drop
 ## back behind their rank — so a gate or a gap between buildings turns the
@@ -778,11 +816,8 @@ const MARCH_MIN_SCALE: float = 0.15
 ## every frame and members extrapolate with its velocity in between.
 const MARCH_UPDATE_INTERVAL: float = 0.1
 ## Route heading is read across this many meters either side of a point so a
-## sharp path corner turns the block smoothly instead of snapping it.
+## sharp path corner re-lays the block smoothly instead of snapping it.
 const MARCH_HEADING_SPAN: float = 1.5
-## Over the last stretch the heading blends into the order's final facing, so
-## the block arrives already oriented to its slots.
-const MARCH_BLEND_DISTANCE: float = 6.0
 ## Spacing of the navmesh samples used to measure room across the route.
 const MARCH_PROBE_STEP: float = 0.5
 ## Extra room probed past a rank's own width, for sliding it sideways.
@@ -842,15 +877,13 @@ func _start_march(record: Dictionary, members: Array[Unit]) -> void:
 	_steer_march(record, members)
 
 ## Each member's slot as (lateral, back) against the order's final facing —
-## lateral along `right`, back measured behind the front rank — plus each
-## rank's reach to either side, which _steer_march needs to slide it whole.
+## lateral along `right`, back measured behind the front rank.
 func _set_march_offsets(record: Dictionary, members: Array[Unit]) -> void:
 	var target: Vector3 = record["target"]
 	var forward: Vector3 = record["march_forward"]
 	var right := Vector3(forward.z, 0.0, -forward.x)
 	var slots: Dictionary = record["slots"]
 	var offsets: Dictionary = {}
-	var ranks: Dictionary = {}
 	var widest := 0.0
 	for unit in members:
 		if not slots.has(unit):
@@ -859,12 +892,11 @@ func _set_march_offsets(record: Dictionary, members: Array[Unit]) -> void:
 		var lateral: float = offset.dot(right)
 		var back: float = maxf(-offset.dot(forward), 0.0)
 		offsets[unit] = Vector2(lateral, back)
-		var rank := roundi(back * 10.0)
-		var reach: Vector2 = ranks.get(rank, Vector2.ZERO)
-		ranks[rank] = Vector2(maxf(reach.x, -lateral), maxf(reach.y, lateral))
-		widest = maxf(widest, absf(lateral))
+		## Any member can end up furthest across the route once the travel
+		## direction stops matching the facing, so probe as far as the
+		## furthest slot from the anchor in any direction.
+		widest = maxf(widest, Vector2(lateral, back).length())
 	record["offsets"] = offsets
-	record["rank_reach"] = ranks
 	record["probe_reach"] = widest + MARCH_PROBE_EXTRA
 
 func _advance_march(record: Dictionary, members: Array[Unit], delta: float) -> void:
@@ -893,16 +925,38 @@ func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
 	var map: RID = record["map"]
 	var arc: float = record["arc"]
 	var offsets: Dictionary = record["offsets"]
-	var ranks: Dictionary = record["rank_reach"]
 	var probe_reach: float = record["probe_reach"]
-	var anchor_speed: float = float(record["speed"]) * float(record["march_scale"])	## Rank key -> [left room, right room, sideways shift], probed once per rank.
-	var rank_room: Dictionary = {}
-	var lag_total := 0.0
-	var lag_count := 0
+	var anchor_speed: float = float(record["speed"]) * float(record["march_scale"])
+
+	## Every slot re-expressed against the anchor's current direction of travel
+	## rather than the facing it was laid out in, so the block keeps its world
+	## orientation however the route bends. A "rank" here is everyone at the
+	## same distance behind the anchor ALONG the route — the facing rank when
+	## the block walks straight ahead, a column's cross-section when it walks
+	## sideways — with its reach either side, so the whole thing can slide.
+	var forward: Vector3 = record["march_forward"]
+	var facing_right := Vector3(forward.z, 0.0, -forward.x)
+	var travel: Vector3 = _march_frame(record, arc)["forward"]
+	var travel_right := Vector3(travel.z, 0.0, -travel.x)
+	var placed: Dictionary = {}
+	var ranks: Dictionary = {}
 	for unit in units:
 		if not offsets.has(unit):
 			continue
-		var offset: Vector2 = offsets[unit]
+		var slot: Vector2 = offsets[unit]
+		var world := facing_right * slot.x - forward * slot.y
+		var offset := Vector2(world.dot(travel_right), -world.dot(travel))
+		placed[unit] = offset
+		var key := roundi(offset.y * 10.0)
+		var reach: Vector2 = ranks.get(key, Vector2.ZERO)
+		ranks[key] = Vector2(maxf(reach.x, -offset.x), maxf(reach.y, offset.x))
+
+	## Rank key -> [left room, right room, sideways shift], probed once per rank.
+	var rank_room: Dictionary = {}
+	var lag_total := 0.0
+	var lag_count := 0
+	for unit in placed:
+		var offset: Vector2 = placed[unit]
 		var rank := roundi(offset.y * 10.0)
 		var frame := _march_frame(record, arc - offset.y)
 		var base: Vector3 = frame["position"]
@@ -944,26 +998,24 @@ func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
 		var lag: float = lag_total / lag_count
 		record["march_scale"] = clampf(1.0 - (lag - MARCH_LAG_FREE) / (MARCH_LAG_STOP - MARCH_LAG_FREE), MARCH_MIN_SCALE, 1.0)
 
-## Position `arc` meters along the march route and the formation's heading
-## there. Negative arcs (ranks still behind the route's start) extend straight
-## back from it.
+## Position `arc` meters along the march route and the direction of travel
+## there. Arcs off either end (members still behind the route's start, or ahead
+## of the anchor when the block walks sideways) extend straight out from it.
 func _march_frame(record: Dictionary, arc: float) -> Dictionary:
 	var route: PackedVector3Array = record["route"]
 	var cumulative: Array[float] = record["cumulative"]
-	var length: float = record["length"]
-	var final_forward: Vector3 = record["march_forward"]
 	var position := _march_position(route, cumulative, arc)
-	var heading := _march_position(route, cumulative, minf(arc + MARCH_HEADING_SPAN, length)) \
+	var heading := _march_position(route, cumulative, arc + MARCH_HEADING_SPAN) \
 			- _march_position(route, cumulative, arc - MARCH_HEADING_SPAN)
 	heading.y = 0.0
-	heading = heading.normalized() if heading.length_squared() > 0.0001 else final_forward
-	var blend: float = clampf(1.0 - (length - arc) / MARCH_BLEND_DISTANCE, 0.0, 1.0)
-	if blend > 0.0:
-		var blended := heading.lerp(final_forward, blend)
-		heading = blended.normalized() if blended.length_squared() > 0.0001 else final_forward
+	heading = heading.normalized() if heading.length_squared() > 0.0001 else record["march_forward"]
 	return {"position": position, "forward": heading}
 
 func _march_position(route: PackedVector3Array, cumulative: Array[float], arc: float) -> Vector3:
+	var length: float = cumulative[cumulative.size() - 1]
+	if arc > length:
+		var end_forward: Vector3 = _route_point_at(route, cumulative, length)["forward"]
+		return route[route.size() - 1] + end_forward * (arc - length)
 	if arc >= 0.0:
 		return _route_point_at(route, cumulative, arc)["position"]
 	var start_forward: Vector3 = _route_point_at(route, cumulative, 0.0)["forward"]

@@ -22,6 +22,9 @@ const UNIT_MOVE_KEY: Key = KEY_M
 const UNIT_STOP_KEY: Key = KEY_H
 const UNIT_ATTACK_KEY: Key = KEY_F
 const UNIT_PATROL_KEY: Key = KEY_P
+## Shares G with BUILDING_HOTKEYS, which only take it while the build submenu
+## is open (checked first in _unhandled_input), so the two never collide.
+const UNIT_HOLD_KEY: Key = KEY_G
 ## Only shown/live when at least one selected unit has can_build; opens the
 ## same construction menu the idle action panel shows, reusing BUILDING_HOTKEYS
 ## for the actual building choice — safe since only one of the two menus is
@@ -1528,6 +1531,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			issue_stop_order()
 			get_viewport().set_input_as_handled()
 			return
+		elif event.keycode == UNIT_HOLD_KEY:
+			toggle_hold_position()
+			get_viewport().set_input_as_handled()
+			return
 		elif event.keycode == UNIT_ATTACK_KEY:
 			arm_attack_mode()
 			get_viewport().set_input_as_handled()
@@ -2052,6 +2059,36 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	feedback.spawn_command_popup("attack", result.position, feedback.command_speaker())
 	_update_order_path_markers(result.position, append)
 
+## Turns hold position on for the whole selection unless every selected unit
+## already holds, in which case it turns it off for all of them.
+func toggle_hold_position() -> void:
+	prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+	_rpc_set_hold_position.rpc_id(1, unit_paths, not selection_holds_position())
+	play_command_sound()
+
+func selection_holds_position() -> bool:
+	for unit in selected_units:
+		if is_instance_valid(unit) and not unit.hold_position:
+			return false
+	return not selected_units.is_empty()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_set_hold_position(unit_paths: Array[NodePath], enabled: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit != null and unit.owner_peer_id == sender_id:
+			unit.hold_position = enabled
+
 func issue_stop_order() -> void:
 	prune_selected_units()
 	if selected_units.is_empty():
@@ -2099,6 +2136,9 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## later click orders too, rather than snapping back to the selected type.
 	if target_node == null:
 		front_width = group_movement.resolve_dragged_width(units, formation_type, front_width)
+	## Resolved once here so the slots, the march and ranks closing later all
+	## share one facing (see GroupMovement.order_facing).
+	facing = group_movement.order_facing(units, world_pos, facing)
 	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type, facing, front_width)
 	## Chokepoints are handled by the march itself (see register_formation
 	## below and GroupMovement's Marching section), which squeezes the block
