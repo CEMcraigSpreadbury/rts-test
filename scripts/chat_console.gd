@@ -46,6 +46,7 @@ func send_line(peer_id: int, line: String) -> void:
 ##   as neutral enemies instead.
 ##   "cmd speed <multiplier>" runs the whole match faster or slower (single
 ##   player only), e.g. "cmd speed 4"; "cmd speed 1" puts it back.
+##   "cmd perf" toggles the movement profiling overlay (host only, see PerfStats).
 ## Commands only run when the host is a debug build or was launched with
 ## "-- --cheats"; otherwise "cmd ..." is just sent as ordinary chat.
 
@@ -148,15 +149,30 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 			var factor: float = clampf(float(parts[1]) if parts.size() > 1 else 1.0, MIN_GAME_SPEED, MAX_GAME_SPEED)
 			Engine.time_scale = factor
 			_rpc_display_chat.rpc_id(sender_id, "[debug] game speed x%s" % factor)
+		"perf":
+			## The counters are host-side (only the host simulates), so the
+			## overlay can only ever show on the host's own screen.
+			if sender_id != main.my_peer_id():
+				_rpc_display_chat.rpc_id(sender_id, "[debug] perf only works on the host")
+				return
+			var existing := main.get_node_or_null(^"PerfStats")
+			if existing:
+				existing.queue_free()
+			else:
+				var overlay := PerfStats.new()
+				overlay.name = "PerfStats"
+				main.add_child(overlay)
+			_rpc_display_chat.rpc_id(sender_id, "[debug] perf overlay %s" % ("off" if existing else "on"))
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
 
 ## --- "cmd spawn" ---
 
-## Guards against a typo like "cmd spawn soldier 3000" stalling the host.
-const MAX_DEBUG_SPAWN: int = 50
+## Guards against a typo like "cmd spawn soldier 30000" stalling the host.
+## High enough to stress-test mass movement (see "cmd perf").
+const MAX_DEBUG_SPAWN: int = 500
 const UNIT_SCENE_DIR: String = "res://scenes/units/"
 const MONSTER_SCENE_DIR: String = "res://scenes/units/monsters/"
 ## Spacing between debug-spawned units: comfortably wider than two avoidance
@@ -222,6 +238,11 @@ func _spawn_offset(index: int) -> Vector3:
 ## Unit._die releases it again. Peer 0 is neutral, owned the same way as
 ## objective guards (see Objective._setup_guard).
 func _spawn_debug_unit(peer_id: int, scene_path: String, position: Vector3) -> Unit:
+	## A big batch's spiral reaches into tree lines and buildings; units start
+	## on the nearest walkable ground instead of walled in among the trunks.
+	var nav_map: RID = main.get_world_3d().navigation_map
+	if NavigationServer3D.map_get_iteration_id(nav_map) > 0:
+		position = NavigationServer3D.map_get_closest_point(nav_map, position)
 	var unit: Unit = main.unit_spawner.spawn({
 		"scene_path": scene_path,
 		"peer_id": peer_id,

@@ -156,8 +156,7 @@ func _slot_ruler(slot: ScenarioSlot, slot_index: int) -> int:
 		return slot_index % count
 	return mini(slot.ruler_index, count - 1)
 
-## Small ids only: Unit puts each owner on avoidance layer bit
-## (owner_peer_id + 1), so a big one would fall off the 32-bit mask.
+## The lowest id from Network.FIRST_AI_PEER_ID up that isn't taken.
 func _free_peer_id(taken: Array) -> int:
 	var id: int = Network.FIRST_AI_PEER_ID
 	while taken.has(id):

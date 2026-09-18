@@ -133,6 +133,7 @@ transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, -0.012756418,
 shape = SubResource("BoxShape3D_body")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=890556865]
+avoidance_enabled = false
 transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, 0, -0.0063278675, 0)
 radius = 2.25
 height = 2.0

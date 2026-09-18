@@ -15,10 +15,9 @@ enum Type { BOX, LINE, STAGGERED }
 const DEFAULT_TYPE: Formation.Type = Type.BOX
 
 ## Spacing between adjacent slots. Every unit shares the same 0.4 capsule
-## (scenes/units/unit.tscn) and a settling formation-mate shrinks its avoidance
-## radius to Unit.FORMATION_SETTLE_RADIUS_FLOOR (0.42), so neighbours only need
-## ~0.84 between centres — this leaves roughly half a metre of slack on top for
-## avoidance to negotiate, which is enough for units to settle into their exact
+## (scenes/units/unit.tscn), so neighbours need ~0.8 between centres, and
+## separation pushes apart anything within Unit.SEPARATION_DISTANCE (0.85) —
+## this leaves room above both, so settled units stand still in their exact
 ## slots without the group reading as a sprawling grid.
 const SPACING: float = 1.3
 

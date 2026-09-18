@@ -67,9 +67,7 @@ var players: Dictionary = {}
 
 enum AiDifficulty { EASY, NORMAL, HARD }
 const AI_DIFFICULTY_NAMES: Array[String] = ["Easy", "Normal", "Hard"]
-## AI peer ids are handed out from here upward. Kept small on purpose: Unit
-## puts each owner on avoidance layer bit (owner_peer_id + 1), so a large id
-## would fall off the end of the 32-bit mask. Real ENet/Steam peers get
+## AI peer ids are handed out from here upward. Real ENet/Steam peers get
 ## random ids in the millions-to-billions, so a collision is vanishingly rare
 ## — and _on_peer_connected moves an AI out of the way if one ever happens.
 const FIRST_AI_PEER_ID: int = 2

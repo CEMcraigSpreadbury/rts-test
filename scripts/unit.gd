@@ -14,38 +14,10 @@ const CREW_DEPTH_OFFSET: float = 0.05
 ## Below this actual speed the unit is considered stopped (e.g. blocked by another unit).
 const MOVING_SPEED_THRESHOLD: float = 0.15
 const MOVE_ARRIVAL_DISTANCE: float = 0.5
-## Base avoidance footprint (also the default NavigationAgent3D.radius) —
-## see _update_formation_avoidance, which shrinks this and shifts
-## avoidance_priority for units settling into a formation slot.
+## A unit's footprint radius for group planning — the physical capsule on
+## scenes/units/unit.tscn is 0.4, plus a little room. Used by GroupMovement to
+## decide which openings a unit can fit through.
 const FORMATION_BASE_RADIUS: float = 0.45
-## _formation_progress() (0 = leg just started, 1 = arrived at slot) fraction
-## beyond which a formation-moving unit starts "settling": shrinking its
-## avoidance radius and regaining avoidance_priority as it nears its slot.
-## Below this the unit is still mid-transit like any other formation-mate.
-const FORMATION_SETTLE_PROGRESS_START: float = 0.75
-## Floor for a fully-settled unit's shrunk avoidance radius. Must stay >= the
-## physical CapsuleShape3D.radius on scenes/units/unit.tscn (0.4 there as of
-## writing) — RVO only steers neighbors this far away, but move_and_slide()
-## still enforces the real capsule regardless, so shrinking the avoidance
-## radius below the physical body would let RVO permit neighbors closer than
-## the capsule can actually tolerate, causing hard-collision pushback/jitter
-## right during the settling window this feature exists to smooth out. Kept
-## as an explicit floor (not a multiplier of FORMATION_BASE_RADIUS) so it
-## can't silently drift under the physical capsule if that radius or
-## FORMATION_BASE_RADIUS ever change independently. If unit.tscn's capsule
-## radius ever changes, update this to match (plus the small margin).
-const FORMATION_SETTLE_RADIUS_FLOOR: float = 0.42
-## avoidance_priority (0..1) a formation-moving unit runs at while still
-## mid-transit (below FORMATION_SETTLE_PROGRESS_START) — kept below the
-## default 1.0 so it yields to groupmates that have already reached/are
-## settling into their own slots, instead of every unit in the formation
-## negotiating avoidance with equal priority all at once. Note: avoidance_priority
-## is a single global NavigationAgent3D knob, not formation-scoped — while
-## traveling, this also makes the unit yield priority to any other agent it
-## encounters (unrelated units included), not just formation-mates. Judged
-## harmless: everyone sharing the same team avoidance layer/mask already
-## negotiates through this same system regardless of formation membership.
-const FORMATION_TRAVELING_AVOIDANCE_PRIORITY: float = 0.4
 ## Chokepoint funnelling (see funnel_point / _update_funnel, armed host-side by
 ## main.gd's _find_funnel_point when a formation move's route has to thread a
 ## gap narrower than the formation is wide). How close to the funnel waypoint
@@ -64,12 +36,12 @@ const FUNNEL_CLEAR_DISTANCE: float = 3.0
 ## must never be left standing at a waypoint forever, which is the one way a
 ## two-stage move can be worse than no funnelling at all.
 const FUNNEL_TIMEOUT: float = 12.0
-## Drop-off points sit outside a building's avoidance-obstacle radius, so this
+## Drop-off points sit outside a building's footprint, so this
 ## needs more slack than a plain move order to reliably register as "arrived".
 const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
 ## How much further than attack_range a target can drift before we bother re-approaching.
 const ATTACK_LEASH_SLACK: float = 1.2
-## Building footprints push agents back via avoidance same as for melee attacks.
+## Building footprints keep units back, same as for melee attacks.
 const BUILD_ARRIVAL_DISTANCE: float = 1.0
 ## Seconds a builder can spend heading to a build site without covering
 ## STUCK_MOVE_EPSILON of ground before it's treated as unreachable and
@@ -108,12 +80,12 @@ const WEAKNESS_DAMAGE_MULTIPLIER: float = 1.5
 ## it's given another order. See _find_assault_target().
 const ASSAULT_AREA_RADIUS: float = 12.0
 
-## Separation: allies never avoid each other through RVO (see
-## _update_avoidance_team) and units don't physically collide with other units,
-## so without this nothing stops two units standing in exactly the same spot —
-## which is what a melee scrum collapses into. Any two living units closer than
-## SEPARATION_DISTANCE (a little over two 0.4 body capsules) get nudged apart —
-## except that between enemies only the attacker yields (see _update_separation).
+## Separation: units have no avoidance and don't physically collide with other
+## units, so this is the only thing keeping two units from standing in exactly
+## the same spot — marching blocks, crowds and melee scrums alike. Any two
+## living units closer than SEPARATION_DISTANCE (a little over two 0.4 body
+## capsules) get nudged apart — except that a unit is never pushed by an enemy
+## that is attacking it (see _update_separation).
 ## Only overlapping bodies are pushed, so formation slots (Formation.SPACING
 ## apart) and melee contact (attack_range apart) are never disturbed by it.
 const SEPARATION_DISTANCE: float = 0.85
@@ -229,15 +201,9 @@ signal status_applied(dot_seconds: float, slow_seconds: float, stun_seconds: flo
 		team_tint = value
 		_update_team_tint_visual()
 ## Which player controls this unit. The host is always peer 1.
-## Setter keeps NavigationAgent3D avoidance layers in sync with ownership (see
-## _update_avoidance_team below) so a captured Objective guard immediately
-## stops being avoidance-blocked by its old enemies and starts being ignored
-## by its new allies, instead of only applying once in _ready().
 @export var owner_peer_id: int = 1:
 	set(value):
 		owner_peer_id = value
-		if nav_agent:
-			_update_avoidance_team()
 		_update_team_tint_visual()
 
 ## How much an enemy's team_tint still shows through — kept well under 1.0 so
@@ -867,6 +833,11 @@ var dragged_formation: Dictionary = {}
 ## non-formation order. An idle unit turns back to it, so a block stands facing
 ## its front however it walked there and the next order reads that front.
 var formation_facing: Vector3 = Vector3.ZERO
+## Host-only. The formation group (see formation_group) whose move this unit
+## finished — at its slot, or settled short of one it couldn't reach — so
+## GroupMovement's ranks-closing knows it's standing in its place even after
+## separation has nudged it about. Cleared by the next move leg.
+var arrived_group: Array[Unit] = []
 
 ## Formation marching state (see GroupMovement's Marching section) — host-only.
 ## While _march_active the unit holds its place relative to the group's moving
@@ -882,11 +853,40 @@ var _march_final_target: Vector3 = Vector3.ZERO
 const MARCH_DIRECT_DISTANCE: float = 2.0
 ## How hard a marching unit is pulled back onto its point, per meter off it.
 const MARCH_CORRECTION_GAIN: float = 2.0
+## A marching unit more than MARCH_CATCH_UP_DISTANCE off its point hurries at
+## this multiple of its speed — the anchor walks at nearly full pace, so at
+## normal speed a straggler that went round an obstacle would barely gain on it.
+const MARCH_CATCH_UP_SPEED: float = 1.3
+const MARCH_CATCH_UP_DISTANCE: float = 1.0
 ## How far the marching point may drift from the nav target before re-pathing.
-const MARCH_REPATH_DISTANCE: float = 1.0
-## Fewest milliseconds between those re-paths — each is a full navmesh query.
-const MARCH_REPATH_INTERVAL_MS: int = 500
-var _march_repath_at: int = 0
+## The path only has to get the unit round whatever it's stuck behind — once
+## it's finished the unit closes the rest straight — so it can go a while stale.
+const MARCH_REPATH_DISTANCE: float = 2.0
+## Fewest seconds between those re-paths — each is a full navmesh query, and
+## a block flowing round a wood has a hundred members pathing at once. Game
+## time, so it holds at any frame rate or game speed.
+const MARCH_REPATH_INTERVAL: float = 1.0
+var _march_recheck_in: float = 0.0
+## Pathing to its marching point rather than steering straight at it (see
+## _march_desired_velocity).
+var _march_pathing: bool = false
+
+## Path-query gating (see PathBudget). The agent only searches for a path when
+## asked for its next waypoint, so the two places that ask go through
+## _path_ready() first: a target the agent hasn't pathed to yet waits for its
+## turn in the budget, and meanwhile the unit steers straight at it.
+## The target the agent last computed a path to.
+var _path_target: Vector3 = Vector3.INF
+## repath() re-issues the same target on purpose, which the comparison above
+## can't see.
+var _path_stale: bool = false
+## Waiting in PathBudget's queue / cleared to query on this or the next tick.
+var _path_queued: bool = false
+## Physics frame PathBudget gave this unit its turn on, or -1.
+var _path_granted_frame: int = -1
+## The navigation map iteration the agent's path was computed on (see
+## PathBudget.map_iteration).
+var _path_iteration: int = -1
 
 const COHESION_RECHECK_INTERVAL: float = 0.2
 ## Most groupmates a unit averages over per recheck (see _update_cohesion).
@@ -972,7 +972,7 @@ var _reach_blocked: bool = false
 ## Earliest Time.get_ticks_msec() this unit may call allies in again (see take_damage).
 var _next_alert_ms: int = 0
 ## How long this unit's move path has been over without reaching its target
-## (see _on_velocity_computed), and how long that's allowed before it gives up.
+## (see _apply_velocity), and how long that's allowed before it gives up.
 var _path_end_timer: float = 0.0
 const PATH_END_GIVE_UP: float = 1.0
 var attack_timer: float = 0.0
@@ -1028,6 +1028,7 @@ func clear_order_queue() -> void:
 ## out on an empty formation_group.
 func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> void:
 	formation_group = group
+	arrived_group = []
 	if group.is_empty():
 		formation_facing = Vector3.ZERO
 	formation_initial_distance = global_position.distance_to(target_position) if not group.is_empty() else 0.0
@@ -1107,7 +1108,7 @@ var _cast_ability_index: int = -1
 var _cast_target: Vector3 = Vector3.ZERO
 var _cast_approach_time: float = 0.0
 ## A freshly issued move_to() can read as navigation-finished for a frame or
-## two before its path exists (see _on_velocity_computed), so a cast approach
+## two before its path exists (see _apply_velocity), so a cast approach
 ## doesn't give up on an unreachable target until this long has passed.
 const CAST_GIVE_UP_GRACE: float = 0.3
 ## Host-only. Abilities whose cast animation has started but that haven't
@@ -1164,43 +1165,31 @@ func _ready() -> void:
 	## leaving it (and falling) each time the slope steepens.
 	floor_snap_length = 0.4
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
-	nav_agent.radius = FORMATION_BASE_RADIUS
-	nav_agent.avoidance_priority = 1.0
-	nav_agent.max_speed = move_speed
+	## The agent re-runs its path query by itself once the unit is this far off
+	## its path, which goes round PathBudget — a marching unit that followed its
+	## anchor away from an old catch-up path set off hundreds at once. Wedged
+	## units re-path through the budget instead (see _track_blocked).
+	nav_agent.path_max_distance = 1000.0
+	## No RVO avoidance: it ran every agent (and every tree's obstacle) through
+	## the avoidance solver each physics frame and answered through a callback,
+	## which didn't scale to armies. The agent only plans paths now; units keep
+	## apart with _update_separation and steer in _physics_tick directly.
+	nav_agent.avoidance_enabled = false
 	## The agent's target defaults to the world origin, which repath() would
 	## otherwise re-issue after the first navmesh rebake — sending every idle
 	## unit walking to the middle of the map.
 	nav_agent.target_position = global_position
-	_update_avoidance_team()
+	if is_multiplayer_authority() and OS.is_debug_build():
+		nav_agent.path_changed.connect(_on_path_changed)
 
-	## Puppets (non-authority peers) never call set_velocity(), but avoidance
-	## keeps emitting velocity_computed on its own once enabled regardless of
-	## authority. status_activity isn't replicated, so a puppet's copy always
-	## reads as IDLE and this callback would otherwise force the animation back
-	## to idle every frame, fighting the animation RPCs from the real owner.
-	if is_multiplayer_authority():
-		nav_agent.avoidance_enabled = true
-		nav_agent.velocity_computed.connect(_on_velocity_computed)
+func _on_path_changed() -> void:
+	if PerfStats.enabled:
+		PerfStats.count_path()
 
 func _exit_tree() -> void:
 	if is_monarch:
 		monarch_count -= 1
 		is_monarch = false
-
-## Same-team units broadcast on (and only avoid) their own owner_peer_id's
-## avoidance layer, so allies can freely overlap/squeeze past each other in a
-## tight chokepoint (e.g. a narrow ramp) instead of RVO treating every nearby
-## unit, ally or not, as something to steer around and deadlocking. Enemies
-## still avoid each other normally since they're never on the same layer.
-func _update_avoidance_team() -> void:
-	## +1 so peer 0 (neutral units, e.g. Objective guards) doesn't land on bit
-	## 1 — the default avoidance layer every building's NavigationObstacle3D
-	## uses (never explicitly set). Clearing only this unit's own bit from its
-	## mask leaves that shared obstacle layer untouched for every team, so
-	## units of any owner still avoid buildings/terrain normally.
-	var team_bit: int = 1 << (owner_peer_id + 1)
-	nav_agent.avoidance_layers = team_bit
-	nav_agent.avoidance_mask = ~team_bit
 
 ## Raw navigation command; prefer command_move / command_gather / command_attack which also manage status.
 func move_to(target_position: Vector3) -> void:
@@ -1220,6 +1209,51 @@ func repath() -> void:
 		return
 	var target: Vector3 = nav_agent.target_position
 	nav_agent.target_position = target
+	_path_stale = true
+
+## True when the agent may be asked about its path this tick — its path is
+## already for the current target, or PathBudget has just given this unit its
+## turn to compute one. Otherwise queues the unit (once) and returns false.
+## Gates is_navigation_finished() as well as get_next_path_position(): both
+## run the path query themselves whenever the target has changed. An empty
+## path counts as not ready too, since the agent re-queries an empty path on
+## every call (a unit stuck off the navmesh would otherwise search each frame).
+func _path_ready() -> bool:
+	var target: Vector3 = nav_agent.target_position
+	var iteration := PathBudget.map_iteration(nav_agent.get_navigation_map())
+	if not _path_stale and target == _path_target and iteration == _path_iteration \
+			and not nav_agent.get_current_navigation_path().is_empty():
+		return true
+	PathBudget.serve()
+	if _path_granted_frame >= 0:
+		var fresh: bool = _path_granted_frame >= Engine.get_physics_frames() - 1
+		_path_granted_frame = -1
+		_path_queued = false
+		## A turn only counts on the tick it's given or the next. An unused one
+		## (a marching unit that stopped needing its path) would otherwise sit
+		## there until the next retarget, and a whole army spending theirs on
+		## the same tick — every member released at the end of a march — is
+		## exactly the burst the budget exists to prevent.
+		if fresh:
+			_path_stale = false
+			_path_target = target
+			_path_iteration = iteration
+			return true
+	if not _path_queued:
+		_path_queued = true
+		PathBudget.enqueue(self)
+	return false
+
+## is_navigation_finished() through the path budget: a target that's still
+## waiting for its path isn't finished.
+func _nav_finished() -> bool:
+	return _path_ready() and nav_agent.is_navigation_finished()
+
+## Flat direction to the nav target, for steering while a path is still queued.
+func _straight_direction() -> Vector3:
+	var direction := nav_agent.target_position - global_position
+	direction.y = 0.0
+	return direction.normalized() if direction.length_squared() > 0.0001 else Vector3.ZERO
 
 func command_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD:
@@ -1247,7 +1281,7 @@ func set_funnel_waypoint(point: Vector3, forward: Vector3) -> void:
 	var final_target: Vector3 = nav_agent.target_position
 	## Re-baselines cohesion onto the leg this unit is actually walking now
 	## (here -> gap) rather than leaving it pointed at the far-side slot. Both
-	## _update_cohesion and _update_formation_avoidance read progress as
+	## _update_cohesion and _formation_progress read progress as
 	## 1 — nav_agent.distance_to_target() / formation_initial_distance, so a
 	## baseline measured to the distant slot while nav_agent steers at the much
 	## nearer gap would read as "nearly arrived" from the first frame. Giving
@@ -1285,6 +1319,11 @@ func set_march_target(point: Vector3, anchor_velocity: Vector3) -> void:
 	if not _march_active:
 		_march_final_target = nav_agent.target_position
 		_march_active = true
+		## A fresh march may re-path to its point straight away, rather than
+		## wait out a timer left over from an earlier one and meanwhile ask
+		## the agent about the far-off slot it's still targeting.
+		_march_recheck_in = 0.0
+		_march_pathing = false
 	_march_point = point
 	_march_velocity = anchor_velocity
 
@@ -1301,17 +1340,52 @@ func end_march() -> void:
 func _march_desired_velocity(max_speed: float) -> Vector3:
 	var to_point := _march_point - global_position
 	to_point.y = 0.0
-	if to_point.length() > MARCH_DIRECT_DISTANCE:
-		if nav_agent.target_position.distance_to(_march_point) > MARCH_REPATH_DISTANCE \
-				and Time.get_ticks_msec() >= _march_repath_at:
-			_march_repath_at = Time.get_ticks_msec() + MARCH_REPATH_INTERVAL_MS
-			nav_agent.target_position = _march_point
-		if not nav_agent.is_navigation_finished():
-			var next := nav_agent.get_next_path_position() - global_position
+	if to_point.length() > MARCH_CATCH_UP_DISTANCE:
+		max_speed *= MARCH_CATCH_UP_SPEED
+	if to_point.length() <= MARCH_DIRECT_DISTANCE:
+		_march_pathing = false
+		_march_recheck_in = 0.0
+	else:
+		## Every MARCH_REPATH_INTERVAL: walk straight back if nothing's in the
+		## way (most stragglers), and only path — a full navmesh query — when
+		## something is. Starting to path afresh always re-targets: the agent
+		## may still hold a path to wherever the point was the last time.
+		_march_recheck_in -= get_physics_process_delta_time()
+		if _march_recheck_in <= 0.0:
+			_march_recheck_in = MARCH_REPATH_INTERVAL
+			var was_pathing := _march_pathing
+			_march_pathing = not _line_walkable(_march_point)
+			if _march_pathing and (not was_pathing \
+					or nav_agent.target_position.distance_to(_march_point) > MARCH_REPATH_DISTANCE):
+				nav_agent.target_position = _march_point
+		if _march_pathing and _path_ready() and not nav_agent.is_navigation_finished():
+			_path_waypoint = nav_agent.get_next_path_position()
+			var next := _path_waypoint - global_position
 			next.y = 0.0
 			if next.length_squared() > 0.0001:
 				return next.normalized() * max_speed
 	return (_march_velocity + to_point * MARCH_CORRECTION_GAIN).limit_length(max_speed)
+
+## Whether the straight line from here to `to` stays on walkable ground,
+## sampled along the navmesh index (each sample hinted with the last one's
+## polygon, so it's mostly one polygon test apiece). Lines longer than
+## LINE_CHECK_MAX count as blocked — past that a path is worth its cost anyway.
+const LINE_CHECK_MAX: float = 12.0
+const LINE_CHECK_STEP: float = 0.5
+func _line_walkable(to: Vector3) -> bool:
+	var walkability := NavWalkability.current
+	if walkability == null:
+		return false
+	var distance := _flat_distance(global_position, to)
+	if distance > LINE_CHECK_MAX:
+		return false
+	var steps: int = maxi(1, ceili(distance / LINE_CHECK_STEP))
+	var poly := _walk_poly
+	for step in range(1, steps + 1):
+		poly = walkability.polygon_at(global_position.lerp(to, float(step) / steps), poly)
+		if poly < 0:
+			return false
+	return true
 
 func _funnel_can_arm() -> bool:
 	return status_activity == Activity.MOVING \
@@ -1582,6 +1656,7 @@ func execute_teleport_ability(ability: Ability, target_pos: Vector3) -> void:
 				or ally.global_position.distance_to(old_position) > ability.affected_ally_radius):
 			continue
 		ally.global_position += delta
+		ally._grounded = false
 		## Clears any in-flight path the same way command_stop() does, so a
 		## teleported unit doesn't immediately try to walk back to where it
 		## was heading from its old position.
@@ -1660,7 +1735,7 @@ func _tick_cast_approach(delta: float) -> void:
 	_cast_approach_time += delta
 	## Navigation ended short of range: the target point can't be reached
 	## (a cliff, the far side of a wall), so give up rather than stand forever.
-	if nav_agent.is_navigation_finished() and _cast_approach_time > CAST_GIVE_UP_GRACE:
+	if _nav_finished() and _cast_approach_time > CAST_GIVE_UP_GRACE:
 		_end_cast_command()
 
 func _perform_cast() -> void:
@@ -1956,11 +2031,21 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 			_next_alert_ms = now + CombatUtils.ALERT_INTERVAL_MS
 			CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
 
+## Timed wrapper for PerfStats ("cmd perf"); the real tick is _physics_tick.
 func _physics_process(delta: float) -> void:
+	if not PerfStats.enabled:
+		_physics_tick(delta)
+		return
+	var start := Time.get_ticks_usec()
+	_physics_tick(delta)
+	PerfStats.add_unit_time(Time.get_ticks_usec() - start)
+
+func _physics_tick(delta: float) -> void:
 	## Only the host simulates movement/gathering/combat; other peers just display
 	## the position/animation replicated by this unit's MultiplayerSynchronizer.
 	if not is_multiplayer_authority():
 		return
+	_path_waypoint = Vector3.INF
 
 	## Runs even if this unit just died — an arrow already in the air should
 	## still land rather than vanish because its shooter is gone.
@@ -1972,10 +2057,12 @@ func _physics_process(delta: float) -> void:
 		_slide()
 		return
 
-	if not is_on_floor():
-		velocity.y -= GRAVITY * delta
-	else:
+	## Following the terrain directly (see _slide) keeps a unit on the ground
+	## by construction; only the move_and_slide() fallback needs gravity.
+	if GroundHeight.terrain(get_tree()) != null or is_on_floor():
 		velocity.y = 0.0
+	else:
+		velocity.y -= GRAVITY * delta
 
 	_tick_status_effects(delta)
 	if status_activity == Activity.DEAD:
@@ -1990,13 +2077,12 @@ func _physics_process(delta: float) -> void:
 	if _stun_remaining > 0.0:
 		velocity.x = 0.0
 		velocity.z = 0.0
-		## Avoidance keeps re-emitting the last requested velocity (see
-		## _on_velocity_computed), which would otherwise keep walking the unit.
-		nav_agent.set_velocity(Vector3.ZERO)
-		## Those activities ignore the avoidance callback and so never get its
-		## move_and_slide(); everything else gets one from the callback.
+		## Those activities manage their own animation and slide; everything
+		## else goes through the normal movement step, standing still.
 		if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.CASTING:
 			_slide()
+		else:
+			_apply_velocity(Vector3.ZERO)
 		return
 
 	if status_activity == Activity.CASTING:
@@ -2033,23 +2119,23 @@ func _physics_process(delta: float) -> void:
 		_slide()
 		return
 
-	if status_activity == Activity.TO_RESOURCE and nav_agent.is_navigation_finished():
+	if status_activity == Activity.TO_RESOURCE and _nav_finished():
 		_start_gathering()
-	elif status_activity == Activity.TO_DROPOFF and nav_agent.is_navigation_finished():
+	elif status_activity == Activity.TO_DROPOFF and _nav_finished():
 		_deposit_and_continue()
 	elif status_activity == Activity.TO_TARGET:
 		## Straight-line reach counts as arrived too: in a scrum the path can't
 		## finish (bodies in the way keep the agent short of its nav target)
 		## even though the target is already within swing. A rank behind the
 		## front one waits instead (see _melee_reach_blocked).
-		if not _update_reach_blocked(delta) and (nav_agent.is_navigation_finished() or _target_in_reach()):
+		if not _update_reach_blocked(delta) and (_nav_finished() or _target_in_reach()):
 			_start_attacking()
 		else:
 			_tick_chase(delta)
 			_tick_approach_threats(delta)
 			_tick_melee_overflow(delta)
 	elif status_activity == Activity.TO_BUILD_SITE:
-		if nav_agent.is_navigation_finished():
+		if _nav_finished():
 			_start_building()
 		else:
 			_tick_build_approach(delta)
@@ -2104,31 +2190,48 @@ func _physics_process(delta: float) -> void:
 				if enemy:
 					command_attack(enemy, true)
 
+	## Standing idle with no order and nothing shoving it — most of an army,
+	## most of the time — there's no steering, path or arrival work to do. It
+	## still turns to hold its formation's front, and still gets pushed apart.
+	if status_activity == Activity.IDLE and status_command == Command.NONE:
+		_update_separation(delta)
+		if _separation_velocity == Vector3.ZERO:
+			velocity.x = 0.0
+			velocity.z = 0.0
+			if formation_facing != Vector3.ZERO:
+				var front_angle: float = atan2(formation_facing.x, formation_facing.z)
+				if absf(angle_difference(rotation.y, front_angle)) > 0.01:
+					rotation.y = lerp_angle(rotation.y, front_angle, rotation_speed * delta)
+			if sprite.sprite_frames:
+				_set_animation("idle")
+			_slide()
+			return
+
 	## Before the steering read below, so a unit released from its funnel
 	## waypoint this frame immediately starts steering at its real slot instead
 	## of spending one more frame closing on a waypoint it's already through.
 	_update_funnel(delta)
 
+	## A marching unit steers off its anchor (see _march_desired_velocity), so
+	## it never asks for the path to its far-off slot — that query is a full
+	## cross-map search per unit, for a result the march would throw away.
 	var direction := Vector3.ZERO
-	if not nav_agent.is_navigation_finished():
-		var next_pos: Vector3 = nav_agent.get_next_path_position()
-		direction = next_pos - global_position
-		direction.y = 0.0
-		if direction.length_squared() > 0.0001:
-			direction = direction.normalized()
+	if not _march_active:
+		if not _path_ready():
+			direction = _straight_direction()
+		elif not nav_agent.is_navigation_finished():
+			var next_pos: Vector3 = nav_agent.get_next_path_position()
+			_path_waypoint = next_pos
+			direction = next_pos - global_position
+			direction.y = 0.0
+			if direction.length_squared() > 0.0001:
+				direction = direction.normalized()
 
 	## Units always travel at their own full speed, even in a mixed group —
 	## no slowest-member cap (formation_speed) and no cohesion throttle.
 	var effective_speed: float = move_speed
 	var buff_speed := _buff_speed_multiplier()
 	effective_speed *= _slow_multiplier() * buff_speed
-	## The agent clamps what avoidance hands back to max_speed, so a speed-up
-	## (Charge!) has to lift the cap too or it would never show. Each set is a
-	## NavigationServer call, so only on a real change.
-	var speed_cap: float = move_speed * maxf(buff_speed, 1.0)
-	if nav_agent.max_speed != speed_cap:
-		nav_agent.max_speed = speed_cap
-	_update_formation_avoidance()
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	if _march_active:
 		desired_velocity = _march_desired_velocity(effective_speed)
@@ -2136,11 +2239,8 @@ func _physics_process(delta: float) -> void:
 	## into the backs of the units already fighting.
 	if status_activity == Activity.TO_TARGET and _reach_blocked:
 		desired_velocity = Vector3.ZERO
-	## Added after avoidance (see _on_velocity_computed), not into the desired
-	## velocity: RVO boxed in by enemies returns a near-zero safe velocity and
-	## would cancel the push, leaving stacked units stacked.
 	_update_separation(delta)
-	nav_agent.set_velocity(desired_velocity)
+	_apply_velocity(desired_velocity)
 
 ## Push away from any living unit overlapping this one (see SEPARATION_DISTANCE).
 ## Units sitting on exactly the same point part along a per-unit fixed angle so
@@ -2154,10 +2254,12 @@ func _update_separation(delta: float) -> Vector3:
 	for other in UnitGrid.units_near(get_tree(), global_position, SEPARATION_DISTANCE):
 		if other == self:
 			continue
-		## An enemy only pushes the unit going for it, never the other way round:
-		## otherwise every attacker crowding a target sums into one big shove and
-		## a mobbed unit gets bulldozed across the field.
-		if Teams.is_enemy(owner_peer_id, other.owner_peer_id) and other != attack_target:
+		## Enemies shove each other like anyone else, except that an enemy
+		## attacking this unit doesn't push it: every attacker crowding a target
+		## would otherwise sum into one big shove and bulldoze a mobbed unit
+		## across the field. The attacker still yields to its target, and a
+		## pair fighting each other push both ways.
+		if Teams.is_enemy(owner_peer_id, other.owner_peer_id) and other.attack_target == self and other != attack_target:
 			continue
 		var away := global_position - other.global_position
 		away.y = 0.0
@@ -2286,39 +2388,6 @@ func _update_cohesion(delta: float, base_speed: float) -> void:
 
 	_cohesion_speed_scale = move_toward(_cohesion_speed_scale, _cohesion_target_speed_scale, COHESION_SCALE_LERP_RATE * delta)
 
-## Formation-mates settling into their slots get avoidance priority back over
-## ones still mid-transit, and shrink their own avoidance radius, so a tight
-## formation (e.g. a Box at SPACING) settles slot-by-slot instead of every
-## unit negotiating RVO avoidance with every other at equal footing all at
-## once (the visible jostling/stutter this exists to fix). Deliberately reuses
-## _formation_progress() (already computed for cohesion) rather than adding
-## new per-unit state or touching formation shape/rank data — "close to my
-## own slot" is a good enough proxy for "front rank / about to settle"
-## without needing main.gd to hand down explicit rank info. Resets to the
-## base footprint/priority the instant formation_group is cleared (order
-## completion, retarget, or a non-formation command), so it never lingers
-## once a unit is done treating this as a formation leg.
-func _update_formation_avoidance() -> void:
-	if formation_group.is_empty():
-		_set_avoidance(FORMATION_BASE_RADIUS, 1.0)
-		return
-	## The progress cached at the last cohesion recheck, not a fresh
-	## remaining-path walk every frame — this runs for every unit every frame.
-	var progress: float = _cohesion_progress
-	if progress < FORMATION_SETTLE_PROGRESS_START:
-		_set_avoidance(FORMATION_BASE_RADIUS, FORMATION_TRAVELING_AVOIDANCE_PRIORITY)
-		return
-	var t: float = clampf((progress - FORMATION_SETTLE_PROGRESS_START) / (1.0 - FORMATION_SETTLE_PROGRESS_START), 0.0, 1.0)
-	_set_avoidance(lerpf(FORMATION_BASE_RADIUS, FORMATION_SETTLE_RADIUS_FLOOR, t),
-			lerpf(FORMATION_TRAVELING_AVOIDANCE_PRIORITY, 1.0, t))
-
-## Each set on the agent is a NavigationServer call, so only on a real change.
-func _set_avoidance(radius: float, priority: float) -> void:
-	if absf(nav_agent.radius - radius) > 0.005:
-		nav_agent.radius = radius
-	if absf(nav_agent.avoidance_priority - priority) > 0.01:
-		nav_agent.avoidance_priority = priority
-
 ## 0 (just started) to 1 (arrived) fraction of this unit's straight-line
 ## distance-to-slot at the start of this leg (see _set_formation_cohesion)
 ## that its actual remaining nav path distance now represents — used instead
@@ -2329,16 +2398,17 @@ func _formation_progress() -> float:
 		return 1.0
 	return clampf(1.0 - nav_agent.distance_to_target() / formation_initial_distance, 0.0, 1.0)
 
-func _on_velocity_computed(safe_velocity: Vector3) -> void:
-	## NavigationAgent3D's avoidance keeps emitting this every physics frame once
-	## armed, even after we stop calling set_velocity() — so states that manage
-	## their own animation/velocity (and already call move_and_slide() themselves)
-	## must ignore these stale callbacks rather than have them stomp the animation.
+## The movement step for every activity that walks: applies `desired` plus the
+## separation push, turns and animates the unit, slides it, and notices a
+## finished move/patrol leg. Activities that manage their own animation and
+## slide (and one that switched into them earlier this tick, e.g. a chase that
+## just started attacking) are left alone.
+func _apply_velocity(desired: Vector3) -> void:
 	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD or status_activity == Activity.CASTING:
 		return
 
-	velocity.x = safe_velocity.x + _separation_velocity.x
-	velocity.z = safe_velocity.z + _separation_velocity.z
+	velocity.x = desired.x + _separation_velocity.x
+	velocity.z = desired.z + _separation_velocity.z
 
 	var flat_speed := Vector2(velocity.x, velocity.z).length()
 	var is_moving := flat_speed > MOVING_SPEED_THRESHOLD
@@ -2357,7 +2427,7 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 
 	## Gated on Activity.MOVING specifically (not just nav-finished) because
 	## PATROL stays Command.PATROL while chasing/fighting (Activity.TO_TARGET/
-	## ATTACKING) too — this callback fires every physics frame regardless of
+	## ATTACKING) too — this runs every physics frame regardless of
 	## activity, and without this gate, a patrolling unit closing to within
 	## attack range of its target would look "finished navigating" while still
 	## mid-chase and get yanked into _advance_patrol() before _start_attacking()
@@ -2380,12 +2450,28 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 	## been over for PATH_END_GIVE_UP counts as arrived wherever it left the unit.
 	## A marching unit's nav target is only its marching point, not the order's
 	## destination — reaching it isn't arriving (see end_march).
-	var path_over := status_activity == Activity.MOVING and nav_agent.is_navigation_finished() and not _march_active
+	var path_over := status_activity == Activity.MOVING and not _march_active and _nav_finished()
 	var at_target := path_over and global_position.distance_to(nav_agent.target_position) <= nav_agent.target_desired_distance + 0.5
+	## Standing on the spot counts whatever the agent says: slots carry the
+	## clicked point's height, so on uneven ground a unit exactly on its slot
+	## can be further than target_desired_distance from it in 3D and the agent
+	## never reports the path finished.
+	if status_activity == Activity.MOVING and not _march_active \
+			and _flat_distance(global_position, nav_agent.target_position) <= nav_agent.target_desired_distance:
+		at_target = true
+	## Wedged against whatever its slot is in or against (see BLOCKED_GIVE_UP_TIME).
+	var wedged := status_activity == Activity.MOVING and not _march_active and _blocked_time >= BLOCKED_GIVE_UP_TIME \
+			and _flat_distance(global_position, nav_agent.target_position) <= BLOCKED_ARRIVAL_RADIUS
 	_path_end_timer = _path_end_timer + get_physics_process_delta_time() if path_over and not at_target else 0.0
-	if at_target or _path_end_timer >= PATH_END_GIVE_UP:
+	var gave_up := wedged or _path_end_timer >= PATH_END_GIVE_UP
+	if at_target or gave_up:
 		_path_end_timer = 0.0
 		if status_command == Command.MOVE or status_command == Command.ATTACK_MOVE:
+			## Where it stopped is its place in the formation now — without this
+			## GroupMovement's ranks-closing reads a unit that settled short of
+			## an unreachable slot, or was shoved off its slot by a crowding
+			## neighbour, as lost and re-orders the whole group, over and over.
+			arrived_group = formation_group
 			## Reset status_command too, not just status_activity — otherwise
 			## a unit that has ever finished a move order (including every
 			## unit that walks to a rally point right after spawning) stays
@@ -2407,21 +2493,35 @@ func _on_velocity_computed(safe_velocity: Vector3) -> void:
 ## networked value decided by whoever owns the unit — every peer (including
 ## the host) must derive it locally, every frame, from the unit's already-synced
 ## world rotation plus that peer's own current camera.
+## Timed wrapper for PerfStats ("cmd perf"); the real per-frame visuals are
+## _process_visuals.
 func _process(delta: float) -> void:
+	if not PerfStats.enabled:
+		_process_visuals(delta)
+		return
+	var start := Time.get_ticks_usec()
+	_process_visuals(delta)
+	PerfStats.add_section(&"unit visuals", Time.get_ticks_usec() - start)
+
+func _process_visuals(delta: float) -> void:
 	_update_health_bar_visual()
 	_update_status_visuals(delta)
 	## Driven off the sprite's own already-cross-peer-correct animation state
 	## (see _set_animation/animation_changed) rather than status_activity or
 	## raw velocity directly — those are only reliable on the authoritative
 	## peer, while every peer already shows the right walk/idle animation.
+	var in_view := visible and _in_camera_view()
+	## Only where someone can see it: every unit carries its own particle
+	## system, each a GPU dispatch and a draw every frame it runs, and a whole
+	## army starts walking on the same click.
 	if walk_dust:
-		var walking: bool = sprite.animation == &"walk"
+		var walking: bool = sprite.animation == &"walk" and in_view 				and (not is_instance_valid(_view_camera) 				or _view_camera.global_position.distance_squared_to(global_position) <= WALK_DUST_MAX_DISTANCE * WALK_DUST_MAX_DISTANCE)
 		if walk_dust.emitting != walking:
 			walk_dust.emitting = walking
 
-	## Hidden by fog: nobody can see which way it's flipped, and it's worked
-	## out again the frame it shows.
-	if not visible:
+	## Hidden by fog or off screen: nobody can see which way it's flipped, and
+	## it's worked out again the frame it shows.
+	if not in_view:
 		return
 	var cam_right := _camera_right_vector()
 	if cam_right == Vector3.ZERO:
@@ -2471,6 +2571,26 @@ func _update_crew_sprite(cam_right: Vector3) -> void:
 ## frame looks it up and the rest reuse it.
 static var _camera_right_frame: int = -1
 static var _camera_right: Vector3 = Vector3.ZERO
+
+## Walk dust only kicks up this close to the camera (see _process_visuals).
+const WALK_DUST_MAX_DISTANCE: float = 45.0
+## Slightly past the frustum, so a sprite half over the screen edge still counts.
+const VIEW_MARGIN: float = 2.0
+static var _view_camera_frame: int = -1
+static var _view_camera: Camera3D = null
+
+## Whether this unit is on screen for the local camera — looked up once per
+## frame and shared, like _camera_right_vector. True with no camera at all.
+func _in_camera_view() -> bool:
+	var frame := Engine.get_process_frames()
+	if frame != _view_camera_frame:
+		_view_camera_frame = frame
+		_view_camera = get_viewport().get_camera_3d()
+	if not is_instance_valid(_view_camera):
+		return true
+	if _view_camera.is_position_in_frustum(global_position):
+		return true
+	return _view_camera.is_position_in_frustum(global_position + Vector3.UP * VIEW_MARGIN)
 
 func _camera_right_vector() -> Vector3:
 	var frame := Engine.get_process_frames()
@@ -2665,10 +2785,10 @@ func _end_gather_command() -> void:
 
 ## --- Combat ---
 
-## Buildings have a large NavigationObstacle3D footprint that keeps agents
-## pushed back well beyond a typical melee attack_range, so units must count
-## that footprint as part of "close enough" or they'd approach, get stopped
-## by avoidance short of attack_range, and never actually start attacking.
+## Buildings are carved out of the navmesh with their footprint, so paths end
+## well beyond a typical melee attack_range; units must count that footprint
+## as part of "close enough" or they'd approach, stop at the carved edge short
+## of attack_range, and never actually start attacking.
 func _effective_attack_range() -> float:
 	if attack_target is ProductionBuilding:
 		return attack_range + attack_target.get_footprint_radius()
@@ -3101,11 +3221,9 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_score := INF
 	var melee := _counts_as_melee()
-	for node in UnitGrid.units_near(get_tree(), global_position, search_range):
-		if node == self or not (node is Unit):
-			continue
+	for node in UnitGrid.enemies_near(get_tree(), global_position, search_range, owner_peer_id):
 		var other: Unit = node
-		if not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or not _is_target_alive(other):
+		if not _is_target_alive(other):
 			continue
 		## Overkill guard: a target that already has enough arrows in the air to
 		## kill it isn't worth another shot. Skipping it here is what spreads a
@@ -3245,12 +3363,151 @@ func _death_squash(target_scale: Vector3, strength: float) -> void:
 	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, DEATH_LAND_SQUASH_DURATION) \
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
-## move_and_slide() is a full collision sweep against the terrain — by far the
-## most expensive thing a unit does each tick — and a grounded unit that isn't
-## moving (most of a battle line, stood fighting) gets nothing from it.
-## is_on_floor() is as of the last real slide, which is still true for a unit
-## that hasn't moved since.
+## Ground-following state (see _slide). _grounded: standing at the terrain's
+## height since the last move — cleared when the unit is placed somewhere by
+## hand (teleport). _walk_poly: the navmesh polygon (in _walk_index, the
+## NavWalkability it indexes into) the unit was last standing in, or -1.
+var _grounded: bool = false
+var _walk_poly: int = -1
+var _walk_index: NavWalkability = null
+
+## How far a blocked step is turned, either side, looking for walkable ground
+## to slide along (see _ground_step).
+const EDGE_SLIDE_ANGLES: Array[float] = [PI / 6.0, PI / 3.0, PI * 0.47]
+## A unit whose step keeps getting stopped or turned hard aside is wedged —
+## typically a separation shove left the straight line to its next waypoint
+## cutting through a tree's carved-out corner. After this long it re-paths from
+## where it actually is (a fresh path is always walkable from its start), and
+## again every BLOCKED_REPATH_INTERVAL while still wedged.
+const BLOCKED_REPATH_TIME: float = 0.4
+const BLOCKED_REPATH_INTERVAL: float = 1.5
+## A move order still wedged this long within BLOCKED_ARRIVAL_RADIUS of its
+## target counts as arrived — its slot is in or against something it can't
+## stand in, the same as a path that ends short (see PATH_END_GIVE_UP).
+const BLOCKED_GIVE_UP_TIME: float = 1.5
+const BLOCKED_ARRIVAL_RADIUS: float = 2.5
+## Still wedged this long and the unit is somewhere no path gets it out of —
+## a pocket of ground walled in by trees. It is let through unclamped for
+## BLOCKED_ESCAPE_DURATION, squeezing between the trunks the way a collision
+## capsule could.
+const BLOCKED_ESCAPE_TIME: float = 3.0
+const BLOCKED_ESCAPE_DURATION: float = 1.0
+## The path waypoint this tick's steering heads for, or INF when the unit isn't
+## following a path this tick (see _ground_step).
+var _path_waypoint: Vector3 = Vector3.INF
+## The navigation server joins navmesh polygons across small gaps (its edge
+## merging), and a path can run straight over one. A path-following unit may
+## cross an unwalkable stretch up to this long on the way to its waypoint.
+const PATH_GAP_MAX: float = 1.0
+const PATH_GAP_SAMPLE: float = 0.25
+var _blocked_time: float = 0.0
+var _next_blocked_repath: float = BLOCKED_REPATH_TIME
+var _unclamped_time: float = 0.0
+
+## Moves the unit by its velocity for this tick. On a TerraBrush map that's a
+## step across the ground: height read straight off the terrain, and kept to
+## the walkable navmesh (which already has buildings, trees, cliffs and deep
+## water carved out around it) instead of sweeping a collision shape — the
+## sweep was the most expensive thing a unit did each tick. Anywhere else it's
+## move_and_slide(). A unit standing still doesn't move at all.
 func _slide() -> void:
-	if is_on_floor() and absf(velocity.x) < 0.01 and absf(velocity.z) < 0.01:
+	var terrain := GroundHeight.terrain(get_tree())
+	var still: bool = absf(velocity.x) < 0.01 and absf(velocity.z) < 0.01
+	if terrain == null:
+		## is_on_floor() is as of the last real slide, which is still true for a
+		## unit that hasn't moved since.
+		if still and is_on_floor():
+			return
+		if not PerfStats.enabled:
+			move_and_slide()
+			return
+		var slide_start := Time.get_ticks_usec()
+		move_and_slide()
+		PerfStats.add_slide(Time.get_ticks_usec() - slide_start)
 		return
-	move_and_slide()
+	if still and _grounded:
+		_track_blocked(false, 0.0)
+		return
+	if not PerfStats.enabled:
+		_ground_step(terrain, get_physics_process_delta_time())
+		return
+	var start := Time.get_ticks_usec()
+	_ground_step(terrain, get_physics_process_delta_time())
+	PerfStats.add_slide(Time.get_ticks_usec() - start)
+
+func _ground_step(terrain: TerraBrush, delta: float) -> void:
+	var step := Vector3(velocity.x, 0.0, velocity.z) * delta
+	var next := global_position + step
+	var wedged := false
+	var walkability := NavWalkability.current
+	if _unclamped_time > 0.0:
+		_unclamped_time -= delta
+		walkability = null
+		_walk_poly = -1
+	if walkability != null:
+		if walkability != _walk_index:
+			_walk_index = walkability
+			_walk_poly = walkability.polygon_at(global_position)
+		var poly := walkability.polygon_at(next, _walk_poly)
+		## Only a unit already on walkable ground is held to it — one that
+		## isn't (spawned or shoved off the edge) is free to walk back on.
+		## Let through along the path, but still held to the walkable ground
+		## for anything else (a separation shove, steering off the path).
+		if poly < 0 and _walk_poly >= 0 and _path_crosses_gap(walkability, _path_waypoint):
+			poly = _walk_poly
+		if poly < 0 and _walk_poly >= 0:
+			## Turn the step progressively further from straight ahead, either
+			## side, until it lands on walkable ground — shortened to how much
+			## of it still goes the intended way — so a unit slides along an
+			## edge or round a tree's corner instead of stopping dead at it.
+			for angle in EDGE_SLIDE_ANGLES:
+				for side in [1.0, -1.0]:
+					var turned: Vector3 = step.rotated(Vector3.UP, angle * side) * cos(angle)
+					poly = walkability.polygon_at(global_position + turned, _walk_poly)
+					if poly >= 0:
+						next = global_position + turned
+						wedged = angle > PI / 4.0
+						break
+				if poly >= 0:
+					break
+			if poly < 0:
+				next = global_position
+				poly = _walk_poly
+				wedged = true
+		_walk_poly = poly
+	_track_blocked(wedged, delta)
+	next.y = terrain.getHeightAtPosition(next.x, next.z, true)
+	global_position = next
+	_grounded = true
+
+## Whether the unit is at a gap the path itself runs across: heading for
+## `waypoint`, walkable ground resumes within PATH_GAP_MAX (or the waypoint is
+## reached first). Only looks that far ahead — this runs for every blocked step.
+func _path_crosses_gap(walkability: NavWalkability, waypoint: Vector3) -> bool:
+	if not waypoint.is_finite():
+		return false
+	var distance := _flat_distance(global_position, waypoint)
+	if distance < 0.01:
+		return false
+	var reach: float = minf(distance, PATH_GAP_MAX + PATH_GAP_SAMPLE)
+	var steps: int = ceili(reach / PATH_GAP_SAMPLE)
+	for step in range(1, steps + 1):
+		var along: float = reach * step / steps
+		if walkability.polygon_at(global_position.lerp(waypoint, along / distance)) >= 0:
+			return along - PATH_GAP_SAMPLE <= PATH_GAP_MAX
+	return distance <= PATH_GAP_MAX
+
+func _track_blocked(wedged: bool, delta: float) -> void:
+	if not wedged:
+		_blocked_time = 0.0
+		_next_blocked_repath = BLOCKED_REPATH_TIME
+		return
+	_blocked_time += delta
+	if _blocked_time >= BLOCKED_ESCAPE_TIME:
+		_unclamped_time = BLOCKED_ESCAPE_DURATION
+		_blocked_time = 0.0
+		_next_blocked_repath = BLOCKED_REPATH_TIME
+		return
+	if _blocked_time >= _next_blocked_repath:
+		_next_blocked_repath += BLOCKED_REPATH_INTERVAL
+		repath()

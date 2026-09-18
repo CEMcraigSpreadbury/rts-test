@@ -8,7 +8,9 @@ extends RefCounted
 ## handful of convex polygons in one cell. Heightmap maps have no overlapping
 ## floors, so XZ alone decides it.
 
-const BUCKET_SIZE: float = 2.0
+## Small enough that a bucket in a wood — where the navmesh is cut into many
+## little polygons round every trunk — still only holds a handful to test.
+const BUCKET_SIZE: float = 1.0
 
 ## The index for the navmesh currently in play, or null before the first one is
 ## built (callers fall back to the NavigationServer). Kept up to date by
@@ -65,17 +67,25 @@ func _init(navigation_mesh: NavigationMesh, region_transform: Transform3D) -> vo
 	_starts[count] = _points.size()
 
 func is_walkable(world_position: Vector3) -> bool:
+	return polygon_at(world_position) >= 0
+
+## Index of the navmesh polygon under `world_position` (XZ only), or -1 off the
+## mesh. `hint` is tested first: a walking unit passes the polygon it was last
+## in, which a single step almost always stays inside, skipping the bucket scan.
+func polygon_at(world_position: Vector3, hint: int = -1) -> int:
 	if _width == 0:
-		return false
+		return -1
 	var local := _to_local * world_position
 	var point := Vector2(local.x, local.z)
+	if hint >= 0 and hint < _starts.size() - 1 and _inside(hint, point):
+		return hint
 	var bucket := _bucket_of(point)
 	if bucket.x < 0 or bucket.y < 0 or bucket.x >= _width or bucket.y >= _height:
-		return false
+		return -1
 	for p in _buckets[bucket.y * _width + bucket.x]:
 		if _inside(p, point):
-			return true
-	return false
+			return p
+	return -1
 
 func _bucket_of(point: Vector2) -> Vector2i:
 	return Vector2i(floori((point.x - _origin.x) / BUCKET_SIZE), floori((point.y - _origin.y) / BUCKET_SIZE))

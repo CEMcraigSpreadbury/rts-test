@@ -48,8 +48,11 @@ func _my_peer_id() -> int:
 	return multiplayer.get_unique_id()
 
 ## Dots only move a pixel or so per redraw at this rate, and redrawing every
-## frame meant walking every unit and building on the map every frame.
-const REDRAW_INTERVAL: float = 1.0 / 30.0
+## frame meant walking every unit and building on the map every frame — with a
+## few hundred units that was the most expensive thing on the frame. A ping's
+## animation redraws at PING_REDRAW_INTERVAL while it plays.
+const REDRAW_INTERVAL: float = 1.0 / 10.0
+const PING_REDRAW_INTERVAL: float = 1.0 / 30.0
 var _redraw_timer: float = 0.0
 
 ## FogOfWar.fog_texture is one "how explored" byte per cell rather than a
@@ -101,7 +104,8 @@ func _process(delta: float) -> void:
 		_attack_ping_time_left = maxf(_attack_ping_time_left - delta, 0.0)
 	_redraw_timer -= delta
 	if _redraw_timer <= 0.0:
-		_redraw_timer = REDRAW_INTERVAL
+		var pinging: bool = _ping_time_left > 0.0 or _attack_ping_time_left > 0.0
+		_redraw_timer = PING_REDRAW_INTERVAL if pinging else REDRAW_INTERVAL
 		queue_redraw()
 
 ## Called by main.gd once a ping (this peer's own or a teammate's) has been
@@ -126,7 +130,16 @@ func _local_to_world(local_pos: Vector2) -> Vector3:
 	var v := local_pos.y / size.y
 	return Vector3(fog.map_origin.x + u * fog.map_size.x, 0.0, fog.map_origin.y + v * fog.map_size.y)
 
+## Timed wrapper for PerfStats ("cmd perf").
 func _draw() -> void:
+	if not PerfStats.enabled:
+		_draw_minimap()
+		return
+	var start := Time.get_ticks_usec()
+	_draw_minimap()
+	PerfStats.add_section(&"minimap", Time.get_ticks_usec() - start)
+
+func _draw_minimap() -> void:
 	## Terrain and fog come from _fog_rect once the fog texture exists.
 	if _fog_rect == null:
 		draw_rect(Rect2(Vector2.ZERO, size), TERRAIN_COLOR)
@@ -154,10 +167,12 @@ func _draw() -> void:
 		var mine: bool = unit.owner_peer_id == my_peer
 		if not Teams.is_friendly(my_peer, unit.owner_peer_id) and not fog.is_visible_at(unit.global_position):
 			continue
+		## Squares, not circles: a filled circle plus an outline ring per unit
+		## is dozens of vertices each, and there can be hundreds of units.
 		var p := _world_to_local(unit.global_position)
-		draw_circle(p, UNIT_DOT_RADIUS, unit.team_tint)
 		if mine:
-			draw_arc(p, UNIT_DOT_RADIUS, 0.0, TAU, 10, OWN_OUTLINE_COLOR, 1.0)
+			draw_rect(Rect2(p - Vector2.ONE * (UNIT_DOT_RADIUS + 1.0), Vector2.ONE * (UNIT_DOT_RADIUS + 1.0) * 2.0), OWN_OUTLINE_COLOR)
+		draw_rect(Rect2(p - Vector2.ONE * UNIT_DOT_RADIUS, Vector2.ONE * UNIT_DOT_RADIUS * 2.0), unit.team_tint)
 
 	_draw_objective_letters()
 	_draw_camera_frustum()

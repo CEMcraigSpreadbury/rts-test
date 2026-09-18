@@ -51,7 +51,7 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	## group rather than by raw distance, so the block translates instead of
 	## shuffling ranks on the way. A short hop still takes nearest slots.
 	var relative := _flat_distance(group_centroid(units), target_pos) >= MARCH_MIN_DISTANCE
-	return _assign_slots_to_units(units, slots, relative)
+	return _assign_slots_to_units(units, slots, forward, relative)
 
 ## Which way a formation order faces. An explicit facing (a drag, a re-form)
 ## always wins. Otherwise a group already holding a front keeps it for anything
@@ -158,11 +158,62 @@ func _group_forward(centroid: Vector3, target_pos: Vector3) -> Vector3:
 	to_target.y = 0.0
 	return to_target.normalized() if to_target.length_squared() > 0.0001 else Vector3.FORWARD
 
+## Past this many units the all-pairs greedy match below (n² pairs, sorted)
+## gives way to the rank sweep — on 250 units the greedy match alone was most
+## of a 200 ms hitch on the order.
+const GREEDY_ASSIGN_MAX_UNITS: int = 48
+## Slots whose depth behind the front differs by less than this share a rank.
+const RANK_DEPTH_TOLERANCE: float = 0.25
+
+func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3], forward: Vector3, relative: bool = false) -> Array[Vector3]:
+	if units.size() <= GREEDY_ASSIGN_MAX_UNITS:
+		return _assign_slots_greedy(units, slots, relative)
+	return _assign_slots_by_rank(units, slots, forward)
+
+## Rank sweep, O(n log n): the frontmost units (by depth along `forward`) take
+## the front rank's slots, the next ones the rank behind, and so on; within a
+## rank they pair up left to right. Nobody crosses anybody else's path, and a
+## block that's already formed up keeps its arrangement. Only orderings along
+## `forward` and `right` matter, so it needs no centring for a relative match.
+## Keys are Vector2(projection, index) so the built-in sort orders them
+## without a per-comparison script callback.
+func _assign_slots_by_rank(units: Array[Unit], slots: Array[Vector3], forward: Vector3) -> Array[Vector3]:
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	var count: int = mini(units.size(), slots.size())
+	var slot_keys: Array[Vector2] = []
+	var unit_keys: Array[Vector2] = []
+	for i in count:
+		slot_keys.append(Vector2(-slots[i].dot(forward), i))
+		unit_keys.append(Vector2(-units[i].global_position.dot(forward), i))
+	slot_keys.sort()
+	unit_keys.sort()
+
+	var result: Array[Vector3] = []
+	result.resize(units.size())
+	var start := 0
+	while start < count:
+		var end := start + 1
+		while end < count and slot_keys[end].x - slot_keys[start].x < RANK_DEPTH_TOLERANCE:
+			end += 1
+		var rank_slots: Array[Vector2] = []
+		var rank_units: Array[Vector2] = []
+		for k in range(start, end):
+			var slot_index := int(slot_keys[k].y)
+			var unit_index := int(unit_keys[k].y)
+			rank_slots.append(Vector2(slots[slot_index].dot(right), slot_index))
+			rank_units.append(Vector2(units[unit_index].global_position.dot(right), unit_index))
+		rank_slots.sort()
+		rank_units.sort()
+		for k in rank_slots.size():
+			result[int(rank_units[k].y)] = slots[int(rank_slots[k].y)]
+		start = end
+	return result
+
 ## Greedy nearest-pair assignment: repeatedly claims the closest remaining
 ## (unit, slot) pair until every unit has one. Not globally optimal (that's
-## the Hungarian algorithm), but for RTS-sized selections this is more than
+## the Hungarian algorithm), but for small selections this is more than
 ## good enough and avoids the crossing-paths problem a fixed index mapping has.
-func _assign_slots_to_units(units: Array[Unit], slots: Array[Vector3], relative: bool = false) -> Array[Vector3]:
+func _assign_slots_greedy(units: Array[Unit], slots: Array[Vector3], relative: bool = false) -> Array[Vector3]:
 	var unit_origin := Vector3.ZERO
 	var slot_origin := Vector3.ZERO
 	if relative:
@@ -497,20 +548,24 @@ func _project_onto_route(route: PackedVector3Array, cumulative: Array[float], po
 ## Inverse of _project_onto_route: the world position `arc` meters along the
 ## route, plus the direction of travel there.
 func _route_point_at(route: PackedVector3Array, cumulative: Array[float], arc: float) -> Dictionary:
-	for i in route.size() - 1:
-		var segment_length: float = cumulative[i + 1] - cumulative[i]
-		if segment_length < 0.0001:
-			continue
-		if arc > cumulative[i + 1] and i < route.size() - 2:
-			continue
-		var t: float = clampf((arc - cumulative[i]) / segment_length, 0.0, 1.0)
-		var direction: Vector3 = route[i + 1] - route[i]
-		direction.y = 0.0
-		return {
-			"position": route[i].lerp(route[i + 1], t),
-			"forward": direction.normalized() if direction.length_squared() > 0.0001 else Vector3.FORWARD,
-		}
-	return {"position": route[0], "forward": Vector3.FORWARD}
+	var last := route.size() - 2
+	if last < 0:
+		return {"position": route[0] if not route.is_empty() else Vector3.ZERO, "forward": Vector3.FORWARD}
+	## The segment `arc` falls on, found by binary search over the cumulative
+	## lengths — a march looks this up several times per member per re-steer.
+	var i: int = clampi(cumulative.bsearch(arc) - 1, 0, last)
+	while i < last and cumulative[i + 1] - cumulative[i] < 0.0001:
+		i += 1
+	var segment_length: float = cumulative[i + 1] - cumulative[i]
+	if segment_length < 0.0001:
+		return {"position": route[0], "forward": Vector3.FORWARD}
+	var t: float = clampf((arc - cumulative[i]) / segment_length, 0.0, 1.0)
+	var direction: Vector3 = route[i + 1] - route[i]
+	direction.y = 0.0
+	return {
+		"position": route[i].lerp(route[i + 1], t),
+		"forward": direction.normalized() if direction.length_squared() > 0.0001 else Vector3.FORWARD,
+	}
 
 ## How wide a corridor this formation actually needs: the lateral spread of its
 ## slots (measured on the same left/right axis the shape was built against, so
@@ -692,13 +747,15 @@ func update_reformation(delta: float) -> void:
 		## The re-issue dropped everyone off the march; pick it back up from
 		## where the anchor already is, with offsets for the re-solved slots.
 		if record["march"]:
-			_set_march_offsets(record, members)
-			record["march_timer"] = 0.0
+			for march in record["marches"]:
+				march["slots"] = record["slots"]
+				_set_march_offsets(march, _march_members(march, members))
+				_set_route_offsets(march)
 
-## How near its slot an idle member has to be standing to count as having
-## arrived there (MOVE_ARRIVAL_DISTANCE plus room for a separation nudge),
-## rather than having been stopped somewhere along the way.
-const HOLD_SLOT_DISTANCE: float = 1.2
+## How far an idle member that finished this order (Unit.arrived_group) may
+## have been nudged off its slot — by separation in a crowd, or by settling
+## short of a slot it couldn't reach — and still count as holding it.
+const HOLD_SLOT_DISTANCE: float = 4.0
 
 ## unit -> the slot its current formation order is taking it to.
 func _slot_map(units: Array[Unit]) -> Dictionary:
@@ -709,7 +766,7 @@ func _slot_map(units: Array[Unit]) -> Dictionary:
 
 ## A record's members still holding its formation: alive, and either still
 ## walking this order or standing idle on the slot it gave them. Arriving
-## clears a unit's formation_group (see Unit._on_velocity_computed), so going
+## clears a unit's formation_group (see Unit._apply_velocity), so going
 ## by the group alone read every arrival as a loss and re-solved the
 ## stragglers into slots the arrivals were already standing in.
 func _record_holding(record: Dictionary) -> Array[Unit]:
@@ -719,6 +776,7 @@ func _record_holding(record: Dictionary) -> Array[Unit]:
 		if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		var arrived: bool = unit.status_command == Unit.Command.NONE and unit.attack_target == null \
+				and is_same(unit.arrived_group, record["group"]) \
 				and _flat_distance(unit.global_position, slots[unit]) <= HOLD_SLOT_DISTANCE
 		if arrived or _is_walking(record, unit):
 			holding.append(unit)
@@ -806,18 +864,25 @@ const MARCH_MIN_DISTANCE: float = 6.0
 ## Anchor pace as a fraction of the slowest member's speed, leaving the members
 ## a little slack to catch up to their offsets while moving.
 const MARCH_SPEED_FACTOR: float = 0.9
-## Average member lag (meters from their steering point) the anchor ignores,
-## and the lag at which it slows to MARCH_MIN_SCALE.
+## Median member lag (meters from their steering point) the anchor ignores,
+## and the lag at which it slows to MARCH_MIN_SCALE. The median, not the
+## average: in a big block some members are always off round a tree clump or a
+## bank, and pacing on them held the whole army to half speed — they hurry to
+## catch up instead (see Unit.MARCH_CATCH_UP_SPEED).
 const MARCH_LAG_FREE: float = 1.0
 const MARCH_LAG_STOP: float = 4.0
 ## Never fully halted, so one unit that can't keep up can't freeze the group.
 const MARCH_MIN_SCALE: float = 0.15
-## How often members' steering points are re-solved. The anchor itself moves
+## How often each member's steering point is re-solved — a slice of the block
+## per frame, so the work is spread evenly rather than landing on one frame
+## (see _steer_march). The anchor itself moves
 ## every frame and members extrapolate with its velocity in between.
 const MARCH_UPDATE_INTERVAL: float = 0.1
 ## Route heading is read across this many meters either side of a point so a
 ## sharp path corner re-lays the block smoothly instead of snapping it.
 const MARCH_HEADING_SPAN: float = 1.5
+## Extra heading span per meter of the block's reach (see _new_march).
+const MARCH_HEADING_SPAN_PER_REACH: float = 0.3
 ## Spacing of the navmesh samples used to measure room across the route.
 const MARCH_PROBE_STEP: float = 0.5
 ## Extra room probed past a rank's own width, for sliding it sideways.
@@ -828,61 +893,105 @@ const MARCH_BLOCKED_DISTANCE: float = 0.3
 ## How far behind its rank a squeezed unit falls, per meter squeezed inward.
 const MARCH_SQUEEZE_TRAIL: float = 0.8
 
+## One march per speed class: an anchor can only walk at one pace, and holding
+## every member to the slowest one's would break the rule that units travel at
+## their own full speed. So a mixed selection splits into a block per speed,
+## each marching its own members' slots of the order's shape along its own
+## route and arriving when it arrives. Only the marching splits — closing
+## ranks still re-solves the whole selection as one formation.
 func _start_march(record: Dictionary, members: Array[Unit]) -> void:
+	record["marches"] = []
 	var target: Vector3 = record["target"]
-	## One anchor can only walk at one pace, which would hold every member to
-	## the slowest one's speed — mixed-speed groups walk to their slots instead.
-	for unit in members:
-		if not is_equal_approx(unit.move_speed, members[0].move_speed):
-			return
-	var centroid := group_centroid(members)
-	if _flat_distance(centroid, target) < MARCH_MIN_DISTANCE:
-		return
 	var map: RID = members[0].nav_agent.get_navigation_map()
 	if not map.is_valid():
 		return
 	var forward: Vector3 = record["forward"]
 	if forward == Vector3.ZERO:
-		forward = _group_forward(centroid, target)
-	record["march_forward"] = forward
-	record["map"] = map
-	_set_march_offsets(record, members)
+		forward = _group_forward(group_centroid(members), target)
+	for speed_class in _speed_classes(members):
+		var march := _new_march(record, speed_class, forward, map)
+		if not march.is_empty():
+			record["marches"].append(march)
+	record["march"] = not (record["marches"] as Array).is_empty()
+
+## `units` split into groups sharing one move_speed.
+func _speed_classes(units: Array[Unit]) -> Array[Array]:
+	var by_speed: Dictionary = {}
+	for unit in units:
+		var key: float = snappedf(unit.move_speed, 0.01)
+		if not by_speed.has(key):
+			var bucket: Array[Unit] = []
+			by_speed[key] = bucket
+		by_speed[key].append(unit)
+	var classes: Array[Array] = []
+	for bucket in by_speed.values():
+		classes.append(bucket)
+	return classes
+
+## The march state for one speed class of `record`, or empty if that class is
+## better off walking straight to its slots (too short a hop, or no route).
+func _new_march(record: Dictionary, units: Array[Unit], forward: Vector3, map: RID) -> Dictionary:
+	var target: Vector3 = record["target"]
+	var centroid := group_centroid(units)
+	if _flat_distance(centroid, target) < MARCH_MIN_DISTANCE:
+		return {}
+	var march := {
+		"target": target,
+		"march_forward": forward,
+		"map": map,
+		"slots": record["slots"],
+	}
+	_set_march_offsets(march, units)
 
 	## The anchor starts where the front-centre of a formation centred on the
-	## group's current position would be.
-	var offsets: Dictionary = record["offsets"]
+	## class's current position would be.
+	var offsets: Dictionary = march["offsets"]
 	var average_back := 0.0
 	for unit in offsets:
 		average_back += (offsets[unit] as Vector2).y
 	average_back /= maxi(offsets.size(), 1)
 	var start := NavigationServer3D.map_get_closest_point(map, centroid + forward * average_back)
 	var route := NavigationServer3D.map_get_path(map, start, target, true)
+	if PerfStats.enabled:
+		PerfStats.count_path()
 	if route.size() < 2:
-		return
+		return {}
 	var cumulative: Array[float] = [0.0]
 	for i in route.size() - 1:
 		cumulative.append(cumulative[i] + _flat_distance(route[i], route[i + 1]))
 	var length: float = cumulative[cumulative.size() - 1]
 	if length < MARCH_MIN_DISTANCE:
-		return
+		return {}
 
-	record["route"] = route
-	record["cumulative"] = cumulative
-	record["length"] = length
-	record["arc"] = 0.0
-	record["speed"] = slowest_move_speed(members) * MARCH_SPEED_FACTOR
-	record["march_scale"] = MARCH_MIN_SCALE
-	record["march_timer"] = 0.0
-	record["march"] = true
-	_steer_march(record, members)
+	march["route"] = route
+	march["cumulative"] = cumulative
+	march["length"] = length
+	march["arc"] = 0.0
+	## A wide block reads its heading over more route, so the small zigzags of
+	## a navmesh path don't swing its flanks back and forth.
+	march["heading_span"] = maxf(MARCH_HEADING_SPAN, float(march["probe_reach"]) * MARCH_HEADING_SPAN_PER_REACH)
+	_set_route_offsets(march)
+	march["speed"] = units[0].move_speed * MARCH_SPEED_FACTOR
+	march["march_scale"] = MARCH_MIN_SCALE
+	_steer_march(march, units, 0.0)
+	return march
+
+## The members of `members` that belong to `march` (its speed class).
+func _march_members(march: Dictionary, members: Array[Unit]) -> Array[Unit]:
+	var offsets: Dictionary = march["offsets"]
+	var result: Array[Unit] = []
+	for unit in members:
+		if offsets.has(unit):
+			result.append(unit)
+	return result
 
 ## Each member's slot as (lateral, back) against the order's final facing —
 ## lateral along `right`, back measured behind the front rank.
-func _set_march_offsets(record: Dictionary, members: Array[Unit]) -> void:
-	var target: Vector3 = record["target"]
-	var forward: Vector3 = record["march_forward"]
+func _set_march_offsets(march: Dictionary, members: Array[Unit]) -> void:
+	var target: Vector3 = march["target"]
+	var forward: Vector3 = march["march_forward"]
 	var right := Vector3(forward.z, 0.0, -forward.x)
-	var slots: Dictionary = record["slots"]
+	var slots: Dictionary = march["slots"]
 	var offsets: Dictionary = {}
 	var widest := 0.0
 	for unit in members:
@@ -896,76 +1005,100 @@ func _set_march_offsets(record: Dictionary, members: Array[Unit]) -> void:
 		## direction stops matching the facing, so probe as far as the
 		## furthest slot from the anchor in any direction.
 		widest = maxf(widest, Vector2(lateral, back).length())
-	record["offsets"] = offsets
-	record["probe_reach"] = widest + MARCH_PROBE_EXTRA
+	march["offsets"] = offsets
+	march["probe_reach"] = widest + MARCH_PROBE_EXTRA
 
 func _advance_march(record: Dictionary, members: Array[Unit], delta: float) -> void:
 	if not record["march"]:
 		return
-	var walking: Array[Unit] = []
-	for unit in members:
-		if _is_walking(record, unit):
-			walking.append(unit)
-	var length: float = record["length"]
-	var arc: float = minf(float(record["arc"]) + float(record["speed"]) * float(record["march_scale"]) * delta, length)
-	record["arc"] = arc
-	if arc >= length:
-		record["march"] = false
-		for unit in walking:
-			unit.end_march()
-		return
-	record["march_timer"] = float(record["march_timer"]) - delta
-	if record["march_timer"] > 0.0:
-		return
-	record["march_timer"] = MARCH_UPDATE_INTERVAL
-	_steer_march(record, walking)
-
-## Re-solves every member's steering point off the anchor's current position.
-func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
-	var map: RID = record["map"]
-	var arc: float = record["arc"]
-	var offsets: Dictionary = record["offsets"]
-	var probe_reach: float = record["probe_reach"]
-	var anchor_speed: float = float(record["speed"]) * float(record["march_scale"])
-
-	## Every slot re-expressed against the anchor's current direction of travel
-	## rather than the facing it was laid out in, so the block keeps its world
-	## orientation however the route bends. A "rank" here is everyone at the
-	## same distance behind the anchor ALONG the route — the facing rank when
-	## the block walks straight ahead, a column's cross-section when it walks
-	## sideways — with its reach either side, so the whole thing can slide.
-	var forward: Vector3 = record["march_forward"]
-	var facing_right := Vector3(forward.z, 0.0, -forward.x)
-	var travel: Vector3 = _march_frame(record, arc)["forward"]
-	var travel_right := Vector3(travel.z, 0.0, -travel.x)
-	var placed: Dictionary = {}
-	var ranks: Dictionary = {}
-	for unit in units:
-		if not offsets.has(unit):
+	var marches: Array = record["marches"]
+	for i in range(marches.size() - 1, -1, -1):
+		var march: Dictionary = marches[i]
+		var walking: Array[Unit] = []
+		for unit in _march_members(march, members):
+			if _is_walking(record, unit):
+				walking.append(unit)
+		var length: float = march["length"]
+		var arc: float = minf(float(march["arc"]) + float(march["speed"]) * float(march["march_scale"]) * delta, length)
+		march["arc"] = arc
+		if arc >= length:
+			for unit in walking:
+				unit.end_march()
+			marches.remove_at(i)
 			continue
+		_steer_march(march, walking, delta)
+	record["march"] = not marches.is_empty()
+
+## Each member's place against the route, as (across, behind the anchor along
+## it), fixed from the direction of travel where the block is now — so the
+## block keeps the arrangement it's standing in and bends round the route's
+## corners like a column, rather than swinging the whole block round to keep
+## its world orientation at every bend (which sent the flanks tens of meters
+## to their new points, and held the anchor back until they got there). It
+## turns into the order's facing at the end, when members walk onto their
+## real slots (Unit.end_march).
+func _set_route_offsets(march: Dictionary) -> void:
+	var forward: Vector3 = march["march_forward"]
+	var facing_right := Vector3(forward.z, 0.0, -forward.x)
+	var travel: Vector3 = _march_frame(march, float(march["arc"]))["forward"]
+	var travel_right := Vector3(travel.z, 0.0, -travel.x)
+	var offsets: Dictionary = march["offsets"]
+	var route_offsets: Dictionary = {}
+	for unit in offsets:
 		var slot: Vector2 = offsets[unit]
 		var world := facing_right * slot.x - forward * slot.y
-		var offset := Vector2(world.dot(travel_right), -world.dot(travel))
-		placed[unit] = offset
-		var key := roundi(offset.y * 10.0)
+		route_offsets[unit] = Vector2(world.dot(travel_right), -world.dot(travel))
+	march["route_offsets"] = route_offsets
+	## A "rank" is everyone at the same distance behind the anchor ALONG the
+	## route — the facing rank when the block walks straight ahead, a column's
+	## cross-section when it walks sideways — with its reach either side, so
+	## the whole thing can slide. Fixed along with the offsets.
+	var ranks: Dictionary = {}
+	for unit in route_offsets:
+		var offset: Vector2 = route_offsets[unit]
+		var key := _rank_key(offset)
 		var reach: Vector2 = ranks.get(key, Vector2.ZERO)
 		ranks[key] = Vector2(maxf(reach.x, -offset.x), maxf(reach.y, offset.x))
+	march["ranks"] = ranks
+	march["lags"] = {}
+	march["steer_cursor"] = 0
 
-	## Rank key -> [left room, right room, sideways shift], probed once per rank.
+static func _rank_key(offset: Vector2) -> int:
+	return roundi(offset.y * 10.0)
+
+## Re-solves members' steering points off the anchor's current position: the
+## next slice of `units` this frame, sized so everyone is refreshed every
+## MARCH_UPDATE_INTERVAL (all of them when `delta` is 0, as on the first call).
+## Doing the whole block on one frame was a ~50 ms hitch ten times a second
+## for a few hundred units. The anchor is paced off the median lag once per
+## full pass.
+func _steer_march(march: Dictionary, units: Array[Unit], delta: float) -> void:
+	var count := units.size()
+	if count == 0:
+		return
+	var slice: int = count if delta <= 0.0 else mini(count, ceili(count * delta / MARCH_UPDATE_INTERVAL))
+	var start: int = int(march["steer_cursor"]) % count
+	var arc: float = march["arc"]
+	var probe_reach: float = march["probe_reach"]
+	var anchor_speed: float = float(march["speed"]) * float(march["march_scale"])
+	var route_offsets: Dictionary = march["route_offsets"]
+	var ranks: Dictionary = march["ranks"]
+	var lags: Dictionary = march["lags"]
+
+	## Per rank, shared by everyone in it this call: the route frame at the
+	## rank's arc, and [left room, right room, sideways shift].
+	var rank_frames: Dictionary = {}
 	var rank_room: Dictionary = {}
-	var lag_total := 0.0
-	var lag_count := 0
-	for unit in placed:
-		var offset: Vector2 = placed[unit]
-		var rank := roundi(offset.y * 10.0)
-		var frame := _march_frame(record, arc - offset.y)
-		var base: Vector3 = frame["position"]
-		var heading: Vector3 = frame["forward"]
-		var right := Vector3(heading.z, 0.0, -heading.x)
-
-		if not rank_room.has(rank):
+	for i in slice:
+		var unit: Unit = units[(start + i) % count]
+		if not route_offsets.has(unit):
+			continue
+		var offset: Vector2 = route_offsets[unit]
+		var rank := _rank_key(offset)
+		if not rank_frames.has(rank):
+			rank_frames[rank] = _march_frame(march, arc - offset.y)
 			var reach: Vector2 = ranks.get(rank, Vector2.ZERO)
-			var measured := _route_room(record, map, arc - offset.y, probe_reach)
+			var measured := _route_room(march, arc - offset.y, probe_reach)
 			var left_room: float = measured.x
 			var right_room: float = measured.y
 			## Slide the whole rank toward the open side before squeezing anyone.
@@ -974,41 +1107,69 @@ func _steer_march(record: Dictionary, units: Array[Unit]) -> void:
 				shift = -minf(reach.y - right_room, maxf(left_room - reach.x, 0.0))
 			elif left_room < reach.x:
 				shift = minf(reach.x - left_room, maxf(right_room - reach.y, 0.0))
-			rank_room[rank] = [left_room, right_room, shift]
-		var room: Array = rank_room[rank]
+			rank_room[rank] = Vector3(left_room, right_room, shift)
+		var frame: Dictionary = rank_frames[rank]
+		var room: Vector3 = rank_room[rank]
+		var base: Vector3 = frame["position"]
+		var heading: Vector3 = frame["forward"]
+		var right := Vector3(heading.z, 0.0, -heading.x)
 
-		var wanted: float = offset.x + float(room[2])
-		var lateral: float = clampf(wanted, -float(room[0]), float(room[1]))
+		var wanted: float = offset.x + room.z
+		var lateral: float = clampf(wanted, -room.x, room.y)
 		var trail: float = absf(wanted - lateral) * MARCH_SQUEEZE_TRAIL
 		## Only a squeezed unit can be steered at somewhere off the navmesh; one
-		## within its rank's measured room is already on walkable ground, so it
-		## skips the closest-point query.
+		## within its rank's measured room is already on walkable ground.
 		var point := base + right * lateral
 		if trail > 0.05:
-			var trailed := _march_frame(record, arc - offset.y - trail)
+			var trailed := _march_frame(march, arc - offset.y - trail)
 			base = trailed["position"]
 			heading = trailed["forward"]
 			right = Vector3(heading.z, 0.0, -heading.x)
-			point = NavigationServer3D.map_get_closest_point(map, base + right * lateral)
+			point = _walkable_toward(base + right * lateral, base, march["map"])
 		unit.set_march_target(point, heading * anchor_speed)
-		lag_total += minf(_flat_distance(unit.global_position, point), MARCH_LAG_STOP * 2.0)
-		lag_count += 1
+		lags[unit] = _flat_distance(unit.global_position, point)
 
-	if lag_count > 0:
-		var lag: float = lag_total / lag_count
-		record["march_scale"] = clampf(1.0 - (lag - MARCH_LAG_FREE) / (MARCH_LAG_STOP - MARCH_LAG_FREE), MARCH_MIN_SCALE, 1.0)
+	march["steer_cursor"] = start + slice
+	if start + slice < count:
+		return
+	var current := PackedFloat32Array()
+	for unit in units:
+		if lags.has(unit):
+			current.append(lags[unit])
+	if not current.is_empty():
+		current.sort()
+		var lag: float = current[current.size() / 2]
+		march["march_scale"] = clampf(1.0 - (lag - MARCH_LAG_FREE) / (MARCH_LAG_STOP - MARCH_LAG_FREE), MARCH_MIN_SCALE, 1.0)
+
+## The walkable point nearest `point` on the way back toward `toward` (a point
+## on the route, so walkable itself), stepping along the navmesh index — a
+## squeezed unit's point pulled back inside the corridor. Only without the index
+## does it fall back on the NavigationServer, whose closest-point query checks
+## every polygon on the map.
+func _walkable_toward(point: Vector3, toward: Vector3, map: RID) -> Vector3:
+	var walkability := NavWalkability.current
+	if walkability == null:
+		return NavigationServer3D.map_get_closest_point(map, point)
+	var distance := _flat_distance(point, toward)
+	var steps: int = ceili(distance / MARCH_PROBE_STEP)
+	for step in steps:
+		var candidate := point.lerp(toward, float(step) / steps)
+		if walkability.is_walkable(candidate):
+			return candidate
+	return toward
 
 ## Position `arc` meters along the march route and the direction of travel
 ## there. Arcs off either end (members still behind the route's start, or ahead
 ## of the anchor when the block walks sideways) extend straight out from it.
-func _march_frame(record: Dictionary, arc: float) -> Dictionary:
-	var route: PackedVector3Array = record["route"]
-	var cumulative: Array[float] = record["cumulative"]
+func _march_frame(march: Dictionary, arc: float) -> Dictionary:
+	var route: PackedVector3Array = march["route"]
+	var cumulative: Array[float] = march["cumulative"]
 	var position := _march_position(route, cumulative, arc)
-	var heading := _march_position(route, cumulative, arc + MARCH_HEADING_SPAN) \
-			- _march_position(route, cumulative, arc - MARCH_HEADING_SPAN)
+	var span: float = march.get("heading_span", MARCH_HEADING_SPAN)
+	var heading := _march_position(route, cumulative, arc + span) \
+			- _march_position(route, cumulative, arc - span)
 	heading.y = 0.0
-	heading = heading.normalized() if heading.length_squared() > 0.0001 else record["march_forward"]
+	heading = heading.normalized() if heading.length_squared() > 0.0001 else march["march_forward"]
 	return {"position": position, "forward": heading}
 
 func _march_position(route: PackedVector3Array, cumulative: Array[float], arc: float) -> Vector3:
@@ -1022,21 +1183,22 @@ func _march_position(route: PackedVector3Array, cumulative: Array[float], arc: f
 	return route[0] + start_forward * arc
 
 ## Room either side of the route (left, right) at `arc`, measured once per
-## MARCH_ROOM_BIN of route and cached on the record. Every rank walks the same
+## MARCH_ROOM_BIN of route and cached on the march. Every rank walks the same
 ## route, so trailing ranks reuse what the front rank already measured, and a
 ## re-steer only probes the ground the anchor has newly reached — probing
 ## per rank per re-steer was hundreds of navmesh queries a second.
-func _route_room(record: Dictionary, map: RID, arc: float, reach: float) -> Vector2:
-	if not record.has("room_cache"):
-		record["room_cache"] = {}
-	var cache: Dictionary = record["room_cache"]
+func _route_room(march: Dictionary, arc: float, reach: float) -> Vector2:
+	if not march.has("room_cache"):
+		march["room_cache"] = {}
+	var cache: Dictionary = march["room_cache"]
 	var bin := floori(arc / MARCH_ROOM_BIN)
 	if cache.has(bin):
 		return cache[bin]
-	var frame := _march_frame(record, (bin + 0.5) * MARCH_ROOM_BIN)
+	var frame := _march_frame(march, (bin + 0.5) * MARCH_ROOM_BIN)
 	var base: Vector3 = frame["position"]
 	var heading: Vector3 = frame["forward"]
 	var right := Vector3(heading.z, 0.0, -heading.x)
+	var map: RID = march["map"]
 	var room := Vector2(_probe_room(map, base, -right, reach), _probe_room(map, base, right, reach))
 	cache[bin] = room
 	return room

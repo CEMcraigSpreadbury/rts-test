@@ -64,12 +64,8 @@ static func nearby_aura_armor_bonus(tree: SceneTree, unit: Unit) -> int:
 static func find_nearest_enemy_unit(tree: SceneTree, from_position: Vector3, owner_peer_id: int, search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_dist := search_range
-	for node in UnitGrid.units_near(tree, from_position, search_range):
-		if not (node is Unit):
-			continue
+	for node in UnitGrid.enemies_near(tree, from_position, search_range, owner_peer_id):
 		var other: Unit = node
-		if not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or other.status_activity == Unit.Activity.DEAD:
-			continue
 		if not is_worth_attacking(other):
 			continue
 		var dist := from_position.distance_to(other.global_position)

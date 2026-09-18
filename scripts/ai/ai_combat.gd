@@ -194,7 +194,7 @@ func _hostiles_near(pos: Vector3, radius: float) -> Array[Unit]:
 
 ## Soldiers that are trying to walk but haven't moved for UNIT_STUCK_SECONDS
 ## — typically two that ended up exactly on top of each other, which leaves
-## their avoidance steering with no way to separate them. A short step to a
+## their separation push with no direction to part them in. A short step to a
 ## nearby spot pulls them apart; the wave/home logic re-sends them from there
 ## once they're idle.
 const UNIT_STUCK_SECONDS: float = 8.0

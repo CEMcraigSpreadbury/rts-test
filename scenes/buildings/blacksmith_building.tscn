@@ -204,6 +204,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.009735107, 1, 0.02142334)
 shape = SubResource("BoxShape3D_body")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=1352662391]
+avoidance_enabled = false
 radius = 2.0
 vertices = PackedVector3Array(-1.3576808, 0, 1.5412493, 1.2710228, 0, 1.5279464, 1.3211993, 0, -1.6694226, -1.106894, 0, -1.7876811)
 

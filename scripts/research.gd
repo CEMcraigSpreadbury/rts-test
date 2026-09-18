@@ -481,7 +481,6 @@ func _apply_unit_stat(unit: Unit, stat: int, amount: float) -> void:
 		ResearchNode.Stat.COMBAT_MOVE_SPEED:
 			if not unit.can_gather:
 				unit.move_speed *= 1.0 + amount
-				unit.nav_agent.max_speed = unit.move_speed
 		ResearchNode.Stat.INFANTRY_CAVALRY_HEALTH:
 			if unit.unit_category == Unit.UnitCategory.INFANTRY or unit.unit_category == Unit.UnitCategory.CAVALRY:
 				_raise_unit_health(unit, amount)

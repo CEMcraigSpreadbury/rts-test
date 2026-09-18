@@ -260,7 +260,16 @@ func _ready() -> void:
 	_push_vision_to_shader()
 	_update_explored()
 
+## Timed wrapper for PerfStats ("cmd perf").
 func _process(delta: float) -> void:
+	if not PerfStats.enabled:
+		_process_fog(delta)
+		return
+	var start := Time.get_ticks_usec()
+	_process_fog(delta)
+	PerfStats.add_section(&"fog", Time.get_ticks_usec() - start)
+
+func _process_fog(delta: float) -> void:
 	_update_wind(delta)
 
 	## Vision sources move constantly, so this (and the shader push) runs at a
@@ -483,6 +492,9 @@ func _stamp_kernel(world_radius: float) -> Dictionary:
 	_stamp_kernels[world_radius] = kernel
 	return kernel
 
+## Travel (meters) between re-stamps of a moving vision source (see _update_explored).
+const STAMP_STEP: float = 2.0
+
 func _update_explored() -> void:
 	## Already fully explored by reveal_all's setter — stamping a map-sized
 	## circle every tick would just redo that.
@@ -490,7 +502,12 @@ func _update_explored() -> void:
 		var stamp_keys: Dictionary = {}
 		for i in _vision_count:
 			var pos := _vision_positions[i]
-			var key := Vector3(pos.x, pos.y, _vision_radii[i])
+			## Keyed on a coarse grid, not the exact position: a marching army's
+			## merged sources shift every update, and re-stamping every one of
+			## them each time was the bulk of the fog's cost. Explored ground
+			## only ever grows, so stamping each STAMP_STEP of travel loses
+			## nothing but a sliver at the very edge of what was just seen.
+			var key := Vector3(snappedf(pos.x, STAMP_STEP), snappedf(pos.y, STAMP_STEP), _vision_radii[i])
 			stamp_keys[key] = true
 			if _last_stamp_keys.has(key):
 				continue

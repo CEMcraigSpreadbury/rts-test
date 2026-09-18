@@ -630,9 +630,10 @@ func _tick_pending_projectiles(delta: float) -> void:
 func accepts_dropoff(type: ResourceType) -> bool:
 	return dropoff_resource_types.is_empty() or dropoff_resource_types.has(type)
 
-## How far NavigationObstacle3D avoidance keeps agents pushed back from this
-## building's center; units attacking a building need to account for this so
-## they don't try to stand somewhere avoidance will never let them reach.
+## How far this building's footprint (described by its NavigationObstacle3D
+## nodes, whose avoidance is off — they're only a footprint now) reaches from
+## its center; units attacking a building need to account for this so they
+## don't try to stand somewhere inside the ground carved out around it.
 ##
 ## Covers EVERY obstacle the building has, offset included, not just one named
 ## node: a structure whose footprint is described by several off-centre
@@ -640,7 +641,7 @@ func accepts_dropoff(type: ResourceType) -> bool:
 ## furthest obstacle edge, and reading a single one's radius would report a
 ## 2m-wide gate as a 0.2m pebble — which then under-reports it to the corridor
 ## scan in main.gd's _find_funnel_point and lets builders and attackers walk far
-## closer to it than avoidance will ever actually permit.
+## closer to it than the carved navmesh will ever actually let them.
 func get_footprint_radius() -> float:
 	var radius: float = 0.0
 	for child in get_children():

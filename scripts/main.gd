@@ -1327,11 +1327,8 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	var spawn_point: Node3D = building.get_node_or_null(building.spawn_point_path)
 	var spawn_pos: Vector3 = spawn_point.global_position if spawn_point else building.global_position
 	## A previously-spawned, un-ordered unit may still be standing exactly on the
-	## spawn point; spawning a new one at those identical coordinates makes their
-	## avoidance radii perfectly overlap, which sends NavigationAgent3D's RVO
-	## avoidance into a degenerate case (near-zero separation) that can fling one
-	## of them across the map trying to resolve it. A small jitter keeps spawns
-	## from ever landing exactly on top of each other.
+	## spawn point; a small jitter keeps spawns from ever landing exactly on top
+	## of each other, which separation can only part along an arbitrary angle.
 	spawn_pos += Vector3(randf_range(-0.6, 0.6), 0.0, randf_range(-0.6, 0.6))
 	## population_cost isn't passed here — the spawned scene's own Unit.population_cost
 	## (set right on the unit for balancing, see get_population_cost()) is already authoritative.
@@ -1386,13 +1383,23 @@ func _get_dropoff_for(peer_id: int) -> Node3D:
 ## per-frame order stays explicit: HUD first, then placement ghosts, then the
 ## world visuals that read placement state, then the host's reformation poll.
 func _process(delta: float) -> void:
-	hud.update(delta)
+	if PerfStats.enabled:
+		var hud_start := Time.get_ticks_usec()
+		hud.update(delta)
+		PerfStats.add_section(&"hud", Time.get_ticks_usec() - hud_start)
+	else:
+		hud.update(delta)
 	placement.update()
 	feedback.update_hover_ring()
 	feedback.update_ability_target_decal()
 	feedback.update_path_markers()
 	_poll_formation_drag()
-	group_movement.update_reformation(delta)
+	if PerfStats.enabled:
+		var start := Time.get_ticks_usec()
+		group_movement.update_reformation(delta)
+		PerfStats.add_section(&"march", Time.get_ticks_usec() - start)
+	else:
+		group_movement.update_reformation(delta)
 	if not game_over:
 		_match_seconds += delta
 
@@ -2120,6 +2127,7 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool, formation_type: Formation.Type = Formation.DEFAULT_TYPE, front_width: float = -1.0, facing: Vector3 = Vector3.ZERO) -> void:
 	if not multiplayer.is_server():
 		return
+	var perf_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	## Client-supplied, so flattened and renormalized rather than trusted as-is.
 	facing.y = 0.0
 	facing = facing.normalized() if facing.length_squared() > 0.0001 else Vector3.ZERO
@@ -2181,6 +2189,8 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## ignores formation slots entirely, so neither belongs in a record whose
 	## whole job is re-solving move slots.
 	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback, facing, front_width)
+	if PerfStats.enabled:
+		PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
 
 ## Explicit re-form (FORMATION_REFORM_KEY): pulls a selection that combat, an
 ## obstacle or a chokepoint has smeared into a blob back into its formation

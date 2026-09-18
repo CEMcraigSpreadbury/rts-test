@@ -98,11 +98,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.85, 0)
 shape = SubResource("BoxShape3D_lintel")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="."]
+avoidance_enabled = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 0, 0)
 radius = 0.2
 height = 1.9
 
 [node name="NavigationObstacle3D2" type="NavigationObstacle3D" parent="."]
+avoidance_enabled = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.85, 0, 0)
 radius = 0.2
 height = 1.9
