@@ -14,19 +14,19 @@
 [sub_resource type="Resource" id="ProducibleItem_beastman_warrior"]
 script = ExtResource("2_item_script")
 item_name = "Beastman Warrior"
-build_time = 8.0
+build_time = 5.0
 unit_scene = ExtResource("5_warrior_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_beastman_raider"]
 script = ExtResource("2_item_script")
 item_name = "Beastman Raider"
-build_time = 7.0
+build_time = 4.0
 unit_scene = ExtResource("6_raider_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_beastman_druid"]
 script = ExtResource("2_item_script")
 item_name = "Beastman Druid"
-build_time = 8.5
+build_time = 5.0
 unit_scene = ExtResource("7_druid_scene")
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]

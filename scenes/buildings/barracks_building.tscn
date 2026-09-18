@@ -20,19 +20,19 @@ amount = 75
 [sub_resource type="Resource" id="ProducibleItem_soldier"]
 script = ExtResource("3_item_script")
 item_name = "Soldier"
-build_time = 6.0
+build_time = 3.5
 unit_scene = ExtResource("5_soldier_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_archer"]
 script = ExtResource("3_item_script")
 item_name = "Archer"
-build_time = 7.0
+build_time = 4.0
 unit_scene = ExtResource("8_archer_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_spearman"]
 script = ExtResource("3_item_script")
 item_name = "Spearman"
-build_time = 5.5
+build_time = 3.0
 unit_scene = ExtResource("9_spearman_scene")
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]

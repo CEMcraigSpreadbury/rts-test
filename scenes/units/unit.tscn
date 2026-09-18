@@ -41,7 +41,7 @@
 [sub_resource type="Resource" id="ResourceCost_villager"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
-amount = 50
+amount = 30
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4

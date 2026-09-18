@@ -11,12 +11,12 @@
 [sub_resource type="Resource" id="ResourceCost_ballista_wood"]
 script = ExtResource("4_cost_script")
 resource_type = ExtResource("5_wood")
-amount = 60
+amount = 30
 
 [sub_resource type="Resource" id="ResourceCost_ballista_gold"]
 script = ExtResource("4_cost_script")
 resource_type = ExtResource("6_gold")
-amount = 35
+amount = 20
 
 [node name="Ballista" instance=ExtResource("1_unit")]
 display_name = "Ballista"

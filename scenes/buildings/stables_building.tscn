@@ -17,7 +17,7 @@ amount = 90
 [sub_resource type="Resource" id="ProducibleItem_cavalry"]
 script = ExtResource("3_item_script")
 item_name = "Cavalry"
-build_time = 8.0
+build_time = 5.0
 unit_scene = ExtResource("6_cavalry_scene")
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]

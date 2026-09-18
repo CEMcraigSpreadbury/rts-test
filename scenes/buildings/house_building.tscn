@@ -108,7 +108,7 @@ building_name = "House"
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_house")])
 can_rally = false
 on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResource("5_ej24r")])
-population_capacity = 5
+population_capacity = 10
 max_health = 60
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=244350864]

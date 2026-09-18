@@ -11,12 +11,12 @@
 [sub_resource type="Resource" id="ResourceCost_cannon_wood"]
 script = ExtResource("4_cost_script")
 resource_type = ExtResource("5_wood")
-amount = 40
+amount = 20
 
 [sub_resource type="Resource" id="ResourceCost_cannon_gold"]
 script = ExtResource("4_cost_script")
 resource_type = ExtResource("6_gold")
-amount = 70
+amount = 35
 
 [node name="MagicCannon" instance=ExtResource("1_unit")]
 display_name = "Magic Cannon"

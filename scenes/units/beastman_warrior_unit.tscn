@@ -9,12 +9,12 @@
 [sub_resource type="Resource" id="ResourceCost_bear_wood"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
-amount = 35
+amount = 20
 
 [sub_resource type="Resource" id="ResourceCost_bear_gold"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("5_gold")
-amount = 30
+amount = 15
 
 [node name="BeastmanWarrior" unique_id=1766743184 instance=ExtResource("1_unit")]
 display_name = "Beastman Warrior"

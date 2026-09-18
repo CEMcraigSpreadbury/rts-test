@@ -10,12 +10,12 @@
 [sub_resource type="Resource" id="ResourceCost_soldier_wood"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
-amount = 20
+amount = 10
 
 [sub_resource type="Resource" id="ResourceCost_soldier_gold"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("5_gold")
-amount = 20
+amount = 10
 
 [sub_resource type="Resource" id="ResourceCost_monarch_wood"]
 script = ExtResource("3_cost_script")
