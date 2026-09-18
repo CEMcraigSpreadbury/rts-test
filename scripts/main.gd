@@ -289,6 +289,7 @@ func _ready() -> void:
 	## holding the last one's gold, population and research points.
 	ResourceStockpile.reset()
 	Population.reset()
+	UnitUpgrades.reset()
 	## A scenario scene is an ordinary map with a Scenario node added; it
 	## installed itself in MatchRules while entering the tree, so there is no
 	## mode to switch on — this is the whole of "are we in a mission".
@@ -340,6 +341,7 @@ func _ready() -> void:
 	building_spawner.spawned.connect(_on_building_spawned_for_camera)
 	if multiplayer.is_server():
 		_spawn_all_players()
+		_snapshot_roster()
 		## MultiplayerSpawner.spawned only fires on remote peers, so the host
 		## (and single player) centres on its own base here instead.
 		if town_centers.has(my_peer_id()):
@@ -379,6 +381,9 @@ func _ready() -> void:
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.pressed.connect(_return_to_main_menu)
 	_build_spectate_button()
 	_build_next_mission_button()
+	_build_rematch_button()
+	_build_match_summary()
+	_build_game_over_backdrop()
 
 	Network.player_disconnected.connect(_on_network_player_disconnected)
 	Network.server_disconnected.connect(_on_network_server_disconnected)
@@ -915,7 +920,7 @@ func _end_game(winner_team: int) -> void:
 	## up to a broadcast interval ago.
 	if conquest_enabled:
 		_broadcast_scores()
-	_rpc_game_over.rpc(winner_team)
+	_rpc_game_over.rpc(winner_team, _final_scoreboard(winner_team))
 
 func _broadcast_scores() -> void:
 	_rpc_scores.rpc(_team_scores())
@@ -974,6 +979,122 @@ func _assign_objective_letters() -> void:
 ## count as the map's centre point for lettering.
 const CENTRE_POINT_RADIUS: float = 5.0
 
+## Host only: peer_id -> {name, team, tint}, taken as the match starts — a
+## player who leaves mid-match is gone from Network.players by the end, but
+## still belongs on the final scoreboard under the team they played for.
+var _roster: Dictionary = {}
+
+func _snapshot_roster() -> void:
+	for peer_id in main_base_count_by_peer.keys():
+		_roster[peer_id] = {
+			name = Network.players.get(peer_id, {}).get("name", "Player %d" % peer_id),
+			team = Teams.team_of(peer_id),
+			tint = get_team_tint(peer_id),
+		}
+
+## One row per team, winner first then by Favour: {team, tint, names, score}.
+func _final_scoreboard(winner_team: int) -> Array:
+	var rows_by_team: Dictionary = {}
+	for peer_id in main_base_count_by_peer.keys():
+		var info: Dictionary = _roster.get(peer_id, {
+			name = "Player %d" % peer_id, team = Teams.team_of(peer_id), tint = get_team_tint(peer_id)})
+		if not rows_by_team.has(info.team):
+			rows_by_team[info.team] = {team = info.team, tint = info.tint, names = [], score = 0}
+		var row: Dictionary = rows_by_team[info.team]
+		row.names.append(info.name)
+		row.score += ResourceStockpile.get_amount(peer_id, FAVOUR_RESOURCE)
+	var rows: Array = rows_by_team.values()
+	rows.sort_custom(func(a, b):
+		if (a.team == winner_team) != (b.team == winner_team):
+			return a.team == winner_team
+		return a.score > b.score)
+	return rows
+
+## Seconds of play, counted locally; stops while paused and once it's over.
+var _match_seconds: float = 0.0
+
+## Scoreboard and time played, between the title and the buttons.
+var _summary_box: VBoxContainer = null
+var _scoreboard: GridContainer = null
+var _time_label: Label = null
+
+func _build_match_summary() -> void:
+	_summary_box = VBoxContainer.new()
+	_summary_box.add_theme_constant_override("separation", 10)
+	_summary_box.visible = false
+	var divider: Control = $UI/GameOverPanel/Margin/VBox/TitleDivider
+	divider.add_sibling(_summary_box)
+
+	_scoreboard = GridContainer.new()
+	_scoreboard.columns = 3
+	_scoreboard.add_theme_constant_override("h_separation", 14)
+	_scoreboard.add_theme_constant_override("v_separation", 6)
+	_summary_box.add_child(_scoreboard)
+
+	_time_label = Label.new()
+	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_time_label.add_theme_color_override("font_color", Color(0.72, 0.64, 0.46))
+	_summary_box.add_child(_time_label)
+
+func _fill_match_summary(board: Array, winner_team: int) -> void:
+	for child in _scoreboard.get_children():
+		child.queue_free()
+	var my_team: int = Teams.team_of(my_peer_id())
+	_scoreboard.columns = 3 if conquest_enabled else 2
+	for row in board:
+		var swatch := ColorRect.new()
+		swatch.color = row.tint
+		swatch.custom_minimum_size = Vector2(14, 14)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_scoreboard.add_child(swatch)
+
+		var names := Label.new()
+		names.text = ", ".join(row.names)
+		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		names.custom_minimum_size.x = 180
+		names.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if row.team == my_team:
+			names.add_theme_color_override("font_color", Color.WHITE)
+		_scoreboard.add_child(names)
+
+		if conquest_enabled:
+			var score := Label.new()
+			score.text = str(row.score)
+			score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			score.add_theme_font_size_override("font_size", 20)
+			if row.team == winner_team:
+				score.add_theme_color_override("font_color", VICTORY_COLOR)
+			_scoreboard.add_child(score)
+	_scoreboard.visible = not board.is_empty()
+	_time_label.text = "Time played: %s" % _format_duration(_match_seconds)
+	_summary_box.visible = true
+
+static func _format_duration(seconds: float) -> String:
+	var total: int = int(seconds)
+	if total >= 3600:
+		return "%d:%02d:%02d" % [total / 3600, (total / 60) % 60, total % 60]
+	return "%d:%02d" % [total / 60, total % 60]
+
+## Replays this same map with the same players, rulers and settings. The host
+## decides for everyone, as it does when starting a match from the lobby.
+var _rematch_button: Button = null
+
+func _build_rematch_button() -> void:
+	_rematch_button = Button.new()
+	_rematch_button.text = "Rematch"
+	_rematch_button.visible = false
+	_rematch_button.pressed.connect(_start_rematch)
+	var return_button: Button = $UI/GameOverPanel/Margin/VBox/ReturnButton
+	return_button.add_sibling(_rematch_button)
+	return_button.get_parent().move_child(_rematch_button, return_button.get_index())
+
+func _start_rematch() -> void:
+	_rematch_button.disabled = true
+	if Network.is_single_player():
+		SceneLoader.change_scene(scene_file_path)
+	else:
+		SceneLoader.start_match(scene_file_path)
+
 ## Offered to a player knocked out of a match that's still going (see
 ## _rpc_player_out), and to everyone once the match ends (_rpc_game_over).
 var _spectate_button: Button = null
@@ -1027,33 +1148,68 @@ func _start_spectating() -> void:
 	select_building(null)
 	select_resource(null)
 
+## Result title colours: gold, blood red, and the theme's own parchment.
+const VICTORY_COLOR := Color(1.0, 0.82, 0.36)
+const DEFEAT_COLOR := Color(0.86, 0.29, 0.22)
+const DRAW_COLOR := Color(0.863, 0.769, 0.486)
+
+## Dims and blocks the battlefield behind the result panel. Follows the panel's
+## visibility (Esc toggles it while spectating) rather than being driven
+## separately.
+var _game_over_backdrop: ColorRect = null
+var _game_over_tween: Tween = null
+
+func _build_game_over_backdrop() -> void:
+	_game_over_backdrop = ColorRect.new()
+	_game_over_backdrop.color = Color(0.02, 0.01, 0.0, 0.6)
+	_game_over_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_game_over_backdrop.visible = false
+	game_over_panel.add_sibling(_game_over_backdrop)
+	game_over_panel.get_parent().move_child(_game_over_backdrop, game_over_panel.get_index())
+	game_over_panel.pivot_offset_ratio = Vector2(0.5, 0.5)
+	game_over_panel.visibility_changed.connect(_on_game_over_panel_visibility_changed)
+
+func _on_game_over_panel_visibility_changed() -> void:
+	_game_over_backdrop.visible = game_over_panel.visible
+	if _game_over_tween != null:
+		_game_over_tween.kill()
+	if not game_over_panel.visible:
+		return
+	_game_over_backdrop.modulate.a = 0.0
+	game_over_panel.modulate.a = 0.0
+	game_over_panel.scale = Vector2(0.85, 0.85)
+	_game_over_tween = create_tween().set_parallel()
+	_game_over_tween.tween_property(_game_over_backdrop, "modulate:a", 1.0, 0.5)
+	_game_over_tween.tween_property(game_over_panel, "modulate:a", 1.0, 0.3).set_delay(0.1)
+	_game_over_tween.tween_property(game_over_panel, "scale", Vector2.ONE, 0.45).set_delay(0.1) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _set_result(text: String, color: Color) -> void:
+	game_over_label.text = text
+	game_over_label.add_theme_color_override("font_color", color)
+
 @rpc("authority", "call_local", "reliable")
 func _rpc_player_out() -> void:
 	local_player_out = true
-	game_over_panel.visible = true
-	game_over_label.text = "Defeat"
+	_set_result("Defeat", DEFEAT_COLOR)
 	_spectate_button.visible = true
+	game_over_panel.visible = true
 	## The host IS the server: quitting takes the match down for everyone
 	## still playing, and there's no host migration to hand it off to.
 	if multiplayer.is_server() and not multiplayer.get_peers().is_empty():
 		$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Leave (ends the match for everyone)"
 
 @rpc("authority", "call_local", "reliable")
-func _rpc_game_over(winner_team: int) -> void:
+func _rpc_game_over(winner_team: int, board: Array) -> void:
 	game_over = true
-	## A mission's closing lines are usually said as it ends — let the player
-	## read them out before the result panel goes up over them.
-	if quest_ui != null and quest_ui.is_presenting():
-		game_over_panel.visible = false
-		quest_ui.presentation_finished.connect(func(): game_over_panel.visible = true, CONNECT_ONE_SHOT)
-	else:
-		game_over_panel.visible = true
 	_spectate_button.visible = true
+	_rematch_button.visible = Network.is_host() and not scene_file_path.is_empty()
+	_fill_match_summary(board, winner_team)
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Return to Main Menu"
+	var won := winner_team != DRAW and winner_team == Teams.team_of(my_peer_id())
 	if winner_team == DRAW:
-		game_over_label.text = "Draw!"
-	elif winner_team == Teams.team_of(my_peer_id()):
-		game_over_label.text = "Victory!"
+		_set_result("Draw!", DRAW_COLOR)
+	elif won:
+		_set_result("Victory!", VICTORY_COLOR)
 		## Written down on each winner's own machine, so in co-op everyone who
 		## played it has it unlocked afterwards. Recorded before the offer
 		## below, which needs the next mission to be unlocked.
@@ -1061,7 +1217,18 @@ func _rpc_game_over(winner_team: int) -> void:
 			CampaignProgress.mark_completed(Network.current_scenario_id, Network.campaign_difficulty)
 			_offer_next_mission()
 	else:
-		game_over_label.text = "Defeat"
+		_set_result("Defeat", DEFEAT_COLOR)
+	## A mission's closing lines are usually said as it ends — let the player
+	## read them out before the result panel goes up over them.
+	if quest_ui != null and quest_ui.is_presenting():
+		game_over_panel.visible = false
+		quest_ui.presentation_finished.connect(_reveal_result.bind(won), CONNECT_ONE_SHOT)
+	else:
+		_reveal_result(won)
+
+func _reveal_result(won: bool) -> void:
+	$MusicPlayer.play_outcome($MusicPlayer.victory_music if won else null)
+	game_over_panel.visible = true
 
 func _return_to_main_menu() -> void:
 	Network.leave_game()
@@ -1223,6 +1390,8 @@ func _process(delta: float) -> void:
 	feedback.update_path_markers()
 	_poll_formation_drag()
 	group_movement.update_reformation(delta)
+	if not game_over:
+		_match_seconds += delta
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over or local_player_out:

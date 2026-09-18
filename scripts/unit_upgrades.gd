@@ -9,6 +9,11 @@ enum Stat { WEAPON, ARMOR }
 ## peer_id -> { Unit.UnitCategory: { Stat: int } }
 var _bonuses: Dictionary = {}
 
+## An autoload, so it outlives a match — without this a rematch or the next
+## mission would open with the last one's Blacksmith upgrades already bought.
+func reset() -> void:
+	_bonuses.clear()
+
 func add_bonus(peer_id: int, category: Unit.UnitCategory, stat: Stat, amount: int) -> void:
 	if not _bonuses.has(peer_id):
 		_bonuses[peer_id] = {}
