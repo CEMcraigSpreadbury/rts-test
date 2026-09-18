@@ -2140,6 +2140,20 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
 
+	## A ranged group ordered onto an enemy attacks as a block (see
+	## GroupMovement.formation_attack). A shift-queued attack still queues
+	## per unit below.
+	if not append and target_node != null and group_movement.can_formation_attack(units, target_node):
+		front_width = group_movement.resolve_dragged_width(units, formation_type, front_width)
+		for unit in units:
+			unit.clear_order_queue()
+		group_movement.formation_attack(units, target_node, formation_type, front_width)
+		for unit in units:
+			feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
+		if PerfStats.enabled:
+			PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
+		return
+
 	## A group the player laid out by right-dragging keeps that shape for its
 	## later click orders too, rather than snapping back to the selected type.
 	if target_node == null:

@@ -38,11 +38,14 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 		## pulling that unit into a neighbor's fight would silently override it.
 		if ally.status_command == Unit.Command.MOVE or ally.status_command == Unit.Command.CAST:
 			continue
-		## Holding its ground: it fights whatever reaches it, not a neighbor's fight.
-		if ally.hold_position and ally.status_command == Unit.Command.NONE:
+		## Holding its ground, or its place in a fighting formation: it fights
+		## whatever reaches it, not a neighbor's fight.
+		if (ally.hold_position or ally.in_formation_fight) and ally.status_command == Unit.Command.NONE:
 			continue
 		if ally.global_position.distance_to(from_position) <= ally.aggro_range:
-			ally.command_attack(attacker)
+			## An ally on a group attack-move brings its whole block round.
+			if not ally._group_contact(attacker):
+				ally.command_attack(attacker)
 
 ## First matching nearby Monarch's PASSIVE_AURA attack-speed bonus for this
 ## unit, or 0.0 if none in range. Multiple Monarchs don't stack — a

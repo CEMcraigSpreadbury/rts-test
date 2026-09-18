@@ -5,6 +5,19 @@ extends Node
 ## drop out of a formation move). Owns no selection or UI state — only the
 ## in-flight formation records below — and only ever does work on the host.
 
+const UnitGrid = preload("res://scripts/unit_grid.gd")
+
+## The host's instance, for units handing it enemies met on a group
+## attack-move (see formation_contact).
+static var current: GroupMovement = null
+
+func _enter_tree() -> void:
+	current = self
+
+func _exit_tree() -> void:
+	if current == self:
+		current = null
+
 ## Host-only reformation bookkeeping — one record per in-flight multi-unit
 ## formation move (see register_formation/update_reformation). Records are
 ## created when a move is dispatched, polled once a frame to notice members
@@ -655,14 +668,27 @@ const REFORM_DEFAULT_FORWARD: Vector3 = Vector3.FORWARD
 ## ranks keeps the block's front, and stamped on every member as the front it
 ## now holds. `front_width` is kept for a dragged formation so closing ranks
 ## keeps the shape the player laid out rather than falling back to the default.
-func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward: Vector3 = Vector3.ZERO, front_width: float = -1.0) -> void:
+## `speed_cap` holds the march to at most that pace (see formation_attack).
+func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward: Vector3 = Vector3.ZERO, front_width: float = -1.0, speed_cap: float = INF) -> Dictionary:
 	if not multiplayer.is_server() or group.size() < 2:
-		return
+		return {}
 	var members := _formation_record_members(group)
 	if members.size() < 2:
-		return
+		return {}
 	for unit in members:
 		unit.formation_facing = forward
+	## A group attack-move is remembered on its members, so the group can stop
+	## to fight as a block and pick the march back up afterwards.
+	if attack_move:
+		var order := {
+			"units": members.duplicate(),
+			"target": target_pos,
+			"type": formation_type,
+			"forward": forward,
+			"front_width": front_width,
+		}
+		for unit in members:
+			unit.attack_move_order = order
 	## No need to hunt down an older record these units were in: they are
 	## carrying this new group array now, so they no longer read as live
 	## members of it and the next poll retires it on its own.
@@ -678,9 +704,13 @@ func register_formation(group: Array[Unit], target_pos: Vector3, formation_type:
 		"timer": 0.0,
 		"dirty": false,
 		"march": false,
+		"attack_target": null,
+		"fight_id": -1,
+		"speed_cap": speed_cap,
 	}
 	_start_march(record, members)
 	_active_formations.append(record)
+	return record
 
 ## The members of `group` still actually walking this order: alive, still on a
 ## move/attack-move command, and still carrying this exact group array. A unit
@@ -708,7 +738,10 @@ func _formation_record_members(group: Array[Unit]) -> Array[Unit]:
 ## this one batched check no matter how many units die at once, and it also
 ## covers hand-placed units that never went through the spawner's signal wiring.
 func update_reformation(delta: float) -> void:
-	if not multiplayer.is_server() or _active_formations.is_empty():
+	if not multiplayer.is_server():
+		return
+	_update_engagements(delta)
+	if _active_formations.is_empty():
 		return
 	for i in range(_active_formations.size() - 1, -1, -1):
 		var record: Dictionary = _active_formations[i]
@@ -739,6 +772,14 @@ func update_reformation(delta: float) -> void:
 			continue
 		record["dirty"] = false
 		reform_group(members, record["target"], record["type"], record["attack_move"], record["forward"], record["front_width"])
+		## Re-issuing the move ended any formation fight; the block is still
+		## on its way to fight, so pick it back up.
+		## Keyed on the engagement, not the target: by now the target may well
+		## be dead and freed, and the block is still fighting.
+		if int(record["fight_id"]) >= 0:
+			var fight_target = record["attack_target"] if is_instance_valid(record["attack_target"]) else null
+			for unit in members:
+				unit.begin_formation_fight(fight_target, unit.formation_slot(), record["fight_id"])
 		## The re-issue hands the survivors a new group array as their cohesion
 		## group, so the record has to follow it or every member would read as
 		## "moved on" on the very next poll.
@@ -775,7 +816,7 @@ func _record_holding(record: Dictionary) -> Array[Unit]:
 	for unit in slots:
 		if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD:
 			continue
-		var arrived: bool = unit.status_command == Unit.Command.NONE and unit.attack_target == null \
+		var arrived: bool = unit.holds_place() \
 				and is_same(unit.arrived_group, record["group"]) \
 				and _flat_distance(unit.global_position, slots[unit]) <= HOLD_SLOT_DISTANCE
 		if arrived or _is_walking(record, unit):
@@ -834,6 +875,356 @@ func group_facing(units: Array[Unit]) -> Vector3:
 		facing += Vector3(sin(unit.rotation.y), 0.0, cos(unit.rotation.y))
 	facing.y = 0.0
 	return facing.normalized() if facing.length_squared() > 0.0001 else REFORM_DEFAULT_FORWARD
+
+## ---------------------------------------------------------------------------
+## Formation attack
+##
+## An attack order given to a ranged group, rather than each man being sent at
+## the target on his own (which left the block as a ring round it): the block
+## marches as a formation to where its front rank is just inside range, facing
+## the target, and every member then fights from its slot (see
+## Unit.in_formation_fight) — only what's within its own reach, the ordered
+## target first, never chasing.
+## ---------------------------------------------------------------------------
+
+## How far inside the group's shortest range the front rank stops, so a target
+## shuffling back a little doesn't step straight out of reach.
+const ENGAGE_RANGE_FRACTION: float = 0.9
+
+## Whether `units` attacking `target` fights as a formation: a group of
+## fighting units ordered onto an enemy it can attack. A selection with
+## non-fighters in it (villagers) still closes in man by man.
+func can_formation_attack(units: Array[Unit], target: Node) -> bool:
+	if units.size() < 2 or not (target is Node3D) or not is_instance_valid(target):
+		return false
+	if not (target is Unit or (target is ProductionBuilding and target.can_be_attacked())):
+		return false
+	for unit in units:
+		if not unit.can_fight or not Teams.is_enemy(unit.owner_peer_id, target.owner_peer_id):
+			return false
+	return true
+
+## Host-side. Issues the formation attack (see can_formation_attack), or, with
+## `fight_id`, sends an engagement already under way at a new target. `refill`
+## re-solves a fighting block's slots in place after losses: members already
+## close to their new slot carry on fighting from it, and only the ones with
+## somewhere to go (the rank behind stepping into a hole) walk there.
+func formation_attack(units: Array[Unit], target: Node3D, formation_type: Formation.Type, front_width: float = -1.0, fight_id: int = -1, refill: bool = false) -> void:
+	if fight_id < 0:
+		fight_id = _next_fight_id
+		_next_fight_id += 1
+		_engagements.append({
+			"id": fight_id,
+			"units": units.duplicate(),
+			"owner": units[0].owner_peer_id,
+			"target": target,
+			"type": formation_type,
+			"front_width": front_width,
+			"check_in": ENGAGEMENT_CHECK_INTERVAL,
+			"advance_in": 0.0,
+			"count": units.size(),
+			"refill_in": -1.0,
+		})
+	var facing := _group_forward(group_centroid(units), target.global_position)
+	var melee := _melee_members(units, true)
+	var ranged := _melee_members(units, false)
+	## A mixed group goes in as one block — melee ranks in front, ranged
+	## behind — and the melee ranks charge on from there (see
+	## _check_engagement). Once fighting, each part refills on its own: the
+	## melee in contact, the ranged at its own range behind.
+	if not refill and not melee.is_empty() and not ranged.is_empty():
+		_formation_attack_mixed(melee, ranged, target, facing, formation_type, front_width, fight_id)
+		return
+	if not melee.is_empty():
+		_formation_attack_block(melee, target, facing, formation_type, front_width, fight_id, refill, INF)
+	if not ranged.is_empty():
+		_formation_attack_block(ranged, target, facing, formation_type, front_width, fight_id, refill, INF)
+
+func _melee_members(units: Array[Unit], melee: bool) -> Array[Unit]:
+	var result: Array[Unit] = []
+	for unit in units:
+		if unit._counts_as_melee() == melee:
+			result.append(unit)
+	return result
+
+## A mixed group's way in: one formation with the melee in its front ranks and
+## the ranged behind, halted where the first ranged rank is in range — so the
+## melee is in front of the archers, short of the enemy, and marching at the
+## slowest member's pace so neither part runs ahead of the other.
+func _formation_attack_mixed(melee: Array[Unit], ranged: Array[Unit], target: Node3D, facing: Vector3, formation_type: Formation.Type, front_width: float, fight_id: int) -> void:
+	var units: Array[Unit] = []
+	units.append_array(melee)
+	units.append_array(ranged)
+	var target_pos := target.global_position
+	var ranged_engage := _engage_distance(ranged, target)
+	if _flat_distance(group_centroid(units), target_pos) <= ranged_engage:
+		for unit in units:
+			unit.command_stop()
+			unit.formation_facing = facing
+			unit.begin_formation_fight(target, unit.global_position, fight_id)
+		return
+	var right := Vector3(facing.z, 0.0, -facing.x)
+	var shape := Formation.new(units, formation_type, front_width).get_slot_positions(Vector3.ZERO, facing, right)
+	## Slots front to back, as (depth behind the front rank, index).
+	var order: Array[Vector2] = []
+	for i in shape.size():
+		order.append(Vector2(-shape[i].dot(facing), i))
+	order.sort()
+	## The first ranged rank is where range is measured from.
+	var ranged_depth: float = order[mini(melee.size(), order.size() - 1)].x
+	var front: float = maxf(ranged_engage - ranged_depth, _engage_distance(melee, target))
+	var point := target_pos - facing * front
+	var map: RID = units[0].nav_agent.get_navigation_map()
+	if map.is_valid() and NavigationServer3D.map_get_iteration_id(map) > 0:
+		point = NavigationServer3D.map_get_closest_point(map, point)
+	var melee_slots: Array[Vector3] = []
+	var ranged_slots: Array[Vector3] = []
+	for k in order.size():
+		var slot: Vector3 = shape[int(order[k].y)] + point
+		if k < melee.size():
+			melee_slots.append(slot)
+		else:
+			ranged_slots.append(slot)
+	var speed := slowest_move_speed(units)
+	for part in [[melee, _assign_slots_to_units(melee, melee_slots, facing, true)],
+			[ranged, _assign_slots_to_units(ranged, ranged_slots, facing, true)]]:
+		var members: Array[Unit] = part[0]
+		var slots: Array[Vector3] = part[1]
+		for i in members.size():
+			members[i].command_move(slots[i], speed, units)
+			members[i].begin_formation_fight(target, slots[i], fight_id)
+	var record := register_formation(units, point, formation_type, false, facing, front_width, speed)
+	if not record.is_empty():
+		record["attack_target"] = target
+		record["fight_id"] = fight_id
+
+## One block of a formation attack (see formation_attack): all melee or all
+## ranged, facing `facing`.
+func _formation_attack_block(units: Array[Unit], target: Node3D, facing: Vector3, formation_type: Formation.Type, front_width: float, fight_id: int, refill: bool, speed_cap: float) -> void:
+	var centroid := group_centroid(units)
+	var target_pos := target.global_position
+	var engage := _engage_distance(units, target)
+	## Already close enough: fight from where they stand rather than walk
+	## backwards to a line further out.
+	if not refill and _flat_distance(centroid, target_pos) <= engage:
+		for unit in units:
+			unit.command_stop()
+			unit.formation_facing = facing
+			unit.begin_formation_fight(target, unit.global_position, fight_id)
+		return
+	var point := target_pos - facing * engage
+	var map: RID = units[0].nav_agent.get_navigation_map()
+	if map.is_valid() and NavigationServer3D.map_get_iteration_id(map) > 0:
+		point = NavigationServer3D.map_get_closest_point(map, point)
+	var slots := formation_positions(units, point, formation_type, facing, front_width)
+	var speed := slowest_move_speed(units)
+	for i in units.size():
+		var unit := units[i]
+		## Measured from its place, not where it stands: a melee man stepped
+		## out to strike is still in the same spot in the line.
+		if refill and unit.status_command != Unit.Command.MOVE \
+				and _flat_distance(unit.formation_fight_place, slots[i]) <= REFILL_KEEP_DISTANCE:
+			unit.formation_fight_place = slots[i]
+			unit.formation_attack_target = target
+			continue
+		unit.command_move(slots[i], speed, units)
+		unit.begin_formation_fight(target, slots[i], fight_id)
+	var record := register_formation(units, point, formation_type, false, facing, front_width, speed_cap)
+	if not record.is_empty():
+		record["attack_target"] = target
+		record["fight_id"] = fight_id
+
+## Where the front rank stands off from `target`: just inside the group's
+## shortest reach.
+func _engage_distance(units: Array[Unit], target: Node3D) -> float:
+	var reach := INF
+	for unit in units:
+		reach = minf(reach, unit.attack_range)
+	if target is ProductionBuilding:
+		reach += target.get_footprint_radius()
+	return reach * ENGAGE_RANGE_FRACTION
+
+## ---------------------------------------------------------------------------
+## Engagements
+##
+## A formation attack doesn't end when the block arrives. Each one is watched
+## here for as long as any member is still fighting in it (any other order
+## takes a unit out): a target that moves out of reach is followed as a block,
+## and one that dies is replaced by the nearest enemy near the block — or, with
+## nothing near, the block holds and fights whatever comes within reach.
+## ---------------------------------------------------------------------------
+
+var _engagements: Array[Dictionary] = []
+var _next_fight_id: int = 1
+## How often each engagement is looked at.
+const ENGAGEMENT_CHECK_INTERVAL: float = 0.25
+## Fewest seconds between re-advances on a target that keeps moving off —
+## each re-solves and re-issues the whole block's slots.
+const ENGAGEMENT_ADVANCE_INTERVAL: float = 1.5
+## A fighting block that loses members waits this long — deaths come in
+## bursts — then re-solves its slots so the rank behind steps into the holes.
+const ENGAGEMENT_REFILL_DELAY: float = 1.0
+## On a refill, a member already this close to its new slot carries on
+## fighting rather than walking the last bit (see formation_attack).
+const REFILL_KEEP_DISTANCE: float = 1.2
+## How far beyond the block's edge a new target is looked for once the last
+## one is dead — from the edge rather than the centre, so a deep block of
+## hundreds looks as far past its front rank as a small one does.
+const ENGAGEMENT_RETARGET_REACH: float = 10.0
+
+func _update_engagements(delta: float) -> void:
+	for i in range(_engagements.size() - 1, -1, -1):
+		var engagement: Dictionary = _engagements[i]
+		var members := _engagement_members(engagement)
+		if members.is_empty():
+			_engagements.remove_at(i)
+			continue
+		engagement["advance_in"] = float(engagement["advance_in"]) - delta
+		if members.size() < int(engagement["count"]):
+			engagement["count"] = members.size()
+			engagement["refill_in"] = ENGAGEMENT_REFILL_DELAY
+		elif float(engagement["refill_in"]) >= 0.0:
+			engagement["refill_in"] = maxf(float(engagement["refill_in"]) - delta, 0.0)
+		engagement["check_in"] = float(engagement["check_in"]) - delta
+		if engagement["check_in"] > 0.0:
+			continue
+		engagement["check_in"] = ENGAGEMENT_CHECK_INTERVAL
+		## Still walking into place: let the block get there first.
+		for unit in members:
+			if unit.status_command == Unit.Command.MOVE:
+				members = []
+				break
+		if members.is_empty():
+			continue
+		_check_engagement(engagement, members)
+
+## Members still fighting in `engagement`: alive, and not given another order.
+func _engagement_members(engagement: Dictionary) -> Array[Unit]:
+	var members: Array[Unit] = []
+	for unit in engagement["units"]:
+		if is_instance_valid(unit) and unit.status_activity != Unit.Activity.DEAD \
+				and unit.in_formation_fight and unit.formation_fight_id == engagement["id"]:
+			members.append(unit)
+	return members
+
+func _check_engagement(engagement: Dictionary, members: Array[Unit]) -> void:
+	var target = engagement["target"]
+	var alive: bool = target != null and is_instance_valid(target) and not _is_dead(target)
+	## Lost men a moment ago: close the holes before anything else.
+	if alive and members.size() >= 2 and float(engagement["refill_in"]) == 0.0:
+		engagement["refill_in"] = -1.0
+		formation_attack(members, target, engagement["type"], engagement["front_width"], engagement["id"], true)
+		return
+	if alive:
+		## A mixed block in place with its archers shooting and its melee
+		## ranks still short of the enemy: the melee charges on into contact.
+		var melee := _melee_members(members, true)
+		if not melee.is_empty() and melee.size() < members.size() and engagement["advance_in"] <= 0.0:
+			var melee_engaged := false
+			for unit in melee:
+				if unit.attack_target != null or unit._formation_can_reach(target):
+					melee_engaged = true
+					break
+			if not melee_engaged:
+				engagement["advance_in"] = ENGAGEMENT_ADVANCE_INTERVAL
+				var charge_facing := _group_forward(group_centroid(melee), target.global_position)
+				_formation_attack_block(melee, target, charge_facing, engagement["type"], engagement["front_width"], engagement["id"], false, INF)
+				return
+		## Someone can still reach it: the block is doing its job.
+		for unit in members:
+			if unit._formation_can_reach(target):
+				return
+		## Moved off out of everyone's reach — follow it as a block.
+		if engagement["advance_in"] > 0.0:
+			return
+		_advance_engagement(engagement, members, target)
+		return
+	var next := _nearest_enemy_near(members, int(engagement["owner"]))
+	## Nothing left near a group that met this fight on an attack-move: carry
+	## on to where it was going.
+	if next == null and engagement.has("resume"):
+		_resume_attack_move(members, engagement["resume"])
+		return
+	if next == null:
+		if target != null:
+			engagement["target"] = null
+			for unit in members:
+				unit.hold_formation_fight()
+		return
+	_advance_engagement(engagement, members, next)
+
+## Host-side. `unit`, on a group attack-move, has met `enemy` (seen it, been
+## hit by it, or been called in by a neighbour it hit): the whole group still on
+## that attack-move stops and fights it as a formation, and resumes the march
+## once the area's clear (see _check_engagement). False if there's no group to
+## bring round, so the unit fights it on its own as before.
+func formation_contact(unit: Unit, enemy: Node3D) -> bool:
+	if not multiplayer.is_server():
+		return false
+	var order: Dictionary = unit.attack_move_order
+	var members: Array[Unit] = []
+	for other in order.get("units", []):
+		if is_instance_valid(other) and other.status_activity != Unit.Activity.DEAD and other.can_fight \
+				and is_same(other.attack_move_order, order) and not other.in_formation_fight \
+				and (other.status_command == Unit.Command.ATTACK_MOVE or other.status_command == Unit.Command.NONE):
+			members.append(other)
+	if members.size() < 2 or not members.has(unit) or not can_formation_attack(members, enemy):
+		return false
+	formation_attack(members, enemy, order["type"], order["front_width"])
+	_engagements[_engagements.size() - 1]["resume"] = order
+	return true
+
+## Puts `members` back on the group attack-move `order` after a fight.
+func _resume_attack_move(members: Array[Unit], order: Dictionary) -> void:
+	var target: Vector3 = order["target"]
+	var slots := formation_positions(members, target, order["type"], order["forward"], order["front_width"])
+	var speed := slowest_move_speed(members)
+	for i in members.size():
+		members[i].command_attack_move(slots[i], speed, members)
+	register_formation(members, target, order["type"], true, order["forward"], order["front_width"])
+
+func _advance_engagement(engagement: Dictionary, members: Array[Unit], target: Node3D) -> void:
+	engagement["target"] = target
+	engagement["advance_in"] = ENGAGEMENT_ADVANCE_INTERVAL
+	formation_attack(members, target, engagement["type"], engagement["front_width"], engagement["id"])
+
+func _is_dead(target: Node) -> bool:
+	if target is Unit:
+		return target.status_activity == Unit.Activity.DEAD
+	if target is ProductionBuilding:
+		return target.is_destroyed or not target.can_be_attacked()
+	return false
+
+## Nearest enemy of `owner` within ENGAGEMENT_RETARGET_REACH of the block's
+## edge (nearest to its centre): a unit if there is one, otherwise an
+## attackable building.
+func _nearest_enemy_near(members: Array[Unit], owner: int) -> Node3D:
+	var centre := group_centroid(members)
+	var block_radius := 0.0
+	for unit in members:
+		block_radius = maxf(block_radius, _flat_distance(centre, unit.global_position))
+	var search := block_radius + ENGAGEMENT_RETARGET_REACH
+	var best: Node3D = null
+	var best_distance := search
+	for unit in UnitGrid.enemies_near(get_tree(), centre, search, owner):
+		if not CombatUtils.is_worth_attacking(unit):
+			continue
+		var distance := _flat_distance(centre, unit.global_position)
+		if distance <= best_distance:
+			best = unit
+			best_distance = distance
+	if best != null:
+		return best
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var building := node as ProductionBuilding
+		if building == null or building.is_destroyed or not building.can_be_attacked() \
+				or not Teams.is_enemy(owner, building.owner_peer_id):
+			continue
+		var distance := _flat_distance(centre, building.global_position) - building.get_footprint_radius()
+		if distance <= best_distance:
+			best = building
+			best_distance = distance
+	return best
 
 ## ---------------------------------------------------------------------------
 ## Marching
@@ -971,7 +1362,7 @@ func _new_march(record: Dictionary, units: Array[Unit], forward: Vector3, map: R
 	## a navmesh path don't swing its flanks back and forth.
 	march["heading_span"] = maxf(MARCH_HEADING_SPAN, float(march["probe_reach"]) * MARCH_HEADING_SPAN_PER_REACH)
 	_set_route_offsets(march)
-	march["speed"] = units[0].move_speed * MARCH_SPEED_FACTOR
+	march["speed"] = minf(units[0].move_speed, float(record["speed_cap"])) * MARCH_SPEED_FACTOR
 	march["march_scale"] = MARCH_MIN_SCALE
 	_steer_march(march, units, 0.0)
 	return march

@@ -1069,6 +1069,36 @@ var leash_radius: float = 0.0
 ## out to meet them. Replicated so every peer's command card shows the state.
 ## Explicit orders (move, attack, attack-move, patrol) still behave as normal.
 var hold_position: bool = false
+## Host-only. Set when this unit's group was ordered to attack as a formation
+## (see GroupMovement.formation_attack): it marches to its slot in the block,
+## then fights from there like a holding unit — only what's within reach, the
+## ordered target first — instead of each man chasing the target down on his
+## own and the block ending up as a ring round it. Any other order ends it.
+var in_formation_fight: bool = false
+var formation_attack_target: Node3D = null
+## Host-only. The group attack-move this unit is on, shared by the whole group
+## (see GroupMovement.register_formation): what lets the group stop and fight
+## an enemy as a block and then carry on (GroupMovement.formation_contact).
+## Empty for a lone unit, and forgotten on any other order.
+var attack_move_order: Dictionary = {}
+## Which of GroupMovement's engagements this unit fights in.
+var formation_fight_id: int = -1
+## Where this unit stands in the fighting block — its slot, or wherever its
+## move actually ended if the slot couldn't be reached — which it walks back
+## to when shoved out of place (see _tick_formation_place).
+var formation_fight_place: Vector3 = Vector3.ZERO
+## Idle and this far out of place: walk back. Stops once within
+## FORMATION_PLACE_SETTLED, so it doesn't twitch at the edge.
+const FORMATION_PLACE_RETURN: float = 0.8
+const FORMATION_PLACE_SETTLED: float = 0.25
+## Shooting and shoved this far out of place: break off and go back first.
+## A melee member may be out by its step as well (see MELEE_FORMATION_STEP).
+const FORMATION_PLACE_DRIFT_MAX: float = 2.0
+## How far a melee member of a fighting block steps out of line to strike an
+## enemy — its reach is counted from its place, not from wherever it stands.
+## Ranged members shoot from where they stand.
+const MELEE_FORMATION_STEP: float = 2.0
+var _returning_to_place: bool = false
 ## Set when a holding unit picked its current fight up by itself rather than
 ## being ordered into it, so it lets the target go instead of chasing it.
 var _hold_engagement: bool = false
@@ -1258,6 +1288,8 @@ func _straight_direction() -> Vector3:
 func command_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD:
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
 	status_command = Command.MOVE
@@ -1418,6 +1450,8 @@ func _update_funnel(delta: float) -> void:
 func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_gather or resource_node == null:
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	## Skip the capacity check when re-issued at a resource this unit is
 	## already assigned to — otherwise it would be blocked by its own reservation.
 	if resource_node != target_resource and not resource_node.can_accept_gatherer():
@@ -1445,6 +1479,9 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
 		return
+	_end_formation_fight()
+	if not keep_assault:
+		attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
 	if not keep_assault:
@@ -1466,6 +1503,7 @@ func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 func command_attack_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD or not can_fight:
 		return
+	_end_formation_fight()
 	_leave_build_site()
 	_leave_gather_site()
 	assault_center = target_position
@@ -1483,6 +1521,8 @@ func command_attack_move(target_position: Vector3, speed_override: float = -1.0,
 func command_patrol(points: Array[Vector3]) -> void:
 	if status_activity == Activity.DEAD or not can_fight or points.is_empty():
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
 	formation_facing = Vector3.ZERO
@@ -1512,6 +1552,8 @@ func command_patrol_add_waypoint(point: Vector3) -> void:
 func command_wander(origin: Node3D, radius: float) -> void:
 	if status_activity == Activity.DEAD or not can_fight or origin == null or radius <= 0.0:
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
 	formation_facing = Vector3.ZERO
@@ -1529,8 +1571,104 @@ func command_wander(origin: Node3D, radius: float) -> void:
 ## Takes on an enemy already within reach without leaving the spot — the
 ## holding-unit counterpart to the idle scan's command_attack.
 func _engage_from_hold(target: Node3D) -> void:
+	## command_attack ends a formation fight, like any order — but this is the
+	## formation fighting, not a new order, so it carries on afterwards.
+	var fighting := in_formation_fight
+	var ordered := formation_attack_target
+	var fight_id := formation_fight_id
 	command_attack(target, true)
+	in_formation_fight = fighting
+	formation_attack_target = ordered
+	formation_fight_id = fight_id
 	_hold_engagement = true
+
+## Hands an enemy met on a group attack-move to the group, which fights it as
+## a block (GroupMovement.formation_contact). False for a lone unit.
+func _group_contact(enemy: Node3D) -> bool:
+	if attack_move_order.is_empty() or GroupMovement.current == null:
+		return false
+	return GroupMovement.current.formation_contact(self, enemy)
+
+## Joins a formation attack on `target` (see in_formation_fight). Called by
+## GroupMovement right after the move to this unit's slot is issued.
+func begin_formation_fight(target: Node3D, place: Vector3, fight_id: int) -> void:
+	in_formation_fight = true
+	formation_attack_target = target
+	formation_fight_id = fight_id
+	formation_fight_place = place
+	_returning_to_place = false
+
+func _end_formation_fight() -> void:
+	in_formation_fight = false
+	formation_attack_target = null
+	formation_fight_id = -1
+
+## The block has lost its target and found nothing to go after: members hold
+## their places and fight whatever comes within reach.
+func hold_formation_fight() -> void:
+	formation_attack_target = null
+
+## Walks an idle member of a fighting block back to its place once it's been
+## pushed out of it — by separation, or an enemy shoving through — straight
+## there, since it's never far. True while it's doing so (the rest of the
+## tick's steering is skipped).
+func _tick_formation_place(delta: float) -> bool:
+	if not in_formation_fight or status_activity != Activity.IDLE or status_command != Command.NONE:
+		_returning_to_place = false
+		return false
+	var to_place := formation_fight_place - global_position
+	to_place.y = 0.0
+	var distance := to_place.length()
+	if distance > FORMATION_PLACE_RETURN:
+		_returning_to_place = true
+	elif distance <= FORMATION_PLACE_SETTLED:
+		_returning_to_place = false
+	if not _returning_to_place:
+		return false
+	_update_separation(delta)
+	## Slows over the last stretch so it settles instead of overshooting.
+	var speed: float = minf(move_speed, distance * 4.0)
+	_apply_velocity(to_place / distance * speed)
+	return true
+
+## The formation's ordered target, if it's alive and within this unit's reach
+## from where it stands.
+func _formation_target_in_reach() -> Node3D:
+	if not in_formation_fight or not _is_target_alive(formation_attack_target):
+		return null
+	if not _formation_can_reach(formation_attack_target):
+		return null
+	return formation_attack_target
+
+## How far a member of a fighting block reaches, counted from its place.
+func _formation_reach(target: Node3D) -> float:
+	return _reach_to(target) + (MELEE_FORMATION_STEP if _counts_as_melee() else 0.0)
+
+func _formation_can_reach(target: Node3D) -> bool:
+	return _flat_distance(formation_fight_place, target.global_position) <= _formation_reach(target)
+
+## Whether a unit fighting from where it stands (hold_position, or its place in
+## a fighting block) may go on with a fight against `target`.
+func _hold_can_reach(target: Node3D) -> bool:
+	return _formation_can_reach(target) if in_formation_fight else _target_in_reach()
+
+## Nearest enemy a holding unit may take on: within attack_range, or for a
+## member of a fighting block, within its reach from its place.
+func _nearest_in_place_reach() -> Node3D:
+	if not in_formation_fight:
+		var near := _find_nearest_enemy_in_range(attack_range)
+		if near and _flat_distance(global_position, near.global_position) <= attack_range:
+			return near
+		return null
+	var step: float = MELEE_FORMATION_STEP if _counts_as_melee() else 0.0
+	var enemy := _find_nearest_enemy_in_range(attack_range + step)
+	return enemy if enemy and _formation_can_reach(enemy) else null
+
+## Idle in its place in a formation — or fighting from it (see
+## in_formation_fight, hold_position) — as opposed to off on an errand of its
+## own. What GroupMovement's ranks-closing counts as still holding the shape.
+func holds_place() -> bool:
+	return (status_command == Command.NONE and attack_target == null) or _in_hold_fight()
 
 ## Only while that self-picked fight is still the unit's order — any other
 ## command either replaces Command.ATTACK or comes back through command_attack.
@@ -1540,6 +1678,8 @@ func _in_hold_fight() -> bool:
 func command_stop() -> void:
 	if status_activity == Activity.DEAD:
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
 	status_command = Command.NONE
@@ -1558,6 +1698,8 @@ func command_stop() -> void:
 func command_build(building: ProductionBuilding) -> void:
 	if status_activity == Activity.DEAD or not can_build or building == null:
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	if not is_instance_valid(building) or not building.is_under_construction:
 		return
 	_leave_build_site()
@@ -1706,6 +1848,8 @@ func command_cast_ability(ability_index: int, target_pos: Vector3) -> void:
 	var ability := get_ability(ability_index)
 	if status_activity == Activity.DEAD or ability == null or not ability.is_activated():
 		return
+	_end_formation_fight()
+	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
 	status_command = Command.CAST
@@ -2018,14 +2162,15 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		## before the unit escapes range, undoing the retreat entirely.
 		## Command.CAST is the same kind of deliberate order: a monster walking
 		## in to cast shouldn't be talked out of it by the first thing to hit it.
-		elif hold_position and status_command == Command.NONE:
-			if _flat_distance(global_position, attacker.global_position) <= attack_range:
+		elif (hold_position or in_formation_fight) and status_command == Command.NONE:
+			if _flat_distance(global_position, attacker.global_position) <= _reach_to(attacker):
 				_engage_from_hold(attacker)
 		elif status_command != Command.ATTACK and status_command != Command.MOVE and status_command != Command.CAST:
 			## keep_assault: being shot at while marching on an assault target
 			## makes this unit fight back, but must not quietly cancel the
 			## standing order to take the place it was sent to.
-			command_attack(attacker, true)
+			if not _group_contact(attacker):
+				command_attack(attacker, true)
 		var now := Time.get_ticks_msec()
 		if now >= _next_alert_ms:
 			_next_alert_ms = now + CombatUtils.ALERT_INTERVAL_MS
@@ -2156,9 +2301,10 @@ func _physics_tick(delta: float) -> void:
 				## buildings — are picked up on arrival instead, by the idle
 				## scan below, and after each kill by _find_new_target_or_idle.
 				var target := _find_nearest_enemy_in_range(aggro_range)
-				if target:
-					## Hands off to the normal ATTACK flow for this one fight,
-					## but keeps the assault so the destination isn't lost.
+				## A group attack-move stops and fights it as a block; a lone
+				## unit hands off to the normal ATTACK flow for this one fight,
+				## but keeps the assault so the destination isn't lost.
+				if target and not _group_contact(target):
 					command_attack(target, true)
 			else:
 				## Patrol stays Command.PATROL through the fight so
@@ -2180,15 +2326,20 @@ func _physics_tick(delta: float) -> void:
 			## A unit holding a cleared assault area watches that whole area
 			## (buildings included), not just its own aggro bubble — it was told
 			## to take the place, and only Stop or another order calls it off.
-			if hold_position:
-				var in_reach := _find_nearest_enemy_in_range(attack_range)
+			if hold_position or in_formation_fight:
+				var in_reach: Node3D = _formation_target_in_reach()
+				if in_reach == null:
+					in_reach = _nearest_in_place_reach()
 				if in_reach:
 					_engage_from_hold(in_reach)
 			else:
 				var enemy: Node3D = _find_assault_target() if assault_active \
 						else _find_nearest_enemy_in_range(aggro_range)
-				if enemy:
+				if enemy and not (assault_active and _group_contact(enemy)):
 					command_attack(enemy, true)
+
+	if _tick_formation_place(delta):
+		return
 
 	## Standing idle with no order and nothing shoving it — most of an army,
 	## most of the time — there's no steering, path or arrival work to do. It
@@ -2472,6 +2623,8 @@ func _apply_velocity(desired: Vector3) -> void:
 			## an unreachable slot, or was shoved off its slot by a crowding
 			## neighbour, as lost and re-orders the whole group, over and over.
 			arrived_group = formation_group
+			if in_formation_fight:
+				formation_fight_place = global_position
 			## Reset status_command too, not just status_activity — otherwise
 			## a unit that has ever finished a move order (including every
 			## unit that walks to a rally point right after spawning) stays
@@ -2812,7 +2965,7 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 	return result
 
 func _head_to_target() -> void:
-	if not _is_target_alive(attack_target) or (_in_hold_fight() and not _target_in_reach()):
+	if not _is_target_alive(attack_target) or (_in_hold_fight() and not _hold_can_reach(attack_target)):
 		_find_new_target_or_idle()
 		return
 	status_activity = Activity.TO_TARGET
@@ -2848,6 +3001,12 @@ func _tick_chase(delta: float) -> void:
 func _target_in_reach() -> bool:
 	return _is_target_alive(attack_target) \
 			and _flat_distance(global_position, attack_target.global_position) <= _effective_attack_range()
+
+## attack_range, plus a building's footprint (see _effective_attack_range).
+func _reach_to(target: Node3D) -> float:
+	if target is ProductionBuilding:
+		return attack_range + target.get_footprint_radius()
+	return attack_range
 
 func _counts_as_melee() -> bool:
 	return can_fight and projectile_scene == null
@@ -2968,6 +3127,16 @@ func _tick_attacking(delta: float) -> void:
 	if not _is_target_alive(attack_target):
 		_find_new_target_or_idle()
 		return
+	## Shoved well out of its place in a fighting block: back into line before
+	## shooting on (see _tick_formation_place).
+	if in_formation_fight and _in_hold_fight() \
+			and _flat_distance(global_position, formation_fight_place) > FORMATION_PLACE_DRIFT_MAX \
+					+ (MELEE_FORMATION_STEP if _counts_as_melee() else 0.0):
+		_hold_engagement = false
+		attack_target = null
+		status_command = Command.NONE
+		status_activity = Activity.IDLE
+		return
 
 	if leash_radius > 0.0 and global_position.distance_to(leash_origin.global_position) > leash_radius:
 		attack_target = null
@@ -3062,8 +3231,10 @@ func _find_new_target_or_idle() -> void:
 	## A holding unit's own fight: switch to anything else already in reach,
 	## otherwise settle back into its stance where it stands.
 	if _in_hold_fight():
-		var in_reach := _find_nearest_enemy_in_range(attack_range)
-		if in_reach and _flat_distance(global_position, in_reach.global_position) <= attack_range:
+		var in_reach: Node3D = _formation_target_in_reach()
+		if in_reach == null:
+			in_reach = _nearest_in_place_reach()
+		if in_reach:
 			attack_target = in_reach
 			_start_attacking()
 			return
