@@ -28,6 +28,7 @@ const DEFAULTS := {
 	&"depth_of_field": true,
 	&"clouds": true,
 	&"wind": true,
+	&"grass": true,
 	&"water_reflections": true,
 }
 

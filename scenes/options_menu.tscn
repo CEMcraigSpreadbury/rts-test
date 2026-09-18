@@ -76,9 +76,14 @@ theme_override_constants/margin_right = 8
 [node name="Game" type="VBoxContainer" parent="Margin/VBox/Pages"]
 layout_mode = 2
 
-[node name="Visuals" type="VBoxContainer" parent="Margin/VBox/Pages"]
+[node name="Visuals" type="ScrollContainer" parent="Margin/VBox/Pages"]
 visible = false
 layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="Margin/VBox/Pages/Visuals"]
+layout_mode = 2
+size_flags_horizontal = 3
 
 [node name="SoundEffects" type="VBoxContainer" parent="Margin/VBox/Pages"]
 visible = false

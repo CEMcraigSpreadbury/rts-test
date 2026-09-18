@@ -157,6 +157,13 @@ const FOGGED_SHADERS: Array[Shader] = [
 	preload("res://shaders/terrain/water.gdshader"),
 ]
 var _grass_materials: Array[ShaderMaterial] = []
+## Grass layers (painted grass_wind layers and TerraBrush's Binbun foliage),
+## hidden when the Grass setting is off.
+const GRASS_SHADERS: Array[Shader] = [
+	GRASS_SHADER,
+	preload("res://shaders/terrain/binbun_foliage.gdshader"),
+]
+var _grass_nodes: Array[GeometryInstance3D] = []
 
 ## Ambient dust (ForestDust in map_base.tscn) floats above the terrain, so the
 ## terrain fog pass never covers it — ambient_dust.gdshader takes the same
@@ -196,8 +203,10 @@ func _setup_terrain_fog_material() -> ShaderMaterial:
 
 func _setup_fogged_materials() -> void:
 	_grass_materials.clear()
+	_grass_nodes.clear()
 	_dust_materials.clear()
 	_find_fogged_materials(get_tree().root)
+	_apply_grass_visibility()
 
 func _find_fogged_materials(node: Node) -> void:
 	if node is MeshInstance3D or node is MultiMeshInstance3D:
@@ -208,6 +217,8 @@ func _find_fogged_materials(node: Node) -> void:
 			grass_material.set_shader_parameter("fog_map_origin", map_origin)
 			grass_material.set_shader_parameter("fog_map_size", map_size)
 			_grass_materials.append(grass_material)
+			if grass_material.shader in GRASS_SHADERS:
+				_grass_nodes.append(node)
 	elif node is GPUParticles3D:
 		var dust_material := (node as GPUParticles3D).material_override as ShaderMaterial
 		if dust_material and dust_material.shader == DUST_SHADER:
@@ -286,6 +297,14 @@ func _update_wind(delta: float) -> void:
 func _on_settings_changed(key: StringName) -> void:
 	if key == &"wind":
 		TreeWind.refresh()
+	elif key == &"grass":
+		_apply_grass_visibility()
+
+func _apply_grass_visibility() -> void:
+	var show_grass: bool = Settings.get_value(&"grass")
+	for node in _grass_nodes:
+		if is_instance_valid(node):
+			node.visible = show_grass
 
 ## Peer 0 is the neutral/AI-owner sentinel (Gatherable, Objective guards
 ## before capture) — never a real player, so it must never be treated as

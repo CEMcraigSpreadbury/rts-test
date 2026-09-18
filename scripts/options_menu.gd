@@ -51,7 +51,7 @@ func _ready() -> void:
 	$Margin/VBox/Pages/Controls/ResetButton.pressed.connect(_on_reset_keys_pressed)
 
 	_build_game_page(pages[0])
-	_build_visuals_page(pages[1])
+	_build_visuals_page($Margin/VBox/Pages/Visuals/List)
 	_build_sound_page(pages[2])
 	_build_controls_page()
 	Settings.changed.connect(_on_settings_changed)
@@ -114,6 +114,7 @@ func _build_visuals_page(page: Control) -> void:
 			func(v: float): Settings.set_value(&"render_scale", v / 100.0), func(v: float): return "%d%%" % v)
 	_add_check(page, "Depth of Field", &"depth_of_field")
 	_add_check(page, "Clouds", &"clouds")
+	_add_check(page, "Grass", &"grass")
 	_add_check(page, "Wind", &"wind")
 	_add_check(page, "Water Reflections", &"water_reflections")
 
