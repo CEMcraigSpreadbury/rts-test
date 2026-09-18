@@ -136,6 +136,19 @@ const MELEE_CROWD_LIMIT: int = 3
 const MELEE_OVERFLOW_RADIUS: float = 4.0
 const MELEE_OVERFLOW_SCAN_INTERVAL: float = 0.3
 
+## Melee reach: a melee unit can't swing through another body. Any living unit
+## standing between it and its target — at least MELEE_BLOCK_MARGIN nearer the
+## target and within MELEE_BLOCK_WIDTH of the line to it — blocks the swing, so
+## only the front rank around a target fights and the ranks behind hold back
+## instead of cramming in (see _melee_reach_blocked). Ring neighbours at the
+## same distance sit well outside the corridor, so they never block each other.
+const MELEE_BLOCK_WIDTH: float = 0.4
+const MELEE_BLOCK_MARGIN: float = 0.25
+## Only checked this close to the target (past its reach): further out a body
+## in line is just someone in the way of the march, not a rank in front.
+const MELEE_BLOCK_QUEUE_DEPTH: float = 3.0
+const MELEE_BLOCK_CHECK_INTERVAL: float = 0.15
+
 ## The player's standing order. Move is one-shot; Gather/Attack/Build loop or
 ## hold (resource->dropoff->resource / target->next target / stay building
 ## until done) until interrupted or exhausted.
@@ -954,6 +967,8 @@ var melee_attackers: int = 0
 var _separation_timer: float = randf() * SEPARATION_INTERVAL
 var _separation_velocity: Vector3 = Vector3.ZERO
 var _overflow_scan_timer: float = 0.0
+var _reach_check_timer: float = randf() * MELEE_BLOCK_CHECK_INTERVAL
+var _reach_blocked: bool = false
 ## Earliest Time.get_ticks_msec() this unit may call allies in again (see take_damage).
 var _next_alert_ms: int = 0
 ## How long this unit's move path has been over without reaching its target
@@ -2025,8 +2040,9 @@ func _physics_process(delta: float) -> void:
 	elif status_activity == Activity.TO_TARGET:
 		## Straight-line reach counts as arrived too: in a scrum the path can't
 		## finish (bodies in the way keep the agent short of its nav target)
-		## even though the target is already within swing.
-		if nav_agent.is_navigation_finished() or _target_in_reach():
+		## even though the target is already within swing. A rank behind the
+		## front one waits instead (see _melee_reach_blocked).
+		if not _update_reach_blocked(delta) and (nav_agent.is_navigation_finished() or _target_in_reach()):
 			_start_attacking()
 		else:
 			_tick_chase(delta)
@@ -2116,6 +2132,10 @@ func _physics_process(delta: float) -> void:
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	if _march_active:
 		desired_velocity = _march_desired_velocity(effective_speed)
+	## Held behind the front rank: stand and wait for a gap rather than walk
+	## into the backs of the units already fighting.
+	if status_activity == Activity.TO_TARGET and _reach_blocked:
+		desired_velocity = Vector3.ZERO
 	## Added after avoidance (see _on_velocity_computed), not into the desired
 	## velocity: RVO boxed in by enemies returns a near-zero safe velocity and
 	## would cancel the push, leaving stacked units stacked.
@@ -2749,6 +2769,38 @@ func _tick_melee_overflow(delta: float) -> void:
 		attack_target = best
 		_head_to_target()
 
+## Cached _melee_reach_blocked(), refreshed on a short timer.
+func _update_reach_blocked(delta: float) -> bool:
+	_reach_check_timer -= delta
+	if _reach_check_timer <= 0.0:
+		_reach_check_timer = MELEE_BLOCK_CHECK_INTERVAL
+		_reach_blocked = _melee_reach_blocked()
+	return _reach_blocked
+
+## Whether another body stands between this melee unit and its (unit) target
+## — see MELEE_BLOCK_WIDTH. Ranged units, and attacks on buildings (whose wide
+## footprint has room all round), are never blocked.
+func _melee_reach_blocked() -> bool:
+	if not _counts_as_melee() or not _is_target_alive(attack_target) or not (attack_target is Unit):
+		return false
+	var to_target: Vector3 = attack_target.global_position - global_position
+	to_target.y = 0.0
+	var dist := to_target.length()
+	if dist < 0.01 or dist > _effective_attack_range() + MELEE_BLOCK_QUEUE_DEPTH:
+		return false
+	var dir := to_target / dist
+	for other in UnitGrid.units_near(get_tree(), global_position, dist):
+		if other == self or other == attack_target:
+			continue
+		var rel := other.global_position - global_position
+		rel.y = 0.0
+		var along := rel.dot(dir)
+		if along < MELEE_BLOCK_MARGIN or along >= dist:
+			continue
+		if (rel - dir * along).length() < MELEE_BLOCK_WIDTH:
+			return true
+	return false
+
 func _start_attacking() -> void:
 	if not _is_target_alive(attack_target):
 		_find_new_target_or_idle()
@@ -2813,6 +2865,11 @@ func _tick_attacking(delta: float) -> void:
 	## the same one and spin.
 	if not CombatUtils.is_worth_attacking(attack_target):
 		_find_new_target_or_idle()
+		return
+
+	## Someone got between this unit and its target (pushed in, or the target
+	## stepped back behind another body): no swinging through them.
+	if _update_reach_blocked(delta):
 		return
 
 	attack_timer += delta
