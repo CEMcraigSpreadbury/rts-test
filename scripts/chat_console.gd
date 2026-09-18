@@ -46,6 +46,13 @@ func send_line(peer_id: int, line: String) -> void:
 ##   as neutral enemies instead.
 ##   "cmd speed <multiplier>" runs the whole match faster or slower (single
 ##   player only), e.g. "cmd speed 4"; "cmd speed 1" puts it back.
+## Commands only run when the host is a debug build or was launched with
+## "-- --cheats"; otherwise "cmd ..." is just sent as ordinary chat.
+
+## Checked on the host only, since that's where commands execute — a client's
+## own build/flags can't unlock them.
+func _cheats_enabled() -> bool:
+	return OS.is_debug_build() or OS.get_cmdline_user_args().has("--cheats")
 
 ## Physics steps don't get more frequent with Engine.time_scale, only longer,
 ## so past this movement and collisions start to go wrong.
@@ -88,7 +95,7 @@ func _rpc_submit_chat(text: String, cursor_pos: Vector3, has_cursor: bool) -> vo
 	if sender_id == 0:
 		sender_id = main.my_peer_id()
 
-	if text.begins_with("cmd "):
+	if text.begins_with("cmd ") and _cheats_enabled():
 		_execute_debug_command(sender_id, text.substr(4), cursor_pos, has_cursor)
 	else:
 		_rpc_display_chat.rpc("Player %d: %s" % [sender_id, text])
