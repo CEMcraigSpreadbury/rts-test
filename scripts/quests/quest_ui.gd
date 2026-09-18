@@ -31,6 +31,10 @@ const HIGHLIGHT_PADDING: float = 4.0
 ## The crop itself (how much of the figure) is UnitPortrait.HEAD_FRACTION.
 const PORTRAIT_SIZE: float = 72.0
 
+## The last line has been read and no briefing is up — the screen is the
+## player's again. Main holds the end-of-match panel back until this.
+signal presentation_finished
+
 var main: Main
 var runner: QuestRunner
 
@@ -243,6 +247,8 @@ func _next_line() -> void:
 		_dialogue_panel.visible = false
 		_set_paused(false)
 		_update_hold()
+		if not _briefing_panel.visible:
+			presentation_finished.emit()
 		return
 	_showing_line = true
 	var line: Dictionary = _queue.pop_front()
@@ -337,6 +343,12 @@ func _close_briefing() -> void:
 	elif _showing_line:
 		_dialogue_panel.visible = true
 	_update_hold()
+	if not is_presenting():
+		presentation_finished.emit()
+
+## A line or a briefing is on screen (or queued behind one).
+func is_presenting() -> bool:
+	return _showing_line or _briefing_panel.visible or not _queue.is_empty()
 
 ## --- Presentation payloads ---
 
@@ -458,7 +470,7 @@ func _process(delta: float) -> void:
 	for id in _markers:
 		var ring: Node3D = _markers[id]
 		if is_instance_valid(ring):
-			(ring as MeshInstance3D).material_override.albedo_color = Color(PANEL_BORDER, pulse)
+			GroundRingMaterial.set_alpha(pulse, (ring as MeshInstance3D).material_override)
 	for element_name in _highlights:
 		var entry: Dictionary = _highlights[element_name]
 		var frame: Control = entry.frame

@@ -1041,7 +1041,13 @@ func _rpc_player_out() -> void:
 @rpc("authority", "call_local", "reliable")
 func _rpc_game_over(winner_team: int) -> void:
 	game_over = true
-	game_over_panel.visible = true
+	## A mission's closing lines are usually said as it ends — let the player
+	## read them out before the result panel goes up over them.
+	if quest_ui != null and quest_ui.is_presenting():
+		game_over_panel.visible = false
+		quest_ui.presentation_finished.connect(func(): game_over_panel.visible = true, CONNECT_ONE_SHOT)
+	else:
+		game_over_panel.visible = true
 	_spectate_button.visible = true
 	$UI/GameOverPanel/Margin/VBox/ReturnButton.text = "Return to Main Menu"
 	if winner_team == DRAW:
