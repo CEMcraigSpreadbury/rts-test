@@ -1105,13 +1105,6 @@ func _ready() -> void:
 	status_current_health = max_health
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
-	## Upright sprites, so water reflections stand up like the unit rather than
-	## a card leaning back at the camera's pitch. Stretched by 1/cos(pitch) so
-	## they look the same height from RTSCamera's fixed 30 degree pitch.
-	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	var upright_stretch := 1.0 / cos(deg_to_rad(30.0))
-	sprite.scale.y *= upright_stretch
-	sprite.position.y *= upright_stretch
 	_sprite_base_position = sprite.position
 	_sprite_base_scale = sprite.scale
 	if sprite_sheet:
