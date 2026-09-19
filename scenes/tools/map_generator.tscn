@@ -4,11 +4,13 @@
 
 [node name="MapGenerator" type="Node3D" unique_id=654162614]
 script = ExtResource("1_map_generator")
-map_name = "Aldmere Road"
+map_name = "Angel Crossing Autumn"
 map_seed = 835057
 shrines_per_player = 2
 paths_to_centre = false
 import_heightmap = "C:/Users/craig/Downloads/angel_crossing_1.5.1.sd7"
 import_height_range = 25.0
+grass_light = Color(0.75424534, 0.75353026, 0.4370901, 1)
+ground_light = Color(0.7529412, 0.7529412, 0.43529412, 1)
 forest_clusters_per_player = 10
 overwrite_existing = true

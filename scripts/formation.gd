@@ -53,9 +53,12 @@ func _init(formation_units: Array[Unit] = [], formation_type: Formation.Type = D
 
 ## How many units fit across a dragged front of `width` meters, measured
 ## between the outermost slot centres — so the flank units stand on the two
-## ends of the drag line rather than a slot's width inside them.
+## ends of the drag line rather than a slot's width inside them. Never
+## narrower than a square block, so a big selection's drag starts wide
+## instead of at a couple of columns dozens of ranks deep.
 static func columns_for_width(width: float, count: int) -> int:
-	return clampi(roundi(width / SPACING) + 1, 1, maxi(count, 1))
+	var n: int = maxi(count, 1)
+	return clampi(roundi(width / SPACING) + 1, ceili(sqrt(n)), n)
 
 ## Display name for the HUD formation indicator (see main.gd's
 ## formation_label/_set_formation_type).

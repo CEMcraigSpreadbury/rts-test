@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MapInfo" format=3 uid="uid://behasgrh6xsih"]
+
+[ext_resource type="Script" uid="uid://cy6qtp2uryluf" path="res://scripts/map_info.gd" id="1_44723"]
+
+[resource]
+script = ExtResource("1_44723")
+map_name = "Angel Crossing Autumn"
+scene_path = "res://scenes/maps/angel_crossing_autumn.tscn"
+max_players = 2
+capture_points = 7
