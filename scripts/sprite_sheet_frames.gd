@@ -1,7 +1,8 @@
 class_name SpriteSheetFrames
 extends RefCounted
 ## Builds a SpriteFrames resource from a single grid-based sprite sheet texture.
-## `animations` maps animation name -> {row, frames, fps, loop}.
+## `animations` maps animation name -> {row, frames, fps, loop, sheet}; an
+## animation's optional `sheet` overrides the shared one for just that clip.
 
 static func build(sheet: Texture2D, cell_size: Vector2i, animations: Dictionary) -> SpriteFrames:
 	var frames := SpriteFrames.new()
@@ -17,7 +18,7 @@ static func build(sheet: Texture2D, cell_size: Vector2i, animations: Dictionary)
 		frames.set_animation_loop(anim_name, loop)
 		for i in frame_count:
 			var atlas := AtlasTexture.new()
-			atlas.atlas = sheet
+			atlas.atlas = config.get("sheet", sheet)
 			atlas.region = Rect2(i * cell_size.x, row * cell_size.y, cell_size.x, cell_size.y)
 			frames.add_frame(anim_name, atlas)
 	return frames

@@ -343,7 +343,7 @@ func _rpc_unit_animation(unit_path: NodePath, anim_name: String) -> void:
 		## The attack lunge is driven off this same relay rather than a channel
 		## of its own — the host's _play_attack_swing pairs the two locally, and
 		## the direction is derived from replicated facing on each peer.
-		if anim_name == "attack":
+		if Unit.base_animation(anim_name) == "attack":
 			unit.play_attack_lunge()
 
 ## Order-dispatch functions below only ever run on the host (inside its RPC

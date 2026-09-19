@@ -762,6 +762,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.team_tint = data.tint
 	unit.position = data.position
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
+	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
 	unit.damaged.connect(feedback.relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
@@ -789,6 +790,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 ## drifting apart is what caused this in the first place.
 func register_objective_unit(unit: Unit) -> void:
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
+	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
 	unit.damaged.connect(feedback.relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
@@ -2390,6 +2392,7 @@ func _dispatch_smart_command(unit: Unit, target_node: Node, world_pos: Vector3, 
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.GATHER)
 	elif (target_node is Unit or (target_node is ProductionBuilding and target_node.can_be_attacked())) \
 			and Teams.is_enemy(unit.owner_peer_id, target_node.owner_peer_id):
+		unit.clear_work_role()
 		unit.command_attack(target_node)
 		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 	elif target_node is ProductionBuilding and target_node.is_under_construction:

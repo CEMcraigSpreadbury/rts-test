@@ -2,6 +2,20 @@ extends CharacterBody3D
 class_name Unit
 
 const SpriteSheetFrames = preload("res://scripts/sprite_sheet_frames.gd")
+const WOOD_RESOURCE: ResourceType = preload("res://resources/wood_resource_type.tres")
+const GOLD_RESOURCE: ResourceType = preload("res://resources/gold_resource_type.tres")
+## [row, frame count] of each clip on the Minifolks work sheets (Blacksmith,
+## Lumberjack, Miner). "gather" is the work swing — hammering, for "build".
+const WORK_ROLE_CLIPS: Dictionary = {
+	"build": {"gather": [5, 6], "attack": [2, 4]},
+	"wood": {"gather": [2, 6], "attack": [5, 7]},
+	"gold": {"gather": [5, 5], "attack": [2, 5]},
+}
+const WORK_ROLE_SHARED_CLIPS: Dictionary = {"idle": [0, 4], "walk": [3, 6], "death": [7, 4]}
+## The stretch-and-settle pop as the sprite set swaps.
+const WORK_ROLE_POP_SCALE: Vector3 = Vector3(0.72, 1.3, 0.72)
+const WORK_ROLE_POP_DURATION: float = 0.45
+const WORK_ROLE_HOP_HEIGHT: float = 0.25
 const UnitSilhouetteMaterial = preload("res://scripts/unit_silhouette_material.gd")
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 
@@ -198,6 +212,8 @@ enum UnitCategory { NONE, INFANTRY, ARCHER, CAVALRY }
 ## other peers; RPCs declared directly on this dynamically-spawned node were
 ## not reaching clients. Sprite flip is NOT networked this way — see _process().
 signal animation_changed(anim_name: String)
+## Every peer, when this unit's sprite set visibly swaps (see _set_work_role).
+signal work_role_swapped
 ## Relayed the same way (see main.gd), so every peer can spawn its own purely
 ## cosmetic projectile visual flying toward the target. Real damage timing is
 ## tracked independently on the host via _pending_projectile_hits, not this.
@@ -284,11 +300,111 @@ func _update_team_tint_visual() -> void:
 		sprite.modulate = _resting_modulate()
 		## Rebuilt here too so an Objective capture recolors the silhouette.
 		if sprite_sheet and not _death_playing:
-			sprite.material_overlay = UnitSilhouetteMaterial.build(sprite_sheet, team_tint)
+			sprite.material_overlay = UnitSilhouetteMaterial.build(_current_sheet(), team_tint)
 	if crew_sprite:
 		crew_sprite.modulate = sprite.modulate
 		if not _death_playing:
 			crew_sprite.material_overlay = UnitSilhouetteMaterial.build(crew_sprite_sheet, team_tint)
+
+## The sheet the playing clip's frames are cut from — sprite_sheet unless a
+## work role (see _set_work_role) has swapped in its own.
+func _current_sheet() -> Texture2D:
+	var frames := sprite.sprite_frames
+	if frames and frames.has_animation(sprite.animation) and frames.get_frame_count(sprite.animation) > 0:
+		var atlas := frames.get_frame_texture(sprite.animation, 0) as AtlasTexture
+		if atlas:
+			return atlas.atlas
+	return sprite_sheet
+
+## --- Work roles ---
+
+## Adds "<role>_idle", "<role>_walk" etc. cut from `sheet`, per WORK_ROLE_CLIPS.
+func _add_work_role_animations(animations: Dictionary, role: String, sheet: Texture2D) -> void:
+	if sheet == null:
+		return
+	var clips: Dictionary = WORK_ROLE_SHARED_CLIPS.merged(WORK_ROLE_CLIPS[role])
+	for base in clips:
+		var clip: Array = clips[base]
+		var config: Dictionary = animations[base].duplicate()
+		config["row"] = clip[0]
+		config["frames"] = clip[1]
+		config["sheet"] = sheet
+		animations["%s_%s" % [role, base]] = config
+
+func _work_role_for(resource_type: ResourceType) -> String:
+	if resource_type == WOOD_RESOURCE:
+		return "wood"
+	if resource_type == GOLD_RESOURCE:
+		return "gold"
+	return ""
+
+## Host-only, from a fresh order: swaps the whole sprite set right away, even
+## while still walking to the job. Only an order changes it back, so a
+## lumberjack keeps his axe walking logs home or fighting off a wolf.
+func _set_work_role(role: String) -> void:
+	if role != "" and not (sprite.sprite_frames and sprite.sprite_frames.has_animation(role + "_idle")):
+		role = ""
+	if role == _work_role:
+		return
+	_work_role = role
+	if sprite.sprite_frames and not _death_playing:
+		_set_animation(base_animation(sprite.animation))
+
+## Player orders that don't route through a command_* setting a role of their
+## own (an attack order — command_attack is also how units fight back on their
+## own, which shouldn't cost them their work sprite).
+func clear_work_role() -> void:
+	_set_work_role("")
+
+## `base` as this unit's current work role plays it, when the role has one.
+func _role_animation(base: String) -> String:
+	if _work_role != "":
+		var anim := "%s_%s" % [_work_role, base]
+		if sprite.sprite_frames and sprite.sprite_frames.has_animation(anim):
+			return anim
+	return base
+
+## The role-free name of a clip ("wood_walk" -> "walk").
+static func base_animation(anim_name: String) -> String:
+	var split := anim_name.find("_")
+	if split != -1 and WORK_ROLE_CLIPS.has(anim_name.left(split)):
+		return anim_name.substr(split + 1)
+	return anim_name
+
+static func _role_of(anim_name: String) -> String:
+	var split := anim_name.find("_")
+	if split != -1 and WORK_ROLE_CLIPS.has(anim_name.left(split)):
+		return anim_name.left(split)
+	return ""
+
+## Every peer — relayed plays included — so the pop and the silhouette both
+## follow the swap without anything extra going over the network.
+func _on_sprite_animation_changed() -> void:
+	_update_team_tint_visual()
+	var role := _role_of(sprite.animation)
+	if role == _shown_work_role:
+		return
+	_shown_work_role = role
+	if not _death_playing:
+		_play_work_role_pop()
+
+## Flash, a stretch that settles elastically and a little hop, plus a dust
+## puff (see work_role_swapped), so the costume change reads as a "poof".
+func _play_work_role_pop() -> void:
+	play_hit_flash()
+	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
+		_sprite_scale_tween.kill()
+	sprite.scale = _sprite_base_scale * WORK_ROLE_POP_SCALE
+	_sprite_scale_tween = create_tween()
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, WORK_ROLE_POP_DURATION) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	var base := _sprite_base_position
+	_restart_sprite_move_tween()
+	_sprite_move_tween.tween_property(sprite, "position", base + Vector3(0.0, WORK_ROLE_HOP_HEIGHT, 0.0), 0.1) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_sprite_move_tween.tween_property(sprite, "position", base, 0.18) \
+			.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	work_role_swapped.emit()
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 11.0
 ## One is picked at random and played through select_audio_player whenever
@@ -327,6 +443,13 @@ func _update_team_tint_visual() -> void:
 @export var cast_row: int = 4
 @export var cast_frame_count: int = 0
 @export var cast_fps: float = 12.0
+## Whole villager sheets the unit swaps to when ordered to build, fell trees
+## or mine gold, so it hammers/chops/digs rather than fruit-picks. The swap
+## lasts until its next order, walking included (see _set_work_role). Rows
+## are laid out per WORK_ROLE_CLIPS. No sheet = that role is skipped.
+@export var build_sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniBlacksmithB.png")
+@export var wood_gather_sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniLumberjack.png")
+@export var gold_gather_sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniMiner.png")
 ## Optional second sprite drawn behind this one on screen, animated alongside
 ## it — e.g. the soldier pushing a siege weapon. Purely visual: it has no
 ## health of its own and plays its death clip when this unit dies.
@@ -527,6 +650,10 @@ var _sprite_scale_tween: Tween
 ## feet) lives in the scene file, and every motion below is an offset from it.
 var _sprite_base_position: Vector3 = Vector3.ZERO
 var _sprite_base_scale: Vector3 = Vector3.ONE
+## "" = the plain sprite set; else a WORK_ROLE_CLIPS key (see _set_work_role).
+var _work_role: String = ""
+## The role last seen playing on this peer, to spot a swap worth popping.
+var _shown_work_role: String = ""
 
 ## Attack lunge. The windup pulls back away from the target before the sprite
 ## drives forward through it — melee at RTS camera height is only a few dozen
@@ -1238,8 +1365,14 @@ func _ready() -> void:
 		}
 		if cast_frame_count > 0:
 			animations["cast"] = {"row": cast_row, "frames": cast_frame_count, "fps": cast_fps, "loop": false}
+		if can_build:
+			_add_work_role_animations(animations, "build", build_sprite_sheet)
+		if can_gather:
+			_add_work_role_animations(animations, "wood", wood_gather_sprite_sheet)
+			_add_work_role_animations(animations, "gold", gold_gather_sprite_sheet)
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, animations)
 		sprite.play("idle")
+		sprite.animation_changed.connect(_on_sprite_animation_changed)
 	if crew_sprite_sheet:
 		_build_crew_sprite()
 	sprite.animation_finished.connect(_on_attack_animation_finished)
@@ -1345,6 +1478,7 @@ func command_move(target_position: Vector3, speed_override: float = -1.0, group:
 	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
+	_set_work_role("")
 	status_command = Command.MOVE
 	status_activity = Activity.MOVING
 	attack_target = null
@@ -1511,6 +1645,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	_set_work_role(_work_role_for(resource_node.resource_type))
 	formation_facing = Vector3.ZERO
 	status_command = Command.GATHER
 	attack_target = null
@@ -1561,6 +1696,7 @@ func command_attack_move(target_position: Vector3, speed_override: float = -1.0,
 	_leave_gather_site()
 	assault_center = target_position
 	assault_active = true
+	_set_work_role("")
 	status_command = Command.ATTACK_MOVE
 	attack_target = null
 	formation_speed = speed_override
@@ -1579,6 +1715,7 @@ func command_patrol(points: Array[Vector3]) -> void:
 	_leave_build_site()
 	_leave_gather_site()
 	formation_facing = Vector3.ZERO
+	_set_work_role("")
 	status_command = Command.PATROL
 	attack_target = null
 	assault_active = false
@@ -1610,6 +1747,7 @@ func command_wander(origin: Node3D, radius: float) -> void:
 	_leave_build_site()
 	_leave_gather_site()
 	formation_facing = Vector3.ZERO
+	_set_work_role("")
 	status_command = Command.PATROL
 	attack_target = null
 	assault_active = false
@@ -1792,6 +1930,7 @@ func command_stop() -> void:
 	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
+	_set_work_role("")
 	status_command = Command.NONE
 	status_activity = Activity.IDLE
 	attack_target = null
@@ -1814,6 +1953,7 @@ func command_build(building: ProductionBuilding) -> void:
 		return
 	_leave_build_site()
 	_leave_gather_site()
+	_set_work_role("build")
 	formation_facing = Vector3.ZERO
 	status_command = Command.BUILD
 	attack_target = null
@@ -1947,6 +2087,7 @@ func command_cast_ability(ability_index: int, target_pos: Vector3) -> void:
 	attack_move_order = {}
 	_leave_build_site()
 	_leave_gather_site()
+	_set_work_role("")
 	status_command = Command.CAST
 	status_activity = Activity.TO_CAST
 	attack_target = null
@@ -2494,7 +2635,7 @@ func _physics_tick(delta: float) -> void:
 		velocity.z = 0.0
 		_tick_building()
 		if sprite.sprite_frames:
-			_set_animation("idle")
+			_set_animation("gather" if _work_role == "build" else "idle")
 		_slide()
 		return
 
@@ -2908,7 +3049,7 @@ func _process_visuals(delta: float) -> void:
 	## system, each a GPU dispatch and a draw every frame it runs, and a whole
 	## army starts walking on the same click.
 	if walk_dust:
-		var walking: bool = sprite.animation == &"walk" and in_view 				and (not is_instance_valid(_view_camera) 				or _view_camera.global_position.distance_squared_to(global_position) <= WALK_DUST_MAX_DISTANCE * WALK_DUST_MAX_DISTANCE)
+		var walking: bool = base_animation(sprite.animation) == "walk" and in_view 				and (not is_instance_valid(_view_camera) 				or _view_camera.global_position.distance_squared_to(global_position) <= WALK_DUST_MAX_DISTANCE * WALK_DUST_MAX_DISTANCE)
 		if walk_dust.emitting != walking:
 			walk_dust.emitting = walking
 
@@ -2949,7 +3090,7 @@ func _update_crew_sprite(cam_right: Vector3) -> void:
 	crew_sprite.flip_h = sprite.flip_h
 	crew_sprite.modulate = sprite.modulate
 	if not _death_playing:
-		var anim: StringName = &"walk" if sprite.animation == &"walk" else &"idle"
+		var anim: StringName = &"walk" if base_animation(sprite.animation) == "walk" else &"idle"
 		if crew_sprite.animation != anim:
 			crew_sprite.play(anim)
 	var behind: Vector3 = cam_right * (crew_offset if sprite.flip_h else -crew_offset)
@@ -3016,6 +3157,7 @@ func _update_health_bar_visual() -> void:
 ## resets playback to frame 0 whenever it's set (even to the same value), so this
 ## must only fire on an actual change, not continuously.
 func _set_animation(anim_name: String) -> void:
+	anim_name = _role_animation(anim_name)
 	if sprite.animation == anim_name:
 		return
 	sprite.play(anim_name)
@@ -3026,15 +3168,17 @@ func _set_animation(anim_name: String) -> void:
 ## _set_animation(), this always restarts the clip even if "attack" is
 ## already playing (e.g. a very short cooldown re-triggering mid-swing).
 func _play_attack_swing() -> void:
-	sprite.play("attack")
-	animation_changed.emit("attack")
+	var anim_name := _role_animation("attack")
+	sprite.play(anim_name)
+	animation_changed.emit(anim_name)
 	play_attack_lunge()
 
 ## "attack" is non-looping; once a swing finishes, settle back to idle until
 ## the next hit fires. This runs on every peer (not just the authority) since
 ## it just reacts to that peer's own local sprite finishing its own playback.
 func _on_attack_animation_finished() -> void:
-	if sprite.animation == "attack" or sprite.animation == "cast":
+	var base := base_animation(sprite.animation)
+	if base == "attack" or base == "cast":
 		_set_animation("idle")
 
 ## --- Gathering ---
@@ -3727,20 +3871,21 @@ func _play_death_and_remove(away: Vector3) -> void:
 		crew_sprite.material_overlay = null
 		crew_sprite.play("death")
 		crew_sprite.pause()
-	var has_death_anim: bool = sprite.sprite_frames and sprite.sprite_frames.has_animation("death")
+	var death_anim := _role_animation("death")
+	var has_death_anim: bool = sprite.sprite_frames and sprite.sprite_frames.has_animation(death_anim)
 	## Held on the clip's first frame through the flight; played directly
 	## rather than via _set_animation, since every peer runs this RPC itself
 	## and doesn't need the host relaying it.
 	if has_death_anim:
-		sprite.play("death")
+		sprite.play(death_anim)
 		sprite.pause()
 	await _play_death_knockback(away).finished
 	if crew_sprite:
 		crew_sprite.play()
 	if has_death_anim:
 		sprite.play()
-		var frame_count: int = sprite.sprite_frames.get_frame_count("death")
-		var fps: float = sprite.sprite_frames.get_animation_speed("death")
+		var frame_count: int = sprite.sprite_frames.get_frame_count(death_anim)
+		var fps: float = sprite.sprite_frames.get_animation_speed(death_anim)
 		await get_tree().create_timer(frame_count / maxf(fps, 1.0)).timeout
 	queue_free()
 
