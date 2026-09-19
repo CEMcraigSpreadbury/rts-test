@@ -391,6 +391,12 @@ func _on_sprite_animation_changed() -> void:
 ## Flash, a stretch that settles elastically and a little hop, plus a dust
 ## puff (see work_role_swapped), so the costume change reads as a "poof".
 func _play_work_role_pop() -> void:
+	_play_sprite_pop()
+	work_role_swapped.emit()
+
+## The flash, elastic stretch and hop on their own — shared by the work-role
+## swap and becoming selected.
+func _play_sprite_pop() -> void:
 	play_hit_flash()
 	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
 		_sprite_scale_tween.kill()
@@ -404,7 +410,6 @@ func _play_work_role_pop() -> void:
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_sprite_move_tween.tween_property(sprite, "position", base, 0.18) \
 			.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
-	work_role_swapped.emit()
 ## How far this unit reveals fog of war around itself.
 @export var vision_range: float = 11.0
 ## One is picked at random and played through select_audio_player whenever
@@ -630,6 +635,8 @@ func _play_selection_punch() -> void:
 	var tween := create_tween()
 	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(selection_ring, "scale", Vector3.ONE, 0.25)
+	if not _death_playing:
+		_play_sprite_pop()
 
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
