@@ -131,6 +131,8 @@ var linked_deposit: Gatherable = null
 ## Whether the current owner is at max_alive_units_per_owner — lets the
 ## owner's command panel grey out its unit buttons.
 @export var synced_unit_limit_reached: bool = false
+## item_name of repeat_item (or ""), for the owner's infinity badge.
+@export var synced_repeat_item_name: String = ""
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
@@ -144,6 +146,10 @@ var _produced_units: Dictionary = {}
 ## Host-only: UPGRADE items already bought, so a one-time upgrade can't be
 ## queued twice — see the guard in enqueue().
 var _purchased_upgrades: Array[ProducibleItem] = []
+## Host-only: a UNIT item re-queued whenever the queue runs empty, until
+## toggled off (right-click its command button). Waits quietly while the owner
+## can't afford it or is at their population cap.
+var repeat_item: ProducibleItem = null
 
 ## How long a SINGLE builder takes to finish this from 0%; each additional
 ## villager assigned via add_builder() scales progress proportionally, so N
@@ -479,6 +485,15 @@ func enqueue(item: ProducibleItem) -> bool:
 	queue_changed.emit()
 	return true
 
+## Host only. Right-clicking the item already repeating turns it off; any other
+## UNIT item replaces it.
+func toggle_repeat(item: ProducibleItem) -> void:
+	if item == null or item.kind != ProducibleItem.Kind.UNIT or repeat_item == item:
+		repeat_item = null
+	else:
+		repeat_item = item
+	synced_repeat_item_name = repeat_item.item_name if repeat_item != null else ""
+
 ## Host only. Called by main.gd for every unit this building finishes.
 func register_produced_unit(unit: Unit) -> void:
 	if max_alive_units_per_owner <= 0:
@@ -718,6 +733,8 @@ func _process(delta: float) -> void:
 			build_timer = 0.0
 			item_completed.emit(item)
 			queue_changed.emit()
+	if repeat_item != null and queue.is_empty():
+		enqueue(repeat_item)
 
 	synced_queue_size = queue.size()
 	synced_time_remaining = time_remaining()

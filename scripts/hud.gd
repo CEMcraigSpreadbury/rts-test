@@ -56,6 +56,9 @@ var _info_built_under_construction: bool = false
 ## item_name -> its producible button's queued-count badge; updated every
 ## frame in _refresh_building_info() from ProductionBuilding.synced_queue_counts.
 var _info_producible_badges: Dictionary = {}
+## item_name -> its UNIT button's infinity badge, shown while that item is the
+## building's synced_repeat_item_name.
+var _info_repeat_badges: Dictionary = {}
 ## The selected building's UNIT buttons, greyed out alongside the badges above
 ## while ProductionBuilding.synced_unit_limit_reached. Untyped: they're freed
 ## whenever the panel rebuilds.
@@ -254,6 +257,7 @@ func show_building(building: ProductionBuilding) -> void:
 
 	var buttons: Array[Control] = []
 	_info_producible_badges.clear()
+	_info_repeat_badges.clear()
 	_info_unit_buttons.clear()
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
@@ -272,6 +276,8 @@ func show_building(building: ProductionBuilding) -> void:
 		_info_producible_badges[item.item_name] = _add_queue_count_badge(button)
 		if item.kind == ProducibleItem.Kind.UNIT:
 			_info_unit_buttons.append(button)
+			_info_repeat_badges[item.item_name] = _add_repeat_badge(button)
+			button.gui_input.connect(_on_producible_gui_input.bind(building, i))
 		buttons.append(button)
 	_fill_action_panel_grid(buttons)
 
@@ -546,6 +552,14 @@ func _refresh_producible_badges(building: ProductionBuilding) -> void:
 	for button in _info_unit_buttons:
 		if is_instance_valid(button):
 			button.disabled = building.synced_unit_limit_reached
+	for item_name in _info_repeat_badges:
+		_info_repeat_badges[item_name].visible = item_name == building.synced_repeat_item_name
+
+## Right-click toggles repeat production of that unit (see ProductionBuilding.toggle_repeat).
+func _on_producible_gui_input(event: InputEvent, building: ProductionBuilding, item_index: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		get_viewport().set_input_as_handled()
+		main.toggle_repeat_production(building, item_index)
 
 ## Whose face a group selection shows: its first monster, the same order the
 ## portrait grid below uses, so a Dark Lord leading a crowd of villagers isn't
@@ -777,6 +791,23 @@ func _add_queue_count_badge(button: Button) -> Label:
 	badge.offset_right = -3
 	badge.offset_bottom = -1
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	badge.add_theme_font_size_override("font_size", 20)
+	badge.add_theme_color_override("font_shadow_color", Color.BLACK)
+	badge.add_theme_constant_override("shadow_offset_x", 1)
+	badge.add_theme_constant_override("shadow_offset_y", 1)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.visible = false
+	button.add_child(badge)
+	return badge
+
+## Top-right counterpart to _add_queue_count_badge, same show/hide approach.
+func _add_repeat_badge(button: Button) -> Label:
+	var badge := Label.new()
+	badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	badge.offset_right = -2
+	badge.offset_top = -4
+	badge.text = "∞"
 	badge.add_theme_font_size_override("font_size", 20)
 	badge.add_theme_color_override("font_shadow_color", Color.BLACK)
 	badge.add_theme_constant_override("shadow_offset_x", 1)

@@ -426,6 +426,7 @@ func _set_owner(new_owner: int) -> void:
 		while not building.queue.is_empty():
 			building.cancel_at(building.queue.size() - 1)
 		building.has_rally_point = false
+		building.toggle_repeat(null)
 		building.owner_peer_id = new_owner
 		building.team_tint = tint
 	owner_peer_id = new_owner

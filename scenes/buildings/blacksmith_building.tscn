@@ -186,6 +186,9 @@ properties/10/replication_mode = 2
 properties/11/path = NodePath(".:synced_queue_counts")
 properties/11/spawn = true
 properties/11/replication_mode = 2
+properties/12/path = NodePath(".:synced_repeat_item_name")
+properties/12/spawn = true
+properties/12/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" unique_id=1175755585 groups=["buildings"]]
 transform = Transform3D(0.70710677, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.70710677, 0, 0, 0)

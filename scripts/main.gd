@@ -2587,6 +2587,24 @@ func enqueue_as(sender_id: int, building_path: NodePath, item_index: int) -> boo
 		return false
 	return building.enqueue(building.producibles[item_index])
 
+func toggle_repeat_production(building: ProductionBuilding, item_index: int) -> void:
+	_rpc_toggle_repeat.rpc_id(1, building.get_path(), item_index)
+	play_command_sound()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_toggle_repeat(building_path: NodePath, item_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	var building := get_node_or_null(building_path) as ProductionBuilding
+	if building == null or building.owner_peer_id != sender_id:
+		return
+	if item_index < 0 or item_index >= building.producibles.size():
+		return
+	building.toggle_repeat(building.producibles[item_index])
+
 ## queue_index 0 is the item in progress (the progress bar); 1+ are the slots
 ## queued behind it, in order.
 func cancel_production(building: ProductionBuilding, queue_index: int) -> void:
