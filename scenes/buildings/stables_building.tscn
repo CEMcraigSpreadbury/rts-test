@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/cavalry.png" id="icon_cavalry"]
 
 [sub_resource type="Resource" id="ResourceCost_stables_building"]
 script = ExtResource("8_cost_script")
@@ -17,6 +18,7 @@ amount = 90
 [sub_resource type="Resource" id="ProducibleItem_cavalry"]
 script = ExtResource("3_item_script")
 item_name = "Cavalry"
+icon = ExtResource("icon_cavalry")
 build_time = 5.0
 unit_scene = ExtResource("6_cavalry_scene")
 

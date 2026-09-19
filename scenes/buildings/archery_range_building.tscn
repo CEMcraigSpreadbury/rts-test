@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
 [ext_resource type="PackedScene" uid="uid://bryxvf6cwr7wb" path="res://assets/art/Models/Barracks/barracks.glb" id="11_jxfkj"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/archer.png" id="icon_archer"]
 
 [sub_resource type="Resource" id="ResourceCost_archery_range_building"]
 script = ExtResource("10_cost_script")
@@ -18,6 +19,7 @@ amount = 75
 [sub_resource type="Resource" id="ProducibleItem_archer"]
 script = ExtResource("3_item_script")
 item_name = "Archer"
+icon = ExtResource("icon_archer")
 build_time = 4.0
 unit_scene = ExtResource("8_archer_scene")
 

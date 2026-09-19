@@ -749,16 +749,23 @@ func _format_construction_status(building: ProductionBuilding) -> String:
 	return "Constructing... %d%% (%d building)" % [percent, building.synced_builder_count]
 
 ## Shared by the construction menu, a building's production menu, and the new
-## unit-command panel: a square button showing only its hotkey letter (icon
-## stays null everywhere today — no icon art exists yet, but the field is
-## wired so real art can be dropped in later without touching this code).
+## unit-command panel: a square button showing its icon with the hotkey letter
+## tucked in the corner, or just the letter when there is no icon (icons come
+## from the Icon Maker dock / scenes/tools/generate_command_icons.tscn).
 func _make_command_button(hotkey_label: String, tooltip: String, icon: Texture2D, callback: Callable) -> Button:
 	var button := Button.new()
 	button.theme_type_variation = &"SquareButton"
 	button.custom_minimum_size = Vector2(40, 40)
-	button.text = hotkey_label
 	button.tooltip_text = tooltip
-	button.icon = icon
+	button.set_meta(&"hotkey", hotkey_label)
+	if icon == null:
+		button.text = hotkey_label
+	else:
+		button.icon = icon
+		button.expand_icon = true
+		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		button.add_child(_make_hotkey_corner(hotkey_label))
 	button.pressed.connect(callback)
 	button.pressed.connect(_punch_control.bind(button))
 	return button
@@ -780,7 +787,7 @@ func _punch_control(control: Control) -> void:
 func pulse_action_button(hotkey_label: String) -> void:
 	for child in action_panel_grid.get_children():
 		var button := child as Button
-		if button and button.text == hotkey_label:
+		if button and button.get_meta(&"hotkey", "") == hotkey_label:
 			_punch_control(button)
 			return
 
@@ -806,6 +813,21 @@ func _add_queue_count_badge(button: Button) -> Label:
 	badge.visible = false
 	button.add_child(badge)
 	return badge
+
+## Top-left hotkey letter over an icon button — the other corners belong to
+## the queue count and repeat badges.
+func _make_hotkey_corner(hotkey_label: String) -> Label:
+	var corner := Label.new()
+	corner.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	corner.offset_left = 3
+	corner.offset_top = -2
+	corner.text = hotkey_label
+	corner.add_theme_font_size_override("font_size", 12)
+	corner.add_theme_color_override("font_shadow_color", Color.BLACK)
+	corner.add_theme_constant_override("shadow_offset_x", 1)
+	corner.add_theme_constant_override("shadow_offset_y", 1)
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return corner
 
 ## Top-right counterpart to _add_queue_count_badge, same show/hide approach.
 func _add_repeat_badge(button: Button) -> Label:

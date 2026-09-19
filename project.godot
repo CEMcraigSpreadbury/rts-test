@@ -40,7 +40,7 @@ mouse_cursor/custom_image="res://assets/art/cursor_64.png"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/TileMapLayer3D/plugin.cfg", "res://addons/grass_painter/plugin.cfg", "res://addons/godot-mcp/plugin.cfg", "res://addons/scenario_editor/plugin.cfg")
+enabled=PackedStringArray("res://addons/TileMapLayer3D/plugin.cfg", "res://addons/grass_painter/plugin.cfg", "res://addons/godot-mcp/plugin.cfg", "res://addons/scenario_editor/plugin.cfg", "res://addons/icon_maker/plugin.cfg")
 
 [gui]
 

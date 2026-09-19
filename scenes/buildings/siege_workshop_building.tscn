@@ -10,6 +10,8 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/ballista.png" id="icon_ballista"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/magic_cannon.png" id="icon_magic_cannon"]
 
 [sub_resource type="Resource" id="ResourceCost_ballista_building_wood"]
 script = ExtResource("8_cost_script")
@@ -24,12 +26,14 @@ amount = 50
 [sub_resource type="Resource" id="ProducibleItem_ballista"]
 script = ExtResource("3_item_script")
 item_name = "Ballista"
+icon = ExtResource("icon_ballista")
 build_time = 7.0
 unit_scene = ExtResource("6_unit_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_magic_cannon"]
 script = ExtResource("3_item_script")
 item_name = "Magic Cannon"
+icon = ExtResource("icon_magic_cannon")
 build_time = 8.0
 unit_scene = ExtResource("11_cannon_scene")
 

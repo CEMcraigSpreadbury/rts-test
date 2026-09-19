@@ -10,6 +10,8 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
 [ext_resource type="PackedScene" uid="uid://bk7f0u6jhxr5f" path="res://assets/art/Models/Barracks2/barracks2.glb" id="11_jxfkj"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/soldier.png" id="icon_soldier"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/spearman.png" id="icon_spearman"]
 
 [sub_resource type="Resource" id="ResourceCost_barracks_building"]
 script = ExtResource("10_cost_script")
@@ -19,12 +21,14 @@ amount = 75
 [sub_resource type="Resource" id="ProducibleItem_soldier"]
 script = ExtResource("3_item_script")
 item_name = "Soldier"
+icon = ExtResource("icon_soldier")
 build_time = 3.5
 unit_scene = ExtResource("5_soldier_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_spearman"]
 script = ExtResource("3_item_script")
 item_name = "Spearman"
+icon = ExtResource("icon_spearman")
 build_time = 3.0
 unit_scene = ExtResource("9_spearman_scene")
 

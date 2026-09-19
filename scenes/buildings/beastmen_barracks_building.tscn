@@ -10,22 +10,28 @@
 [ext_resource type="PackedScene" path="res://scenes/units/beastman_druid_unit.tscn" id="7_druid_scene"]
 [ext_resource type="AudioStream" uid="uid://b8hfdcngfe20q" path="res://assets/sfx/Facilities/Barracks_1.wav" id="8_sfx_a"]
 [ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_sfx_b"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/beastman_druid.png" id="icon_beastman_druid"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/beastman_raider.png" id="icon_beastman_raider"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/beastman_warrior.png" id="icon_beastman_warrior"]
 
 [sub_resource type="Resource" id="ProducibleItem_beastman_warrior"]
 script = ExtResource("2_item_script")
 item_name = "Beastman Warrior"
+icon = ExtResource("icon_beastman_warrior")
 build_time = 5.0
 unit_scene = ExtResource("5_warrior_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_beastman_raider"]
 script = ExtResource("2_item_script")
 item_name = "Beastman Raider"
+icon = ExtResource("icon_beastman_raider")
 build_time = 4.0
 unit_scene = ExtResource("6_raider_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_beastman_druid"]
 script = ExtResource("2_item_script")
 item_name = "Beastman Druid"
+icon = ExtResource("icon_beastman_druid")
 build_time = 5.0
 unit_scene = ExtResource("7_druid_scene")
 

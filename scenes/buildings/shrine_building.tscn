@@ -14,52 +14,68 @@
 [ext_resource type="PackedScene" path="res://scenes/units/monsters/phoenix_unit.tscn" id="10_phoenix"]
 [ext_resource type="PackedScene" path="res://scenes/units/monsters/skeleton_dragon_unit.tscn" id="10_skeleton_dragon"]
 [ext_resource type="PackedScene" path="res://scenes/units/monsters/yeti_unit.tscn" id="10_yeti"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/black_dragon.png" id="icon_black_dragon"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/dark_lord.png" id="icon_dark_lord"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/giant_bear.png" id="icon_giant_bear"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/hydra.png" id="icon_hydra"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/orc_mutant.png" id="icon_orc_mutant"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/phoenix.png" id="icon_phoenix"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/skeleton_dragon.png" id="icon_skeleton_dragon"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/yeti.png" id="icon_yeti"]
 
 [sub_resource type="Resource" id="ProducibleItem_black_dragon"]
 script = ExtResource("2_item_script")
 item_name = "Black Dragon"
+icon = ExtResource("icon_black_dragon")
 build_time = 48.0
 unit_scene = ExtResource("10_black_dragon")
 
 [sub_resource type="Resource" id="ProducibleItem_dark_lord"]
 script = ExtResource("2_item_script")
 item_name = "Dark Lord"
+icon = ExtResource("icon_dark_lord")
 build_time = 45.0
 unit_scene = ExtResource("10_dark_lord")
 
 [sub_resource type="Resource" id="ProducibleItem_giant_bear"]
 script = ExtResource("2_item_script")
 item_name = "Giant Bear"
+icon = ExtResource("icon_giant_bear")
 build_time = 40.0
 unit_scene = ExtResource("10_giant_bear")
 
 [sub_resource type="Resource" id="ProducibleItem_hydra"]
 script = ExtResource("2_item_script")
 item_name = "Hydra"
+icon = ExtResource("icon_hydra")
 build_time = 45.0
 unit_scene = ExtResource("10_hydra")
 
 [sub_resource type="Resource" id="ProducibleItem_orc_mutant"]
 script = ExtResource("2_item_script")
 item_name = "Orc Mutant"
+icon = ExtResource("icon_orc_mutant")
 build_time = 40.0
 unit_scene = ExtResource("10_orc_mutant")
 
 [sub_resource type="Resource" id="ProducibleItem_phoenix"]
 script = ExtResource("2_item_script")
 item_name = "Phoenix"
+icon = ExtResource("icon_phoenix")
 build_time = 44.0
 unit_scene = ExtResource("10_phoenix")
 
 [sub_resource type="Resource" id="ProducibleItem_skeleton_dragon"]
 script = ExtResource("2_item_script")
 item_name = "Skeleton Dragon"
+icon = ExtResource("icon_skeleton_dragon")
 build_time = 48.0
 unit_scene = ExtResource("10_skeleton_dragon")
 
 [sub_resource type="Resource" id="ProducibleItem_yeti"]
 script = ExtResource("2_item_script")
 item_name = "Yeti"
+icon = ExtResource("icon_yeti")
 build_time = 42.0
 unit_scene = ExtResource("10_yeti")
 
