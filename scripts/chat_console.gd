@@ -190,8 +190,17 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 			var raining: bool = not main.weather.is_raining if arg.is_empty() else arg == "on"
 			main.weather.set_raining(raining)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] rain %s" % ("on" if raining else "off"))
+		"day":
+			var day_arg: String = parts[1].to_lower() if parts.size() > 1 else ""
+			if day_arg not in ["", "on", "off"]:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] usage: cmd day [on|off]")
+				return
+			## "on" is daytime, so it turns night off.
+			var night: bool = not main.day_night.is_night if day_arg.is_empty() else day_arg == "off"
+			main.day_night.set_night(night)
+			_rpc_display_chat.rpc_id(sender_id, "[debug] day %s" % ("off" if night else "on"))
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf, cmd rain [on|off]")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf, cmd rain [on|off], cmd day [on|off]")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
 

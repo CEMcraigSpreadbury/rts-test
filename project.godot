@@ -58,6 +58,11 @@ rendering_device/driver.windows="d3d12"
 
 [shader_globals]
 
+unit_night_lift={
+"type": "float",
+"value": 0.0
+}
+
 water_reflections={
 "type": "bool",
 "value": true

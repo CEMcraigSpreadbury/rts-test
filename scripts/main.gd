@@ -268,6 +268,7 @@ var hud: Hud
 var placement: BuildingPlacement
 var chat: ChatConsole
 var weather: Weather
+var day_night: DayNight
 var research: Research
 var quests: QuestRunner
 
@@ -384,6 +385,8 @@ func _ready() -> void:
 	feedback.setup()
 	chat.setup()
 	weather.setup()
+	## After the weather, which the lighting reads its rain dimming from.
+	day_night.setup()
 
 	var utility_buttons: VBoxContainer = $UI/BottomBar/UtilityButtons
 	utility_buttons.get_node(^"IdleButton").pressed.connect(_select_all_idle_villagers)
@@ -455,6 +458,11 @@ func _add_components() -> void:
 	weather.main = self
 	weather.name = "Weather"
 	add_child(weather)
+
+	day_night = DayNight.new()
+	day_night.main = self
+	day_night.name = "DayNight"
+	add_child(day_night)
 
 	research = Research.new()
 	research.main = self

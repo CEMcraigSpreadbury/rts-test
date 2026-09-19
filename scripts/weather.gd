@@ -22,7 +22,8 @@ const RAIN_DURATION_MIN: float = 90.0
 const RAIN_DURATION_MAX: float = 240.0
 ## How long the drops take to thicken up or thin out, rather than switching.
 const FADE_DURATION: float = 4.0
-## The sun is dimmed to this fraction of its authored energy at full rain.
+## The sun is dimmed to this fraction of its energy at full rain. Applied by
+## DayNight, which owns the light's energy (see DayNight._apply).
 const SUN_ENERGY_IN_RAIN: float = 0.6
 
 ## Covers the ground the camera can see at max zoom (see RtsCamera.max_zoom).
@@ -59,18 +60,16 @@ var is_raining: bool = false
 ## Host only: counts down to the next start/stop.
 var _time_to_change: float = 0.0
 
+## What the sun's energy is multiplied by while it rains; read by DayNight.
+var sun_energy_scale: float = 1.0
+
 var _particles: GPUParticles3D
 var _sound: AudioStreamPlayer
-var _sun: DirectionalLight3D
-var _sun_energy: float = 1.0
 var _intensity: float = 0.0
 var _fade_tween: Tween
 
 ## Called from Main._ready(), once the camera rig and lights exist.
 func setup() -> void:
-	_sun = main.get_node_or_null(^"DirectionalLight3D") as DirectionalLight3D
-	if _sun:
-		_sun_energy = _sun.light_energy
 	_particles = _build_particles()
 	main.add_child(_particles)
 	## Same bus as AmbiencePlayer, so the ambience volume slider covers it.
@@ -133,8 +132,9 @@ func _set_intensity(value: float) -> void:
 	_intensity = value
 	_particles.amount_ratio = value
 	_sound.volume_db = lerpf(SILENT_DB, RAIN_VOLUME_DB, sqrt(value))
-	if _sun:
-		_sun.light_energy = _sun_energy * lerpf(1.0, SUN_ENERGY_IN_RAIN, value)
+	sun_energy_scale = lerpf(1.0, SUN_ENERGY_IN_RAIN, value)
+	if main.day_night:
+		main.day_night.refresh_lighting()
 
 func _build_particles() -> GPUParticles3D:
 	var process := ParticleProcessMaterial.new()
