@@ -99,7 +99,7 @@ attack_damage = 12
 attack_range = 1.8
 attack_cooldown = 1.8
 aggro_range = 9.0
-weak_to = 4
+armor_class = 6
 vision_range = 13.0
 abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_phoenix")])
 

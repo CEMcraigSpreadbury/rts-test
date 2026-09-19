@@ -186,6 +186,11 @@ var _formation_drag_start_screen: Vector2 = Vector2.ZERO
 var _formation_drag_start_world: Vector3 = Vector3.ZERO
 var _formation_drag_end_world: Vector3 = Vector3.ZERO
 var _formation_drag_facing: Vector3 = Vector3.ZERO
+## Shift doubles as queue-order and flip-facing during a right-drag: its state
+## when the drag began decides queueing, and pressing or releasing it mid-drag
+## flips the facing (flipped whenever it differs from that starting state).
+var _formation_drag_shift_at_start: bool = false
+var _formation_drag_flipped: bool = false
 
 ## The last Unit/ProductionBuilding/Gatherable single-left-clicked (own or
 ## not) — keeps the hover ring showing on it even when the mouse moves away,
@@ -1316,8 +1321,6 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		building._purchased_upgrades.append(item)
 		## Extension point: a future upgrade effect is another optional flag
 		## on ProducibleItem plus a matching `if` here.
-		if item.unlocks_monarch_promotion:
-			building.can_promote_monarch = true
 		if item.upgrade_bonus != 0:
 			UnitUpgrades.add_bonus(building.owner_peer_id, item.upgrade_category, item.upgrade_stat, item.upgrade_bonus)
 		chat.send_line(building.owner_peer_id, "Upgrade complete: %s" % item.item_name)
@@ -1608,6 +1611,8 @@ func _begin_formation_drag(screen_pos: Vector2) -> void:
 	_formation_drag_start_screen = screen_pos
 	_formation_drag_start_world = hit.position
 	_formation_drag_end_world = hit.position
+	_formation_drag_shift_at_start = Input.is_key_pressed(KEY_SHIFT)
+	_formation_drag_flipped = false
 
 func _update_formation_drag(screen_pos: Vector2) -> void:
 	if not _formation_drag_active:
@@ -1622,15 +1627,22 @@ func _update_formation_drag(screen_pos: Vector2) -> void:
 	var hit := raycast(screen_pos, FORMATION_DRAG_RAY_MASK)
 	if not hit.is_empty():
 		_formation_drag_end_world = hit.position
+	_refresh_formation_drag_preview()
+
+func _refresh_formation_drag_preview() -> void:
 	_formation_drag_facing = group_movement.drag_facing(selected_units, _formation_drag_start_world, _formation_drag_end_world)
+	if _formation_drag_flipped:
+		_formation_drag_facing = -_formation_drag_facing
 	feedback.show_formation_preview(group_movement.drag_preview_slots(
-			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing))
+			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing),
+			(_formation_drag_start_world + _formation_drag_end_world) * 0.5, _formation_drag_facing,
+			_formation_drag_start_world.distance_to(_formation_drag_end_world))
 
 ## Never dragged far enough: exactly the right-click order the press used to
 ## issue on its own, from where the button went down.
 func _finish_formation_drag(append: bool) -> void:
 	if _formation_drag_active:
-		_issue_formation_drag_order(append)
+		_issue_formation_drag_order(_formation_drag_shift_at_start)
 	else:
 		_issue_move_order(_formation_drag_start_screen, append)
 	_cancel_formation_drag()
@@ -1645,7 +1657,17 @@ func _cancel_formation_drag() -> void:
 ## the button's real state is polled as a backstop instead of trusting the
 ## release event alone, which would otherwise leave the preview stuck on screen.
 func _poll_formation_drag() -> void:
-	if not _formation_drag_pressed or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+	if not _formation_drag_pressed:
+		return
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		## Polled rather than caught as a key event so a Shift tap flips the
+		## preview at once, even with the mouse held still.
+		var flipped := Input.is_key_pressed(KEY_SHIFT) != _formation_drag_shift_at_start
+		if _formation_drag_active and flipped != _formation_drag_flipped:
+			_formation_drag_flipped = flipped
+			prune_selected_units()
+			if not selected_units.is_empty():
+				_refresh_formation_drag_preview()
 		return
 	if game_over or local_player_out or _is_pause_menu_open() or chat.is_input_open() or placement.is_placing():
 		_cancel_formation_drag()
@@ -2494,16 +2516,6 @@ func arm_patrol_mode() -> void:
 	_patrol_started_this_session = false
 	play_command_sound()
 
-func player_has_monarch_unlocked(peer_id: int) -> bool:
-	for node in get_tree().get_nodes_in_group("buildings"):
-		if node is ProductionBuilding and node.owner_peer_id == peer_id and node.can_promote_monarch:
-			return true
-	return false
-
-func issue_promote_order(unit: Unit) -> void:
-	_rpc_request_promote_monarch.rpc_id(1, unit.get_path())
-	play_command_sound()
-
 ## Refuses (silently — the HUD button is already greyed out) while the
 ## ability is still cooling down, rather than arming a click the host would
 ## only reject.
@@ -2598,27 +2610,7 @@ func cancel_production_as(sender_id: int, building_path: NodePath, queue_index: 
 		return
 	building.cancel_at(queue_index)
 
-## --- Monarch promotion / abilities ---
-
-@rpc("any_peer", "call_local", "reliable")
-func _rpc_request_promote_monarch(unit_path: NodePath) -> void:
-	if not multiplayer.is_server():
-		return
-	var sender_id := multiplayer.get_remote_sender_id()
-	if sender_id == 0:
-		sender_id = my_peer_id()
-
-	var unit := get_node_or_null(unit_path) as Unit
-	if unit == null or unit.owner_peer_id != sender_id:
-		return
-	if not unit.can_fight or unit.is_monarch or unit.monarch_abilities.is_empty():
-		return
-	if not player_has_monarch_unlocked(sender_id):
-		return
-	if not ResourceStockpile.can_afford(sender_id, unit.monarch_promotion_costs):
-		return
-	ResourceStockpile.spend(sender_id, unit.monarch_promotion_costs)
-	unit.promote_to_monarch()
+## --- Abilities ---
 
 ## Validation only — range isn't checked here, since an out-of-range target
 ## just makes the unit walk until it's in range (see Unit.command_cast_ability).

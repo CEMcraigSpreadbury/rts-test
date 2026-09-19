@@ -20,16 +20,16 @@ node, expand **Producibles**, grow the array by one, and fill in:
 
 ## 2. Pick what it does
 
-An upgrade needs at least one of these two effects set (both can be set at
-once, though in practice existing content picks one per item):
+An upgrade sets this effect:
 
 ### A — Blacksmith-style weapon/armor bonus
 
 - **Upgrade Category** → which `Unit.UnitCategory` it affects (`Infantry`/
   `Archer`/`Cavalry`; `NONE` means it affects nothing — don't leave it here
   by accident).
-- **Upgrade Stat** → `Weapon` (adds to attack damage) or `Armor` (subtracts
-  from incoming damage, floor of 1).
+- **Upgrade Stat** → `Weapon` (adds to attack damage) or `Armor` (each point
+  cuts incoming damage by 10%, capped at 60%, floor of 1 — see
+  `Unit.ARMOR_REDUCTION_PER_POINT`).
 - **Upgrade Bonus** → the flat integer amount.
 
 On completion (`main.gd:_on_building_item_completed`) this calls
@@ -40,14 +40,6 @@ ones produced later**, automatically picked up by
 `Unit.take_damage()` (armor) and `Unit._effective_attack_damage()` (weapon).
 No per-unit wiring needed; a unit only needs its own **Unit Category** field
 (see `docs/creating-a-unit.md`) set to match for this to apply to it.
-
-### B — Unlocks Monarch promotion
-
-Check **Unlocks Monarch Promotion**. On completion this sets
-`can_promote_monarch = true` on the building that sold it — checked by
-whatever UI/command offers the promotion action for that owner's units. This
-is a one-off boolean, not a per-category bonus; it doesn't need **Upgrade
-Category**/**Upgrade Stat**/**Upgrade Bonus** set at all.
 
 ## 3. Tiering (optional)
 
@@ -68,13 +60,12 @@ and `main.gd:_producible_is_visible()` hides every tier from the menu except
 the next legitimately-buyable one, so a player never sees the whole line
 at once.
 
-## 4. A genuinely new upgrade *effect* (beyond A/B above)
+## 4. A genuinely new upgrade *effect* (beyond A above)
 
-If neither "flat weapon/armor bonus" nor "unlock Monarch promotion" fits what
-you're adding, the extension point is `main.gd:_on_building_item_completed()`
+If a weapon/armor bonus doesn't fit what you're adding, the extension point is `main.gd:_on_building_item_completed()`
 (the `if item.kind == ProducibleItem.Kind.UPGRADE:` branch): add a new
-optional field to `ProducibleItem` (mirroring `unlocks_monarch_promotion`'s
-pattern — a plain `@export var` defaulting to whatever means "off"), then a
+optional field to `ProducibleItem` (a plain `@export var` defaulting to
+whatever means "off"), then a
 matching `if` in that function applying the effect. Keep the field boolean/
 numeric and off-by-default so it never silently interacts with existing
 items that don't set it.

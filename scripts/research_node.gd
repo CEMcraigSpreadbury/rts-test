@@ -62,7 +62,7 @@ enum Stat {
 enum Buff {
 	NONE,
 	ATTACK_SPEED,
-	ARMOR, ## flat
+	ARMOR, ## armour points (see Unit.ARMOR_REDUCTION_PER_POINT)
 	MOVE_SPEED,
 	DAMAGE,
 	GATHER_SPEED,

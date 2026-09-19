@@ -43,7 +43,9 @@ func send_line(peer_id: int, line: String) -> void:
 ##   "cmd spawn <unit|monster> [count]" spawns units you own at the mouse
 ##   cursor, e.g. "cmd spawn soldier 3"; "monster" picks a random one each.
 ##   Append "e" ("cmd spawn soldier 3e", "cmd spawn monster e") to spawn them
-##   as neutral enemies instead.
+##   as neutral enemies instead. More than one spawns as a block facing the
+##   camera, front rank on the cursor; an enemy block holds its ground so it
+##   stays a block to practise flanking and charging against.
 ##   "cmd speed <multiplier>" runs the whole match faster or slower (single
 ##   player only), e.g. "cmd speed 4"; "cmd speed 1" puts it back.
 ##   "cmd perf" toggles the movement profiling overlay (host only, see PerfStats).
@@ -86,10 +88,12 @@ func _on_chat_submitted(text: String) -> void:
 	## Where the mouse is pointing on the ground, captured here because only
 	## the typing player's machine knows it — "cmd spawn" drops units there.
 	var cursor_hit: Dictionary = main.raycast(main.get_viewport().get_mouse_position())
-	_rpc_submit_chat.rpc_id(1, trimmed, cursor_hit.get("position", Vector3.ZERO), not cursor_hit.is_empty())
+	var camera := main.get_viewport().get_camera_3d()
+	var camera_pos: Vector3 = camera.global_position if camera else Vector3.ZERO
+	_rpc_submit_chat.rpc_id(1, trimmed, cursor_hit.get("position", Vector3.ZERO), not cursor_hit.is_empty(), camera_pos)
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_submit_chat(text: String, cursor_pos: Vector3, has_cursor: bool) -> void:
+func _rpc_submit_chat(text: String, cursor_pos: Vector3, has_cursor: bool, camera_pos: Vector3) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -97,11 +101,11 @@ func _rpc_submit_chat(text: String, cursor_pos: Vector3, has_cursor: bool) -> vo
 		sender_id = main.my_peer_id()
 
 	if text.begins_with("cmd ") and _cheats_enabled():
-		_execute_debug_command(sender_id, text.substr(4), cursor_pos, has_cursor)
+		_execute_debug_command(sender_id, text.substr(4), cursor_pos, has_cursor, camera_pos)
 	else:
 		_rpc_display_chat.rpc("Player %d: %s" % [sender_id, text])
 
-func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vector3, has_cursor: bool) -> void:
+func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vector3, has_cursor: bool, camera_pos: Vector3) -> void:
 	var parts: PackedStringArray = args_string.strip_edges().split(" ", false)
 	if parts.is_empty():
 		return
@@ -133,12 +137,25 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 				_rpc_display_chat.rpc_id(sender_id, "[debug] unknown unit '%s' (known: monster, %s)" % [parts[1], ", ".join(_unit_scene_catalog().keys())])
 				return
 			var center: Vector3 = cursor_pos if has_cursor else _fallback_spawn_center(sender_id)
+			var facing := _spawn_facing(center, camera_pos)
+			var positions := _spawn_block_slots(center, facing, count)
 			var spawned_names: Array[String] = []
+			var block: Array[Unit] = []
 			for i in count:
 				var path: String = _random_monster_scene_path() if wants_random_monster else scene_path
 				if path.is_empty():
 					break
-				spawned_names.append(_spawn_debug_unit(0 if as_enemy else sender_id, path, center + _spawn_offset(i)).display_name)
+				var unit := _spawn_debug_unit(0 if as_enemy else sender_id, path, positions[i])
+				if count > 1:
+					unit.formation_facing = facing
+					unit.rotation.y = atan2(facing.x, facing.z)
+					unit.hold_position = as_enemy
+					block.append(unit)
+				spawned_names.append(unit.display_name)
+			## Standing together as a block, as if they'd walked there as one
+			## (see Unit.arrived_group) — so they answer an attack as a block.
+			for unit in block:
+				unit.arrived_group = block
 			_rpc_display_chat.rpc_id(sender_id, "[debug] spawned %s%s" % [", ".join(spawned_names), " (enemy)" if as_enemy else ""])
 		"speed":
 			## Single player only: the host is the only machine simulating, so
@@ -175,10 +192,6 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 const MAX_DEBUG_SPAWN: int = 500
 const UNIT_SCENE_DIR: String = "res://scenes/units/"
 const MONSTER_SCENE_DIR: String = "res://scenes/units/monsters/"
-## Spacing between debug-spawned units: comfortably wider than two avoidance
-## radii, so a batch doesn't spawn overlapping (see the spawn jitter note in
-## Main._on_building_item_completed for what overlapping spawns do).
-const DEBUG_SPAWN_SPACING: float = 1.1
 
 ## Spawn name ("soldier", "black_dragon", ...) -> scene path, read off the unit
 ## scene files themselves so a newly added unit is spawnable with no changes
@@ -226,12 +239,20 @@ func _fallback_spawn_center(peer_id: int) -> Vector3:
 	var town_center: Node3D = main.town_centers.get(peer_id)
 	return town_center.global_position + Vector3(0.0, 0.0, 5.0) if town_center else Vector3.ZERO
 
-## Sunflower spiral: the first unit lands exactly on the cursor and each next
-## one a little further out, packing a batch of any size into a tidy blob.
-func _spawn_offset(index: int) -> Vector3:
-	var radius: float = DEBUG_SPAWN_SPACING * sqrt(float(index))
-	var angle: float = float(index) * 2.39996
-	return Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+## A spawned block faces the camera that typed the command, so its front is
+## the side the player is looking at and its flanks and rear are easy to find.
+func _spawn_facing(center: Vector3, camera_pos: Vector3) -> Vector3:
+	var to_camera := camera_pos - center
+	to_camera.y = 0.0
+	return to_camera.normalized() if to_camera.length_squared() > 0.0001 else Vector3.BACK
+
+## The same box a formation order would stand in, front rank on the cursor —
+## laid out from the count alone, before any unit exists to fill it.
+func _spawn_block_slots(center: Vector3, facing: Vector3, count: int) -> Array[Vector3]:
+	var placeholders: Array[Unit] = []
+	placeholders.resize(count)
+	var right := Vector3(facing.z, 0.0, -facing.x)
+	return Formation.new(placeholders).get_slot_positions(center, facing, right)
 
 ## Same path as a starting unit (see Main._spawn_player_base): population is
 ## reserved by hand since the unit never went through a production queue, and

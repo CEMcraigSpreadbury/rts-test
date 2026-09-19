@@ -15,7 +15,7 @@ signal construction_finished
 signal destroyed
 ## Relayed by main.gd for a floating damage-number popup, same reasoning as
 ## Unit.damaged — take_damage() only ever runs on the host.
-signal damaged(amount: int, attacker_path: NodePath, fatal: bool)
+signal damaged(amount: int, attacker_path: NodePath, fatal: bool, flanked: bool)
 ## Purely cosmetic (see Unit.projectile_fired) — real damage lands later, off
 ## _pending_projectile_hits, entirely independent of this signal/its visual.
 signal projectile_fired(target: Node3D)
@@ -75,11 +75,6 @@ enum Role { OTHER, MILITARY, SHRINE, WALL }
 	set(value):
 		team_tint = value
 		_apply_team_color()
-## Set once a ProducibleItem with kind == UPGRADE and unlocks_monarch_promotion
-## completes on this building (see main.gd:_on_building_item_completed).
-## Mirrored to non-authoritative peers so their own command panel can tell
-## whether promotion is available.
-@export var can_promote_monarch: bool = false
 ## How far the model sinks into the ground as it's destroyed.
 @export var construction_sink_depth: float = 3.0
 ## >0 marks this building as a walkable OPENING rather than a solid obstacle,
@@ -554,7 +549,7 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	var attacker_path: NodePath = NodePath()
 	if attacker != null and is_instance_valid(attacker) and attacker.is_inside_tree():
 		attacker_path = attacker.get_path()
-	damaged.emit(amount, attacker_path, fatal)
+	damaged.emit(amount, attacker_path, fatal, false)
 	current_health = maxi(current_health - amount, 0)
 	health_fraction = float(current_health) / float(maxi(max_health, 1))
 	if current_health <= 0:

@@ -40,10 +40,11 @@ two places.
 - **Can Fight** (false makes it never auto-engage or take a Command.Attack)
 - **Max Health**, **Attack Damage**, **Attack Range**, **Attack Cooldown**,
   **Aggro Range**
-- **Damage Type** — this unit's own rock-paper-scissors type (`NONE` if it
-  has no bonus-damage matchup)
-- **Weak To** — a `DamageType` this unit takes 1.5x damage from; `NONE` for
-  immune to the whole system
+- **Damage Type** — what this unit's attacks count as (`Blade`/`Spear`/
+  `Cavalry`/`Pierce`/`Magic`; `NONE` hits everything at x1)
+- **Armor Class** — how it takes each damage type (`Soldier`/`Spear`/
+  `Archer`/`Cavalry`/`Siege`/`Monster`; `NONE` takes x1 from everything).
+  The multipliers live in `CombatUtils.COUNTER_TABLE`.
 - **Unit Category** (`NONE`/`Infantry`/`Archer`/`Cavalry`) — which Blacksmith
   upgrade line (see `docs/creating-an-upgrade.md`) affects this unit. Use
   `NONE` for a non-combat unit like a Villager so no Blacksmith tier ever
@@ -75,26 +76,16 @@ is applied at spawn (`main.gd` overrides this with the owning player's actual
 team color when the unit is produced) — mostly matters for a hand-placed unit
 (e.g. an Objective guard) that's never spawned through that path.
 
-## 8. Monarch promotion (optional)
+## 8. Abilities (optional)
 
-**Monarch** group: leave **Monarch Abilities** empty to make this unit type
-never promotable. To allow promotion, add one or more `Ability` resources
-(passive aura or active ability — see any existing entry on
-`soldier_unit.tscn` for the shape) and set **Monarch Promotion Costs**.
-Promotion itself is still gated by some building on the owner's roster having
-completed an `Upgrade`-kind `ProducibleItem` with **Unlocks Monarch
-Promotion** checked (see `docs/creating-an-upgrade.md`) — the ability list
-here only decides *what a promoted unit of this type can do*, not *whether*
-promotion is available yet.
-
-**Abilities** group (just above Monarch): abilities this unit type always has,
-no promotion needed — every Shrine monster has one. For a clickable area
+**Abilities** group: abilities this unit type always has — every Shrine
+monster has one. For a clickable area
 attack, add an `Ability` with **Kind: Activated Area** and fill in the
 **Activated** group (range, cooldown, optional costs) and the **Area Effect**
 group (radius, instant damage, damage over time, slow, stun, and the colour
 used for the targeting decal and impact). Any `*_unit.tscn` in
 `scenes/units/monsters/` has a working example. Abilities get hotkeys R/T/Y/U
-in list order, and a unit's own abilities come before its Monarch ones.
+in list order.
 Clicking a target out of range makes the unit walk until it's in range, then
 cast.
 
@@ -148,5 +139,3 @@ scene to whichever building's **Producibles** list should train it (see
    the host's authoritative timer actually applies damage (check by having a
    target flee mid-flight — a real hit shouldn't land after it's out of
    range).
-4. If Monarch-capable: confirm promotion is unavailable until the relevant
-   Upgrade is bought, then available after.

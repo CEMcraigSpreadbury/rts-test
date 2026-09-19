@@ -2,7 +2,7 @@ extends Node
 ## Host-authoritative per-player Blacksmith bonuses, applying to every unit
 ## of the matching category a player owns (present and future). Not synced —
 ## combat resolution (Unit.take_damage/_tick_attacking) only ever runs on the
-## host, same reasoning as CombatUtils' Monarch aura helpers.
+## host.
 
 enum Stat { WEAPON, ARMOR }
 

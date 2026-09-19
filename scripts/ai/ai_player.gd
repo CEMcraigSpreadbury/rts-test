@@ -219,10 +219,11 @@ func order_target(units: Array, target: Node3D) -> void:
 		return
 	main.issue_command_as(peer_id, _paths(units), target.get_path(), target.global_position, false, false)
 
-func order_move(units: Array, pos: Vector3, attack_move: bool = false) -> void:
+## `append` queues it after the units' current order, like a shift-click.
+func order_move(units: Array, pos: Vector3, attack_move: bool = false, append: bool = false) -> void:
 	if units.is_empty():
 		return
-	main.issue_command_as(peer_id, _paths(units), NodePath(), pos, attack_move, false)
+	main.issue_command_as(peer_id, _paths(units), NodePath(), pos, attack_move, append)
 
 func group_centroid(units: Array) -> Vector3:
 	var sum := Vector3.ZERO

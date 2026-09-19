@@ -89,18 +89,15 @@ properties/7/replication_mode = 2
 properties/8/path = NodePath(".:synced_current_item_progress")
 properties/8/spawn = true
 properties/8/replication_mode = 1
-properties/9/path = NodePath(".:can_promote_monarch")
+properties/9/path = NodePath(".:owner_peer_id")
 properties/9/spawn = true
 properties/9/replication_mode = 2
-properties/10/path = NodePath(".:owner_peer_id")
+properties/10/path = NodePath(".:team_tint")
 properties/10/spawn = true
 properties/10/replication_mode = 2
-properties/11/path = NodePath(".:team_tint")
+properties/11/path = NodePath(".:synced_queue_counts")
 properties/11/spawn = true
 properties/11/replication_mode = 2
-properties/12/path = NodePath(".:synced_queue_counts")
-properties/12/spawn = true
-properties/12/replication_mode = 2
 
 [node name="ProductionBuilding2" type="StaticBody3D" unique_id=247093089 groups=["buildings"]]
 script = ExtResource("1_building_script")

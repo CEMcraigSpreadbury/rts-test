@@ -71,9 +71,6 @@ const WANDER_PAUSE_MAX: float = 3.0
 ## Fraction of wander_radius a wander leg must at least cover, so legs are
 ## actual walks rather than a shuffle in place.
 const WANDER_MIN_LEG_FRACTION: float = 0.35
-## Multiplier applied when an attacker's damage_type matches its target's
-## weak_to — see take_damage().
-const WEAKNESS_DAMAGE_MULTIPLIER: float = 1.5
 ## Radius around an attack-move's destination that counts as "the place the
 ## player pointed at". A unit under that order keeps picking new targets
 ## inside this circle — enemy buildings included — until the area is clear or
@@ -96,10 +93,60 @@ const SEPARATION_MAX_SPEED: float = 2.5
 ## only has to be roughly current to read as bodies jostling apart.
 const SEPARATION_INTERVAL: float = 0.1
 
+## Flank and rear hits on a unit standing in a block (see _flank_multiplier):
+## within ±60° of its front is x1, ±60-120° is the flank, the rest the rear.
+## As dot products against the block's facing: cos 60° and cos 120°.
+const FLANK_ARC_DOT: float = 0.5
+const REAR_ARC_DOT: float = -0.5
+const FLANK_DAMAGE_MULTIPLIER: float = 1.3
+## Hit flash for a flank/rear hit, so a block caught on its side reads at a glance.
+const FLANK_HIT_FLASH_COLOR: Color = Color(1.0, 0.25, 0.2)
+const REAR_DAMAGE_MULTIPLIER: float = 1.75
+## Cavalry charge (see can_charge): a charger that has run at least
+## CHARGE_MIN_RUN at CHARGE_MIN_SPEED_FRACTION of its speed or better lands its
+## next melee hit at CHARGE_DAMAGE_MULTIPLIER, knocking the target back and
+## stunning foot units. Spent on that hit; ready again after running
+## CHARGE_REARM_DISTANCE away from the fight. Within CHARGE_SPRINT_DISTANCE of
+## its target a ready charger sprints at CHARGE_SPEED_MULTIPLIER.
+const CHARGE_MIN_RUN: float = 4.0
+const CHARGE_MIN_SPEED_FRACTION: float = 0.75
+const CHARGE_REARM_DISTANCE: float = 8.0
+const CHARGE_SPRINT_DISTANCE: float = 10.0
+const CHARGE_SPEED_MULTIPLIER: float = 1.4
+const CHARGE_DAMAGE_MULTIPLIER: float = 3.0
+## How long a charge stays armed after the charger slows — it pulls up at its
+## target (or its slot in a block) a moment before the first swing.
+const CHARGE_ARMED_GRACE_MS: int = 1000
+const CHARGE_KNOCKBACK_DISTANCE: float = 1.5
+const CHARGE_KNOCKBACK_TIME: float = 0.2
+const CHARGE_STUN_SECONDS: float = 0.5
+const CHARGE_STUN_COLOR: Color = Color(1.0, 0.9, 0.6)
+## Spear brace (see can_brace): standing still in a block for BRACE_TIME, a
+## brace-capable unit meets a charge into its front arc with its spear — the
+## charge gets no bonus, the charger is stopped dead (stunned) and takes the
+## bracer's hit at BRACE_COUNTER_MULTIPLIER. A charge into its flank or rear
+## lands as normal.
+const BRACE_TIME: float = 1.5
+## Below this flat speed a unit counts as standing still (separation nudges
+## in a crowded block stay under it).
+const BRACE_STILL_SPEED: float = 0.6
+const BRACE_COUNTER_MULTIPLIER: float = 3.0
+const BRACE_STOP_SECONDS: float = 0.6
+## Percentage armour (see take_damage): each point of armour cuts this much of
+## a hit, up to the cap.
+const ARMOR_REDUCTION_PER_POINT: float = 0.1
+const ARMOR_MAX_REDUCTION: float = 0.6
 ## Melee crowding: each melee attacker already on a target makes it read this
 ## many meters further away to the target scans, so a line of melee units
 ## spreads across the enemy line instead of all picking the one nearest enemy.
 const MELEE_CROWD_PENALTY: float = 1.2
+## Ranged crowding, the same idea: each shooter already on a target makes it
+## read this many meters further away, so a block of archers spreads its fire
+## across the enemy line instead of all loosing at the one nearest man.
+const RANGED_SPREAD_PENALTY: float = 3.0
+## An ordered target marks where a fighting block's archers aim, not the one man
+## they all shoot: they spread over the enemies within this radius of it.
+const RANGED_SPREAD_RADIUS: float = 5.0
 ## How many melee attackers can already be closer to a target than this unit
 ## before it looks for a less crowded enemy beside it (see _tick_melee_overflow).
 const MELEE_CROWD_LIMIT: int = 3
@@ -129,9 +176,13 @@ enum Command { NONE, MOVE, GATHER, ATTACK, BUILD, ATTACK_MOVE, PATROL, CAST }
 ## The current step within a command, e.g. Gather cycles TO_RESOURCE -> GATHERING -> TO_DROPOFF.
 ## CASTING holds the unit still while its cast animation plays out (see _perform_cast).
 enum Activity { IDLE, MOVING, TO_RESOURCE, GATHERING, TO_DROPOFF, TO_TARGET, ATTACKING, TO_BUILD_SITE, BUILDING, DEAD, TO_CAST, CASTING }
-## Rock-paper-scissors combat: NONE means "no special type" (deals no bonus,
-## takes no bonus). MAGIC has no attacker yet — reserved for future spellcasters.
-enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC }
+## Counter system: what an attack counts as, scaled against the target's
+## ArmorClass by CombatUtils.counter_multiplier. NONE (e.g. the Villager) is
+## always x1. BLADE is last only so existing scenes' stored values still line up.
+enum DamageType { NONE, SPEAR, CAVALRY, PIERCE, MAGIC, BLADE }
+## The defending side of the counter system — see CombatUtils.COUNTER_TABLE.
+## NONE is always x1 (Villagers).
+enum ArmorClass { NONE, SOLDIER, SPEAR, ARCHER, CAVALRY, SIEGE, MONSTER }
 ## Distinct from Command above — this exists purely to pick which On ***
 ## Sound Effects array to play from (see play_order_sound()), and needs its
 ## own STOP entry since command_stop() results in Command.NONE, which
@@ -157,8 +208,9 @@ signal projectile_fired(target: Node3D)
 ## `attacker_path` is empty when nothing identifiable landed the hit, and
 ## `fatal` says whether this is the blow that kills — see take_damage, and
 ## main.gd, which relays both to drive the recoil direction and the attacker's
-## kill hitstop on every peer.
-signal damaged(amount: int, attacker_path: NodePath, fatal: bool)
+## kill hitstop on every peer. `flanked` marks a flank/rear hit on a block
+## (see _flank_multiplier), which flashes red instead of white.
+signal damaged(amount: int, attacker_path: NodePath, fatal: bool, flanked: bool)
 ## Relayed the same way, for a floating "+N" resource popup. Carries the
 ## resource's display_color directly (rather than the ResourceType resource
 ## itself) since that's all the popup needs and it's trivially RPC-safe.
@@ -251,9 +303,6 @@ func _update_team_tint_visual() -> void:
 @export var costs: Array[ResourceCost] = []
 ## Released back to the owner's Population pool when this unit dies.
 @export var population_cost: int = 1
-## Monarchs currently in the tree, any owner — lets CombatUtils skip its aura
-## lookups (run on every attack and every hit) when there are none.
-static var monarch_count: int = 0
 
 @export_group("Sprite Sheet")
 @export var sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png")
@@ -311,14 +360,17 @@ static var monarch_count: int = 0
 ## Scales this unit's damage against buildings — siege weapons (Ballista,
 ## Magic Cannon) set it well above 1.
 @export var building_damage_multiplier: float = 1.0
-## What kind of damage this unit's attacks count as, for the weak_to rock-
-## paper-scissors check below. NONE if this unit has no special damage type.
+## What kind of damage this unit's attacks count as against a target's
+## armor_class (see CombatUtils.counter_multiplier).
 @export var damage_type: DamageType = DamageType.NONE
-## Attacks whose damage_type matches this deal WEAKNESS_DAMAGE_MULTIPLIER
-## bonus damage to this unit. NONE means immune to the whole system.
-@export var weak_to: DamageType = DamageType.NONE
+## How this unit takes each DamageType (see CombatUtils.COUNTER_TABLE).
+@export var armor_class: ArmorClass = ArmorClass.NONE
 ## Which Blacksmith weapon/armor upgrade line applies to this unit.
 @export var unit_category: UnitCategory = UnitCategory.NONE
+## Mounted: sprints into melee and lands a charge (see CHARGE_MIN_RUN).
+@export var can_charge: bool = false
+## Spear-armed: braces against a charge when standing in a block (see BRACE_TIME).
+@export var can_brace: bool = false
 ## Null = melee (instant damage on cooldown, like today). Set = ranged: each
 ## cooldown tick fires a projectile that travels at projectile_speed and only
 ## applies damage once it actually arrives (see _tick_pending_projectiles) —
@@ -362,18 +414,10 @@ static var monarch_count: int = 0
 @export var build_command_lines: Array[CommandLine] = []
 
 @export_group("Abilities")
-## Abilities this unit type always has, promoted or not — e.g. each Shrine
-## monster's area attack. Listed ahead of monarch_abilities on the command
-## card and in ability indices (see get_abilities).
+## Abilities this unit type always has — e.g. each Shrine monster's area
+## attack. Indices into this are what the command card, hotkeys, cooldowns and
+## the activation RPC all refer to (see get_abilities).
 @export var abilities: Array[Ability] = []
-
-@export_group("Monarch")
-## Empty means this unit type can never be promoted. Non-empty defines what a
-## promoted unit of this type can do — set directly on the unit scene, same
-## convention as costs/population_cost, so "skills depend on which unit was
-## promoted" needs no separate lookup table.
-@export var monarch_abilities: Array[Ability] = []
-@export var monarch_promotion_costs: Array[ResourceCost] = []
 
 @export_group("Status", "status_")
 ## Read/write here for debugging; normally driven by command_move / command_gather / command_attack.
@@ -393,7 +437,6 @@ var crew_sprite: AnimatedSprite3D = null
 @onready var selection_ring: MeshInstance3D = $SelectionRing
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
-@onready var crown_icon: Sprite3D = $CrownIcon
 ## Inspector-configurable (amount/color/spread/etc. all live on the node
 ## itself) — see _process() for when it's toggled on/off.
 @onready var walk_dust: GPUParticles3D = get_node_or_null("WalkDust")
@@ -465,17 +508,6 @@ func _play_selection_punch() -> void:
 	tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tween.tween_property(selection_ring, "scale", Vector3.ONE, 0.25)
 
-## Setter (not just a plain bool) so the crown reacts immediately whether set
-## locally (host, on promotion) or received over the wire on other peers via
-## replication — same reasoning as the `selected` setter above.
-var is_monarch: bool = false:
-	set(value):
-		if value != is_monarch:
-			monarch_count += 1 if value else -1
-		is_monarch = value
-		if crown_icon:
-			crown_icon.visible = value
-
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
 var _fill_base_scale_x: float = 1.0
@@ -545,10 +577,10 @@ var _death_playing: bool = false
 ## same as the floating damage number it's paired with). Flashes to white and
 ## eases back to team_tint rather than just snapping back, so a rapid flurry
 ## of hits doesn't cut the flash short mid-fade.
-func play_hit_flash() -> void:
+func play_hit_flash(color: Color = Color.WHITE) -> void:
 	if _flash_tween and _flash_tween.is_valid():
 		_flash_tween.kill()
-	sprite.modulate = Color.WHITE
+	sprite.modulate = color
 	_flash_tween = create_tween()
 	_flash_tween.tween_property(sprite, "modulate", _resting_modulate(), 0.15)
 
@@ -557,10 +589,10 @@ func play_hit_flash() -> void:
 ## is the attacker's position; passing this unit's own position (what main.gd
 ## does when the attacker is gone or unknown) means "no direction", and the
 ## recoil is skipped so the unit doesn't lurch off in an arbitrary direction.
-func play_hit_reaction(from_position: Vector3) -> void:
+func play_hit_reaction(from_position: Vector3, flanked: bool = false) -> void:
 	if _death_playing:
 		return
-	play_hit_flash()
+	play_hit_flash(FLANK_HIT_FLASH_COLOR if flanked else Color.WHITE)
 	_play_hit_squash()
 	var away := global_position - from_position
 	away.y = 0.0
@@ -950,20 +982,29 @@ var _last_resource_position: Vector3 = Vector3.ZERO
 ## idles rather than trekking off across the map on its own.
 const RESOURCE_RETARGET_RADIUS: float = 15.0
 ## Unit or ProductionBuilding — anything with owner_peer_id/current_health/take_damage().
-## Setter keeps the target's melee_attackers count in step, whichever of the
-## many code paths below retargets this unit.
+## Setter keeps the target's melee_attackers/ranged_attackers count in step,
+## whichever of the many code paths below retargets this unit.
 var attack_target: Node3D = null:
 	set(value):
 		if value == attack_target:
 			return
 		var melee := _counts_as_melee()
-		if melee and is_instance_valid(attack_target) and attack_target is Unit:
-			attack_target.melee_attackers = maxi(attack_target.melee_attackers - 1, 0)
+		var ranged := can_fight and not melee
+		if is_instance_valid(attack_target) and attack_target is Unit:
+			if melee:
+				attack_target.melee_attackers = maxi(attack_target.melee_attackers - 1, 0)
+			elif ranged:
+				attack_target.ranged_attackers = maxi(attack_target.ranged_attackers - 1, 0)
 		attack_target = value
-		if melee and is_instance_valid(value) and value is Unit:
-			value.melee_attackers += 1
+		if is_instance_valid(value) and value is Unit:
+			if melee:
+				value.melee_attackers += 1
+			elif ranged:
+				value.ranged_attackers += 1
 ## Host only: how many melee units currently have this unit as attack_target.
 var melee_attackers: int = 0
+## Host only: the same for ranged units — spreads a volley (see RANGED_SPREAD_PENALTY).
+var ranged_attackers: int = 0
 var _separation_timer: float = randf() * SEPARATION_INTERVAL
 var _separation_velocity: Vector3 = Vector3.ZERO
 var _overflow_scan_timer: float = 0.0
@@ -1163,6 +1204,23 @@ var _dots: Array[Dictionary] = []
 var _slow_fraction: float = 0.0
 var _slow_remaining: float = 0.0
 var _stun_remaining: float = 0.0
+## Host-only charge state (see CHARGE_MIN_RUN). _charge_run is the current
+## unbroken run at speed; _charge_rearm_run counts toward rearming once spent.
+var _charge_ready: bool = true
+## Host-only: the last flank/rear hit on this unit and who landed it — what an
+## AI reads to know its block is caught on the wrong side (see AiTactics).
+var last_flanked_ms: int = -100000
+var last_flanker: Node3D = null
+## Host-only: how long this unit has stood still (see is_braced).
+var _still_time: float = 0.0
+## Host-only: when this unit last swung or fired (see _start_attacking).
+var _last_swing_ms: int = -100000
+var _charge_run: float = 0.0
+var _charge_rearm_run: float = 0.0
+var _charge_armed_until_ms: int = 0
+## Host-only: being shoved back by a charge, over _knockback_remaining seconds.
+var _knockback_velocity: Vector3 = Vector3.ZERO
+var _knockback_remaining: float = 0.0
 
 func _ready() -> void:
 	status_current_health = max_health
@@ -1215,11 +1273,6 @@ func _ready() -> void:
 func _on_path_changed() -> void:
 	if PerfStats.enabled:
 		PerfStats.count_path()
-
-func _exit_tree() -> void:
-	if is_monarch:
-		monarch_count -= 1
-		is_monarch = false
 
 ## Raw navigation command; prefer command_move / command_gather / command_attack which also manage status.
 func move_to(target_position: Vector3) -> void:
@@ -1589,6 +1642,30 @@ func _group_contact(enemy: Node3D) -> bool:
 		return false
 	return GroupMovement.current.formation_contact(self, enemy)
 
+## Standing idle in the block it last walked to as a group (see arrived_group,
+## formation_facing), free to answer as one — not holding its ground or already
+## fighting as a formation, which have their own rules. Fighting from its place
+## (_in_hold_fight) still counts: it hasn't left the block.
+func in_idle_block() -> bool:
+	return can_fight and formation_facing != Vector3.ZERO and arrived_group.size() >= 2 \
+			and not hold_position and not in_formation_fight \
+			and (status_command == Command.NONE or _in_hold_fight())
+
+## An idle block member meeting `enemy` (hit by it, or seeing it come into
+## range): from the front the whole block goes in as a formation attack; from
+## the flank or rear it keeps its shape and fights from where it stands —
+## blocks never wheel round on their own, re-facing one is the player's call.
+## True when it has dealt with it, so the caller mustn't send the unit off alone.
+func _block_contact(enemy: Node3D) -> bool:
+	if not in_idle_block() or enemy == null or not is_instance_valid(enemy):
+		return false
+	if _flank_multiplier(enemy.global_position) <= 1.0 and GroupMovement.current != null \
+			and GroupMovement.current.idle_block_contact(self, enemy):
+		return true
+	if status_command == Command.NONE and _flat_distance(global_position, enemy.global_position) <= _reach_to(enemy):
+		_engage_from_hold(enemy)
+	return true
+
 ## Joins a formation attack on `target` (see in_formation_fight). Called by
 ## GroupMovement right after the move to this unit's slot is issued.
 func begin_formation_fight(target: Node3D, place: Vector3, fight_id: int) -> void:
@@ -1632,13 +1709,43 @@ func _tick_formation_place(delta: float) -> bool:
 	return true
 
 ## The formation's ordered target, if it's alive and within this unit's reach
-## from where it stands.
+## from where it stands — or, for a ranged unit, the least-shot enemy around it
+## (see RANGED_SPREAD_RADIUS).
 func _formation_target_in_reach() -> Node3D:
 	if not in_formation_fight or not _is_target_alive(formation_attack_target):
 		return null
+	if not _counts_as_melee() and formation_attack_target is Unit:
+		return _spread_target_near(formation_attack_target)
 	if not _formation_can_reach(formation_attack_target):
 		return null
 	return formation_attack_target
+
+## How much further away `other` reads for being already crowded by this
+## unit's own kind of attacker (itself not counted).
+func _crowd_penalty(other: Unit) -> float:
+	var mine := 1 if other == attack_target else 0
+	if _counts_as_melee():
+		return maxi(other.melee_attackers - mine, 0) * MELEE_CROWD_PENALTY
+	return maxi(other.ranged_attackers - mine, 0) * RANGED_SPREAD_PENALTY
+
+## The best enemy for a ranged block member to shoot around `ordered`: in reach
+## from its place, still worth a shot, fewest shooters already on it.
+func _spread_target_near(ordered: Unit) -> Node3D:
+	var best: Node3D = null
+	var best_score := INF
+	for node in UnitGrid.enemies_near(get_tree(), ordered.global_position, RANGED_SPREAD_RADIUS, owner_peer_id):
+		var other: Unit = node
+		if not _is_target_alive(other) or not CombatUtils.is_worth_attacking(other):
+			continue
+		if _flat_distance(other.global_position, ordered.global_position) > RANGED_SPREAD_RADIUS:
+			continue
+		if not _formation_can_reach(other):
+			continue
+		var score := _flat_distance(global_position, other.global_position) + _crowd_penalty(other)
+		if score < best_score:
+			best = other
+			best_score = score
+	return best
 
 ## How far a member of a fighting block reaches, counted from its place.
 func _formation_reach(target: Node3D) -> float:
@@ -1654,14 +1761,17 @@ func _hold_can_reach(target: Node3D) -> bool:
 
 ## Nearest enemy a holding unit may take on: within attack_range, or for a
 ## member of a fighting block, within its reach from its place.
+## A ranged unit only picks what it can see for itself (aggro_range, its sight):
+## its full attack_range is for targets it's ordered onto, spotted by others.
 func _nearest_in_place_reach() -> Node3D:
+	var pick_range: float = attack_range if _counts_as_melee() else minf(attack_range, aggro_range)
 	if not in_formation_fight:
-		var near := _find_nearest_enemy_in_range(attack_range)
-		if near and _flat_distance(global_position, near.global_position) <= attack_range:
+		var near := _find_nearest_enemy_in_range(pick_range)
+		if near and _flat_distance(global_position, near.global_position) <= pick_range:
 			return near
 		return null
 	var step: float = MELEE_FORMATION_STEP if _counts_as_melee() else 0.0
-	var enemy := _find_nearest_enemy_in_range(attack_range + step)
+	var enemy := _find_nearest_enemy_in_range(pick_range + step)
 	return enemy if enemy and _formation_can_reach(enemy) else null
 
 ## Idle in its place in a formation — or fighting from it (see
@@ -1775,14 +1885,6 @@ func end_build_command() -> void:
 	status_activity = Activity.IDLE
 	order_completed.emit()
 
-## --- Monarch ---
-
-## Called only from main.gd's validated promotion RPC handler. No sprite/scene
-## change — this unit keeps its existing model/animations; the crown icon is
-## the only visual difference (see is_monarch's setter above).
-func promote_to_monarch() -> void:
-	is_monarch = true
-
 ## Called only from main.gd's validated ability-activation RPC handler.
 ## Teleports self to target_pos, then applies the same offset to every ally
 ## (same owner, self excluded) that was within ability.affected_ally_radius
@@ -1806,16 +1908,9 @@ func execute_teleport_ability(ability: Ability, target_pos: Vector3) -> void:
 
 ## --- Abilities ---
 
-## Everything this unit can currently use, in command-card order: its own
-## abilities first, then its Monarch ones once promoted. Indices into this list
-## are what the HUD, hotkeys, cooldowns and the activation RPC all refer to —
-## innate abilities come first so promotion never shifts their indices.
+## Everything this unit can use, in command-card order (see `abilities`).
 func get_abilities() -> Array[Ability]:
-	if not is_monarch or monarch_abilities.is_empty():
-		return abilities
-	var all: Array[Ability] = abilities.duplicate()
-	all.append_array(monarch_abilities)
-	return all
+	return abilities
 
 func get_ability(index: int) -> Ability:
 	var list := get_abilities()
@@ -2011,7 +2106,7 @@ func apply_zone_tick(ability: Ability, source) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.linger_damage_per_second > 0:
-		take_damage(_warded(ability.linger_damage_per_second), source if is_instance_valid(source) else null)
+		take_damage(_warded(ability.linger_damage_per_second), source if is_instance_valid(source) else null, false)
 	if status_activity == Activity.DEAD:
 		return
 	var slow_seconds := 0.0
@@ -2030,7 +2125,7 @@ func apply_ability_hit(ability: Ability, source) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.area_damage > 0:
-		take_damage(_warded(ability.area_damage), source if is_instance_valid(source) else null)
+		take_damage(_warded(ability.area_damage), source if is_instance_valid(source) else null, false)
 	if status_activity == Activity.DEAD:
 		return
 	if ability.dot_damage_per_second > 0 and ability.dot_duration > 0.0:
@@ -2063,7 +2158,7 @@ func _tick_status_effects(delta: float) -> void:
 		if dot["ticks_left"] <= 0:
 			_dots.remove_at(i)
 		var source = dot["source"]
-		take_damage(_warded(dot["dps"]), source if is_instance_valid(source) else null)
+		take_damage(_warded(dot["dps"]), source if is_instance_valid(source) else null, false)
 		if status_activity == Activity.DEAD:
 			_dots.clear()
 			return
@@ -2095,8 +2190,7 @@ func heal(amount: int) -> void:
 		return
 	status_current_health = mini(status_current_health + amount, max_health)
 
-## Only the Shrine monsters carry abilities of their own (a Monarch's live in
-## monarch_abilities instead).
+## Only the Shrine monsters carry abilities of their own.
 func is_monster() -> bool:
 	return not abilities.is_empty()
 
@@ -2107,6 +2201,123 @@ func ability_cooldown(ability: Ability) -> float:
 	return ability.cooldown * (1.0 - Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_COOLDOWN_REDUCTION))
 
 ## Ability damage taken, after this unit's owner's Warding.
+## --- Cavalry charge ---
+
+## Ready to charge, with its target (its own, or its block's) close enough to
+## sprint at. Read by the movement step and by GroupMovement's march pacing.
+func is_charging() -> bool:
+	if not can_charge or not _charge_ready:
+		return false
+	var target: Node3D = attack_target
+	if not _is_target_alive(target) and in_formation_fight:
+		target = formation_attack_target
+	if not _is_target_alive(target) or not (target is Unit):
+		return false
+	return _flat_distance(global_position, target.global_position) <= CHARGE_SPRINT_DISTANCE
+
+func is_charge_ready() -> bool:
+	return can_charge and _charge_ready
+
+## Runs every physics frame on the host, off last frame's velocity.
+func _update_charge(delta: float) -> void:
+	if not can_charge:
+		return
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if speed < move_speed * CHARGE_MIN_SPEED_FRACTION:
+		_charge_run = 0.0
+		return
+	var step := speed * delta
+	_charge_run += step
+	if not _charge_ready:
+		_charge_rearm_run += step
+		if _charge_rearm_run >= CHARGE_REARM_DISTANCE:
+			_charge_ready = true
+	if _charge_ready and _charge_run >= CHARGE_MIN_RUN:
+		_charge_armed_until_ms = Time.get_ticks_msec() + CHARGE_ARMED_GRACE_MS
+
+func _charge_armed() -> bool:
+	return can_charge and _charge_ready and Time.get_ticks_msec() <= _charge_armed_until_ms
+
+func _spend_charge() -> void:
+	_charge_ready = false
+	_charge_run = 0.0
+	_charge_rearm_run = 0.0
+	_charge_armed_until_ms = 0
+
+## Hit by a landed charge (host-only): shoved straight back from the charger,
+## and a unit on foot is stunned too. Siege and monsters are too heavy to move.
+func receive_charge(charger: Unit) -> void:
+	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
+		return
+	if armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER:
+		return
+	var away := global_position - charger.global_position
+	away.y = 0.0
+	if away.length_squared() > 0.0001:
+		_knockback_velocity = away.normalized() * (CHARGE_KNOCKBACK_DISTANCE / CHARGE_KNOCKBACK_TIME)
+		_knockback_remaining = CHARGE_KNOCKBACK_TIME
+	if armor_class != ArmorClass.CAVALRY:
+		_stun_remaining = maxf(_stun_remaining, CHARGE_STUN_SECONDS)
+		status_applied.emit(0.0, 0.0, CHARGE_STUN_SECONDS, CHARGE_STUN_COLOR)
+
+## --- Spear brace ---
+
+func _update_brace(delta: float) -> void:
+	if not can_brace:
+		return
+	if Vector2(velocity.x, velocity.z).length() < BRACE_STILL_SPEED:
+		_still_time += delta
+	else:
+		_still_time = 0.0
+
+## Standing set in its block, spear levelled: long enough still, in a block
+## (the same test as flank damage — idle, holding, or fighting from its place),
+## and not reeling from a stun.
+func is_braced() -> bool:
+	return can_brace and _still_time >= BRACE_TIME and _stun_remaining <= 0.0 \
+			and _stands_in_block()
+
+## Whether `charger` runs onto this unit's braced spears: braced, and the
+## charge comes in through its front arc.
+func braces_against(charger: Unit) -> bool:
+	return is_braced() and _flank_multiplier(charger.global_position) <= 1.0
+
+## A charge broken on this unit's spears (host-only): the charger is stopped
+## dead and takes this unit's hit at BRACE_COUNTER_MULTIPLIER, through the
+## usual counters (a spear against cavalry already hits x2.5).
+func counter_charge(charger: Unit) -> void:
+	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
+		return
+	_play_attack_swing()
+	charger._stun_remaining = maxf(charger._stun_remaining, BRACE_STOP_SECONDS)
+	charger.status_applied.emit(0.0, 0.0, BRACE_STOP_SECONDS, CHARGE_STUN_COLOR)
+	charger.take_damage(roundi(_effective_attack_damage(charger) * BRACE_COUNTER_MULTIPLIER), self)
+
+## Standing, marching or fighting as part of a block, rather than off on its
+## own attack order (see _flank_multiplier).
+func _stands_in_block() -> bool:
+	if formation_facing == Vector3.ZERO:
+		return false
+	return not (status_command == Command.ATTACK and not in_formation_fight and not _in_hold_fight())
+
+## x1 from the front arc of this unit's block, more from the flank or rear.
+## Only while it's standing, marching or fighting as part of a block (from its
+## place, or holding its ground) — a lone unit, or one that broke off on its
+## own attack order, turns to face whoever hits it, so it has no side to be
+## caught on. The block's front never turns
+## on its own: re-facing it against a flank attack is the player's job.
+func _flank_multiplier(from_position: Vector3) -> float:
+	if not _stands_in_block():
+		return 1.0
+	var to_attacker := from_position - global_position
+	to_attacker.y = 0.0
+	if to_attacker.length_squared() < 0.0001:
+		return 1.0
+	var d := formation_facing.normalized().dot(to_attacker.normalized())
+	if d >= FLANK_ARC_DOT:
+		return 1.0
+	return FLANK_DAMAGE_MULTIPLIER if d > REAR_ARC_DOT else REAR_DAMAGE_MULTIPLIER
+
 func _warded(amount: int) -> int:
 	var reduction := Research.bonus(owner_peer_id, ResearchNode.Stat.ABILITY_DAMAGE_REDUCTION)
 	return maxi(roundi(amount * (1.0 - reduction)), 1) if reduction > 0.0 else amount
@@ -2114,25 +2325,35 @@ func _warded(amount: int) -> int:
 func _slow_multiplier() -> float:
 	return 1.0 - _slow_fraction if _slow_remaining > 0.0 else 1.0
 
-func take_damage(amount: int, attacker: Node3D = null) -> void:
+## `directional` false for ability blasts and damage over time, which have no
+## meaningful side they came from — only real attacks get flank/rear bonuses.
+func take_damage(amount: int, attacker: Node3D = null, directional: bool = true) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	## Sanctuary: nothing gets through while it lasts.
 	if buffs.amount(ResearchNode.Buff.INVULNERABLE) > 0.0:
 		return
 	last_damaged_msec = Time.get_ticks_msec()
-	## Rock-paper-scissors bonus: an attacker whose damage_type matches what
-	## this unit is weak_to hits harder. NONE never matches NONE, so units
-	## with no assigned weakness (or attackers with no assigned type, e.g.
-	## Villager) are simply never affected by this either way.
-	if weak_to != DamageType.NONE and attacker is Unit and attacker.damage_type == weak_to:
-		amount = int(amount * WEAKNESS_DAMAGE_MULTIPLIER)
-	## A nearby allied Monarch's passive aura and this player's Blacksmith
-	## armor upgrades both reduce this further; never reduces below 1 so
-	## neither can make a unit fully immune.
-	var armor: int = CombatUtils.nearby_aura_armor_bonus(get_tree(), self) \
-			+ UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) 			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR))
-	amount = maxi(amount - armor, 1)
+	## Counters: the attacker's damage type against this unit's armour class.
+	## Only a Unit attacker has a damage type; buildings and the like hit x1.
+	if attacker is Unit:
+		amount = maxi(roundi(amount * CombatUtils.counter_multiplier(attacker.damage_type, armor_class)), 1)
+	var flanked := false
+	if directional and attacker != null and is_instance_valid(attacker):
+		var flank := _flank_multiplier(attacker.global_position)
+		flanked = flank > 1.0
+		amount = roundi(amount * flank)
+		if flanked:
+			last_flanked_ms = Time.get_ticks_msec()
+			last_flanker = attacker
+	## Armour (Blacksmith upgrades + research buffs) cuts a percentage per
+	## point, capped, rather than a flat amount: flat armour against hits of
+	## only 4-7 swamped the counter multipliers above. Never below 1 damage.
+	var armor: int = UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) \
+			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR))
+	if armor > 0:
+		var reduction := minf(armor * ARMOR_REDUCTION_PER_POINT, ARMOR_MAX_REDUCTION)
+		amount = maxi(roundi(amount * (1.0 - reduction)), 1)
 	## Fatality is decided here, before the health subtraction below, purely so
 	## it can ride along with the signal: main.gd relays this to every peer and
 	## uses it to hitstop the attacker on a killing blow, and by the time the
@@ -2141,7 +2362,7 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	var attacker_path: NodePath = NodePath()
 	if attacker != null and is_instance_valid(attacker) and attacker.is_inside_tree():
 		attacker_path = attacker.get_path()
-	damaged.emit(amount, attacker_path, fatal)
+	damaged.emit(amount, attacker_path, fatal, flanked)
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die(attacker)
@@ -2165,6 +2386,8 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 		elif (hold_position or in_formation_fight) and status_command == Command.NONE:
 			if _flat_distance(global_position, attacker.global_position) <= _reach_to(attacker):
 				_engage_from_hold(attacker)
+		elif in_idle_block():
+			_block_contact(attacker)
 		elif status_command != Command.ATTACK and status_command != Command.MOVE and status_command != Command.CAST:
 			## keep_assault: being shot at while marching on an assault target
 			## makes this unit fight back, but must not quietly cancel the
@@ -2216,6 +2439,17 @@ func _physics_tick(delta: float) -> void:
 	## already paid for and committed to the ability, and freezing the windup
 	## would let a stun silently swallow it if the order changed meanwhile.
 	_tick_pending_casts(delta)
+
+	_update_charge(delta)
+	_update_brace(delta)
+
+	## Knocked back by a charge: carried along, nothing else, until it's spent.
+	if _knockback_remaining > 0.0:
+		_knockback_remaining -= delta
+		velocity.x = _knockback_velocity.x
+		velocity.z = _knockback_velocity.z
+		_slide()
+		return
 
 	## Stunned: frozen in place, every timer (attack, gather, cast approach)
 	## paused, but the current order survives and resumes once it wears off.
@@ -2332,6 +2566,10 @@ func _physics_tick(delta: float) -> void:
 					in_reach = _nearest_in_place_reach()
 				if in_reach:
 					_engage_from_hold(in_reach)
+			elif in_idle_block() and not assault_active:
+				var enemy := _find_nearest_enemy_in_range(aggro_range)
+				if enemy:
+					_block_contact(enemy)
 			else:
 				var enemy: Node3D = _find_assault_target() if assault_active \
 						else _find_nearest_enemy_in_range(aggro_range)
@@ -2383,6 +2621,8 @@ func _physics_tick(delta: float) -> void:
 	var effective_speed: float = move_speed
 	var buff_speed := _buff_speed_multiplier()
 	effective_speed *= _slow_multiplier() * buff_speed
+	if is_charging():
+		effective_speed *= CHARGE_SPEED_MULTIPLIER
 	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
 	if _march_active:
 		desired_velocity = _march_desired_velocity(effective_speed)
@@ -2947,9 +3187,8 @@ func _effective_attack_range() -> float:
 		return attack_range + attack_target.get_footprint_radius()
 	return attack_range
 
-## Live Blacksmith weapon-upgrade bonus on top of the exported stat, same
-## "computed live, not baked into the field itself" approach as the Monarch
-## aura attack-speed bonus — then the owner's research: more against buildings
+## Live Blacksmith weapon-upgrade bonus on top of the exported stat (computed
+## live, not baked into the field itself) — then the owner's research: more against buildings
 ## (Siegebreakers), more while badly hurt (Relentless).
 func _effective_attack_damage(target: Node3D = null) -> int:
 	var damage := attack_damage + UnitUpgrades.get_weapon_bonus(owner_peer_id, unit_category)
@@ -3085,7 +3324,10 @@ func _start_attacking() -> void:
 		_find_new_target_or_idle()
 		return
 	status_activity = Activity.ATTACKING
-	attack_timer = attack_cooldown
+	## Swings at once on a fresh engagement, but never sooner than the cooldown
+	## after its last swing — a target knocked back or stepping out of reach and
+	## straight back in would otherwise hand the attacker a free extra hit.
+	attack_timer = minf(attack_cooldown, (Time.get_ticks_msec() - _last_swing_ms) / 1000.0)
 
 ## Whatever gets in front of a unit while it's closing on a target that's
 ## still a long way off is the more urgent problem. An assault produces exactly
@@ -3162,12 +3404,12 @@ func _tick_attacking(delta: float) -> void:
 		return
 
 	attack_timer += delta
-	## A nearby allied Monarch's passive aura can shrink the effective cooldown
-	## (not the exported stat itself — this is computed live each tick).
-	var effective_cooldown := attack_cooldown * (1.0 - CombatUtils.nearby_aura_attack_speed_bonus(get_tree(), self)) \
-			/ (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED))
+	## Research attack-speed buffs shrink the effective cooldown (computed live
+	## each tick, not baked into the exported stat).
+	var effective_cooldown := attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED))
 	if attack_timer >= effective_cooldown:
 		attack_timer = 0.0
+		_last_swing_ms = Time.get_ticks_msec()
 		_play_attack_swing()
 		if projectile_scene != null:
 			## Damage lands later, when the shot actually arrives (see
@@ -3175,7 +3417,24 @@ func _tick_attacking(delta: float) -> void:
 			## its own cooldown in the meantime rather than waiting for it.
 			_fire_projectile(attack_target)
 		else:
-			attack_target.take_damage(_effective_attack_damage(attack_target), self)
+			var damage := _effective_attack_damage(attack_target)
+			var charged := _charge_armed() and attack_target is Unit
+			if charged and attack_target.braces_against(self):
+				## Straight onto the spears: no charge, and the charger pays.
+				_spend_charge()
+				attack_target.take_damage(damage, self)
+				if _is_target_alive(attack_target):
+					attack_target.counter_charge(self)
+				if status_activity == Activity.DEAD:
+					return
+				charged = false
+			else:
+				if charged:
+					damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER)
+					_spend_charge()
+				attack_target.take_damage(damage, self)
+			if charged and _is_target_alive(attack_target):
+				attack_target.receive_charge(self)
 			if not _is_target_alive(attack_target):
 				_find_new_target_or_idle()
 
@@ -3385,13 +3644,12 @@ func _nearest_in_assault_area(group: StringName) -> Node3D:
 func _flat_distance(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
 
-## Melee units score each candidate by distance plus MELEE_CROWD_PENALTY per
-## melee attacker already on it (this unit itself not counted), so they spread
-## across nearby enemies; `search_range` still limits the raw distance.
+## Each candidate scores its distance plus a crowding penalty for attackers of
+## this unit's own kind already on it (see _crowd_penalty), so melee and ranged
+## alike spread across nearby enemies; `search_range` still limits the raw distance.
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_score := INF
-	var melee := _counts_as_melee()
 	for node in UnitGrid.enemies_near(get_tree(), global_position, search_range, owner_peer_id):
 		var other: Unit = node
 		if not _is_target_alive(other):
@@ -3406,10 +3664,7 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 		var dist := global_position.distance_to(other.global_position)
 		if dist > search_range:
 			continue
-		var score := dist
-		if melee:
-			var crowd: int = other.melee_attackers - (1 if other == attack_target else 0)
-			score += maxi(crowd, 0) * MELEE_CROWD_PENALTY
+		var score := dist + _crowd_penalty(other)
 		if score <= nearest_score:
 			nearest = other
 			nearest_score = score

@@ -31,3 +31,6 @@ home_guard_share = 0.2
 reinforce_batch = 5
 retreat_threshold = 0.5
 defend_reaction_seconds = 3.0
+reface_reaction_seconds = 3.0
+cavalry_tactics = true
+cavalry_recharge = false

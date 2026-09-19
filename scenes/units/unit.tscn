@@ -5,7 +5,6 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
-[ext_resource type="Texture2D" uid="uid://bgxdtljq6ix1t" path="res://assets/art/crown.png" id="5_crown"]
 [ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/06_confirm_1.wav" id="90_sfx_confirm1"]
 [ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/06_confirm_2.wav" id="91_sfx_confirm2"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Drop_Whoosh.wav" id="92_sfx_whoosh"]
@@ -93,18 +92,15 @@ properties/1/replication_mode = 1
 properties/2/path = NodePath(".:status_current_health")
 properties/2/spawn = true
 properties/2/replication_mode = 2
-properties/3/path = NodePath(".:is_monarch")
+properties/3/path = NodePath(".:owner_peer_id")
 properties/3/spawn = true
 properties/3/replication_mode = 2
-properties/4/path = NodePath(".:owner_peer_id")
+properties/4/path = NodePath(".:team_tint")
 properties/4/spawn = true
 properties/4/replication_mode = 2
-properties/5/path = NodePath(".:team_tint")
+properties/5/path = NodePath(".:hold_position")
 properties/5/spawn = true
 properties/5/replication_mode = 2
-properties/6/path = NodePath(".:hold_position")
-properties/6/spawn = true
-properties/6/replication_mode = 2
 
 [node name="Unit" type="CharacterBody3D" unique_id=1622850852 groups=["units"]]
 collision_layer = 4
@@ -164,14 +160,6 @@ bus = &"SFX"
 
 [node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="."]
 bus = &"SFX"
-
-[node name="CrownIcon" type="Sprite3D" parent="." unique_id=1233211234]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8366616, 0)
-visible = false
-pixel_size = 0.0006
-billboard = 1
-texture_filter = 0
-texture = ExtResource("5_crown")
 
 [node name="HealthBar" type="Node3D" parent="." unique_id=1766485738]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)

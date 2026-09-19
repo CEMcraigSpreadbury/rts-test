@@ -674,9 +674,8 @@ func _populate_unit_command_buttons() -> void:
 			var hotkey_label: String = OS.get_keycode_string(Main.ABILITY_HOTKEYS[i]) if i < Main.ABILITY_HOTKEYS.size() else "?"
 			var tooltip: String = "%s\n%s" % [ability.ability_name, ability.description] if ability.description != "" else ability.ability_name
 			if not ability.is_activated():
-				## Shown for visibility (so a player can see what their
-				## Monarch grants) but never actionable — it just works
-				## continuously, there's nothing to click.
+				## Shown for visibility but never actionable — a passive
+				## works continuously, there's nothing to click.
 				var button := _make_command_button(hotkey_label, tooltip, ability.icon, func(): pass)
 				button.disabled = true
 				buttons.append(button)
@@ -684,8 +683,6 @@ func _populate_unit_command_buttons() -> void:
 				var button := _make_command_button(hotkey_label, tooltip, ability.icon, main.arm_ability.bind(unit, i))
 				_ability_buttons.append({"button": button, "unit": unit, "index": i, "sweep": _add_cooldown_sweep(button)})
 				buttons.append(button)
-		if not unit.is_monarch and unit.can_fight and not unit.monarch_abilities.is_empty() and main.player_has_monarch_unlocked(unit.owner_peer_id):
-			buttons.append(_make_command_button("Promote", "Promote to Monarch", null, main.issue_promote_order.bind(unit)))
 	_refresh_ability_buttons()
 	_fill_action_panel_grid(buttons)
 

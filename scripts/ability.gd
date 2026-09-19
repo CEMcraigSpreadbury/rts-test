@@ -1,13 +1,15 @@
 class_name Ability
 extends Resource
-## One unit ability — a Monarch's (Unit.monarch_abilities) or one a unit type
-## always has (Unit.abilities, e.g. the Shrine monsters). A flat resource
+## One unit ability — one a unit type always has (Unit.abilities, e.g. the
+## Shrine monsters). A flat resource
 ## (matching BuildingType/ProducibleItem style) rather than subclasses per
 ## kind — irrelevant fields for a given kind are just left at default, and
 ## both the command panel and a future AI can iterate an Array[Ability]
 ## generically by switching on `kind` instead of needing bespoke
 ## per-named-ability code.
 
+## PASSIVE_AURA is no longer used by anything (it was the Monarch's) — kept
+## only so the kind values stored in existing scenes still line up.
 enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT, ACTIVATED_AREA }
 
 @export var ability_name: String = "Ability"
@@ -16,14 +18,6 @@ enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT, ACTIVATED_AREA }
 @export_multiline var description: String = ""
 @export var icon: Texture2D
 @export var kind: Kind = Kind.PASSIVE_AURA
-
-@export_group("Passive Aura")
-## Continuously affects nearby allies owned by the same player as the Monarch.
-@export var aura_radius: float = 6.0
-## Fractional cooldown reduction applied to allies' attacks, e.g. 0.2 = 20% faster.
-@export var aura_attack_speed_bonus: float = 0.0
-## Flat damage reduction applied to hits allies take.
-@export var aura_armor_bonus: int = 0
 
 @export_group("Activated")
 ## How far from the caster a target point may be. A target further away than
@@ -34,7 +28,7 @@ enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT, ACTIVATED_AREA }
 @export var costs: Array[ResourceCost] = []
 
 @export_group("Teleport (target point)")
-## Allies within this radius of the Monarch (at the moment of activation) are affected too.
+## Allies within this radius of the caster (at the moment of activation) are affected too.
 @export var affected_ally_radius: float = 4.0
 
 @export_group("Area Effect")

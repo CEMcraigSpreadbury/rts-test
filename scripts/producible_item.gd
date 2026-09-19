@@ -21,15 +21,10 @@ enum Kind { UNIT, UPGRADE }
 ## Used when kind == UNIT; the scene instanced into the world on completion.
 @export var unit_scene: PackedScene
 
-## Used when kind == UPGRADE: whether completing this unlocks Monarch
-## promotion on the owner's units (see ProductionBuilding.can_promote_monarch).
-## The extension point for future upgrade effects — a new one is another
-## optional field here plus a matching check in main.gd's completion handler.
-@export var unlocks_monarch_promotion: bool = false
-
 ## Used when kind == UPGRADE, for a Blacksmith-style weapon/armor upgrade
 ## (see UnitUpgrades autoload). upgrade_bonus == 0 means this item doesn't
-## grant one (e.g. it's the Monarch-unlock item above instead).
+## grant one. A future upgrade effect is another optional field here plus a
+## matching check in main.gd's completion handler.
 @export var upgrade_category: Unit.UnitCategory = Unit.UnitCategory.NONE
 @export var upgrade_stat: UnitUpgrades.Stat = UnitUpgrades.Stat.WEAPON
 @export var upgrade_bonus: int = 0

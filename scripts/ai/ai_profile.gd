@@ -81,6 +81,14 @@ extends Resource
 @export var recall_army_to_defend: bool = true
 ## Whether villagers run for the Town Center when the base can't hold.
 @export var villagers_flee: bool = true
+## Seconds a block is caught in the flank or rear before it turns to meet the
+## attacker (see AiTactics). -1 = never.
+@export var reface_reaction_seconds: float = 3.0
+## Whether cavalry leaves the block to ride round and charge flanks, archers
+## and siege (see AiTactics), rather than just marching with the wave.
+@export var cavalry_tactics: bool = true
+## Whether cavalry wheels away once its charge is spent, to charge again.
+@export var cavalry_recharge: bool = false
 
 @export_group("Army Mix")
 @export var infantry_weight: float = 0.45

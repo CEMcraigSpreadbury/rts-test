@@ -470,16 +470,16 @@ func _spawn_building_projectile_visual(shooter: ProductionBuilding, target: Node
 ## take_damage() and Unit._deposit_and_continue() are authority-gated), so —
 ## same reasoning as animation/projectile relaying above — the host spawns its
 ## own local popup immediately and relays to every other peer to do the same.
-func relay_damage_number(amount: int, attacker_path: NodePath, fatal: bool, node: Node3D) -> void:
-	_show_damage_feedback(node, amount, attacker_path, fatal)
+func relay_damage_number(amount: int, attacker_path: NodePath, fatal: bool, flanked: bool, node: Node3D) -> void:
+	_show_damage_feedback(node, amount, attacker_path, fatal, flanked)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_damage_number.rpc(node.get_path(), amount, attacker_path, fatal)
+		_rpc_damage_number.rpc(node.get_path(), amount, attacker_path, fatal, flanked)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePath, fatal: bool) -> void:
+func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePath, fatal: bool, flanked: bool) -> void:
 	var node := get_node_or_null(node_path) as Node3D
 	if node:
-		_show_damage_feedback(node, amount, attacker_path, fatal)
+		_show_damage_feedback(node, amount, attacker_path, fatal, flanked)
 
 ## Floating number for anything damageable; the hit reaction (flash, recoil,
 ## squash) only applies to Unit, and buildings get their own flash/squash
@@ -489,7 +489,7 @@ func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePat
 ## Unit.take_damage). The attacker is looked up per-peer rather than having its
 ## position sent, so a hit always recoils away from where that peer actually
 ## sees the attacker standing.
-func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, fatal: bool) -> void:
+func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, fatal: bool, flanked: bool) -> void:
 	## get() rather than node.owner_peer_id: this takes a plain Node3D (Unit
 	## and ProductionBuilding both land here), and a missing property comes
 	## back null, which simply compares unequal.
@@ -506,7 +506,7 @@ func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, f
 		var from_position: Vector3 = node.global_position
 		if attacker != null:
 			from_position = attacker.global_position
-		node.play_hit_reaction(from_position)
+		node.play_hit_reaction(from_position, flanked)
 	elif node is ProductionBuilding:
 		node.play_hit_flash()
 		node.play_squash()
@@ -1543,7 +1543,22 @@ const FORMATION_PREVIEW_COLOR: Color = Color(1.0, 1.0, 1.0, 0.45)
 ## those a second, and the slot count only changes when the selection does.
 var _formation_preview_decals: Array[Decal] = []
 
-func show_formation_preview(slots: Array[Vector3]) -> void:
+## Cossacks 3-style facing arrow laid on the ground just ahead of the dragged
+## front rank, so which way the block will face is never a guess. Scales with
+## the width of the drag (a wide line gets a bigger arrow) within limits.
+const FORMATION_ARROW_COLOR: Color = Color(1.0, 1.0, 1.0, 0.4)
+const FORMATION_ARROW_MIN_WIDTH: float = 1.6
+const FORMATION_ARROW_MAX_WIDTH: float = 4.0
+const FORMATION_ARROW_WIDTH_FRACTION: float = 0.4
+const FORMATION_ARROW_LENGTH_RATIO: float = 1.4
+## Clear space between the front rank's line and the arrow's tail.
+const FORMATION_ARROW_GAP: float = 0.9
+var _formation_arrow_decal: Decal = null
+var _formation_arrow_texture: ImageTexture = null
+var _formation_arrow_emission_texture: ImageTexture = null
+
+func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing: Vector3, front_width: float) -> void:
+	_show_formation_arrow(front_center, facing, front_width)
 	while _formation_preview_decals.size() < slots.size():
 		var decal := _make_ability_decal()
 		decal.size = Vector3(FORMATION_PREVIEW_DISC_SIZE, ABILITY_DECAL_HEIGHT, FORMATION_PREVIEW_DISC_SIZE)
@@ -1559,6 +1574,69 @@ func show_formation_preview(slots: Array[Vector3]) -> void:
 func hide_formation_preview() -> void:
 	for decal in _formation_preview_decals:
 		decal.visible = false
+	if _formation_arrow_decal:
+		_formation_arrow_decal.visible = false
+
+func _show_formation_arrow(front_center: Vector3, facing: Vector3, front_width: float) -> void:
+	facing.y = 0.0
+	if facing.length_squared() < 0.0001:
+		if _formation_arrow_decal:
+			_formation_arrow_decal.visible = false
+		return
+	facing = facing.normalized()
+	if _formation_arrow_decal == null:
+		_build_formation_arrow_textures()
+		_formation_arrow_decal = Decal.new()
+		_formation_arrow_decal.texture_albedo = _formation_arrow_texture
+		_formation_arrow_decal.texture_emission = _formation_arrow_emission_texture
+		_formation_arrow_decal.emission_energy = 0.6
+		_formation_arrow_decal.upper_fade = 0.15
+		_formation_arrow_decal.lower_fade = 0.15
+		_formation_arrow_decal.modulate = FORMATION_ARROW_COLOR
+		add_child(_formation_arrow_decal)
+	var width := clampf(front_width * FORMATION_ARROW_WIDTH_FRACTION, FORMATION_ARROW_MIN_WIDTH, FORMATION_ARROW_MAX_WIDTH)
+	var length := width * FORMATION_ARROW_LENGTH_RATIO
+	_formation_arrow_decal.size = Vector3(width, ABILITY_DECAL_HEIGHT, length)
+	_formation_arrow_decal.visible = true
+	## A decal maps its texture's top edge to local -Z, and looking_at points
+	## -Z along the facing, so the arrow (drawn pointing up) points forward.
+	var center := front_center + facing * (FORMATION_ARROW_GAP + length * 0.5)
+	_formation_arrow_decal.global_transform = Transform3D(Basis.looking_at(facing, Vector3.UP), center)
+
+## An upward-pointing arrow (triangular head over a shaft) with a faint fill and
+## a solid rim, white so Decal.modulate can colour it. Emission gets its own
+## copy with alpha baked in, for the same reason as the ability circle's.
+func _build_formation_arrow_textures() -> void:
+	const W: int = 128
+	const H: int = 180
+	const FILL_ALPHA: float = 0.35
+	const RIM_PX: float = 5.0
+	## Outline in pixels, clockwise from the tip.
+	var outline := PackedVector2Array([
+		Vector2(W * 0.5, 2.0), Vector2(W - 3.0, H * 0.45), Vector2(W * 0.68, H * 0.45),
+		Vector2(W * 0.68, H - 3.0), Vector2(W * 0.32, H - 3.0), Vector2(W * 0.32, H * 0.45),
+		Vector2(3.0, H * 0.45)])
+	var albedo := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
+	var emission := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
+	for y in H:
+		for x in W:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var edge_dist := INF
+			for i in outline.size():
+				var a := outline[i]
+				var b := outline[(i + 1) % outline.size()]
+				edge_dist = minf(edge_dist, p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b)))
+			var alpha := 0.0
+			if Geometry2D.is_point_in_polygon(p, outline):
+				alpha = lerpf(FILL_ALPHA, 1.0, 1.0 - smoothstep(RIM_PX - 1.0, RIM_PX + 1.0, edge_dist))
+			else:
+				alpha = 1.0 - smoothstep(0.0, 1.0, edge_dist)
+			albedo.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+			emission.set_pixel(x, y, Color(alpha, alpha, alpha, 1.0))
+	albedo.generate_mipmaps()
+	emission.generate_mipmaps()
+	_formation_arrow_texture = ImageTexture.create_from_image(albedo)
+	_formation_arrow_emission_texture = ImageTexture.create_from_image(emission)
 
 func _make_ability_decal() -> Decal:
 	var decal := Decal.new()

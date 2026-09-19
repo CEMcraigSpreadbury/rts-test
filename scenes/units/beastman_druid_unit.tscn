@@ -19,6 +19,7 @@ amount = 20
 
 [node name="BeastmanDruid" instance=ExtResource("1_unit")]
 display_name = "Beastman Druid"
+move_speed = 3.0
 costs = Array[Resource]([SubResource("ResourceCost_deer_wood"), SubResource("ResourceCost_deer_gold")])
 sprite_sheet = ExtResource("2_deer")
 walk_row = 1
@@ -31,11 +32,12 @@ can_gather = false
 can_build = false
 max_health = 32
 attack_damage = 5
-attack_range = 5.5
+attack_range = 18.0
 attack_cooldown = 2.2
-aggro_range = 8.0
+aggro_range = 14.0
+vision_range = 14.0
 projectile_scene = ExtResource("3_projectile")
 projectile_speed = 14.0
 damage_type = 4
-weak_to = 2
+armor_class = 3
 unit_category = 2

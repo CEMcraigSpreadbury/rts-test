@@ -94,23 +94,20 @@ func held_facing(units: Array[Unit]) -> Vector3:
 			return Vector3.ZERO
 	return shared
 
-## The facing a dragged formation takes: square to the drag line, and pointing
-## away from wherever the group currently stands — so ranks trail back toward
-## the side the group arrives from and the front rank lands on the line itself,
-## whichever end the player started dragging from. Client-side (it drives the
-## preview decals) and sent with the order, so the host builds exactly the
-## shape the player saw instead of re-deriving it from its own unit positions.
+## The facing a dragged formation takes: square to the drag line, on the left
+## of the drag direction as seen from above (Total War / Cossacks: drag left to
+## right and the block faces up the screen), so the player picks which way it
+## faces — including back toward where it stands now — by which end they start
+## from. The front rank lands on the line itself. Client-side (it drives the
+## preview) and sent with the order, so the host builds exactly the shape the
+## player saw instead of re-deriving it from its own unit positions.
 func drag_facing(units: Array[Unit], line_start: Vector3, line_end: Vector3) -> Vector3:
 	var along := line_end - line_start
 	along.y = 0.0
 	if along.length_squared() < 0.0001:
 		return _group_forward(group_centroid(units), line_start)
 	along = along.normalized()
-	var facing := Vector3(-along.z, 0.0, along.x)
-	var midpoint := (line_start + line_end) * 0.5
-	var to_line := midpoint - group_centroid(units)
-	to_line.y = 0.0
-	return -facing if to_line.dot(facing) < 0.0 else facing
+	return Vector3(along.z, 0.0, -along.x)
 
 ## Slot layout for a dragged formation, in shape order rather than assigned to
 ## units — only for drawing the preview; the order itself goes through
@@ -1188,6 +1185,24 @@ func formation_contact(unit: Unit, enemy: Node3D) -> bool:
 	_engagements[_engagements.size() - 1]["resume"] = order
 	return true
 
+## An idle block (see Unit.in_idle_block) met from the front goes in as one:
+## every member still standing idle in it joins a formation attack on `enemy`,
+## in the shape it was last dragged into, if any.
+func idle_block_contact(unit: Unit, enemy: Node3D) -> bool:
+	if not multiplayer.is_server():
+		return false
+	var group: Array[Unit] = unit.arrived_group
+	var members: Array[Unit] = []
+	for other in group:
+		if is_instance_valid(other) and other.status_activity != Unit.Activity.DEAD \
+				and is_same(other.arrived_group, group) and other.in_idle_block():
+			members.append(other)
+	if members.size() < 2 or not members.has(unit) or not can_formation_attack(members, enemy):
+		return false
+	var memory: Dictionary = unit.dragged_formation
+	formation_attack(members, enemy, memory.get("type", Formation.DEFAULT_TYPE), memory.get("width", -1.0))
+	return true
+
 ## Puts `members` back on the group attack-move `order` after a fight.
 func _resume_attack_move(members: Array[Unit], order: Dictionary) -> void:
 	var target: Vector3 = order["target"]
@@ -1229,7 +1244,10 @@ func _bring_up_wings(engagement: Dictionary, members: Array[Unit]) -> void:
 			continue
 		if unit._nearest_in_place_reach() != null:
 			continue
-		var enemy := unit._find_nearest_enemy_in_range(maxf(unit.aggro_range, unit.attack_range + ENGAGEMENT_RETARGET_REACH))
+		## A ranged unit only picks what it can see (see Unit._nearest_in_place_reach).
+		var search: float = maxf(unit.aggro_range, unit.attack_range + ENGAGEMENT_RETARGET_REACH) \
+				if unit._counts_as_melee() else unit.aggro_range
+		var enemy := unit._find_nearest_enemy_in_range(search)
 		if enemy == null:
 			continue
 		if unit._counts_as_melee() and enemy.melee_attackers > 0:
@@ -1504,6 +1522,20 @@ func _set_march_offsets(march: Dictionary, members: Array[Unit]) -> void:
 	march["offsets"] = offsets
 	march["probe_reach"] = widest + MARCH_PROBE_EXTRA
 
+## A block of chargers marching on an attack breaks into a charge over the last
+## stretch (see Unit.CHARGE_SPRINT_DISTANCE): the anchor speeds up with them, or
+## it would hold them to marching pace. Only when every walker can charge and
+## has its charge ready, so a mixed or spent block keeps its step.
+func _charge_factor(record: Dictionary, walking: Array[Unit], remaining: float) -> float:
+	if walking.is_empty() or remaining > Unit.CHARGE_SPRINT_DISTANCE:
+		return 1.0
+	if record["attack_target"] == null or not is_instance_valid(record["attack_target"]):
+		return 1.0
+	for unit in walking:
+		if not unit.is_charge_ready():
+			return 1.0
+	return Unit.CHARGE_SPEED_MULTIPLIER
+
 func _advance_march(record: Dictionary, members: Array[Unit], delta: float) -> void:
 	if not record["march"]:
 		return
@@ -1515,7 +1547,9 @@ func _advance_march(record: Dictionary, members: Array[Unit], delta: float) -> v
 			if _is_walking(record, unit):
 				walking.append(unit)
 		var length: float = march["length"]
-		var arc: float = minf(float(march["arc"]) + float(march["speed"]) * float(march["march_scale"]) * delta, length)
+		march["charge_scale"] = _charge_factor(record, walking, length - float(march["arc"]))
+		var speed: float = float(march["speed"]) * float(march["charge_scale"])
+		var arc: float = minf(float(march["arc"]) + speed * float(march["march_scale"]) * delta, length)
 		march["arc"] = arc
 		if arc >= length:
 			for unit in walking:
@@ -1576,7 +1610,7 @@ func _steer_march(march: Dictionary, units: Array[Unit], delta: float) -> void:
 	var start: int = int(march["steer_cursor"]) % count
 	var arc: float = march["arc"]
 	var probe_reach: float = march["probe_reach"]
-	var anchor_speed: float = float(march["speed"]) * float(march["march_scale"])
+	var anchor_speed: float = float(march["speed"]) * float(march["march_scale"]) * float(march.get("charge_scale", 1.0))
 	var route_offsets: Dictionary = march["route_offsets"]
 	var ranks: Dictionary = march["ranks"]
 	var lags: Dictionary = march["lags"]

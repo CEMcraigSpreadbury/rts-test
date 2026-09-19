@@ -127,14 +127,19 @@ var _last_threat_time: float = -INF
 var _defending: bool = false
 var _last_defend_pos: Vector3 = Vector3.ZERO
 
+## Fighting the battle once it's joined: re-facing, cavalry (see AiTactics).
+var tactics: AiTactics
+
 func _init(p_ai: AiPlayer) -> void:
 	ai = p_ai
+	tactics = AiTactics.new(p_ai, self)
 
 func think() -> void:
 	_prune(wave)
 	_perceive()
 	_update_defence()
 	_update_wave()
+	tactics.think()
 	_manage_home_units()
 	_unstick_units()
 	_use_abilities()
@@ -515,7 +520,8 @@ func _update_attack_hold() -> void:
 func _send_stragglers_on() -> void:
 	var stragglers: Array[Unit] = []
 	for unit in wave:
-		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(wave_target) > WAVE_ARRIVE_RADIUS:
+		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(wave_target) > WAVE_ARRIVE_RADIUS \
+				and not tactics.is_detached(unit):
 			stragglers.append(unit)
 	if stragglers.is_empty() or _breach(stragglers):
 		return
@@ -771,6 +777,7 @@ func _set_wave_target(target: Dictionary) -> void:
 	_wave_progress_pos = ai.group_centroid(wave)
 	_wave_progress_time = ai.game_time
 	ai.order_move(wave, wave_target, true)
+	tactics.reset()
 
 ## `give_up_current`: the current target proved unreachable (or untakeable) —
 ## it's left alone for UNREACHABLE_RETRY_SECONDS (see _choose_target).
@@ -796,6 +803,7 @@ func _send_wave_home() -> void:
 
 func _clear_wave() -> void:
 	wave.clear()
+	tactics.reset()
 	_wave_target_node = null
 	_wave_target_objective = null
 	_wave_target_spawn = null

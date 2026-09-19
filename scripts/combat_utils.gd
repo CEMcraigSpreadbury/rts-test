@@ -12,8 +12,24 @@ const ALERT_QUERY_RADIUS: float = 20.0
 ## re-scan the neighbourhood, and in a big melee that's hundreds a second for
 ## the same handful of allies, who are already fighting after the first one.
 const ALERT_INTERVAL_MS: int = 500
-## Same for the aura lookup: must cover the largest Ability.aura_radius.
-const AURA_QUERY_RADIUS: float = 10.0
+
+## Damage multiplier per Unit.DamageType (row) against Unit.ArmorClass
+## (column, in enum order: NONE, SOLDIER, SPEAR, ARCHER, CAVALRY, SIEGE, MONSTER).
+## The loop: Spear > Cavalry > Archer > infantry, Soldier > Spear; siege is
+## easy prey to anything that closes in and shrugs off arrows. The NONE row
+## and column are x1 throughout (Villagers, monsters' own attacks).
+const COUNTER_TABLE: Dictionary = {
+	Unit.DamageType.NONE:    [1.0, 1.0,  1.0, 1.0,  1.0,  1.0, 1.0],
+	Unit.DamageType.BLADE:   [1.0, 1.0,  1.5, 1.25, 1.0,  1.5, 1.0],
+	Unit.DamageType.SPEAR:   [1.0, 0.75, 1.0, 1.0,  2.5,  1.0, 1.0],
+	Unit.DamageType.CAVALRY: [1.0, 1.0,  0.5, 2.0,  1.0,  2.0, 1.0],
+	Unit.DamageType.PIERCE:  [1.0, 1.5,  1.5, 1.0,  0.75, 0.5, 1.0],
+	Unit.DamageType.MAGIC:   [1.0, 1.5,  1.0, 1.0,  1.5,  1.0, 1.5],
+}
+
+static func counter_multiplier(damage_type: Unit.DamageType, armor_class: Unit.ArmorClass) -> float:
+	var row: Array = COUNTER_TABLE.get(damage_type, COUNTER_TABLE[Unit.DamageType.NONE])
+	return row[armor_class]
 
 ## Calls in nearby allied units to help fight back against whoever just landed a hit.
 static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defender_peer_id: int, attacker: Node3D) -> void:
@@ -42,22 +58,16 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 		## whatever reaches it, not a neighbor's fight.
 		if (ally.hold_position or ally.in_formation_fight) and ally.status_command == Unit.Command.NONE:
 			continue
+		## Part of an idle block: it answers as the block does, not by running
+		## off on its own.
+		if ally.in_idle_block():
+			if ally.global_position.distance_to(from_position) <= ally.aggro_range:
+				ally._block_contact(attacker)
+			continue
 		if ally.global_position.distance_to(from_position) <= ally.aggro_range:
 			## An ally on a group attack-move brings its whole block round.
 			if not ally._group_contact(attacker):
 				ally.command_attack(attacker)
-
-## First matching nearby Monarch's PASSIVE_AURA attack-speed bonus for this
-## unit, or 0.0 if none in range. Multiple Monarchs don't stack — a
-## deliberate simplification, first match wins.
-static func nearby_aura_attack_speed_bonus(tree: SceneTree, unit: Unit) -> float:
-	var ability := _find_nearby_aura(tree, unit)
-	return ability.aura_attack_speed_bonus if ability else 0.0
-
-## Same as above, for flat armor (damage reduction).
-static func nearby_aura_armor_bonus(tree: SceneTree, unit: Unit) -> int:
-	var ability := _find_nearby_aura(tree, unit)
-	return ability.aura_armor_bonus if ability else 0
 
 ## Nearest living enemy Unit within range of a position/owner — used by
 ## anything that can initiate an attack but isn't itself a Unit (e.g. a
@@ -110,18 +120,3 @@ static func effective_health(target) -> int:
 
 static func is_worth_attacking(target) -> bool:
 	return effective_health(target) > 0
-
-static func _find_nearby_aura(tree: SceneTree, unit: Unit) -> Ability:
-	if Unit.monarch_count <= 0:
-		return null
-	for node in UnitGrid.units_near(tree, unit.global_position, AURA_QUERY_RADIUS):
-		if not (node is Unit) or node == unit:
-			continue
-		var monarch: Unit = node
-		if not monarch.is_monarch or monarch.owner_peer_id != unit.owner_peer_id:
-			continue
-		for ability in monarch.monarch_abilities:
-			if ability.kind == Ability.Kind.PASSIVE_AURA \
-					and monarch.global_position.distance_to(unit.global_position) <= ability.aura_radius:
-				return ability
-	return null

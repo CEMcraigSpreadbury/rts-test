@@ -65,12 +65,11 @@ synced_current_item_name         (On Change)
 health_fraction                  (Always)
 synced_builder_count             (On Change)
 synced_current_item_progress     (Always)
-can_promote_monarch              (On Change)
 owner_peer_id                    (On Change)
 team_tint                        (On Change)
 ```
 
-`synced_current_item_progress`/`can_promote_monarch` were missing from every
+`synced_current_item_progress` was missing from every
 building except Town Center for a while — that's exactly the "production bar
 doesn't fill on the client" class of bug this step exists to prevent. Do this
 in the Inspector's Replication panel, not by hand-editing the `.tscn` text —
@@ -128,9 +127,8 @@ Only one tier in a line is ever shown at once in the building's menu
 buying a tier whose prerequisite isn't purchased yet or that's already
 one-time-purchased — no extra wiring needed beyond setting these fields.
 
-A `ProducibleItem` can instead (or additionally) set **Unlocks Monarch
-Promotion** to true — see `main.gd:_on_building_item_completed` for that
-effect's extension point if you need a genuinely new upgrade *kind* someday.
+See `main.gd:_on_building_item_completed` for the extension point if you
+need a genuinely new upgrade *kind* someday.
 
 ## Variation C — non-queue building (buildable resource)
 
