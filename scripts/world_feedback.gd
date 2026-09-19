@@ -412,12 +412,27 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 	var dist: float = start_pos.distance_to(end_pos)
 	var duration: float = maxf(dist / maxf(shooter.projectile_speed, 0.01), 0.05)
 	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
-	projectile.global_position = start_pos
+	_fly_projectile_visual(projectile, start_pos, end_pos, duration, arc_height)
+
+## Arcs a projectile from start_pos to end_pos, then frees it. Sprite
+## projectiles are turned every frame to point along their on-screen flight
+## path; art drawn facing left carries metadata/art_faces_left in its scene.
+func _fly_projectile_visual(projectile: Node3D, start_pos: Vector3, end_pos: Vector3, duration: float, arc_height: float) -> void:
+	var sprite := projectile as SpriteBase3D
+	var faces_left: bool = projectile.get_meta(&"art_faces_left", false)
+	if sprite:
+		sprite.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	var previous := [start_pos]
+	var fly := func(t: float) -> void:
+		var pos: Vector3 = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0)
+		projectile.global_position = pos
+		if sprite:
+			var dir: Vector3 = pos - previous[0] if t > 0.0 else end_pos - start_pos + Vector3.UP * arc_height * PI
+			_orient_to_screen_direction(sprite, pos, -dir if faces_left else dir)
+		previous[0] = pos
+	fly.call(0.0)
 	var tween := create_tween()
-	tween.tween_method(
-		func(t: float): projectile.global_position = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0),
-		0.0, 1.0, duration
-	)
+	tween.tween_method(fly, 0.0, 1.0, duration)
 	tween.tween_callback(projectile.queue_free)
 
 ## Building equivalent of on_unit_projectile_fired/_rpc_spawn_projectile_visual/
@@ -449,13 +464,7 @@ func _spawn_building_projectile_visual(shooter: ProductionBuilding, target: Node
 	var dist: float = start_pos.distance_to(end_pos)
 	var duration: float = maxf(dist / maxf(shooter.projectile_speed, 0.01), 0.05)
 	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
-	projectile.global_position = start_pos
-	var tween := create_tween()
-	tween.tween_method(
-		func(t: float): projectile.global_position = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0),
-		0.0, 1.0, duration
-	)
-	tween.tween_callback(projectile.queue_free)
+	_fly_projectile_visual(projectile, start_pos, end_pos, duration, arc_height)
 
 ## Damage taken and resources deposited only ever happen on the host (both
 ## take_damage() and Unit._deposit_and_continue() are authority-gated), so —

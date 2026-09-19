@@ -1089,12 +1089,15 @@ func _update_engagements(delta: float) -> void:
 		if engagement["check_in"] > 0.0:
 			continue
 		engagement["check_in"] = ENGAGEMENT_CHECK_INTERVAL
-		## Still walking into place: let the block get there first.
+		## Still walking into place: let the block get there first — though
+		## whoever's already standing idle beside a fight goes on into it.
+		var walking := false
 		for unit in members:
 			if unit.status_command == Unit.Command.MOVE:
-				members = []
+				walking = true
 				break
-		if members.is_empty():
+		if walking:
+			_bring_up_wings(engagement, members)
 			continue
 		_check_engagement(engagement, members)
 
@@ -1113,8 +1116,17 @@ func _check_engagement(engagement: Dictionary, members: Array[Unit]) -> void:
 	## Lost men a moment ago: close the holes before anything else.
 	if alive and members.size() >= 2 and float(engagement["refill_in"]) == 0.0:
 		engagement["refill_in"] = -1.0
-		formation_attack(members, target, engagement["type"], engagement["front_width"], engagement["id"], true)
-		return
+		## Wings that moved up and are still fighting stay out of it rather
+		## than being pulled back into line (see _bring_up_wings).
+		var wings: Array = engagement.get("wings", [])
+		var line: Array[Unit] = []
+		for unit in members:
+			if not (wings.has(unit) and unit.attack_target != null):
+				line.append(unit)
+		engagement["wings"] = wings.filter(func(unit): return not line.has(unit))
+		if line.size() >= 2:
+			formation_attack(line, target, engagement["type"], engagement["front_width"], engagement["id"], true)
+			return
 	if alive:
 		## A mixed block in place with its archers shooting and its melee
 		## ranks still short of the enemy: the melee charges on into contact.
@@ -1133,9 +1145,11 @@ func _check_engagement(engagement: Dictionary, members: Array[Unit]) -> void:
 		## Someone can still reach it: the block is doing its job.
 		for unit in members:
 			if unit._formation_can_reach(target):
+				_bring_up_wings(engagement, members)
 				return
 		## Moved off out of everyone's reach — follow it as a block.
 		if engagement["advance_in"] > 0.0:
+			_bring_up_wings(engagement, members)
 			return
 		_advance_engagement(engagement, members, target)
 		return
@@ -1183,9 +1197,68 @@ func _resume_attack_move(members: Array[Unit], order: Dictionary) -> void:
 		members[i].command_attack_move(slots[i], speed, members)
 	register_formation(members, target, order["type"], true, order["forward"], order["front_width"])
 
+## Width of the lanes _bring_up_wings sorts a block into: about one file.
+const WING_LANE_WIDTH: float = Formation.SPACING
+## A melee member with a comrade at least this far ahead of it in its lane (or
+## the next one over) is a rear rank, and holds for its turn to step up.
+const WING_COVER_DEPTH: float = 0.5
+
+## While the block is fighting, members with nothing in reach from their place
+## — the ends of a line that overlaps the enemy's, most often — move up to
+## the nearest enemy near them and fight from there instead of standing idle.
+## A melee rear rank, with a comrade in front of it, only goes if that enemy
+## has nobody on it yet; otherwise it holds to step into the gaps as before.
+func _bring_up_wings(engagement: Dictionary, members: Array[Unit]) -> void:
+	var fighting := false
+	for unit in members:
+		if unit.attack_target != null:
+			fighting = true
+			break
+	if not fighting:
+		return
+	var facing := group_facing(members)
+	var right := Vector3(facing.z, 0.0, -facing.x)
+	## Furthest-forward place in each lane.
+	var lane_front := {}
+	for unit in members:
+		var lane := floori(unit.formation_fight_place.dot(right) / WING_LANE_WIDTH)
+		var depth: float = unit.formation_fight_place.dot(facing)
+		lane_front[lane] = maxf(float(lane_front.get(lane, -INF)), depth)
+	for unit in members:
+		if unit.status_command != Unit.Command.NONE or unit.attack_target != null:
+			continue
+		if unit._nearest_in_place_reach() != null:
+			continue
+		var enemy := unit._find_nearest_enemy_in_range(maxf(unit.aggro_range, unit.attack_range + ENGAGEMENT_RETARGET_REACH))
+		if enemy == null:
+			continue
+		if unit._counts_as_melee() and enemy.melee_attackers > 0:
+			var lane := floori(unit.formation_fight_place.dot(right) / WING_LANE_WIDTH)
+			var depth: float = unit.formation_fight_place.dot(facing) + WING_COVER_DEPTH
+			if float(lane_front.get(lane - 1, -INF)) > depth or float(lane_front.get(lane, -INF)) > depth \
+					or float(lane_front.get(lane + 1, -INF)) > depth:
+				continue
+		var away := unit.global_position - enemy.global_position
+		away.y = 0.0
+		if away.length_squared() < 0.0001:
+			continue
+		var alone: Array[Unit] = [unit]
+		var place := enemy.global_position + away.normalized() * _engage_distance(alone, enemy)
+		var map: RID = unit.nav_agent.get_navigation_map()
+		if map.is_valid() and NavigationServer3D.map_get_iteration_id(map) > 0:
+			place = NavigationServer3D.map_get_closest_point(map, place)
+		var fight_id := unit.formation_fight_id
+		unit.command_move(place)
+		unit.begin_formation_fight(enemy, place, fight_id)
+		var wings: Array = engagement.get("wings", [])
+		if not wings.has(unit):
+			wings.append(unit)
+		engagement["wings"] = wings
+
 func _advance_engagement(engagement: Dictionary, members: Array[Unit], target: Node3D) -> void:
 	engagement["target"] = target
 	engagement["advance_in"] = ENGAGEMENT_ADVANCE_INTERVAL
+	engagement["wings"] = []
 	formation_attack(members, target, engagement["type"], engagement["front_width"], engagement["id"])
 
 func _is_dead(target: Node) -> bool:
@@ -1342,7 +1415,7 @@ func _new_march(record: Dictionary, units: Array[Unit], forward: Vector3, map: R
 		average_back += (offsets[unit] as Vector2).y
 	average_back /= maxi(offsets.size(), 1)
 	var start := NavigationServer3D.map_get_closest_point(map, centroid + forward * average_back)
-	var route := NavigationServer3D.map_get_path(map, start, target, true)
+	var route := _straighten_route(NavigationServer3D.map_get_path(map, start, target, true))
 	if PerfStats.enabled:
 		PerfStats.count_path()
 	if route.size() < 2:
@@ -1366,6 +1439,38 @@ func _new_march(record: Dictionary, units: Array[Unit], forward: Vector3, map: R
 	march["march_scale"] = MARCH_MIN_SCALE
 	_steer_march(march, units, 0.0)
 	return march
+
+## `route` with every stretch that can be walked in a straight line replaced by
+## that line. Over rolling terrain the navmesh path wanders meters either side
+## of a straight line across open ground (the funnel works on the 3D polygons),
+## and the anchor following it snaked the whole block from side to side.
+## Splits in half until each piece either walks straight or is a single leg of
+## the original path, so open ground costs one check.
+func _straighten_route(route: PackedVector3Array) -> PackedVector3Array:
+	if route.size() <= 2 or NavWalkability.current == null:
+		return route
+	var result := PackedVector3Array([route[0]])
+	result.append_array(_straighten_span(route, 0, route.size() - 1))
+	return result
+
+## The straightened points of route[from..to] that follow route[from].
+func _straighten_span(route: PackedVector3Array, from: int, to: int) -> PackedVector3Array:
+	if to - from <= 1 or _segment_walkable(route[from], route[to]):
+		return PackedVector3Array([route[to]])
+	var middle: int = floori((from + to) * 0.5)
+	var points := _straighten_span(route, from, middle)
+	points.append_array(_straighten_span(route, middle, to))
+	return points
+
+func _segment_walkable(from: Vector3, to: Vector3) -> bool:
+	var walkability := NavWalkability.current
+	var steps: int = maxi(1, ceili(_flat_distance(from, to) / MARCH_PROBE_STEP))
+	var poly := -1
+	for step in range(1, steps):
+		poly = walkability.polygon_at(from.lerp(to, float(step) / steps), poly)
+		if poly < 0:
+			return false
+	return true
 
 ## The members of `members` that belong to `march` (its speed class).
 func _march_members(march: Dictionary, members: Array[Unit]) -> Array[Unit]:

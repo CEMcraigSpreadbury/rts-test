@@ -10,3 +10,4 @@ pixel_size = 0.035
 billboard = 1
 alpha_cut = 1
 texture_filter = 0
+metadata/art_faces_left = true

@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://trailer/formations_boot.gd" id="1_boot"]
+
+[node name="FormationsBoot" type="Node"]
+script = ExtResource("1_boot")
