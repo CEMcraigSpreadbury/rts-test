@@ -276,6 +276,10 @@ var rally_marker: Node3D = null
 ## Purely local visual too — just feedback for whatever the mouse is
 ## currently over, built on demand like rally_marker.
 var hover_ring: MeshInstance3D = null
+## One per building in a double-click group (Main.selected_buildings). Each is
+## parented to its building so it goes when that does, but top_level so the
+## building's own scale can't warp it.
+var _group_rings: Array[MeshInstance3D] = []
 ## Clears the Shrine model and its health bar (which sits at y 2.8).
 const FAVOUR_POPUP_HEIGHT: float = 3.4
 ## Favour is the one resource with no ResourceCost lying around to read its
@@ -893,6 +897,27 @@ func _ensure_hover_ring() -> void:
 	hover_ring.visible = false
 	add_child(hover_ring)
 
+## Replaces whatever rings the last group had; an empty group just clears.
+func show_building_group_rings(buildings: Array[ProductionBuilding]) -> void:
+	for ring in _group_rings:
+		if is_instance_valid(ring):
+			ring.queue_free()
+	_group_rings.clear()
+	for building in buildings:
+		if not is_instance_valid(building):
+			continue
+		var radius := _hover_ring_radius(building)
+		var mesh := TorusMesh.new()
+		mesh.outer_radius = radius
+		mesh.inner_radius = maxf(radius - 0.08, 0.01)
+		var ring := MeshInstance3D.new()
+		ring.mesh = mesh
+		ring.set_surface_override_material(0, GroundRingMaterial.build(HOVER_RING_COLOR))
+		ring.top_level = true
+		building.add_child(ring)
+		ring.global_position = building.global_position + Vector3(0, 0.05, 0)
+		_group_rings.append(ring)
+
 func _is_ring_target(node: Object) -> bool:
 	return node is Unit or node is ProductionBuilding or node is Gatherable
 
@@ -915,8 +940,10 @@ func update_hover_ring() -> void:
 	var target: Node3D = hovered if hovered else (main.clicked_ring_target if is_instance_valid(main.clicked_ring_target) else null)
 
 	## Selected units already show their own green SelectionRing — showing
-	## this one too on top would be redundant.
-	if target == null or (target is Unit and target.selected):
+	## this one too on top would be redundant. Likewise a building already
+	## wearing a double-click group ring.
+	if target == null or (target is Unit and target.selected) \
+			or (target is ProductionBuilding and main.selected_buildings.has(target)):
 		if hover_ring:
 			hover_ring.visible = false
 		return

@@ -133,6 +133,11 @@ var selected_units: Array[Unit] = []
 ## simulates movement) knows which shape to arrange the group's slots into.
 var current_formation_type: Formation.Type = Formation.DEFAULT_TYPE
 var selected_building: ProductionBuilding = null
+## Every building a double-click gathered up, selected_building among them;
+## empty for an ordinary single-building selection. The command panel still
+## shows selected_building, but units trained from it are spread across the
+## whole group (see on_producible_button_pressed).
+var selected_buildings: Array[ProductionBuilding] = []
 ## Left-click-selected resource node (tree/berry bush/gold deposit/farm),
 ## shown read-only in the info panel with its remaining amount — mutually
 ## exclusive with selected_building/selected_units, same as those are with
@@ -1812,6 +1817,46 @@ func _select_all_visible_units_of_type(unit_type: String) -> void:
 				selected_units.append(child)
 	_play_random_select_sound(selected_units)
 
+## Double-clicking one of your finished buildings adds every other finished
+## building of yours with the same name that's on screen, so one Barracks'
+## command panel trains from all of them. Anything else (an enemy building,
+## one still going up) just gets the camera centred on it, as before.
+func _select_all_visible_buildings_of_type(clicked: ProductionBuilding) -> void:
+	if not can_command_building(clicked) or clicked.is_under_construction:
+		_center_camera_on([clicked])
+		return
+	var group: Array[ProductionBuilding] = [clicked]
+	var viewport_rect := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
+	for child in buildings_root.get_children():
+		var building := child as ProductionBuilding
+		if building == null or building == clicked or not can_command_building(building) \
+				or building.building_name != clicked.building_name \
+				or building.is_under_construction or building.is_destroyed \
+				or camera.is_position_behind(building.global_position):
+			continue
+		if viewport_rect.has_point(camera.unproject_position(building.global_position)):
+			group.append(building)
+	if group.size() > 1:
+		_set_building_group(group)
+
+func _set_building_group(group: Array[ProductionBuilding]) -> void:
+	selected_buildings = group
+	feedback.show_building_group_rings(group)
+	if selected_building != null:
+		hud.show_building(selected_building)
+
+## The group's buildings still standing, selected_building first; just
+## [selected_building] when there's no group.
+func selected_building_group() -> Array[ProductionBuilding]:
+	var group: Array[ProductionBuilding] = []
+	if selected_building == null or not is_instance_valid(selected_building):
+		return group
+	group.append(selected_building)
+	for building in selected_buildings:
+		if building != selected_building and is_instance_valid(building) and not building.is_destroyed:
+			group.append(building)
+	return group
+
 ## Selects every owned combat unit (can_gather == false) anywhere on the map,
 ## not just what's on screen — matches the usual RTS "select army" hotkey,
 ## which is meant to work regardless of where those units currently are.
@@ -1912,7 +1957,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 			select_resource(null)
 			clicked_ring_target = collider
 			if double_click:
-				_center_camera_on([collider])
+				_select_all_visible_buildings_of_type(collider)
 		elif collider is Gatherable:
 			## Any resource node (own or not — trees/berries/gold deposits have
 			## no owner) shows its remaining amount in the info panel; unlike
@@ -2457,6 +2502,9 @@ func can_command_building(building: ProductionBuilding) -> bool:
 ## the rest of the selection implies.
 func select_building(building: ProductionBuilding) -> void:
 	selected_building = building
+	if not selected_buildings.is_empty():
+		selected_buildings.clear()
+		feedback.show_building_group_rings(selected_buildings)
 	feedback.update_rally_marker()
 	if building == null:
 		hud.refresh_command_panel()
@@ -2495,6 +2543,9 @@ func select_resource(resource: Gatherable) -> void:
 				u.selected = false
 		selected_units.clear()
 		selected_building = null
+		if not selected_buildings.is_empty():
+			selected_buildings.clear()
+			feedback.show_building_group_rings(selected_buildings)
 	hud.refresh_command_panel()
 
 func any_selected_can_build() -> bool:
@@ -2564,8 +2615,52 @@ func on_producible_button_pressed(building: ProductionBuilding, item_index: int)
 	if not hud.can_afford_locally(costs):
 		hud.flash_missing_resources(costs)
 		return
-	_rpc_enqueue.rpc_id(1, building.get_path(), item_index)
+	## Upgrades are bought per building, so only units are spread over a group.
+	var group: Array[ProductionBuilding] = []
+	if building == selected_building:
+		group = selected_building_group()
+	if item.kind == ProducibleItem.Kind.UNIT and group.size() > 1:
+		var paths: Array[NodePath] = []
+		for member in group:
+			paths.append(member.get_path())
+		_rpc_enqueue_in_group.rpc_id(1, paths, item.item_name)
+	else:
+		_rpc_enqueue.rpc_id(1, building.get_path(), item_index)
 	play_command_sound()
+
+## Host picks whichever building in the group has the shortest queue (the
+## first listed on a tie), so repeated clicks deal one unit to each in turn —
+## decided here rather than on the client, whose synced queue sizes lag
+## behind a quick run of clicks. Matched by name, not index, in case a
+## building's menu differs from the one the player was looking at.
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_enqueue_in_group(building_paths: Array[NodePath], item_name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	var candidates: Array[ProductionBuilding] = []
+	for path in building_paths:
+		var building := get_node_or_null(path) as ProductionBuilding
+		if building != null and building.owner_peer_id == sender_id:
+			candidates.append(building)
+	## Stable sort by queue length: sort_custom isn't stable, so ties are
+	## broken on original order explicitly.
+	var order: Array[int] = []
+	for i in candidates.size():
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var qa: int = candidates[a].queue.size()
+		var qb: int = candidates[b].queue.size()
+		return qa < qb or (qa == qb and a < b))
+	for i in order:
+		var building := candidates[i]
+		for item in building.producibles:
+			if item.item_name == item_name:
+				if building.enqueue(item):
+					return
+				break
 
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_enqueue(building_path: NodePath, item_index: int) -> void:
@@ -2587,8 +2682,20 @@ func enqueue_as(sender_id: int, building_path: NodePath, item_index: int) -> boo
 		return false
 	return building.enqueue(building.producibles[item_index])
 
+## On a group, every building ends up matching what the clicked one is
+## switching to — only those not already there are toggled.
 func toggle_repeat_production(building: ProductionBuilding, item_index: int) -> void:
-	_rpc_toggle_repeat.rpc_id(1, building.get_path(), item_index)
+	var item_name := building.producibles[item_index].item_name
+	var turning_on := building.synced_repeat_item_name != item_name
+	var group: Array[ProductionBuilding] = [building]
+	if building == selected_building:
+		group = selected_building_group()
+	for member in group:
+		if member == building or (member.synced_repeat_item_name == item_name) != turning_on:
+			for i in member.producibles.size():
+				if member.producibles[i].item_name == item_name:
+					_rpc_toggle_repeat.rpc_id(1, member.get_path(), i)
+					break
 	play_command_sound()
 
 @rpc("any_peer", "call_local", "reliable")
@@ -2691,13 +2798,14 @@ func _set_rally_point(screen_pos: Vector2) -> void:
 	if result.is_empty():
 		return
 	var target_path := _resolve_order_target_path(result)
-	selected_building.rally_point = result.position
-	selected_building.rally_target_path = target_path
-	selected_building.has_rally_point = true
+	for building in selected_building_group():
+		building.rally_point = result.position
+		building.rally_target_path = target_path
+		building.has_rally_point = true
+		_rpc_set_rally_point.rpc_id(1, building.get_path(), result.position, target_path)
 	feedback.update_rally_marker()
 	feedback.spawn_rally_dust(result.position)
 	AudioUtils.play_random(command_audio_player, on_rally_set_sound_effects)
-	_rpc_set_rally_point.rpc_id(1, selected_building.get_path(), result.position, target_path)
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3, target_path: NodePath) -> void:

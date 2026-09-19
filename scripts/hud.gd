@@ -542,10 +542,15 @@ func _refresh_building_info() -> void:
 			slot.pressed.connect(main.cancel_production.bind(building, i + 1))
 			_info_slot_row.add_child(slot)
 
+## Counts are totalled over a double-click group, since that's where the
+## clicks went.
 func _refresh_producible_badges(building: ProductionBuilding) -> void:
+	var group: Array[ProductionBuilding] = main.selected_building_group()
 	for item_name in _info_producible_badges:
 		var badge: Label = _info_producible_badges[item_name]
-		var count: int = building.synced_queue_counts.get(item_name, 0)
+		var count: int = 0
+		for member in group:
+			count += member.synced_queue_counts.get(item_name, 0)
 		badge.visible = count > 0
 		if count > 0:
 			badge.text = str(count)
@@ -731,9 +736,11 @@ func _on_selected_building_constructed(building: ProductionBuilding) -> void:
 	if main.selected_building == building:
 		main.select_building(building)
 
+## show_building rather than Main.select_building, which would break up a
+## double-click group every time one of its units came out.
 func _on_selected_building_item_completed(_item: ProducibleItem, building: ProductionBuilding) -> void:
 	if main.selected_building == building:
-		main.select_building(building)
+		show_building(building)
 
 func _format_construction_status(building: ProductionBuilding) -> String:
 	var percent := int(building.construction_progress * 100)
