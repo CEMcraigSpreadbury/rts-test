@@ -51,7 +51,7 @@ amount = 500
 [sub_resource type="Resource" id="mods_player"]
 script = ExtResource("mods_script")
 cost_multiplier = 0.5
-allowed_buildings = Array[String](["Town Center", "House", "Barracks", "Mine"])
+allowed_buildings = Array[String](["Town Center", "House", "Barracks", "Archery Range", "Mine"])
 research_tier_cap = 2
 locked_hud = Array[String](["research", "formations"])
 

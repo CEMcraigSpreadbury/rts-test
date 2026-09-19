@@ -34,6 +34,7 @@ extends Resource
 @export var first_mine_at_villagers: int = 4
 @export var second_mine_at_villagers: int = 14
 @export var barracks_at_villagers: int = 7
+@export var archery_range_at_villagers: int = 9
 @export var stables_at_villagers: int = 12
 @export var second_barracks_at_villagers: int = -1
 

@@ -16,6 +16,8 @@
 [ext_resource type="PackedScene" path="res://scenes/buildings/wall_gate.tscn" id="14_wall_gate"]
 [ext_resource type="PackedScene" uid="uid://hv63ugeypt36" path="res://scenes/buildings/watchtower_building.tscn" id="15_watchtower"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/siege_workshop_building.tscn" id="16_siege_workshop"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/archery_range_building.tscn" id="17_archery_range"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/storehouse_building.tscn" id="18_storehouse"]
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
@@ -31,11 +33,25 @@ scene = ExtResource("4_barracks")
 footprint_radius = 2.4
 construction_time = 7.0
 
+[sub_resource type="Resource" id="BuildingType_archery_range"]
+script = ExtResource("2_building_type_script")
+building_name = "Archery Range"
+scene = ExtResource("17_archery_range")
+footprint_radius = 2.4
+construction_time = 7.0
+
 [sub_resource type="Resource" id="BuildingType_house"]
 script = ExtResource("2_building_type_script")
 building_name = "House"
 scene = ExtResource("5_house")
 footprint_radius = 1.6
+
+[sub_resource type="Resource" id="BuildingType_storehouse"]
+script = ExtResource("2_building_type_script")
+building_name = "Storehouse"
+scene = ExtResource("18_storehouse")
+footprint_radius = 1.8
+construction_time = 5.0
 
 [sub_resource type="Resource" id="BuildingType_mine"]
 script = ExtResource("2_building_type_script")
@@ -93,6 +109,6 @@ construction_time = 10.0
 [resource]
 script = ExtResource("1_faction_script")
 faction_name = "Human"
-building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_siege_workshop")])
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_archery_range"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_storehouse"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_siege_workshop")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit")])

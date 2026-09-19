@@ -101,7 +101,7 @@ func _weight(role: int) -> float:
 
 ## The item at `building` whose role is furthest below its share of the
 ## army — judged only among the roles this building can train, so a Stables
-## always trains cavalry and a Barracks balances its own three.
+## always trains cavalry and a Barracks balances its own two.
 func _choose_item(building: ProductionBuilding, counts: Dictionary) -> int:
 	var options: Array = []
 	var total_weight := 0.0

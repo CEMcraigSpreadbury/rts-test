@@ -8,7 +8,7 @@
 script = ExtResource("2_node")
 effects = {1: 0.15}
 node_name = "Drill Sergeants"
-description = "Barracks and Stables train 15% faster."
+description = "Barracks, Archery Ranges and Stables train 15% faster."
 tier = 1
 column = 0.0
 cost = 5

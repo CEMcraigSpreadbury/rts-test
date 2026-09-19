@@ -15,6 +15,7 @@ builders_per_site = 1
 first_mine_at_villagers = 5
 second_mine_at_villagers = -1
 barracks_at_villagers = 8
+archery_range_at_villagers = 10
 stables_at_villagers = -1
 second_barracks_at_villagers = -1
 military_queue = 1

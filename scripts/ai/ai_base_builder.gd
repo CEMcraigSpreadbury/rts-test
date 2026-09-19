@@ -1,6 +1,6 @@
 class_name AiBaseBuilder
 extends RefCounted
-## AiPlayer's base building: the build order (Mines, Barracks, Stables — see
+## AiPlayer's base building: the build order (Mines, Barracks, Archery Range, Stables — see
 ## AiProfile's "Build Order" group), finding a sensible spot for anything that
 ## goes on open ground, and pointing every military building's rally at the
 ## base's staging point.
@@ -96,8 +96,9 @@ func _follow_build_order() -> void:
 	var p: AiProfile = ai.profile
 	var villagers: int = ai.villagers.size()
 	var mines: Array[BuildingType] = ai.types_with_role(AiPlayer.BuildingRole.MINE)
-	var barracks: BuildingType = _military_type(false)
-	var stables: BuildingType = _military_type(true)
+	var barracks: BuildingType = _military_type(AiPlayer.UnitRole.INFANTRY)
+	var archery_range: BuildingType = _military_type(AiPlayer.UnitRole.RANGED)
+	var stables: BuildingType = _military_type(AiPlayer.UnitRole.CAVALRY)
 	var steps: Array = []
 	if not mines.is_empty():
 		steps.append([mines[0], p.first_mine_at_villagers, 1])
@@ -105,6 +106,8 @@ func _follow_build_order() -> void:
 	if barracks != null:
 		steps.append([barracks, p.barracks_at_villagers, 1])
 		steps.append([barracks, p.second_barracks_at_villagers, 2])
+	if archery_range != null:
+		steps.append([archery_range, p.archery_range_at_villagers, 1])
 	if stables != null:
 		steps.append([stables, p.stables_at_villagers, 1])
 	steps.sort_custom(func(a, b): return a[1] < b[1])
@@ -134,15 +137,17 @@ func _working_mines() -> int:
 			count += 1
 	return count
 
-## The military building type that trains cavalry (stables) or the one that
-## trains the most other kinds (barracks).
-func _military_type(cavalry: bool) -> BuildingType:
+## The military building type that trains `role` (infantry -> barracks,
+## ranged -> archery range, cavalry -> stables); of several, the one that
+## trains the most kinds. Only the cavalry lookup may return a cavalry trainer.
+func _military_type(role: AiPlayer.UnitRole) -> BuildingType:
 	var best: BuildingType = null
 	var best_count := -1
 	for type in ai.types_with_role(AiPlayer.BuildingRole.MILITARY):
 		var roles: Array = ai.roles_trained_by_type(type)
-		var has_cavalry: bool = roles.has(AiPlayer.UnitRole.CAVALRY)
-		if has_cavalry != cavalry:
+		if not roles.has(role):
+			continue
+		if roles.has(AiPlayer.UnitRole.CAVALRY) != (role == AiPlayer.UnitRole.CAVALRY):
 			continue
 		if roles.size() > best_count:
 			best_count = roles.size()

@@ -29,7 +29,7 @@ amount = 300
 
 [sub_resource type="Resource" id="mods_player"]
 script = ExtResource("mods_script")
-allowed_buildings = Array[String](["House", "Barracks"])
+allowed_buildings = Array[String](["House", "Barracks", "Archery Range"])
 research_tier_cap = 0
 locked_hud = Array[String](["research"])
 

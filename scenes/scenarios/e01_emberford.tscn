@@ -56,7 +56,7 @@ amount = 200
 
 [sub_resource type="Resource" id="mods_lords"]
 script = ExtResource("mods_script")
-allowed_buildings = Array[String](["House", "Barracks", "Mine", "Blacksmith", "Watchtower", "Wall", "Gate"])
+allowed_buildings = Array[String](["House", "Barracks", "Archery Range", "Mine", "Blacksmith", "Watchtower", "Wall", "Gate"])
 research_tier_cap = 1
 
 [sub_resource type="Resource" id="have_barracks"]

@@ -34,7 +34,7 @@ amount = 40
 
 [sub_resource type="Resource" id="mods_player"]
 script = ExtResource("mods_script")
-allowed_buildings = Array[String](["House", "Barracks", "Mine"])
+allowed_buildings = Array[String](["House", "Barracks", "Archery Range", "Mine"])
 
 [sub_resource type="Resource" id="say_council"]
 script = ExtResource("act_dialogue")
