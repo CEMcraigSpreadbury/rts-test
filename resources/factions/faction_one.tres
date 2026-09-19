@@ -46,13 +46,6 @@ building_name = "House"
 scene = ExtResource("5_house")
 footprint_radius = 1.6
 
-[sub_resource type="Resource" id="BuildingType_storehouse"]
-script = ExtResource("2_building_type_script")
-building_name = "Storehouse"
-scene = ExtResource("18_storehouse")
-footprint_radius = 1.8
-construction_time = 5.0
-
 [sub_resource type="Resource" id="BuildingType_mine"]
 script = ExtResource("2_building_type_script")
 building_name = "Mine"
@@ -61,6 +54,12 @@ footprint_radius = 1.4
 construction_time = 6.0
 requires_deposit = true
 deposit_scene = ExtResource("8_gold_deposit")
+
+[sub_resource type="Resource" id="BuildingType_storehouse"]
+script = ExtResource("2_building_type_script")
+building_name = "Storehouse"
+scene = ExtResource("18_storehouse")
+footprint_radius = 1.8
 
 [sub_resource type="Resource" id="BuildingType_stables"]
 script = ExtResource("2_building_type_script")

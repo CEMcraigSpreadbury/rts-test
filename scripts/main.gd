@@ -383,7 +383,7 @@ func _ready() -> void:
 	chat.setup()
 
 	var utility_buttons: VBoxContainer = $UI/BottomBar/UtilityButtons
-	utility_buttons.get_node(^"IdleButton").pressed.connect(_select_next_idle_villager)
+	utility_buttons.get_node(^"IdleButton").pressed.connect(_select_all_idle_villagers)
 	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
 	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
 	utility_buttons.get_node(^"FormationStaggeredButton").pressed.connect(_set_formation_type.bind(Formation.Type.STAGGERED))
@@ -1775,13 +1775,36 @@ func _activate_control_group(number: int) -> void:
 ## select-and-recenter pattern as reactivating a control group.
 var _idle_villager_cycle_index: int = -1
 
-func _select_next_idle_villager() -> void:
+func _idle_villagers() -> Array[Unit]:
 	var idle_villagers: Array[Unit] = []
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
 		if unit and unit.owner_peer_id == my_peer_id() and unit.can_gather \
 				and unit.status_activity == Unit.Activity.IDLE and unit.status_command == Unit.Command.NONE:
 			idle_villagers.append(unit)
+	return idle_villagers
+
+## The utility bar's idle button: every idle gatherer at once, left where the
+## camera is (they may be scattered across the map).
+func _select_all_idle_villagers() -> void:
+	var idle_villagers := _idle_villagers()
+	if idle_villagers.is_empty():
+		return
+
+	for u in selected_units:
+		u.selected = false
+	selected_units.clear()
+	select_building(null)
+	select_resource(null)
+	_active_group_number = -1
+
+	for villager in idle_villagers:
+		villager.selected = true
+		selected_units.append(villager)
+	_play_random_select_sound(idle_villagers)
+
+func _select_next_idle_villager() -> void:
+	var idle_villagers := _idle_villagers()
 	if idle_villagers.is_empty():
 		return
 

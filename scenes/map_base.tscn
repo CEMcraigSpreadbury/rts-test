@@ -303,7 +303,7 @@ alignment = 1
 [node name="IdleButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=605278022]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
-tooltip_text = "Select next idle villager"
+tooltip_text = "Select all idle villagers"
 theme_type_variation = &"SquareButton"
 text = "I"
 

@@ -1,26 +1,23 @@
-[gd_resource type="ShaderMaterial" load_steps=11 format=3 uid="uid://cvennpt4m61v8"]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://cvennpt4m61v8"]
 
 [ext_resource type="Shader" uid="uid://ydf0ta8gs34h" path="res://shaders/terrain/water.gdshader" id="1_water"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_displacement"]
-noise_type = 1
 frequency = 0.008
 
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_displacement"]
 width = 256
 height = 256
-seamless = true
 noise = SubResource("FastNoiseLite_displacement")
+seamless = true
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_edge"]
 noise_type = 2
 frequency = 0.02
 
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_edge"]
-width = 512
-height = 512
-seamless = true
 noise = SubResource("FastNoiseLite_edge")
+seamless = true
 
 [sub_resource type="Gradient" id="Gradient_edge_ramp"]
 offsets = PackedFloat32Array(0, 0.08)
@@ -34,21 +31,53 @@ noise_type = 2
 frequency = 0.015
 
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_normal"]
-width = 512
-height = 512
+noise = SubResource("FastNoiseLite_normal")
 seamless = true
 as_normal_map = true
 bump_strength = 4.0
-noise = SubResource("FastNoiseLite_normal")
 
 [resource]
 render_priority = 0
 shader = ExtResource("1_water")
+shader_parameter/fog_enabled = false
+shader_parameter/fog_map_origin = Vector2(0, 0)
+shader_parameter/fog_map_size = Vector2(0, 0)
+shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_count = 0
+shader_parameter/absorption_color = Color(1, 0.35, 0, 1)
+shader_parameter/fresnel_radius = 2.0
+shader_parameter/fresnel_color = Color(0, 0.57, 0.72, 1)
+shader_parameter/roughness = 0.15
+shader_parameter/specular = 0.25
+shader_parameter/depth_distance = 25.0
+shader_parameter/beers_law = 4.5
 shader_parameter/displacement_strength = 0.08
+shader_parameter/displacement_scroll_speed = 0.1
+shader_parameter/displacement_scroll_offset = Vector2(-0.2, 0.3)
+shader_parameter/displacement_scale_offset = 0.5
+shader_parameter/displacement_scale = Vector2(0.04, 0.04)
+shader_parameter/displacement_texture = SubResource("NoiseTexture2D_displacement")
 shader_parameter/edge_thickness = 0.12
 shader_parameter/foam_opacity = 0.55
-shader_parameter/ssr_resolution_near = 0.1
-shader_parameter/displacement_texture = SubResource("NoiseTexture2D_displacement")
+shader_parameter/edge_speed = 0.35
+shader_parameter/edge_noise_scale = Vector2(0.4, 0.4)
 shader_parameter/edge_noise = SubResource("NoiseTexture2D_edge")
 shader_parameter/edge_ramp = SubResource("GradientTexture1D_edge_ramp")
+shader_parameter/caustic_size = 2.0
+shader_parameter/caustic_range = 40.0
+shader_parameter/caustic_strength = 0.08
+shader_parameter/ssr_mix_strength = 0.65
+shader_parameter/ssr_travel = 100.0
+shader_parameter/ssr_resolution_near = 0.1
+shader_parameter/ssr_resolution_far = 5.0
+shader_parameter/ssr_tolerance = 1.0
+shader_parameter/refraction_strength = 1.25
+shader_parameter/normal_map_strength = 1.0
+shader_parameter/scroll_speed = 0.3
+shader_parameter/scroll_offset = Vector2(0.1, -0.3)
+shader_parameter/scale_offset = 0.5
+shader_parameter/normal_map_scale = Vector2(0.1, 0.1)
 shader_parameter/normal_map = SubResource("NoiseTexture2D_normal")
+shader_parameter/flow_direction = Vector2(0.6, 0.8)
+shader_parameter/flow_speed = 0.6

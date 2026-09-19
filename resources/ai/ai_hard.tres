@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="AiProfile" format=3]
+[gd_resource type="Resource" script_class="AiProfile" format=3 uid="uid://c44vw0dhf5maj"]
 
-[ext_resource type="Script" path="res://scripts/ai/ai_profile.gd" id="1_profile"]
+[ext_resource type="Script" uid="uid://1v867wpxxrcq" path="res://scripts/ai/ai_profile.gd" id="1_profile"]
 
 [resource]
 script = ExtResource("1_profile")
@@ -10,10 +10,7 @@ target_villagers = 22
 economy_first_share = 0.4
 villager_queue = 2
 gold_worker_share = 0.3
-house_headroom = 2
 max_population = 110
-builders_per_site = 2
-first_mine_at_villagers = 4
 second_mine_at_villagers = 16
 barracks_at_villagers = 5
 archery_range_at_villagers = 7
@@ -21,11 +18,9 @@ stables_at_villagers = 16
 second_barracks_at_villagers = 10
 military_queue = 3
 max_army = 120
-save_for_monsters = true
 ability_min_targets = 2
 army_per_villager = 1.0
 first_capture_seconds = 90.0
-capture_min_army = 6
 first_attack_seconds = 300.0
 attack_min_army = 16
 attack_advantage = 1.25
@@ -34,5 +29,4 @@ reinforce_batch = 4
 retreat_threshold = 0.8
 defend_reaction_seconds = 1.0
 reface_reaction_seconds = 1.5
-cavalry_tactics = true
 cavalry_recharge = true
