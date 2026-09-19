@@ -49,6 +49,8 @@ func send_line(peer_id: int, line: String) -> void:
 ##   "cmd speed <multiplier>" runs the whole match faster or slower (single
 ##   player only), e.g. "cmd speed 4"; "cmd speed 1" puts it back.
 ##   "cmd perf" toggles the movement profiling overlay (host only, see PerfStats).
+##   "cmd rain [on|off]" starts or stops rain for everyone; with no argument it
+##   toggles. It still clears up / returns on its own afterwards (see Weather).
 ## Commands only run when the host is a debug build or was launched with
 ## "-- --cheats"; otherwise "cmd ..." is just sent as ordinary chat.
 
@@ -180,8 +182,16 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 				overlay.name = "PerfStats"
 				main.add_child(overlay)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] perf overlay %s" % ("off" if existing else "on"))
+		"rain":
+			var arg: String = parts[1].to_lower() if parts.size() > 1 else ""
+			if arg not in ["", "on", "off"]:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] usage: cmd rain [on|off]")
+				return
+			var raining: bool = not main.weather.is_raining if arg.is_empty() else arg == "on"
+			main.weather.set_raining(raining)
+			_rpc_display_chat.rpc_id(sender_id, "[debug] rain %s" % ("on" if raining else "off"))
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf, cmd rain [on|off]")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
 

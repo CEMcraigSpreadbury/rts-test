@@ -9,6 +9,7 @@ extends Node3D
 ##   Hud               — resource bar, info panel, action panel
 ##   BuildingPlacement — placement ghosts, wall drag, gate tool, build RPCs
 ##   ChatConsole       — chat, debug commands, minimap pings
+##   Weather           — rain that comes and goes, synced from the host
 
 ## The team color palette lives on Network (Network.TEAM_COLORS) rather than
 ## here, so the lobby offers exactly the choices this scene spawns players
@@ -266,6 +267,7 @@ var feedback: WorldFeedback
 var hud: Hud
 var placement: BuildingPlacement
 var chat: ChatConsole
+var weather: Weather
 var research: Research
 var quests: QuestRunner
 
@@ -381,6 +383,7 @@ func _ready() -> void:
 
 	feedback.setup()
 	chat.setup()
+	weather.setup()
 
 	var utility_buttons: VBoxContainer = $UI/BottomBar/UtilityButtons
 	utility_buttons.get_node(^"IdleButton").pressed.connect(_select_all_idle_villagers)
@@ -447,6 +450,11 @@ func _add_components() -> void:
 	chat.main = self
 	chat.name = "ChatConsole"
 	add_child(chat)
+
+	weather = Weather.new()
+	weather.main = self
+	weather.name = "Weather"
+	add_child(weather)
 
 	research = Research.new()
 	research.main = self
