@@ -33,6 +33,15 @@ uniform sampler2D wind_texture;
 uniform vec2 wind_velocity;
 // Accumulated noise scroll, driven by FogOfWar so velocity changes stay seamless.
 uniform vec2 wind_offset;
+// The wind noise only spans ~0.4-0.65, which reads as a steady lean rather than
+// gusts, so it's stretched around its middle by this much.
+uniform float gust_contrast = 4.0;
+uniform float gust_strength = 0.18;
+// Ripples rolling downwind on top of the gusts, as a fraction of the lean.
+uniform float flutter : hint_range(0.0, 1.0, 0.05) = 0.3;
+uniform float flutter_speed = 2.5;
+// World units between ripple crests.
+uniform float flutter_wavelength = 10.0;
 
 group_uniforms Transparency;
 uniform float alpha_cut_start : hint_range(0.0, 1.0, 0.05) = 0.4;
@@ -53,10 +62,16 @@ vec2 atlas_uv(vec2 uv, int index, int size) {
 	return uv * tile_size + vec2(float(i % size), float(i / size)) * tile_size;
 }
 
+// Always leans downwind (0..1 of the full lean), so neighbouring blades move together.
 vec3 wind(vec2 uv) {
 	float wind_noise = texture(wind_texture, (world_pos.xz * 0.03) - wind_offset).r;
+	float gust = clamp(0.5 + (wind_noise - 0.5) * gust_contrast, 0.0, 1.0);
+	float speed = length(wind_velocity);
+	vec2 direction = speed > 0.0001 ? wind_velocity / speed : vec2(0.0);
+	float ripple = 0.5 + 0.5 * sin(dot(world_pos.xz, direction) * TAU / flutter_wavelength - TIME * flutter_speed);
+	gust = mix(gust, gust * ripple, flutter);
 	float wind_affect = pow(1.0 - uv.y, 2.0);
-	return vec3(wind_noise * wind_velocity.x, 0.0, wind_noise * wind_velocity.y) * 0.25 * wind_affect;
+	return vec3(wind_velocity.x, 0.0, wind_velocity.y) * gust * gust_strength * wind_affect;
 }
 
 // The ground point the main camera looks at (in the terrain's local space), snapped
