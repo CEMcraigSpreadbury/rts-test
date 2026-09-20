@@ -10,6 +10,9 @@
 [ext_resource type="PackedScene" uid="uid://cde1warrior00011" path="res://scenes/units/dark_elves/dark_elf_warrior_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" uid="uid://cde2guard000012" path="res://scenes/units/dark_elves/dark_elf_guard_unit.tscn" id="20_1"]
 [ext_resource type="PackedScene" uid="uid://cde3archer00013" path="res://scenes/units/dark_elves/dark_elf_archer_unit.tscn" id="20_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/dark_elf_archer.png" id="icon_dark_elf_archer"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/dark_elf_guard.png" id="icon_dark_elf_guard"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/dark_elf_warrior.png" id="icon_dark_elf_warrior"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
 script = ExtResource("8_cost_script")
@@ -24,18 +27,21 @@ amount = 80
 [sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
 item_name = "Dark Elf Warrior"
+icon = ExtResource("icon_dark_elf_warrior")
 build_time = 9.0
 unit_scene = ExtResource("20_0")
 
 [sub_resource type="Resource" id="ProducibleItem_1"]
 script = ExtResource("3_item_script")
 item_name = "Dark Elf Guard"
+icon = ExtResource("icon_dark_elf_guard")
 build_time = 10.0
 unit_scene = ExtResource("20_1")
 
 [sub_resource type="Resource" id="ProducibleItem_2"]
 script = ExtResource("3_item_script")
 item_name = "Dark Elf Archer"
+icon = ExtResource("icon_dark_elf_archer")
 build_time = 10.0
 unit_scene = ExtResource("20_2")
 

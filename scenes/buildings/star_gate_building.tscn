@@ -10,6 +10,9 @@
 [ext_resource type="PackedScene" uid="uid://csw1warrior00021" path="res://scenes/units/star_wanderers/sw_warrior_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" uid="uid://csw2spearman0022" path="res://scenes/units/star_wanderers/sw_spearman_unit.tscn" id="20_1"]
 [ext_resource type="PackedScene" uid="uid://csw3hunter000023" path="res://scenes/units/star_wanderers/sw_hunter_unit.tscn" id="20_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/star_hunter.png" id="icon_star_hunter"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/star_spearman.png" id="icon_star_spearman"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/star_warrior.png" id="icon_star_warrior"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
 script = ExtResource("8_cost_script")
@@ -24,18 +27,21 @@ amount = 120
 [sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
 item_name = "Star Warrior"
+icon = ExtResource("icon_star_warrior")
 build_time = 14.0
 unit_scene = ExtResource("20_0")
 
 [sub_resource type="Resource" id="ProducibleItem_1"]
 script = ExtResource("3_item_script")
 item_name = "Star Spearman"
+icon = ExtResource("icon_star_spearman")
 build_time = 14.0
 unit_scene = ExtResource("20_1")
 
 [sub_resource type="Resource" id="ProducibleItem_2"]
 script = ExtResource("3_item_script")
 item_name = "Star Hunter"
+icon = ExtResource("icon_star_hunter")
 build_time = 16.0
 unit_scene = ExtResource("20_2")
 

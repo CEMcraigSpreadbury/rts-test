@@ -27,6 +27,10 @@ class Options:
 	var frame_size: Vector2i = Vector2i.ZERO
 	var frame_row: int = 0
 	var frame_column: int = 0
+	## Sprites only: how much to blow the figure up. Zero fits it to the icon
+	## on its own; a set value is how a whole roster is given one zoom (see
+	## unit_scale) so buttons sitting side by side match.
+	var scale: float = 0.0
 
 ## What a file can be turned into: "model", "unit" (a scene with a sprite
 ## sheet), "sprite", or "" for anything else.
@@ -57,21 +61,62 @@ static func make(host: Node, path: String, options: Options) -> Image:
 
 ## A unit scene's first idle frame, read off its exported sprite settings.
 static func unit_icon(scene: PackedScene, options: Options) -> Image:
+	return sprite_icon(_unit_sheet(scene), _unit_options(scene, options))
+
+## The zoom this unit's figure would get on its own. A roster takes the
+## smallest of these and passes it back in as Options.scale, so no one unit
+## ends up twice the size of the one beside it on the command card.
+static func unit_scale(scene: PackedScene, size: int) -> float:
+	var options := Options.new()
+	options.size = size
+	var frame: Image = _frame_image(_unit_sheet(scene), _unit_options(scene, options))
+	if frame == null:
+		return 1.0
+	return _auto_scale(frame.get_size(), size)
+
+static func _unit_sheet(scene: PackedScene) -> Texture2D:
 	var unit: Node = scene.instantiate()
 	var sheet: Texture2D = unit.get("sprite_sheet")
+	unit.free()
+	return sheet
+
+static func _unit_options(scene: PackedScene, options: Options) -> Options:
+	var unit: Node = scene.instantiate()
 	var cell: Vector2i = unit.get("sprite_cell_size")
 	var row: int = unit.get("idle_row")
 	unit.free()
 	var sprite_options := Options.new()
 	sprite_options.size = options.size
 	sprite_options.outline = options.outline
+	sprite_options.scale = options.scale
 	sprite_options.frame_size = cell
 	sprite_options.frame_row = row
-	return sprite_icon(sheet, sprite_options)
+	return sprite_options
 
-## Crops the figure out of its frame and scales it up by the largest whole
-## number that still fits, so its pixels stay square and even.
+## Crops the figure out of its frame and scales it by whole pixels, so its
+## pixels stay square and even.
 static func sprite_icon(texture: Texture2D, options: Options) -> Image:
+	if texture == null:
+		return null
+	var image: Image = _frame_image(texture, options)
+	if image == null:
+		return null
+	var used: Vector2i = image.get_size()
+	var scale: float = options.scale if options.scale > 0.0 else _auto_scale(used, options.size)
+	var scaled := Vector2i(maxi(1, roundi(used.x * scale)), maxi(1, roundi(used.y * scale)))
+	scaled = scaled.min(Vector2i(options.size, options.size))
+	image.resize(scaled.x, scaled.y, Image.INTERPOLATE_NEAREST)
+	var icon := Image.create_empty(options.size, options.size, false, Image.FORMAT_RGBA8)
+	icon.blit_rect(image, Rect2i(Vector2i.ZERO, scaled), (Vector2i(options.size, options.size) - scaled) / 2)
+	if options.outline:
+		_outline(icon)
+	return icon
+
+## One frame of a sheet, trimmed to the figure — a frame is mostly empty
+## space, and where in the cell the figure sits varies from sheet to sheet.
+static func _frame_image(texture: Texture2D, options: Options) -> Image:
+	if texture == null:
+		return null
 	var image: Image = texture.get_image()
 	if image == null:
 		return null
@@ -85,18 +130,13 @@ static func sprite_icon(texture: Texture2D, options: Options) -> Image:
 	var used: Rect2i = image.get_used_rect()
 	if not used.has_area():
 		return null
-	image = image.get_region(used)
-	var room: int = options.size - 2
-	var scale: float = maxf(1.0, floorf(minf(float(room) / used.size.x, float(room) / used.size.y)))
-	if used.size.x > room or used.size.y > room:
-		scale = minf(float(room) / used.size.x, float(room) / used.size.y)
-	var scaled := Vector2i(maxi(1, roundi(used.size.x * scale)), maxi(1, roundi(used.size.y * scale)))
-	image.resize(scaled.x, scaled.y, Image.INTERPOLATE_NEAREST)
-	var icon := Image.create_empty(options.size, options.size, false, Image.FORMAT_RGBA8)
-	icon.blit_rect(image, Rect2i(Vector2i.ZERO, scaled), (Vector2i(options.size, options.size) - scaled) / 2)
-	if options.outline:
-		_outline(icon)
-	return icon
+	return image.get_region(used)
+
+## Whole-number zoom while the figure still fits; anything already bigger
+## than the icon is shrunk to fit instead.
+static func _auto_scale(figure: Vector2i, size: int) -> float:
+	var fit: float = minf(float(size) / figure.x, float(size) / figure.y)
+	return maxf(1.0, floorf(fit)) if fit >= 1.0 else fit
 
 ## Renders the scene in its own world from a three-quarter view, framed to
 ## its meshes, then pixelates it. Scripts are stripped first so nothing in the

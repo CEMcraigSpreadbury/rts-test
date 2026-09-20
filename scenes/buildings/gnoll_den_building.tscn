@@ -12,6 +12,9 @@
 [ext_resource type="PackedScene" uid="uid://cgn1warrior0001" path="res://scenes/units/gnolls/gnoll_warrior_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" uid="uid://cgn2archer00002" path="res://scenes/units/gnolls/gnoll_archer_unit.tscn" id="20_1"]
 [ext_resource type="PackedScene" uid="uid://cgn3hyena000003" path="res://scenes/units/gnolls/hyena_unit.tscn" id="20_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/gnoll_archers.png" id="icon_gnoll_archers"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/gnoll_warriors.png" id="icon_gnoll_warriors"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/hyenas.png" id="icon_hyenas"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
 script = ExtResource("8_cost_script")
@@ -26,6 +29,7 @@ amount = 30
 [sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
 item_name = "Gnoll Warriors"
+icon = ExtResource("icon_gnoll_warriors")
 build_time = 7.0
 unit_scene = ExtResource("20_0")
 spawn_count = 3
@@ -33,6 +37,7 @@ spawn_count = 3
 [sub_resource type="Resource" id="ProducibleItem_1"]
 script = ExtResource("3_item_script")
 item_name = "Gnoll Archers"
+icon = ExtResource("icon_gnoll_archers")
 build_time = 8.0
 unit_scene = ExtResource("20_1")
 spawn_count = 2
@@ -40,6 +45,7 @@ spawn_count = 2
 [sub_resource type="Resource" id="ProducibleItem_2"]
 script = ExtResource("3_item_script")
 item_name = "Hyenas"
+icon = ExtResource("icon_hyenas")
 build_time = 7.0
 unit_scene = ExtResource("20_2")
 spawn_count = 2

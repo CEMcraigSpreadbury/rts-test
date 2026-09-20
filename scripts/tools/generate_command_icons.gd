@@ -27,8 +27,19 @@ func _ready() -> void:
 		var building: Node = load(BUILDINGS_DIR + "/" + file).instantiate()
 		var producibles: Array = building.get("producibles") if building.get("producibles") != null else []
 		building.free()
+		## One zoom for the whole roster, taken from whichever of its units has
+		## the largest figure: these buttons sit side by side on the command
+		## card, and a unit drawn small looked blown up next to its own kin.
+		var roster: Array[ProducibleItem] = []
 		for item: ProducibleItem in producibles:
-			if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null or done.has(item.item_name):
+			if item.kind == ProducibleItem.Kind.UNIT and item.unit_scene != null:
+				roster.append(item)
+		sprite_options.scale = 0.0
+		for item in roster:
+			var scale: float = IconMaker.unit_scale(item.unit_scene, sprite_options.size)
+			sprite_options.scale = scale if sprite_options.scale <= 0.0 else minf(sprite_options.scale, scale)
+		for item in roster:
+			if done.has(item.item_name):
 				continue
 			done[item.item_name] = true
 			_save(IconMaker.unit_icon(item.unit_scene, sprite_options), "units", item.item_name)

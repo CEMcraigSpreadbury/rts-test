@@ -10,6 +10,9 @@
 [ext_resource type="PackedScene" uid="uid://cgn4leader000004" path="res://scenes/units/gnolls/gnoll_leader_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" uid="uid://cgn5shaman000005" path="res://scenes/units/gnolls/gnoll_shaman_unit.tscn" id="20_1"]
 [ext_resource type="PackedScene" uid="uid://cgn6berserk00006" path="res://scenes/units/gnolls/gnoll_berserk_unit.tscn" id="20_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/gnoll_berserks.png" id="icon_gnoll_berserks"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/gnoll_leader.png" id="icon_gnoll_leader"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/gnoll_shaman.png" id="icon_gnoll_shaman"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
 script = ExtResource("8_cost_script")
@@ -24,18 +27,21 @@ amount = 55
 [sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
 item_name = "Gnoll Leader"
+icon = ExtResource("icon_gnoll_leader")
 build_time = 14.0
 unit_scene = ExtResource("20_0")
 
 [sub_resource type="Resource" id="ProducibleItem_1"]
 script = ExtResource("3_item_script")
 item_name = "Gnoll Shaman"
+icon = ExtResource("icon_gnoll_shaman")
 build_time = 12.0
 unit_scene = ExtResource("20_1")
 
 [sub_resource type="Resource" id="ProducibleItem_2"]
 script = ExtResource("3_item_script")
 item_name = "Gnoll Berserks"
+icon = ExtResource("icon_gnoll_berserks")
 build_time = 10.0
 unit_scene = ExtResource("20_2")
 spawn_count = 2

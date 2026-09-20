@@ -10,6 +10,9 @@
 [ext_resource type="PackedScene" uid="uid://cde4assassin0014" path="res://scenes/units/dark_elves/dark_elf_assassin_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" uid="uid://cde5sorceress015" path="res://scenes/units/dark_elves/dark_elf_sorceress_unit.tscn" id="20_1"]
 [ext_resource type="PackedScene" uid="uid://cde6stealer00016" path="res://scenes/units/dark_elves/dark_elf_spellstealer_unit.tscn" id="20_2"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/assassin.png" id="icon_assassin"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/sorceress.png" id="icon_sorceress"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/spellstealer.png" id="icon_spellstealer"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
 script = ExtResource("8_cost_script")
@@ -24,18 +27,21 @@ amount = 140
 [sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
 item_name = "Assassin"
+icon = ExtResource("icon_assassin")
 build_time = 12.0
 unit_scene = ExtResource("20_0")
 
 [sub_resource type="Resource" id="ProducibleItem_1"]
 script = ExtResource("3_item_script")
 item_name = "Sorceress"
+icon = ExtResource("icon_sorceress")
 build_time = 16.0
 unit_scene = ExtResource("20_1")
 
 [sub_resource type="Resource" id="ProducibleItem_2"]
 script = ExtResource("3_item_script")
 item_name = "Spellstealer"
+icon = ExtResource("icon_spellstealer")
 build_time = 15.0
 unit_scene = ExtResource("20_2")
 
