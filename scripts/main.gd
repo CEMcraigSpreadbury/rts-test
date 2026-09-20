@@ -253,6 +253,7 @@ var quest_ui: QuestUi = null
 var research_panel: ResearchPanel = null
 var power_bar: PowerBar = null
 const FAVOUR_RESOURCE: ResourceType = preload("res://resources/favour_resource_type.tres")
+const UnitGrid = preload("res://scripts/unit_grid.gd")
 
 ## Extend this when new resource types (Stone, ...) are added.
 ## What every player starts a skirmish with. Favour is score and research
@@ -2407,8 +2408,64 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## ignores formation slots entirely, so neither belongs in a record whose
 	## whole job is re-solving move slots.
 	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback, facing, front_width)
+	if attack_move_fallback and target_node == null and not append:
+		_engage_at_attack_move_destination(units, world_pos, sender_id)
 	if PerfStats.enabled:
 		PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
+
+## An attack-move onto ground that already has enemies standing on it is an
+## order to take *them* on, not to walk to the spot and only then turn round:
+## the units go for the nearest one straight away, exactly as they would if
+## they had met it on the march (GroupMovement.formation_contact for a group,
+## a keep_assault attack for a lone unit). The assault survives either way, so
+## the rest of the area is still cleared once that target is down.
+func _engage_at_attack_move_destination(units: Array[Unit], world_pos: Vector3, sender_id: int) -> void:
+	var marchers: Array[Unit] = []
+	for unit in units:
+		if unit.status_command == Unit.Command.ATTACK_MOVE and unit.assault_active:
+			marchers.append(unit)
+	if marchers.is_empty():
+		return
+	var enemy := _nearest_enemy_at(world_pos, sender_id)
+	if enemy == null:
+		return
+	## One of these brings the whole block round; all false means there's no
+	## group to bring (a lone unit, or a target it can't formation-attack), so
+	## each marcher goes in on its own.
+	for unit in marchers:
+		if group_movement.formation_contact(unit, enemy):
+			return
+	for unit in marchers:
+		unit.command_attack(enemy, true)
+
+## Nearest enemy of `owner` standing inside the assault area a click at
+## `point` would cover — a unit if there is one, otherwise an attackable
+## building, matching how Unit._find_assault_target picks once the area is
+## reached.
+func _nearest_enemy_at(point: Vector3, owner: int) -> Node3D:
+	var best: Node3D = null
+	var best_distance := INF
+	for unit in UnitGrid.enemies_near(get_tree(), point, Unit.ASSAULT_AREA_RADIUS, owner):
+		if not CombatUtils.is_worth_attacking(unit):
+			continue
+		var distance := Vector2(point.x - unit.global_position.x, point.z - unit.global_position.z).length()
+		if distance < best_distance:
+			best = unit
+			best_distance = distance
+	if best != null:
+		return best
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var building := node as ProductionBuilding
+		if building == null or building.is_destroyed or not building.can_be_attacked() \
+				or not Teams.is_enemy(owner, building.owner_peer_id):
+			continue
+		var distance := Vector2(point.x - building.global_position.x, point.z - building.global_position.z).length() \
+				- building.get_footprint_radius()
+		if distance > Unit.ASSAULT_AREA_RADIUS or distance >= best_distance:
+			continue
+		best = building
+		best_distance = distance
+	return best
 
 ## Explicit re-form (FORMATION_REFORM_KEY): pulls a selection that combat, an
 ## obstacle or a chokepoint has smeared into a blob back into its formation
