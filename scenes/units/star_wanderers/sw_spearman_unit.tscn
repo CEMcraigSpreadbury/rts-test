@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://csw2spearman0022"]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MiniStarWanderers/MiniStarWanderers/Outline/MiniSWSpearman-Sheet.png" id="2_sheet"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
+[ext_resource type="Resource" path="res://resources/starlight_resource_type.tres" id="4_starlight"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_starlight"]
+script = ExtResource("3_cost")
+resource_type = ExtResource("4_starlight")
+amount = 8
+
+[sub_resource type="Resource" id="ResourceCost_gold"]
+script = ExtResource("3_cost")
+resource_type = ExtResource("4_gold")
+amount = 28
+
+[node name="StarSpearman" unique_id=1900000019 instance=ExtResource("1_unit")]
+display_name = "Star Spearman"
+move_speed = 2.60
+costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_starlight"), SubResource("ResourceCost_gold")])
+sprite_sheet = ExtResource("2_sheet")
+sprite_cell_size = Vector2i(32, 32)
+idle_frame_count = 4
+walk_row = 1
+walk_frame_count = 6
+attack_row = 3
+attack_frame_count = 8
+death_row = 6
+death_frame_count = 6
+can_gather = false
+can_build = false
+population_cost = 2
+max_health = 120
+attack_damage = 9
+attack_range = 1.80
+attack_cooldown = 1.70
+aggro_range = 8.00
+vision_range = 13
+armor_class = 2
+damage_type = 2
+unit_category = 0
+can_brace = true
+population_pool = 1

@@ -24,3 +24,9 @@ func amount(buff: int) -> float:
 		_entries.erase(buff)
 		return 0.0
 	return entry[0]
+
+## Everything wears off at once — what a Dark Elf Spellstealer does on hit.
+## Curse and the other hostile powers live in here too, so this strips the
+## bad with the good rather than picking sides.
+func clear() -> void:
+	_entries.clear()

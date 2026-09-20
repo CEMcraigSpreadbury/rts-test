@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://bqn5bear0anim5"]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksForestAnimals/Outline/MiniBear.png" id="2_sheet"]
+
+
+[node name="Bear" unique_id=1900000005 instance=ExtResource("1_unit")]
+display_name = "Bear"
+move_speed = 2.80
+sprite_sheet = ExtResource("2_sheet")
+sprite_cell_size = Vector2i(32, 32)
+idle_frame_count = 4
+walk_row = 1
+walk_frame_count = 6
+attack_row = 3
+attack_frame_count = 6
+death_row = 7
+death_frame_count = 4
+can_gather = false
+can_build = false
+population_cost = 0
+max_health = 140
+attack_damage = 16
+attack_range = 1.40
+attack_cooldown = 1.80
+aggro_range = 10.00
+vision_range = 11
+armor_class = 0
+damage_type = 1
+hunt_meat = 30

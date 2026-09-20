@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="PactRace" format=3]
+
+[ext_resource type="Script" path="res://scripts/pact_race.gd" id="1_pact_race_script"]
+[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
+[ext_resource type="Resource" path="res://resources/starlight_resource_type.tres" id="3_currency"]
+[ext_resource type="PackedScene" uid="uid://dj4m0v7yqx8ea" path="res://scenes/buildings/observatory_building.tscn" id="4_b0"]
+[ext_resource type="PackedScene" uid="uid://bz5c1qk7t3mnp" path="res://scenes/buildings/star_gate_building.tscn" id="4_b1"]
+[ext_resource type="PackedScene" uid="uid://cf8j2xr0ue4vb" path="res://scenes/buildings/star_sanctum_building.tscn" id="4_b2"]
+
+[sub_resource type="Resource" id="BuildingType_b0"]
+script = ExtResource("2_building_type_script")
+building_name = "Observatory"
+scene = ExtResource("4_b0")
+footprint_radius = 2.4
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_b1"]
+script = ExtResource("2_building_type_script")
+building_name = "Star Gate"
+scene = ExtResource("4_b1")
+footprint_radius = 2.4
+construction_time = 10.0
+
+[sub_resource type="Resource" id="BuildingType_b2"]
+script = ExtResource("2_building_type_script")
+building_name = "Sanctum"
+scene = ExtResource("4_b2")
+footprint_radius = 2.4
+construction_time = 10.0
+
+[resource]
+script = ExtResource("1_pact_race_script")
+race_name = "Star Wanderers"
+display_color = Color(0.45, 0.72, 0.95, 1)
+currency = ExtResource("3_currency")
+passive_income_per_second = 0.1
+passive_night_multiplier = 3.0
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_b0"), SubResource("BuildingType_b1"), SubResource("BuildingType_b2")])

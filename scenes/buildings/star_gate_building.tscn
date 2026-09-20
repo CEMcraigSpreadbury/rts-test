@@ -1,0 +1,204 @@
+[gd_scene format=3 uid="uid://b05c1qk7t3mnp"]
+
+[ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
+[ext_resource type="PackedScene" uid="uid://dsmkj36p3jjk8" path="res://assets/art/Models/Towncenter/base_basic_pbr.glb" id="7_model"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="10_gold"]
+[ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
+[ext_resource type="PackedScene" uid="uid://csw1warrior00021" path="res://scenes/units/star_wanderers/sw_warrior_unit.tscn" id="20_0"]
+[ext_resource type="PackedScene" uid="uid://csw2spearman0022" path="res://scenes/units/star_wanderers/sw_spearman_unit.tscn" id="20_1"]
+[ext_resource type="PackedScene" uid="uid://csw3hunter000023" path="res://scenes/units/star_wanderers/sw_hunter_unit.tscn" id="20_2"]
+
+[sub_resource type="Resource" id="ResourceCost_build_wood"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("9_wood")
+amount = 160
+
+[sub_resource type="Resource" id="ResourceCost_build_gold"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 120
+
+[sub_resource type="Resource" id="ProducibleItem_0"]
+script = ExtResource("3_item_script")
+item_name = "Star Warrior"
+build_time = 14.0
+unit_scene = ExtResource("20_0")
+
+[sub_resource type="Resource" id="ProducibleItem_1"]
+script = ExtResource("3_item_script")
+item_name = "Star Spearman"
+build_time = 14.0
+unit_scene = ExtResource("20_1")
+
+[sub_resource type="Resource" id="ProducibleItem_2"]
+script = ExtResource("3_item_script")
+item_name = "Star Hunter"
+build_time = 16.0
+unit_scene = ExtResource("20_2")
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_body"]
+size = Vector3(2.8, 2, 3.0)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
+emission_shape = 1
+emission_sphere_radius = 1.2
+direction = Vector3(0, 1, 0)
+spread = 60.0
+initial_velocity_min = 2.0
+initial_velocity_max = 4.0
+scale_min = 0.5
+scale_max = 1.5
+color = Color(0.45, 0.35, 0.22, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_debris"]
+shading_mode = 0
+albedo_color = Color(0.45, 0.35, 0.22, 1)
+
+[sub_resource type="QuadMesh" id="QuadMesh_debris"]
+material = SubResource("StandardMaterial3D_debris")
+size = Vector2(0.15, 0.15)
+
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_construction"]
+emission_shape = 1
+emission_sphere_radius = 2.5
+direction = Vector3(0, 1, 0)
+spread = 40.0
+initial_velocity_min = 0.3
+initial_velocity_max = 0.8
+gravity = Vector3(0, 0.3, 0)
+scale_min = 0.6
+scale_max = 1.2
+color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dust"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.8, 0.75, 0.65, 0.5)
+
+[sub_resource type="QuadMesh" id="QuadMesh_dust"]
+material = SubResource("StandardMaterial3D_dust")
+size = Vector2(0.2, 0.2)
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_building"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:is_under_construction")
+properties/1/spawn = true
+properties/1/replication_mode = 2
+properties/2/path = NodePath(".:construction_progress")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:synced_queue_size")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:synced_time_remaining")
+properties/4/spawn = true
+properties/4/replication_mode = 1
+properties/5/path = NodePath(".:synced_current_item_name")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath(".:health_fraction")
+properties/6/spawn = true
+properties/6/replication_mode = 1
+properties/7/path = NodePath(".:synced_builder_count")
+properties/7/spawn = true
+properties/7/replication_mode = 2
+properties/8/path = NodePath(".:synced_current_item_progress")
+properties/8/spawn = true
+properties/8/replication_mode = 1
+properties/9/path = NodePath(".:owner_peer_id")
+properties/9/spawn = true
+properties/9/replication_mode = 2
+properties/10/path = NodePath(".:team_tint")
+properties/10/spawn = true
+properties/10/replication_mode = 2
+properties/11/path = NodePath(".:synced_queue_counts")
+properties/11/spawn = true
+properties/11/replication_mode = 2
+properties/12/path = NodePath(".:synced_repeat_item_name")
+properties/12/spawn = true
+properties/12/replication_mode = 2
+properties/13/path = NodePath(".:synced_unit_limit_reached")
+properties/13/spawn = true
+properties/13/replication_mode = 2
+
+[node name="ProductionBuilding" type="StaticBody3D" unique_id=1180000700 groups=["buildings"]]
+script = ExtResource("1_building_script")
+building_name = "Star Gate"
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_build_wood"), SubResource("ResourceCost_build_gold")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_0"), SubResource("ProducibleItem_1"), SubResource("ProducibleItem_2")])
+role = 1
+population_capacity = 5
+population_pool = 1
+teleports_produced_units = true
+max_health = 800
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1180000702]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("BoxShape3D_body")
+
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=1180000703]
+avoidance_enabled = false
+radius = 2.0
+vertices = PackedVector3Array(-1.4, 0, 1.5, 1.4, 0, 1.5, 1.4, 0, -1.5, -1.4, 0, -1.5)
+
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1180000704]
+bus = &"SFX"
+
+[node name="SpawnPoint" type="Node3D" parent="." unique_id=1180000705]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.2)
+
+[node name="PlacementBurst" type="GPUParticles3D" parent="." unique_id=1180000706]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+emitting = false
+amount = 24
+lifetime = 0.6
+one_shot = true
+explosiveness = 1.0
+randomness = 0.3
+process_material = SubResource("ParticleProcessMaterial_placement")
+draw_pass_1 = SubResource("QuadMesh_debris")
+
+[node name="ConstructionDust" type="GPUParticles3D" parent="." unique_id=1180000707]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+emitting = false
+amount = 64
+lifetime = 1.4
+preprocess = 0.5
+process_material = SubResource("ParticleProcessMaterial_construction")
+draw_pass_1 = SubResource("QuadMesh_dust")
+
+[node name="HealthBar" type="Node3D" parent="." unique_id=1180000708]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.591141, 0)
+visible = false
+
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=1180000709]
+transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
+cast_shadow = 0
+modulate = Color(0.1, 0.1, 0.1, 0.85)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("7_bar_tex")
+no_depth_test = true
+render_priority = 20
+
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=1180000710]
+transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
+cast_shadow = 0
+modulate = Color(0.25, 0.9, 0.3, 1)
+pixel_size = 0.2
+billboard = 1
+texture_filter = 0
+texture = ExtResource("7_bar_tex")
+no_depth_test = true
+render_priority = 21
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1180000711]
+replication_config = SubResource("SceneReplicationConfig_building")
+
+[node name="Model" parent="." unique_id=1180000712 instance=ExtResource("7_model")]

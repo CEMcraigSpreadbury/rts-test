@@ -118,7 +118,7 @@ costs = Array[ExtResource("7_cost_script")]([SubResource("ResourceCost_towncente
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_villager")])
 vision_range = 36.0
 on_select_sound_effects = Array[AudioStream]([ExtResource("7_lthpd")])
-population_capacity = 10
+population_capacity = 20
 is_main_base = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1793394571]

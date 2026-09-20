@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="PactRace" format=3]
+
+[ext_resource type="Script" path="res://scripts/pact_race.gd" id="1_pact_race_script"]
+[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
+[ext_resource type="Resource" path="res://resources/souls_resource_type.tres" id="3_currency"]
+[ext_resource type="PackedScene" uid="uid://b2w8kq3nvh5r7" path="res://scenes/buildings/dark_elf_altar_building.tscn" id="4_b0"]
+[ext_resource type="PackedScene" uid="uid://ckh3p9wm2v0xq" path="res://scenes/buildings/dark_elf_spire_building.tscn" id="4_b1"]
+[ext_resource type="PackedScene" uid="uid://dn6r4yv8a1wzt" path="res://scenes/buildings/dark_elf_coven_building.tscn" id="4_b2"]
+
+[sub_resource type="Resource" id="BuildingType_b0"]
+script = ExtResource("2_building_type_script")
+building_name = "Dark Elf Altar"
+scene = ExtResource("4_b0")
+footprint_radius = 2.4
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_b1"]
+script = ExtResource("2_building_type_script")
+building_name = "Dark Spire"
+scene = ExtResource("4_b1")
+footprint_radius = 2.4
+construction_time = 9.0
+
+[sub_resource type="Resource" id="BuildingType_b2"]
+script = ExtResource("2_building_type_script")
+building_name = "Coven"
+scene = ExtResource("4_b2")
+footprint_radius = 2.4
+construction_time = 9.0
+
+[resource]
+script = ExtResource("1_pact_race_script")
+race_name = "Dark Elves"
+display_color = Color(0.55, 0.3, 0.72, 1)
+currency = ExtResource("3_currency")
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_b0"), SubResource("BuildingType_b1"), SubResource("BuildingType_b2")])

@@ -39,6 +39,15 @@ var _last_command_panel_units: Array[Unit] = []
 ## a selected unit's Build button (as opposed to the always-available idle
 ## construction menu when nothing is selected).
 var showing_build_submenu: bool = false
+## Which page of the construction menu is showing. The action panel's frame
+## art fixes it at ACTION_PANEL_SLOT_COUNT slots, and the Human roster already
+## fills every one, so anything past that (the Pact Hall, and an allied race's
+## buildings in due course) lives on a further page reached by the last slot.
+var _construction_page: int = 0
+## Which allied race's buildings the construction menu is showing, or null for
+## the player's own (Human) roster. Set by the category buttons a Pact adds to
+## the build menu (see Pacts).
+var _construction_race: PactRace = null
 ## Command panel info section — built once per selection change, then only
 ## had their values (not structure) updated every frame, to avoid rebuilding
 ## Control nodes 60 times a second for something that just needs a number to move.
@@ -87,6 +96,10 @@ var _info_resource_label: Label = null
 var _resource_totals: Dictionary = {}
 var _population_used: int = 0
 var _population_cap: int = 0
+## The separate allied-race pool (see PopulationPool.Kind.PACT), only shown once
+## the player has actually built something that grants pact room.
+var _pact_population_used: int = 0
+var _pact_population_cap: int = 0
 
 ## resource_name -> true while it's one of the ones flashing red because the
 ## last attempted purchase couldn't afford it — see flash_missing_resources.
@@ -154,9 +167,13 @@ func _update_resource_ticker(delta: float) -> void:
 	if changed:
 		_update_resource_label()
 
-func _on_population_changed(used: int, cap: int) -> void:
-	_population_used = used
-	_population_cap = cap
+func _on_population_changed(used: int, cap: int, pool: int) -> void:
+	if pool == int(PopulationPool.Kind.PACT):
+		_pact_population_used = used
+		_pact_population_cap = cap
+	else:
+		_population_used = used
+		_population_cap = cap
 	_update_resource_label()
 
 func _update_resource_label() -> void:
@@ -171,7 +188,21 @@ func _update_resource_label() -> void:
 		if _resource_flash_on and _flashing_resource_names.has(resource_type.display_name):
 			text = "[color=#ff4433]%s[/color]" % text
 		parts.append(text)
+	## An allied race's currency joins the bar only once its Pact is made —
+	## before that it is nothing the player can earn or spend.
+	for page in Pacts.building_pages(main.my_peer_id()):
+		var currency: ResourceType = page["race"].currency
+		if currency == null:
+			continue
+		var pact_shown: int = int(round(_resource_display_totals.get(currency.display_name,
+				float(_resource_totals.get(currency.display_name, 0)))))
+		var pact_text := "%s: %d" % [currency.display_name, pact_shown]
+		if _resource_flash_on and _flashing_resource_names.has(currency.display_name):
+			pact_text = "[color=#ff4433]%s[/color]" % pact_text
+		parts.append(pact_text)
 	parts.append("Population: %d/%d" % [_population_used, _population_cap])
+	if _pact_population_cap > 0:
+		parts.append("Pact: %d/%d" % [_pact_population_used, _pact_population_cap])
 	resource_label.text = "   ".join(parts)
 
 ## Mirrors ResourceStockpile.can_afford(), but against this client's own
@@ -244,6 +275,13 @@ func show_building(building: ProductionBuilding) -> void:
 	## panel is where "yours to command" starts, so an enemy building simply
 	## gets an empty grid instead of its production buttons.
 	if not main.can_command_building(building):
+		## Cleared here as well as below: these hold Labels living inside the
+		## buttons this grid is about to drop. Leaving them behind is what
+		## made capturing a Shrine you had selected walk freed nodes in
+		## _refresh_producible_badges.
+		_info_producible_badges.clear()
+		_info_repeat_badges.clear()
+		_info_unit_buttons.clear()
 		_fill_action_panel_grid([])
 		return
 
@@ -287,6 +325,12 @@ func show_building(building: ProductionBuilding) -> void:
 ## whole line at once (ProductionBuilding.enqueue() already refuses both
 ## cases server-side; this just keeps the menu matching what's legal).
 func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) -> bool:
+	## A Pact leaves the menu once this hall has sealed one, and a race
+	## already allied with elsewhere is off the menu everywhere.
+	if item.kind == ProducibleItem.Kind.PACT:
+		if not building.synced_pact_name.is_empty():
+			return false
+		return item.pact_race != null and not Pacts.has_pact(building.owner_peer_id, item.pact_race.race_name)
 	if item.kind != ProducibleItem.Kind.UPGRADE:
 		return true
 	if building._purchased_upgrades.has(item):
@@ -311,6 +355,8 @@ func refresh_command_panel() -> void:
 	_info_resource_label = null
 	_last_command_panel_units = main.selected_units.duplicate()
 	showing_build_submenu = false
+	_construction_race = null
+	_construction_page = 0
 
 	if not main.selected_units.is_empty():
 		_show_info_header()
@@ -338,12 +384,12 @@ func _refresh_resource_info() -> void:
 		_info_resource_label.text = "%d remaining" % main.selected_resource.amount_remaining
 
 func _populate_construction_buttons() -> void:
-	var my_building_types: Array[BuildingType] = main.my_faction().building_types
+	var building_types: Array[BuildingType] = current_construction_types()
 	var buttons: Array[Control] = []
 	var rules := MatchRules.active()
 	var me: int = main.my_peer_id()
-	for i in my_building_types.size():
-		var building_type: BuildingType = my_building_types[i]
+	for i in building_types.size():
+		var building_type: BuildingType = building_types[i]
 		## Each type keeps its own hotkey whether or not the ones before it are
 		## available, so a scenario locking one doesn't move the others.
 		if not rules.building_allowed(me, building_type.building_name):
@@ -351,7 +397,63 @@ func _populate_construction_buttons() -> void:
 		var hotkey: String = OS.get_keycode_string(Main.BUILDING_HOTKEYS[i]) if i < Main.BUILDING_HOTKEYS.size() else "?"
 		var tooltip := "%s (%s)" % [building_type.building_name, format_costs(rules.scaled_costs(me, building_type.get_costs()))]
 		buttons.append(_make_command_button(hotkey, tooltip, building_type.icon, main.placement.on_construction_button_pressed.bind(building_type)))
-	_fill_action_panel_grid(buttons)
+	if _construction_race == null:
+		## One category button per Pact, after the player's own buildings.
+		for page in Pacts.building_pages(me):
+			buttons.append(_make_race_category_button(page["race"]))
+	else:
+		buttons.append(_make_command_button("<<", "Back", null, func(): show_construction_race(null)))
+	_fill_action_panel_grid(_paginate_buttons(buttons))
+
+## Which roster the construction menu is currently offering — the player's own
+## or, on a Pact race's page, that race's. Also what the build hotkeys place,
+## so they always match what's on screen (see Main._unhandled_input).
+func current_construction_types() -> Array[BuildingType]:
+	if _construction_race != null:
+		return _construction_race.building_types
+	return main.my_faction().building_types
+
+## No icon art per race yet, so the button falls back to text: initials in the
+## race's own colour, which is also what tints it once an icon exists.
+func _make_race_category_button(race: PactRace) -> Button:
+	var initials := ""
+	for word in race.race_name.split(" ", false):
+		initials += word.substr(0, 1)
+	var button := _make_command_button(initials.to_upper(), race.race_name, race.icon,
+			func(): show_construction_race(race))
+	button.self_modulate = race.display_color
+	return button
+
+## Swaps the construction menu to an allied race's buildings, or back to the
+## player's own with null.
+func show_construction_race(race: PactRace) -> void:
+	_construction_race = race
+	_show_construction_page(0)
+
+## Cuts `buttons` down to the one page currently showing, reserving the last
+## slot for the page-turn button when they don't all fit. Only the page-turn
+## button is added here; everything else is passed straight through.
+func _paginate_buttons(buttons: Array[Control]) -> Array[Control]:
+	if buttons.size() <= ACTION_PANEL_SLOT_COUNT:
+		_construction_page = 0
+		return buttons
+	var per_page: int = ACTION_PANEL_SLOT_COUNT - 1
+	var page_count: int = ceili(float(buttons.size()) / float(per_page))
+	_construction_page = clampi(_construction_page, 0, page_count - 1)
+	var start: int = _construction_page * per_page
+	var page: Array[Control] = []
+	page.assign(buttons.slice(start, mini(start + per_page, buttons.size())))
+	for i in range(page.size(), per_page):
+		page.append(_make_empty_action_slot())
+	var next_page: int = (_construction_page + 1) % page_count
+	page.append(_make_command_button(">>", "More", null, func(): _show_construction_page(next_page)))
+	return page
+
+func _show_construction_page(page: int) -> void:
+	_construction_page = page
+	for child in action_panel_grid.get_children():
+		child.queue_free()
+	_populate_construction_buttons()
 
 ## The action panel's grid is a fixed-size 4-column layout (see
 ## ACTION_PANEL_SLOT_COUNT) regardless of how many real buttons a given
@@ -375,6 +477,8 @@ func open_build_submenu() -> void:
 	if not MatchRules.active().hud_allowed(main.my_peer_id(), "build"):
 		return
 	showing_build_submenu = true
+	_construction_page = 0
+	_construction_race = null
 	for child in action_panel_grid.get_children():
 		child.queue_free()
 	_populate_construction_buttons()
@@ -494,7 +598,13 @@ func _refresh_building_info() -> void:
 	var building := main.selected_building
 	var shown_health: int = int(round(building.health_fraction * building.max_health))
 	portrait_health_label.text = "%d / %d" % [shown_health, building.max_health]
-	if _info_progress_bar == null 			or _info_built_commandable != main.can_command_building(building) 			or _info_built_under_construction != building.is_under_construction:
+	if _info_built_commandable != main.can_command_building(building):
+		## It changed hands (or finished being captured) while selected: the
+		## action panel's producibles belong to the new owner now, so the
+		## whole selection is rebuilt rather than just the info side.
+		show_building(building)
+		return
+	if _info_progress_bar == null 			or _info_built_under_construction != building.is_under_construction:
 		_build_building_info(building)
 
 	if building.is_under_construction:
@@ -547,7 +657,9 @@ func _refresh_building_info() -> void:
 func _refresh_producible_badges(building: ProductionBuilding) -> void:
 	var group: Array[ProductionBuilding] = main.selected_building_group()
 	for item_name in _info_producible_badges:
-		var badge: Label = _info_producible_badges[item_name]
+		var badge = _info_producible_badges[item_name]
+		if not is_instance_valid(badge):
+			continue
 		var count: int = 0
 		for member in group:
 			count += member.synced_queue_counts.get(item_name, 0)
@@ -558,7 +670,9 @@ func _refresh_producible_badges(building: ProductionBuilding) -> void:
 		if is_instance_valid(button):
 			button.disabled = building.synced_unit_limit_reached
 	for item_name in _info_repeat_badges:
-		_info_repeat_badges[item_name].visible = item_name == building.synced_repeat_item_name
+		var repeat_badge = _info_repeat_badges[item_name]
+		if is_instance_valid(repeat_badge):
+			repeat_badge.visible = item_name == building.synced_repeat_item_name
 
 ## Right-click toggles repeat production of that unit (see ProductionBuilding.toggle_repeat).
 func _on_producible_gui_input(event: InputEvent, building: ProductionBuilding, item_index: int) -> void:

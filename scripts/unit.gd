@@ -424,6 +424,9 @@ func _play_sprite_pop() -> void:
 @export var costs: Array[ResourceCost] = []
 ## Released back to the owner's Population pool when this unit dies.
 @export var population_cost: int = 1
+## Which cap this unit spends: MAIN is the ordinary Human population fed by
+## Houses, PACT the separate pool an allied race's units use (see Pacts).
+@export var population_pool: PopulationPool.Kind = PopulationPool.Kind.MAIN
 
 @export_group("Sprite Sheet")
 @export var sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png")
@@ -499,6 +502,28 @@ func _play_sprite_pop() -> void:
 @export var can_charge: bool = false
 ## Spear-armed: braces against a charge when standing in a block (see BRACE_TIME).
 @export var can_brace: bool = false
+
+@export_group("Pact")
+## Gnolls fight as a pack: damage rises with every packmate fighting beside
+## them (see PACK_COURAGE_RADIUS) and falls away when no pack leader is near,
+## which is what makes a gnoll army collapse once its leaders are sniped.
+@export var pack_member: bool = false
+## A leader steadies every packmate around it; it is not itself steadied.
+@export var pack_leader: bool = false
+## Killing this unit pays Meat to a hunter holding the Gnoll Pact — what the
+## forest animals are worth, and why hunting is worth doing at all.
+@export var hunt_meat: int = 0
+## Applied to whatever this unit hits (Dark Elf poison). Only the damage-over-
+## time, slow and stun parts of an Ability are used here.
+@export var on_hit_ability: Ability = null
+## Strips every timed buff off whatever it hits (the Dark Elf Spellstealer),
+## which is what makes it the answer to a Ruler's power buffs.
+@export var strips_buffs: bool = false
+## Heals nearby allies for this much every heal_aura_interval seconds (the
+## Star Wanderer Priestess). 0 disables it.
+@export var heal_aura_amount: int = 0
+@export var heal_aura_interval: float = 3.0
+@export var heal_aura_radius: float = 7.0
 ## Null = melee (instant damage on cooldown, like today). Set = ranged: each
 ## cooldown tick fires a projectile that travels at projectile_speed and only
 ## applies damage once it actually arrives (see _tick_pending_projectiles) —
@@ -1157,6 +1182,13 @@ var build_target: ProductionBuilding = null
 var _build_stuck_timer: float = 0.0
 var _build_stuck_check_pos: Vector3 = Vector3.ZERO
 var _dying: bool = false
+## Pack courage, recomputed on a timer rather than per swing — see
+## _tick_pack_courage. 1.0 for anything that isn't a packmate.
+var _pack_multiplier: float = 1.0
+var _pack_timer: float = 0.0
+var _heal_aura_timer: float = 0.0
+## Shots drawn but not yet loosed — see _tick_pending_shots.
+var _pending_shots: Array[Dictionary] = []
 var patrol_points: Array[Vector3] = []
 var patrol_index: int = 0
 ## Wander mode (see command_wander) — objective guards mill about near their
@@ -1743,12 +1775,23 @@ func command_patrol_add_waypoint(point: Vector3) -> void:
 	if status_command == Command.PATROL:
 		patrol_points.append(point)
 
+## Drifts about within radius of origin without ever picking a fight — the
+## deer-and-fox counterpart to command_wander, which refuses a unit that
+## can't fight. Used by Wildlife for the animals that only flee and graze.
+func command_graze(origin: Node3D, radius: float) -> void:
+	if status_activity == Activity.DEAD or origin == null or radius <= 0.0:
+		return
+	_begin_wander_command(origin, radius)
+
 ## Mills about within radius of origin, engaging anything that comes near and
 ## drifting back to another random nearby point once the fight ends. Used by
 ## Objective for its guards (see Objective._ready).
 func command_wander(origin: Node3D, radius: float) -> void:
 	if status_activity == Activity.DEAD or not can_fight or origin == null or radius <= 0.0:
 		return
+	_begin_wander_command(origin, radius)
+
+func _begin_wander_command(origin: Node3D, radius: float) -> void:
 	_end_formation_fight()
 	attack_move_order = {}
 	_leave_build_site()
@@ -2583,6 +2626,12 @@ func _physics_tick(delta: float) -> void:
 	_tick_status_effects(delta)
 	if status_activity == Activity.DEAD:
 		return
+
+	_tick_pending_shots(delta)
+	if pack_member:
+		_tick_pack_courage(delta)
+	if heal_aura_amount > 0:
+		_tick_heal_aura(delta)
 	## Before the stun check, deliberately: a monster stunned mid-windup has
 	## already paid for and committed to the ability, and freezing the windup
 	## would let a stun silently swallow it if the order changed meanwhile.
@@ -3350,6 +3399,8 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
 	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
 	var result: int = roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
+	if pack_member and not is_equal_approx(_pack_multiplier, 1.0):
+		result = maxi(roundi(result * _pack_multiplier), 1)
 	if target is ProductionBuilding and building_damage_multiplier != 1.0:
 		result = roundi(result * building_damage_multiplier)
 	return result
@@ -3563,10 +3614,16 @@ func _tick_attacking(delta: float) -> void:
 		_last_swing_ms = Time.get_ticks_msec()
 		_play_attack_swing()
 		if projectile_scene != null:
-			## Damage lands later, when the shot actually arrives (see
-			## _tick_pending_projectiles) — the shooter can keep re-nocking on
-			## its own cooldown in the meantime rather than waiting for it.
-			_fire_projectile(attack_target)
+			## The shot leaves at the END of the draw/cast animation rather
+			## than the instant the swing starts, so an archer's arrow and a
+			## caster's bolt both come off the animation that throws them.
+			## Damage then lands later still, when it arrives (see
+			## _tick_pending_projectiles) — the shooter keeps re-nocking on its
+			## own cooldown in the meantime rather than waiting for either.
+			_pending_shots.append({
+				"time_remaining": minf(_attack_swing_duration(), effective_cooldown),
+				"target": attack_target,
+			})
 		else:
 			var damage := _effective_attack_damage(attack_target)
 			var charged := _charge_armed() and attack_target is Unit
@@ -3574,6 +3631,7 @@ func _tick_attacking(delta: float) -> void:
 				## Straight onto the spears: no charge, and the charger pays.
 				_spend_charge()
 				attack_target.take_damage(damage, self)
+				_apply_on_hit_effects(attack_target)
 				if _is_target_alive(attack_target):
 					attack_target.counter_charge(self)
 				if status_activity == Activity.DEAD:
@@ -3584,6 +3642,7 @@ func _tick_attacking(delta: float) -> void:
 					damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER)
 					_spend_charge()
 				attack_target.take_damage(damage, self)
+			_apply_on_hit_effects(attack_target)
 			if charged and _is_target_alive(attack_target):
 				attack_target.receive_charge(self)
 			if not _is_target_alive(attack_target):
@@ -3621,6 +3680,7 @@ func _tick_pending_projectiles(delta: float) -> void:
 		if not _is_target_alive(target):
 			continue
 		target.take_damage(hit["damage"], self)
+		_apply_on_hit_effects(target)
 		if attack_target == target and not _is_target_alive(target):
 			_find_new_target_or_idle()
 
@@ -3730,6 +3790,13 @@ func _begin_wander_leg() -> void:
 ## doesn't apply — this keeps watching for enemies the same way the moving
 ## half of a patrol does.
 func _tick_wander_pause(delta: float) -> void:
+	if not can_fight:
+		## Grazing, not standing guard: a deer between legs just waits, and
+		## never goes looking for something to attack.
+		_wander_pause_timer -= delta
+		if _wander_pause_timer <= 0.0:
+			_begin_wander_leg()
+		return
 	_enemy_scan_timer -= delta
 	if _enemy_scan_timer <= 0.0:
 		_enemy_scan_timer = ENEMY_SCAN_INTERVAL
@@ -3835,8 +3902,11 @@ func _die(attacker: Node3D = null) -> void:
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
 	## A summon never reserved any population (see Research._summon).
 	if not summoned:
-		Population.release(owner_peer_id, population_cost)
+		Population.release(owner_peer_id, population_cost, population_pool)
 	var main := get_tree().current_scene
+	## Meat for the hunter, Souls for anyone watching — see Pacts.award_death.
+	if main is Main and main.pacts != null:
+		main.pacts.award_death(self, attacker)
 	if main is Main and main.research != null:
 		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
 		main.research.award_kill(self, attacker, credit)
@@ -4089,3 +4159,88 @@ func _track_blocked(wedged: bool, delta: float) -> void:
 	if _blocked_time >= _next_blocked_repath:
 		_next_blocked_repath += BLOCKED_REPATH_INTERVAL
 		repath()
+
+
+## --- Pact unit behaviour -------------------------------------------------
+
+## How far a packmate looks for company and for its leader.
+const PACK_COURAGE_RADIUS: float = 9.0
+## Damage gained per packmate nearby, up to PACK_COURAGE_MAX_BONUS.
+const PACK_COURAGE_PER_MATE: float = 0.08
+const PACK_COURAGE_MAX_BONUS: float = 0.4
+## Damage lost while no pack leader is within PACK_COURAGE_RADIUS.
+const PACK_LEADERLESS_PENALTY: float = 0.3
+const PACK_RECHECK_INTERVAL: float = 0.6
+
+## Host-side. Recomputed on a timer: counting neighbours every swing would
+## scan the whole unit list per attack, and courage changes slowly anyway.
+func _tick_pack_courage(delta: float) -> void:
+	_pack_timer -= delta
+	if _pack_timer > 0.0:
+		return
+	_pack_timer = PACK_RECHECK_INTERVAL
+	var mates: int = 0
+	var has_leader: bool = pack_leader
+	var radius_squared: float = PACK_COURAGE_RADIUS * PACK_COURAGE_RADIUS
+	for other in get_tree().get_nodes_in_group("units"):
+		if other == self or not is_instance_valid(other) or other.status_activity == Activity.DEAD:
+			continue
+		if other.owner_peer_id != owner_peer_id or not other.pack_member:
+			continue
+		if global_position.distance_squared_to(other.global_position) > radius_squared:
+			continue
+		mates += 1
+		if other.pack_leader:
+			has_leader = true
+	var bonus: float = minf(float(mates) * PACK_COURAGE_PER_MATE, PACK_COURAGE_MAX_BONUS)
+	_pack_multiplier = 1.0 + bonus - (0.0 if has_leader else PACK_LEADERLESS_PENALTY)
+
+## Host-side. A Priestess keeps her own side standing without any order.
+func _tick_heal_aura(delta: float) -> void:
+	_heal_aura_timer -= delta
+	if _heal_aura_timer > 0.0:
+		return
+	_heal_aura_timer = heal_aura_interval
+	var radius_squared: float = heal_aura_radius * heal_aura_radius
+	for other in get_tree().get_nodes_in_group("units"):
+		if not is_instance_valid(other) or other.status_activity == Activity.DEAD:
+			continue
+		if other.owner_peer_id != owner_peer_id:
+			continue
+		if other.status_current_health >= other.max_health:
+			continue
+		if global_position.distance_squared_to(other.global_position) > radius_squared:
+			continue
+		other.heal(heal_aura_amount)
+
+## Dark Elf work: poison rides in on the hit, and a Spellstealer scrubs off
+## whatever buffs its victim was enjoying. Both are host-side, both are no-ops
+## for every other unit in the game.
+func _apply_on_hit_effects(target) -> void:
+	if not _is_target_alive(target):
+		return
+	if on_hit_ability != null and target is Unit:
+		target.apply_ability_hit(on_hit_ability, self)
+	if strips_buffs and "buffs" in target and target.buffs != null:
+		target.buffs.clear()
+
+## How long one attack animation runs, which is how long a drawn shot is held
+## before it is loosed. Matches the 10 fps the "attack" clip is built at (see
+## _role_animation).
+func _attack_swing_duration() -> float:
+	return float(maxi(attack_frame_count, 1)) / 10.0
+
+## Host-side. Releases shots whose animation has played out. A target that
+## died while the shot was being drawn simply cancels it — nothing is fired
+## into a corpse, and no damage was reserved yet either.
+func _tick_pending_shots(delta: float) -> void:
+	for i in range(_pending_shots.size() - 1, -1, -1):
+		var shot: Dictionary = _pending_shots[i]
+		shot["time_remaining"] -= delta
+		if shot["time_remaining"] > 0.0:
+			continue
+		_pending_shots.remove_at(i)
+		var target = shot["target"]
+		if projectile_scene == null or not _is_target_alive(target):
+			continue
+		_fire_projectile(target)

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="ResourceType" format=3]
+
+[ext_resource type="Script" uid="uid://hwhfoh2ijaqq" path="res://scripts/resource_type.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "Meat"
+display_color = Color(0.78, 0.35, 0.32, 1)
+gather_interval = 1.4

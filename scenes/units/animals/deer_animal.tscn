@@ -1,0 +1,31 @@
+[gd_scene format=3 uid="uid://bqn1deer0anim1"]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksForestAnimals/Outline/MiniDeer2.png" id="2_sheet"]
+
+
+[node name="Deer" unique_id=1900000001 instance=ExtResource("1_unit")]
+display_name = "Deer"
+move_speed = 3.20
+sprite_sheet = ExtResource("2_sheet")
+sprite_cell_size = Vector2i(32, 32)
+idle_frame_count = 4
+walk_row = 1
+walk_frame_count = 4
+attack_row = 3
+attack_frame_count = 5
+death_row = 6
+death_frame_count = 4
+can_gather = false
+can_build = false
+population_cost = 0
+max_health = 30
+attack_damage = 0
+attack_range = 1.20
+attack_cooldown = 2.00
+aggro_range = 0.00
+vision_range = 8
+armor_class = 0
+damage_type = 0
+hunt_meat = 12
+can_fight = false

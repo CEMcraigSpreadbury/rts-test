@@ -1,0 +1,44 @@
+[gd_scene format=3 uid="uid://csw1warrior00021"]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MiniStarWanderers/MiniStarWanderers/Outline/MiniSWWarrior-Sheet.png" id="2_sheet"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
+[ext_resource type="Resource" path="res://resources/starlight_resource_type.tres" id="4_starlight"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_starlight"]
+script = ExtResource("3_cost")
+resource_type = ExtResource("4_starlight")
+amount = 8
+
+[sub_resource type="Resource" id="ResourceCost_gold"]
+script = ExtResource("3_cost")
+resource_type = ExtResource("4_gold")
+amount = 30
+
+[node name="StarWarrior" unique_id=1900000018 instance=ExtResource("1_unit")]
+display_name = "Star Warrior"
+move_speed = 2.90
+costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_starlight"), SubResource("ResourceCost_gold")])
+sprite_sheet = ExtResource("2_sheet")
+sprite_cell_size = Vector2i(32, 32)
+idle_frame_count = 4
+walk_row = 1
+walk_frame_count = 6
+attack_row = 3
+attack_frame_count = 7
+death_row = 7
+death_frame_count = 5
+can_gather = false
+can_build = false
+population_cost = 2
+max_health = 130
+attack_damage = 11
+attack_range = 1.40
+attack_cooldown = 1.50
+aggro_range = 8.00
+vision_range = 13
+armor_class = 1
+damage_type = 1
+unit_category = 0
+population_pool = 1

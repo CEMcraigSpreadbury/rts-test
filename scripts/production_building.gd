@@ -54,6 +54,17 @@ enum Role { OTHER, MILITARY, SHRINE, WALL }
 ## Center), and removed again if this building is destroyed. 0 for buildings
 ## that don't grant population room (Barracks, Stables).
 @export var population_capacity: int = 0
+## Which pool population_capacity feeds. A Pact Hall and an allied race's
+## buildings grant PACT room, which only that race's units can spend — so
+## expanding within a race is what grows your foreign army, rather than
+## building a second Pact Hall (see Pacts).
+@export var population_pool: PopulationPool.Kind = PopulationPool.Kind.MAIN
+## Units finished here appear at the rally point instead of walking to it —
+## the Star Wanderer Star Gate. Only honoured when the owner can see the
+## rally point (checked host-side in Main._on_building_item_completed).
+@export var teleports_produced_units: bool = false
+## Which Pact currency this building's SACRIFICE items pay out in.
+@export var sacrifice_resource: ResourceType = null
 ## >0 caps how many units trained HERE each player may have alive at once,
 ## counting ones still queued. Per player, not per building: whoever takes the
 ## building over starts with their own full allowance, while units the last
@@ -133,6 +144,10 @@ var linked_deposit: Gatherable = null
 @export var synced_unit_limit_reached: bool = false
 ## item_name of repeat_item (or ""), for the owner's infinity badge.
 @export var synced_repeat_item_name: String = ""
+## PactRace.race_name of the Pact this building has granted, "" until one is
+## completed. Replicated because it is what takes the other two races off this
+## hall's menu on every peer, not just the host's (see Pacts).
+@export var synced_pact_name: String = ""
 
 var queue: Array[ProducibleItem] = []
 var build_timer: float = 0.0
@@ -473,13 +488,27 @@ func enqueue(item: ProducibleItem) -> bool:
 	## Population is reserved as soon as an item enters the queue (not when it
 	## actually spawns) so a player can't queue past the cap; Unit.release()s
 	## the same amount when the resulting unit later dies.
-	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(owner_peer_id, item.get_population_cost()):
+	if item.kind == ProducibleItem.Kind.SACRIFICE and sacrifice_victim() == null:
+		return false
+	if item.kind == ProducibleItem.Kind.PACT:
+		if not synced_pact_name.is_empty() or item.pact_race == null:
+			return false
+		## A hall may only ever grant one Pact, and a race already allied with
+		## can't be taken again at a second hall. Both are checked against the
+		## queue too, or two Pacts queued in the same frame would both pass.
+		if Pacts.has_pact(owner_peer_id, item.pact_race.race_name):
+			return false
+		for queued in queue:
+			if queued.kind == ProducibleItem.Kind.PACT:
+				return false
+	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(
+			owner_peer_id, population_for(item), item.get_population_pool()):
 		return false
 	if item.kind == ProducibleItem.Kind.UNIT and is_at_unit_limit(owner_peer_id):
 		return false
 	ResourceStockpile.spend(owner_peer_id, costs)
 	if item.kind == ProducibleItem.Kind.UNIT:
-		Population.reserve(owner_peer_id, item.get_population_cost())
+		Population.reserve(owner_peer_id, population_for(item), item.get_population_pool())
 	queue.append(item)
 	_paid_costs.append(costs)
 	queue_changed.emit()
@@ -532,7 +561,7 @@ func cancel_at(index: int) -> bool:
 	for cost in paid:
 		ResourceStockpile.add(owner_peer_id, cost.resource_type, cost.amount)
 	if item.kind == ProducibleItem.Kind.UNIT:
-		Population.release(owner_peer_id, item.get_population_cost())
+		Population.release(owner_peer_id, population_for(item), item.get_population_pool())
 	queue_changed.emit()
 	return true
 
@@ -673,7 +702,7 @@ func _begin_destruction() -> void:
 	## of the match. (No refund: the building and its work are lost.)
 	for item in queue:
 		if item.kind == ProducibleItem.Kind.UNIT:
-			Population.release(owner_peer_id, item.get_population_cost())
+			Population.release(owner_peer_id, population_for(item), item.get_population_pool())
 	queue.clear()
 	_paid_costs.clear()
 	is_under_construction = false
@@ -860,3 +889,37 @@ func _restore_materials() -> void:
 			mesh_instance.position.y = info["base_y"]
 			mesh_instance.scale.y = info["base_scale_y"]
 	_original_materials.clear()
+
+
+## What one queued item costs in population: a Gnoll litter reserves room for
+## every body it will spawn, not just the first, or three gnolls arrive on one
+## gnoll's worth of pact room (see ProducibleItem.spawn_count).
+static func population_for(item: ProducibleItem) -> int:
+	return item.get_population_cost() * maxi(item.spawn_count, 1)
+
+## How far from the Altar a unit has to be to be fed to it.
+const SACRIFICE_RADIUS: float = 9.0
+
+## The unit a SACRIFICE item would consume: the owner's cheapest living unit
+## standing within SACRIFICE_RADIUS, or null if nobody is close enough. Picking
+## the cheapest keeps an idle villager on the slab rather than the Sorceress
+## who happened to walk past.
+func sacrifice_victim() -> Unit:
+	var best: Unit = null
+	var best_cost: int = 0
+	var radius_squared: float = SACRIFICE_RADIUS * SACRIFICE_RADIUS
+	for node in get_tree().get_nodes_in_group("units"):
+		var unit := node as Unit
+		if unit == null or not is_instance_valid(unit) or unit.summoned:
+			continue
+		if unit.owner_peer_id != owner_peer_id or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if global_position.distance_squared_to(unit.global_position) > radius_squared:
+			continue
+		var cost: int = 0
+		for entry in unit.costs:
+			cost += entry.amount
+		if best == null or cost < best_cost:
+			best = unit
+			best_cost = cost
+	return best

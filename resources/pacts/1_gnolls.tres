@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="PactRace" format=3]
+
+[ext_resource type="Script" path="res://scripts/pact_race.gd" id="1_pact_race_script"]
+[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
+[ext_resource type="Resource" path="res://resources/meat_resource_type.tres" id="3_currency"]
+[ext_resource type="PackedScene" uid="uid://cqa1x7pd4tn21" path="res://scenes/buildings/gnoll_den_building.tscn" id="4_b0"]
+[ext_resource type="PackedScene" uid="uid://bt7g0n5kkq2ld" path="res://scenes/buildings/gnoll_totem_building.tscn" id="4_b1"]
+
+[sub_resource type="Resource" id="BuildingType_b0"]
+script = ExtResource("2_building_type_script")
+building_name = "Gnoll Den"
+scene = ExtResource("4_b0")
+footprint_radius = 2.4
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_b1"]
+script = ExtResource("2_building_type_script")
+building_name = "Gnoll Totem"
+scene = ExtResource("4_b1")
+footprint_radius = 2.4
+construction_time = 8.0
+
+[resource]
+script = ExtResource("1_pact_race_script")
+race_name = "Gnolls"
+display_color = Color(0.72, 0.58, 0.24, 1)
+currency = ExtResource("3_currency")
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_b0"), SubResource("BuildingType_b1")])

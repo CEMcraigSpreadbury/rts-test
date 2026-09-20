@@ -5,7 +5,7 @@ extends Resource
 ## Create new ones by duplicating a .tres of this (or embedding one in a
 ## building's scene) and editing the fields in the inspector.
 
-enum Kind { UNIT, UPGRADE }
+enum Kind { UNIT, UPGRADE, PACT, SACRIFICE }
 
 @export var item_name: String = "Villager"
 ## Shown on its command-card button; left null until real icon art exists,
@@ -20,6 +20,22 @@ enum Kind { UNIT, UPGRADE }
 @export var population_cost: int = 1
 ## Used when kind == UNIT; the scene instanced into the world on completion.
 @export var unit_scene: PackedScene
+
+## Used when kind == PACT (a Pact Hall's alliance with one race): the race
+## allied with on completion. Completing any Pact takes the other races off
+## that hall's menu for good, and a race already allied with can't be taken
+## again at a second hall — both enforced in ProductionBuilding.enqueue().
+@export var pact_race: PactRace
+
+## How many units one completed item spawns. Gnolls are trained in litters:
+## one cost, one build time, three or four bodies. 1 for everything else.
+@export var spawn_count: int = 1
+
+## Used when kind == SACRIFICE (the Dark Elf Altar): one of the owner's own
+## units within SACRIFICE_RADIUS is killed and this much of the building's
+## Pact currency paid instead. The victim is chosen cheapest-first, so an
+## Altar eats villagers before it eats Sorceresses.
+@export var sacrifice_payout: int = 0
 
 ## Used when kind == UPGRADE, for a Blacksmith-style weapon/armor upgrade
 ## (see UnitUpgrades autoload). upgrade_bonus == 0 means this item doesn't
@@ -43,6 +59,16 @@ func get_costs() -> Array[ResourceCost]:
 		temp.free()
 		return result
 	return costs
+
+## Which population pool this item spends. Read off the unit itself, like its
+## cost, so a Gnoll scene is the one place its pool is set.
+func get_population_pool() -> PopulationPool.Kind:
+	if kind == Kind.UNIT and unit_scene != null:
+		var temp: Unit = unit_scene.instantiate()
+		var result: PopulationPool.Kind = temp.population_pool
+		temp.free()
+		return result
+	return PopulationPool.Kind.MAIN
 
 func get_population_cost() -> int:
 	if kind == Kind.UNIT and unit_scene != null:

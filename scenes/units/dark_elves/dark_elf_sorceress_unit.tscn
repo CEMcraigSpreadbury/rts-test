@@ -1,0 +1,47 @@
+[gd_scene format=3 uid="uid://cde5sorceress015"]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MiniDarkElves/Outline/MiniDarkElfSorceress-Sheet.png" id="2_sheet"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
+[ext_resource type="Resource" path="res://resources/souls_resource_type.tres" id="4_souls"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="PackedScene" path="res://scenes/effects/projectile_magic_ball.tscn" id="6_projectile"]
+
+[sub_resource type="Resource" id="ResourceCost_souls"]
+script = ExtResource("3_cost")
+resource_type = ExtResource("4_souls")
+amount = 12
+
+[sub_resource type="Resource" id="ResourceCost_gold"]
+script = ExtResource("3_cost")
+resource_type = ExtResource("4_gold")
+amount = 42
+
+[node name="DarkElfSorceress" unique_id=1900000016 instance=ExtResource("1_unit")]
+display_name = "Dark Elf Sorceress"
+move_speed = 2.90
+costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_souls"), SubResource("ResourceCost_gold")])
+sprite_sheet = ExtResource("2_sheet")
+sprite_cell_size = Vector2i(32, 32)
+idle_frame_count = 4
+walk_row = 1
+walk_frame_count = 6
+attack_row = 3
+attack_frame_count = 10
+death_row = 6
+death_frame_count = 5
+can_gather = false
+can_build = false
+population_cost = 2
+max_health = 45
+attack_damage = 14
+attack_range = 15.00
+attack_cooldown = 2.60
+aggro_range = 13.00
+vision_range = 14
+armor_class = 3
+damage_type = 5
+unit_category = 0
+projectile_speed = 12.00
+population_pool = 1
+projectile_scene = ExtResource("6_projectile")

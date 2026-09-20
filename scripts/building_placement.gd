@@ -408,7 +408,7 @@ func _confirm_placement() -> void:
 	if not main.hud.can_afford_locally(local_costs):
 		main.hud.flash_missing_resources(local_costs)
 		return
-	var my_building_types: Array[BuildingType] = main.my_faction().building_types
+	var my_building_types: Array[BuildingType] = main.buildable_types_for(main.my_peer_id())
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _placement_target.get_path() if _placement_target else NodePath()
 	var placed_type := placing_type
@@ -462,7 +462,7 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 	## faction's roster.
 	if not main.faction_by_peer.has(sender_id):
 		return null
-	var sender_building_types: Array[BuildingType] = main.faction_by_peer[sender_id].building_types
+	var sender_building_types: Array[BuildingType] = main.buildable_types_for(sender_id)
 	if type_index < 0 or type_index >= sender_building_types.size():
 		return null
 	var building_type: BuildingType = sender_building_types[type_index]
@@ -509,9 +509,9 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 		building.begin_construction(building_type.construction_time)
 		if building.population_capacity > 0:
 			building.construction_finished.connect(func():
-				Population.add_cap(sender_id, building.population_capacity)
+				Population.add_cap(sender_id, building.population_capacity, building.population_pool)
 				building.destroyed.connect(
-					func(): Population.add_cap(sender_id, -building.population_capacity), CONNECT_ONE_SHOT
+					func(): Population.add_cap(sender_id, -building.population_capacity, building.population_pool), CONNECT_ONE_SHOT
 				)
 			, CONNECT_ONE_SHOT)
 		if deposit:
@@ -956,7 +956,7 @@ func _confirm_wall_placement() -> void:
 		main.hud.flash_missing_resources(costs)
 		return
 
-	var my_building_types: Array[BuildingType] = main.my_faction().building_types
+	var my_building_types: Array[BuildingType] = main.buildable_types_for(main.my_peer_id())
 	var type_index: int = my_building_types.find(placing_type)
 	var positions: Array[Vector3] = []
 	var directions: Array[Vector3] = []
@@ -1000,7 +1000,7 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 		sender_id = main.my_peer_id()
 	if not main.faction_by_peer.has(sender_id):
 		return
-	var sender_building_types: Array[BuildingType] = main.faction_by_peer[sender_id].building_types
+	var sender_building_types: Array[BuildingType] = main.buildable_types_for(sender_id)
 	if type_index < 0 or type_index >= sender_building_types.size():
 		return
 	var building_type: BuildingType = sender_building_types[type_index]
@@ -1147,7 +1147,7 @@ func _confirm_gate_placement() -> void:
 		main.hud.flash_missing_resources(gate_costs)
 		return
 
-	var my_building_types: Array[BuildingType] = main.my_faction().building_types
+	var my_building_types: Array[BuildingType] = main.buildable_types_for(main.my_peer_id())
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _gate_target.get_path()
 	var gate_position := _gate_target.global_position
@@ -1174,7 +1174,7 @@ func _rpc_request_build_gate(type_index: int, target_path: NodePath, builder_pat
 		sender_id = main.my_peer_id()
 	if not main.faction_by_peer.has(sender_id):
 		return
-	var sender_building_types: Array[BuildingType] = main.faction_by_peer[sender_id].building_types
+	var sender_building_types: Array[BuildingType] = main.buildable_types_for(sender_id)
 	if type_index < 0 or type_index >= sender_building_types.size():
 		return
 	var building_type: BuildingType = sender_building_types[type_index]
