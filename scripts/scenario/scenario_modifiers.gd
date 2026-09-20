@@ -17,6 +17,10 @@ extends Resource
 ## Units and upgrades this player may train, by ProducibleItem.item_name.
 ## Empty = everything the building offers.
 @export var allowed_items: Array[String] = []
+## Research unlocks this player starts the mission already holding, by tag
+## (see the UnitUnlocks autoload) — "shields", "crossbows", "halberds",
+## "lances", "ancient_texts". Empty = none, i.e. they have to be researched as usual.
+@export var starting_unlocks: Array[StringName] = []
 ## Which monsters a Shrine may offer, by ProducibleItem.item_name. Empty = the
 ## usual roll. Read from the Scenario's own modifiers rather than a slot's: a
 ## Shrine is rolled once for the whole match, not per player.

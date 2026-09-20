@@ -480,10 +480,20 @@ func enqueue(item: ProducibleItem) -> bool:
 		return false
 	if queue.size() >= MAX_QUEUE_SIZE:
 		return false
+	## Whatever kind it is, an item gated on an unlock waits for it (see the
+	## UnitUnlocks autoload) — checked here rather than trusted to the HUD having
+	## hidden the button, same as MatchRules above.
+	if not UnitUnlocks.has(owner_peer_id, item.requires_unlock):
+		return false
 	if item.kind == ProducibleItem.Kind.UPGRADE:
 		if _purchased_upgrades.has(item) or queue.has(item):
 			return false
 		if item.requires_upgrade != null and not _purchased_upgrades.has(item.requires_upgrade):
+			return false
+		## A second Blacksmith mustn't be able to sell an unlock its owner
+		## already holds — its own _purchased_upgrades knows nothing of the
+		## first one's purchase.
+		if item.grants_unlock != &"" and UnitUnlocks.has(owner_peer_id, item.grants_unlock):
 			return false
 	## Population is reserved as soon as an item enters the queue (not when it
 	## actually spawns) so a player can't queue past the cap; Unit.release()s

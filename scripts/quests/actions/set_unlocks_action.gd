@@ -20,6 +20,12 @@ extends QuestAction
 ## one piece at a time.
 @export var unlock_hud: Array[String] = []
 @export var lock_hud: Array[String] = []
+## Research unlocks handed over outright, by tag (see the UnitUnlocks
+## autoload): "shields", "crossbows", "halberds", "lances", "ancient_texts". This is how
+## a mission opens with Crossbowmen already trainable, instead of making the
+## player buy Crossbows first. Taking one back isn't supported — use
+## lock_items to take the unit itself off the menu.
+@export var grant_unlocks: Array[StringName] = []
 
 func run(runner) -> void:
 	var peers: Array[int] = []
@@ -32,3 +38,5 @@ func run(runner) -> void:
 	for peer_id in peers:
 		runner.set_unlocks(peer_id, unlock_buildings, lock_buildings, unlock_items, lock_items,
 				research_tier_cap, unlock_hud, lock_hud)
+		for tag in grant_unlocks:
+			UnitUnlocks.grant(peer_id, tag)

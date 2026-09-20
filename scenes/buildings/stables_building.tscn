@@ -2,25 +2,36 @@
 
 [ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
-[ext_resource type="PackedScene" path="res://scenes/units/cavalry_unit.tscn" id="6_cavalry_scene"]
+[ext_resource type="PackedScene" path="res://scenes/units/horseman_unit.tscn" id="6_horseman_scene"]
+[ext_resource type="PackedScene" path="res://scenes/units/cavalier_unit.tscn" id="6_cavalier_scene"]
 [ext_resource type="AudioStream" uid="uid://bwtwoe3ethss1" path="res://assets/sfx/Facilities/Stable_1.wav" id="6_mfbxo"]
 [ext_resource type="AudioStream" uid="uid://7h4k0d2hco31" path="res://assets/sfx/Facilities/Stable_2.wav" id="7_0g1is"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/cavalry.png" id="icon_cavalry"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/horseman.png" id="icon_horseman"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/cavalier.png" id="icon_cavalier"]
 
 [sub_resource type="Resource" id="ResourceCost_stables_building"]
 script = ExtResource("8_cost_script")
 resource_type = ExtResource("9_wood")
 amount = 90
 
-[sub_resource type="Resource" id="ProducibleItem_cavalry"]
+[sub_resource type="Resource" id="ProducibleItem_horseman"]
 script = ExtResource("3_item_script")
-item_name = "Cavalry"
-icon = ExtResource("icon_cavalry")
+item_name = "Horseman"
+icon = ExtResource("icon_horseman")
 build_time = 5.0
-unit_scene = ExtResource("6_cavalry_scene")
+unit_scene = ExtResource("6_horseman_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_cavalier"]
+script = ExtResource("3_item_script")
+item_name = "Cavalier"
+icon = ExtResource("icon_cavalier")
+build_time = 8.0
+unit_scene = ExtResource("6_cavalier_scene")
+population_cost = 2
+requires_unlock = &"lances"
 
 [sub_resource type="BoxMesh" id="BoxMesh_body"]
 size = Vector3(3.5, 2, 3)
@@ -118,7 +129,7 @@ script = ExtResource("1_building_script")
 building_name = "Stables"
 role = 1
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_stables_building")])
-producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_cavalry")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_horseman"), SubResource("ProducibleItem_cavalier")])
 on_select_sound_effects = Array[AudioStream]([ExtResource("6_mfbxo"), ExtResource("7_0g1is")])
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=2085560716]

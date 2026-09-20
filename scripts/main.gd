@@ -317,6 +317,7 @@ func _ready() -> void:
 	ResourceStockpile.reset()
 	Population.reset()
 	UnitUpgrades.reset()
+	UnitUnlocks.reset()
 	## A scenario scene is an ordinary map with a Scenario node added; it
 	## installed itself in MatchRules while entering the tree, so there is no
 	## mode to switch on — this is the whole of "are we in a mission".
@@ -690,6 +691,10 @@ func _spawn_scenario_sides() -> void:
 		var purse: float = 1.0 if slot.team == scenario.player_team() else MatchRules.enemy_scale()
 		for cost in slot.starting_resources:
 			ResourceStockpile.add(peer_id, cost.resource_type, roundi(cost.amount * purse))
+		## Research unlocks a mission hands out up front, so a side can open
+		## already fielding Crossbowmen (see ScenarioModifiers.starting_unlocks).
+		for tag in MatchRules.active().modifiers_for(peer_id).starting_unlocks:
+			UnitUnlocks.grant(peer_id, tag)
 		if slot.spawn_point_index >= 0 and slot.spawn_point_index < player_spawn_points.get_child_count():
 			_spawn_player_base(peer_id, i, slot.spawn_point_index, slot)
 		## A brain for every side that isn't a person: the scenario's own AI
@@ -1417,6 +1422,8 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		## on ProducibleItem plus a matching `if` here.
 		if item.upgrade_bonus != 0:
 			UnitUpgrades.add_bonus(building.owner_peer_id, item.upgrade_category, item.upgrade_stat, item.upgrade_bonus)
+		## Opens a new unit on whichever buildings train it (see UnitUnlocks).
+		UnitUnlocks.grant(building.owner_peer_id, item.grants_unlock)
 		chat.send_line(building.owner_peer_id, "Upgrade complete: %s" % item.item_name)
 		return
 	if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:

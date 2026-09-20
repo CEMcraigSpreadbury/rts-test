@@ -1,40 +1,57 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
+[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
+[ext_resource type="PackedScene" uid="uid://8vu8jhcyc8kb" path="res://assets/art/Models/Shrine/shrine.glb" id="7_model"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="10_gold"]
 [ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
-[ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="6_bar_tex"]
-[ext_resource type="AudioStream" uid="uid://b8hfdcngfe20q" path="res://assets/sfx/Facilities/Barracks_1.wav" id="8_1ng4x"]
-[ext_resource type="PackedScene" path="res://scenes/units/archer_unit.tscn" id="8_archer_scene"]
-[ext_resource type="PackedScene" path="res://scenes/units/crossbowman_unit.tscn" id="8_crossbowman_scene"]
-[ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_jxfkj"]
-[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
-[ext_resource type="PackedScene" uid="uid://bryxvf6cwr7wb" path="res://assets/art/Models/Barracks/barracks.glb" id="11_jxfkj"]
-[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/archer.png" id="icon_archer"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/crossbowman.png" id="icon_crossbowman"]
+[ext_resource type="PackedScene" path="res://scenes/units/wizard_unit.tscn" id="20_0"]
+[ext_resource type="PackedScene" path="res://scenes/units/arch_mage_unit.tscn" id="20_1"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/wizard.png" id="icon_wizard"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/arch_mage.png" id="icon_arch_mage"]
 
-[sub_resource type="Resource" id="ResourceCost_archery_range_building"]
-script = ExtResource("10_cost_script")
-resource_type = ExtResource("11_wood")
-amount = 75
+[sub_resource type="Resource" id="ResourceCost_build_wood"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("9_wood")
+amount = 150
 
-[sub_resource type="Resource" id="ProducibleItem_archer"]
+[sub_resource type="Resource" id="ResourceCost_build_gold"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 180
+
+[sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
-item_name = "Archer"
-icon = ExtResource("icon_archer")
-build_time = 4.0
-unit_scene = ExtResource("8_archer_scene")
+item_name = "Wizard"
+icon = ExtResource("icon_wizard")
+build_time = 14.0
+unit_scene = ExtResource("20_0")
 
-[sub_resource type="Resource" id="ProducibleItem_crossbowman"]
+[sub_resource type="Resource" id="ResourceCost_ancient_texts"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 200
+
+[sub_resource type="Resource" id="ProducibleItem_ancient_texts"]
 script = ExtResource("3_item_script")
-item_name = "Crossbowman"
-icon = ExtResource("icon_crossbowman")
-build_time = 7.0
-unit_scene = ExtResource("8_crossbowman_scene")
-requires_unlock = &"crossbows"
+item_name = "Ancient Texts"
+kind = 1
+build_time = 40.0
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_ancient_texts")])
+grants_unlock = &"ancient_texts"
+
+[sub_resource type="Resource" id="ProducibleItem_1"]
+script = ExtResource("3_item_script")
+item_name = "Arch Mage"
+icon = ExtResource("icon_arch_mage")
+build_time = 22.0
+unit_scene = ExtResource("20_1")
+requires_unlock = &"ancient_texts"
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(2.7772217, 2, 3.5512695)
+size = Vector3(2.8, 2, 3.0)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
 emission_shape = 1
@@ -116,34 +133,34 @@ properties/11/replication_mode = 2
 properties/12/path = NodePath(".:synced_repeat_item_name")
 properties/12/spawn = true
 properties/12/replication_mode = 2
+properties/13/path = NodePath(".:synced_unit_limit_reached")
+properties/13/spawn = true
+properties/13/replication_mode = 2
 
-[node name="ProductionBuilding" type="StaticBody3D" unique_id=1614311513 groups=["buildings"]]
-transform = Transform3D(0.7071067, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.7071067, 0, 0, 0)
+[node name="ProductionBuilding" type="StaticBody3D" unique_id=1190000900 groups=["buildings"]]
 script = ExtResource("1_building_script")
-building_name = "Archery Range"
+building_name = "Arcane Sanctum"
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_build_wood"), SubResource("ResourceCost_build_gold")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_0"), SubResource("ProducibleItem_ancient_texts"), SubResource("ProducibleItem_1")])
 role = 1
-costs = Array[ExtResource("10_cost_script")]([SubResource("ResourceCost_archery_range_building")])
-producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_archer"), SubResource("ProducibleItem_crossbowman")])
-on_select_sound_effects = Array[AudioStream]([ExtResource("8_1ng4x"), ExtResource("9_jxfkj")])
+max_health = 600
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=838743970]
-transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, -0.012756418, 1, 0.115478486)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1190000902]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_body")
 
-[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=890556865]
+[node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=1190000903]
 avoidance_enabled = false
-transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, 0, -0.0063278675, 0)
-radius = 2.25
-height = 2.0
-vertices = PackedVector3Array(1.4664905, 0, -1.8795857, -1.4458354, 0, -1.8589313, -1.5077997, 0, 1.7969662, 1.5387819, 0, 1.848604)
+radius = 2.0
+vertices = PackedVector3Array(-1.4, 0, 1.5, 1.4, 0, 1.5, 1.4, 0, -1.5, -1.4, 0, -1.5)
 
-[node name="SpawnPoint" type="Marker3D" parent="." unique_id=1657432524]
-transform = Transform3D(0.9999999, 0, 0, 0, 1, 0, 0, 0, 0.9999999, -0.013812661, 0, 2.5210896)
-
-[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=97035508]
+[node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1190000904]
 bus = &"SFX"
 
-[node name="PlacementBurst" type="GPUParticles3D" parent="." unique_id=931608722]
+[node name="SpawnPoint" type="Node3D" parent="." unique_id=1190000905]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 3.2)
+
+[node name="PlacementBurst" type="GPUParticles3D" parent="." unique_id=1190000906]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 emitting = false
 amount = 24
@@ -154,7 +171,7 @@ randomness = 0.3
 process_material = SubResource("ParticleProcessMaterial_placement")
 draw_pass_1 = SubResource("QuadMesh_debris")
 
-[node name="ConstructionDust" type="GPUParticles3D" parent="." unique_id=1390645523]
+[node name="ConstructionDust" type="GPUParticles3D" parent="." unique_id=1190000907]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
 emitting = false
 amount = 64
@@ -163,33 +180,33 @@ preprocess = 0.5
 process_material = SubResource("ParticleProcessMaterial_construction")
 draw_pass_1 = SubResource("QuadMesh_dust")
 
-[node name="HealthBar" type="Node3D" parent="." unique_id=2140115230]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.7, 0)
+[node name="HealthBar" type="Node3D" parent="." unique_id=1190000908]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.591141, 0)
+visible = false
 
-[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=1845921125]
+[node name="Background" type="Sprite3D" parent="HealthBar" unique_id=1190000909]
 transform = Transform3D(1, 0, 0, 0, 0.125, 0, 0, 0, 1, 0, 0, 0)
 cast_shadow = 0
 modulate = Color(0.1, 0.1, 0.1, 0.85)
 pixel_size = 0.2
 billboard = 1
 texture_filter = 0
-texture = ExtResource("6_bar_tex")
+texture = ExtResource("7_bar_tex")
 no_depth_test = true
 render_priority = 20
 
-[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=1126691683]
+[node name="Fill" type="Sprite3D" parent="HealthBar" unique_id=1190000910]
 transform = Transform3D(0.9375, 0, 0, 0, 0.0875, 0, 0, 0, 1, 0, 0, 0.01)
 cast_shadow = 0
 modulate = Color(0.25, 0.9, 0.3, 1)
 pixel_size = 0.2
 billboard = 1
 texture_filter = 0
-texture = ExtResource("6_bar_tex")
+texture = ExtResource("7_bar_tex")
 no_depth_test = true
 render_priority = 21
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=872243082]
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1190000911]
 replication_config = SubResource("SceneReplicationConfig_building")
 
-[node name="barracks" parent="." unique_id=645515408 instance=ExtResource("11_jxfkj")]
-transform = Transform3D(0.9999999, 0, -5.9604645e-08, 0, 1, 0, 5.9604645e-08, 0, 0.9999999, 0, 0, 0)
+[node name="Model" parent="." unique_id=1190000912 instance=ExtResource("7_model")]

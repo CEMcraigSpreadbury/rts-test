@@ -11,6 +11,12 @@ extends RefCounted
 ## buildings in front, and nothing is dropped on the path between the Town
 ## Center and its Mines.
 
+## Buildings placed by a build-order step of their own rather than by what
+## they train (see _type_named / _military_type).
+const BLACKSMITH_NAME: String = "Blacksmith"
+const ARCANE_SANCTUM_NAME: String = "Arcane Sanctum"
+const NAMED_STEP_BUILDINGS: Array[String] = [BLACKSMITH_NAME, ARCANE_SANCTUM_NAME]
+
 ## Walking room kept around every AI building, on top of its footprint.
 const SITE_CLEARANCE: float = 1.6
 ## Extra room kept clear right around the Town Center (villagers queue up to
@@ -110,6 +116,12 @@ func _follow_build_order() -> void:
 		steps.append([archery_range, p.archery_range_at_villagers, 1])
 	if stables != null:
 		steps.append([stables, p.stables_at_villagers, 1])
+	var blacksmith: BuildingType = _type_named(BLACKSMITH_NAME)
+	if blacksmith != null:
+		steps.append([blacksmith, p.blacksmith_at_villagers, 1])
+	var sanctum: BuildingType = _type_named(ARCANE_SANCTUM_NAME)
+	if sanctum != null:
+		steps.append([sanctum, p.arcane_sanctum_at_villagers, 1])
 	steps.sort_custom(func(a, b): return a[1] < b[1])
 	for step in steps:
 		var type: BuildingType = step[0]
@@ -140,10 +152,14 @@ func _working_mines() -> int:
 ## The military building type that trains `role` (infantry -> barracks,
 ## ranged -> archery range, cavalry -> stables); of several, the one that
 ## trains the most kinds. Only the cavalry lookup may return a cavalry trainer.
+## Types with a build-order step of their own are left out, or the Arcane
+## Sanctum (whose Wizards are ranged) could be mistaken for the Archery Range.
 func _military_type(role: AiPlayer.UnitRole) -> BuildingType:
 	var best: BuildingType = null
 	var best_count := -1
 	for type in ai.types_with_role(AiPlayer.BuildingRole.MILITARY):
+		if NAMED_STEP_BUILDINGS.has(type.building_name):
+			continue
 		var roles: Array = ai.roles_trained_by_type(type)
 		if not roles.has(role):
 			continue
@@ -153,6 +169,14 @@ func _military_type(role: AiPlayer.UnitRole) -> BuildingType:
 			best_count = roles.size()
 			best = type
 	return best
+
+## One of this player's own buildable types by name, for the build-order
+## steps that can't be found by what the building trains.
+func _type_named(building_name: String) -> BuildingType:
+	for type in ai.building_roles:
+		if type.building_name == building_name:
+			return type
+	return null
 
 ## Places `type` and sends builders, if it can be paid for now. Can't pay:
 ## its cost is set aside (see AiPlayer.reserved) so cheaper things wait.

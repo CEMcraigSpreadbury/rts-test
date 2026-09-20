@@ -114,7 +114,14 @@ const RESOURCE_FLASH_INTERVAL: float = 0.15
 func setup() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	Population.changed.connect(_on_population_changed)
+	## An unlock is granted at one building and opens buttons on another, so
+	## the selected building's own item_completed never fires for it.
+	UnitUnlocks.unlocks_changed.connect(_on_unlocks_changed)
 	_populate_construction_buttons()
+
+func _on_unlocks_changed() -> void:
+	if main.selected_building != null:
+		show_building(main.selected_building)
 
 ## Ticked by Main._process.
 func update(delta: float) -> void:
@@ -325,6 +332,13 @@ func show_building(building: ProductionBuilding) -> void:
 ## whole line at once (ProductionBuilding.enqueue() already refuses both
 ## cases server-side; this just keeps the menu matching what's legal).
 func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) -> bool:
+	## Not researched yet: the Cavalier stays off the Stables until Lances is
+	## bought, and the upgrade that granted it leaves every Blacksmith's menu
+	## once it has been (ProductionBuilding.enqueue() refuses both server-side).
+	if not UnitUnlocks.has(building.owner_peer_id, item.requires_unlock):
+		return false
+	if item.grants_unlock != &"" and UnitUnlocks.has(building.owner_peer_id, item.grants_unlock):
+		return false
 	## A Pact leaves the menu once this hall has sealed one, and a race
 	## already allied with elsewhere is off the menu everywhere.
 	if item.kind == ProducibleItem.Kind.PACT:

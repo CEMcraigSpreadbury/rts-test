@@ -14,7 +14,37 @@ func _init(p_ai: AiPlayer) -> void:
 
 func think() -> void:
 	_train_monsters()
+	_research_unlocks()
 	_train()
+
+## An item this player may actually order right now — anything still waiting
+## on an upgrade elsewhere in the base (see the UnitUnlocks autoload) is skipped
+## rather than offered to enqueue_as, which would only refuse it.
+func _is_available(item: ProducibleItem) -> bool:
+	return UnitUnlocks.has(ai.peer_id, item.requires_unlock)
+
+## Buys the upgrades that open a better unit — Shields, Crossbows, Halberds,
+## Lances, Ancient Texts — as soon as one is affordable and its building is idle.
+## Plain weapon/armor upgrades are deliberately left alone: those are a
+## balance choice, while these decide whether the AI can field the unit at all.
+func _research_unlocks() -> void:
+	if not ai.profile.buys_unit_unlocks:
+		return
+	for building in ai.my_buildings:
+		## Room in the queue is enough — an Arcane Sanctum is nearly always
+		## training something, and waiting for it to fall idle would mean
+		## Ancient Texts never being bought at all. enqueue() refuses an
+		## upgrade that is already queued here, so this can't stack.
+		if building.is_under_construction or building.queue.size() >= ProductionBuilding.MAX_QUEUE_SIZE:
+			continue
+		for i in building.producibles.size():
+			var item: ProducibleItem = building.producibles[i]
+			if item.kind != ProducibleItem.Kind.UPGRADE or item.grants_unlock == &"":
+				continue
+			if UnitUnlocks.has(ai.peer_id, item.grants_unlock) or not _is_available(item):
+				continue
+			if ai.can_afford(ai.item_costs(item)) and ai.main.enqueue_as(ai.peer_id, building.get_path(), i):
+				break
 
 ## Soldiers we want before saving up for a monster rather than just buying
 ## one whenever the money happens to be there.
@@ -37,6 +67,8 @@ func _train_monsters() -> void:
 			if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
 				continue
 			if ai.unit_role_of_scene(item.unit_scene) != AiPlayer.UnitRole.MONSTER:
+				continue
+			if not _is_available(item):
 				continue
 			var strength: float = ai.unit_strength_of_scene(item.unit_scene)
 			if strength > best_strength:
@@ -106,19 +138,29 @@ func _choose_item(building: ProductionBuilding, counts: Dictionary) -> int:
 	var options: Array = []
 	var total_weight := 0.0
 	var total_count := 0
-	var seen_roles: Array = []
+	## role -> [index, strength]. One entry per role, and where a building
+	## trains two of the same role it's the stronger one — that's how a
+	## researched unlock actually reaches the field: once Crossbows is bought
+	## the Archery Range starts turning out Crossbowmen instead of Archers.
+	var best_of_role: Dictionary = {}
 	for i in building.producibles.size():
 		var item: ProducibleItem = building.producibles[i]
 		if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
 			continue
-		var role: int = ai.unit_role_of_scene(item.unit_scene)
-		if role == AiPlayer.UnitRole.WORKER or role == AiPlayer.UnitRole.MONSTER or seen_roles.has(role):
+		if not _is_available(item):
 			continue
-		seen_roles.append(role)
+		var role: int = ai.unit_role_of_scene(item.unit_scene)
+		if role == AiPlayer.UnitRole.WORKER or role == AiPlayer.UnitRole.MONSTER:
+			continue
+		var strength: float = ai.unit_strength_of_scene(item.unit_scene)
+		var held: Variant = best_of_role.get(role)
+		if held == null or strength > float(held[1]):
+			best_of_role[role] = [i, strength]
+	for role in best_of_role:
 		## A captured building's own roster (e.g. beastmen) may not map onto
 		## the weights at all; everything it trains still gets a fair share.
 		var weight: float = maxf(_weight(role), 0.1)
-		options.append([i, role, weight])
+		options.append([best_of_role[role][0], role, weight])
 		total_weight += weight
 		total_count += int(counts.get(role, 0))
 	var best := -1

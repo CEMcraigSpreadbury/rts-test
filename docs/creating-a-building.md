@@ -106,6 +106,12 @@ for `Kind: Unit` those are read from the unit scene's own `Costs`/
 `Population Cost` instead (`ProducibleItem.get_costs()`), so balancing a
 unit's price only ever needs editing in one place.
 
+To keep a unit off the menu until its owner has researched something (the
+Shieldman waits for Shields, the Cavalier for Lances, the Arch Mage
+for Ancient Texts), set **Requires Unlock** to the tag the upgrade grants — see
+`docs/creating-an-upgrade.md`. The research need not live in this building,
+or even in this kind of building.
+
 ## Variation B — upgrade building (Blacksmith-style)
 
 Add one `ProducibleItem` per upgrade tier, each with:
@@ -121,6 +127,9 @@ Add one `ProducibleItem` per upgrade tier, each with:
   category the buying player owns, present and future)
 - **Requires Upgrade** → for tier 2+, point this at the tier-1 item resource
   so it can't be bought out of order; leave null for the first tier in a line
+- **Grants Unlock** → set instead of Upgrade Bonus for an upgrade whose whole
+  effect is opening a unit somewhere else (Shields, Crossbows,
+  Halberds, Lances, Ancient Texts)
 
 Only one tier in a line is ever shown at once in the building's menu
 (`main.gd:_producible_is_visible`) and `ProductionBuilding.enqueue()` refuses

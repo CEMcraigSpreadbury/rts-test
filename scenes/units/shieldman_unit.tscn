@@ -1,37 +1,38 @@
 [gd_scene format=3]
 
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
-[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniCavalierMan.png" id="2_cavalry"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniShieldMan.png" id="2_shieldman"]
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
 
-[sub_resource type="Resource" id="ResourceCost_cavalry_wood"]
+[sub_resource type="Resource" id="ResourceCost_shieldman_wood"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 15
 
-[sub_resource type="Resource" id="ResourceCost_cavalry_gold"]
+[sub_resource type="Resource" id="ResourceCost_shieldman_gold"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("5_gold")
-amount = 15
+amount = 30
 
-[node name="Cavalry" instance=ExtResource("1_unit")]
-display_name = "Cavalry"
-costs = Array[Resource]([SubResource("ResourceCost_cavalry_wood"), SubResource("ResourceCost_cavalry_gold")])
+[node name="Shieldman" instance=ExtResource("1_unit")]
+display_name = "Shieldman"
+move_speed = 2.6
+costs = Array[Resource]([SubResource("ResourceCost_shieldman_wood"), SubResource("ResourceCost_shieldman_gold")])
 team_tint = Color(0.35, 0.6, 1, 1)
-sprite_sheet = ExtResource("2_cavalry")
-move_speed = 6.0
+sprite_sheet = ExtResource("2_shieldman")
 walk_row = 1
-death_row = 5
+walk_frame_count = 6
+attack_row = 3
+death_row = 6
 can_gather = false
 can_build = false
-max_health = 62
+max_health = 85
 attack_damage = 6
 attack_range = 1.3
 attack_cooldown = 1.6
 aggro_range = 7.0
-damage_type = 2
-unit_category = 3
-can_charge = true
-armor_class = 4
+damage_type = 5
+armor_class = 1
+unit_category = 1

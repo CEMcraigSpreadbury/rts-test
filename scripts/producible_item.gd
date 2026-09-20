@@ -49,6 +49,15 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE }
 ## one-time-purchase guard lives.
 @export var requires_upgrade: ProducibleItem = null
 
+## Used when kind == UPGRADE: finishing this hands its owner the named unlock
+## for the rest of the match (see the UnitUnlocks autoload). Empty grants none.
+@export var grants_unlock: StringName = &""
+## This item stays off the menu — and is refused by enqueue() — until its
+## owner holds this unlock. Empty means always available. Cross-building on
+## purpose: Lances is researched at a Blacksmith and opens the Cavalier at
+## every Stables, which _purchased_upgrades (per building) can't express.
+@export var requires_unlock: StringName = &""
+
 ## Peeks at unit_scene's exported defaults without adding it to the tree (so
 ## _ready() — sprite sheet building, etc. — never runs) for UNIT items;
 ## falls back to this resource's own costs for UPGRADE items, which have no unit.

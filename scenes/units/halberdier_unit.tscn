@@ -1,0 +1,40 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniHalberdMan.png" id="2_halberdier"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_halberdier_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 15
+
+[sub_resource type="Resource" id="ResourceCost_halberdier_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("5_gold")
+amount = 20
+
+[node name="Halberdier" instance=ExtResource("1_unit")]
+display_name = "Halberdier"
+costs = Array[Resource]([SubResource("ResourceCost_halberdier_wood"), SubResource("ResourceCost_halberdier_gold")])
+move_speed = 2.2
+team_tint = Color(0.35, 0.6, 1, 1)
+sprite_sheet = ExtResource("2_halberdier")
+walk_row = 1
+walk_frame_count = 6
+attack_row = 3
+death_row = 5
+death_frame_count = 5
+can_gather = false
+can_build = false
+max_health = 60
+attack_damage = 8
+attack_range = 1.5
+attack_cooldown = 1.6
+aggro_range = 7.5
+damage_type = 1
+armor_class = 2
+unit_category = 1
+can_brace = true

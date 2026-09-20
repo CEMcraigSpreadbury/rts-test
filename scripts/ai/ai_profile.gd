@@ -37,6 +37,12 @@ extends Resource
 @export var archery_range_at_villagers: int = 9
 @export var stables_at_villagers: int = 12
 @export var second_barracks_at_villagers: int = -1
+## The two tier-2 buildings, matched by name rather than by what they train:
+## a Blacksmith trains nothing at all, and an Arcane Sanctum trains ranged
+## units like the Archery Range does, so neither can be found the way
+## AiBaseBuilder._military_type finds the others.
+@export var blacksmith_at_villagers: int = 14
+@export var arcane_sanctum_at_villagers: int = 18
 
 @export_group("Military")
 ## Units kept queued at each military building at once.
@@ -46,6 +52,10 @@ extends Resource
 ## Whether a monster's cost is set aside at an owned Shrine until it can be
 ## afforded (otherwise one's only bought when the money happens to be there).
 @export var save_for_monsters: bool = true
+## Whether upgrades that unlock a better unit (Crossbows, Halberds, Lances,
+## Ancient Texts — see the UnitUnlocks autoload) are bought when affordable.
+## Plain weapon/armor upgrades are never bought either way.
+@export var buys_unit_unlocks: bool = true
 ## Fewest hostiles an area ability must catch before it's cast. 0 = never.
 @export var ability_min_targets: int = 3
 ## While the army is smaller than this many soldiers per villager, soldiers

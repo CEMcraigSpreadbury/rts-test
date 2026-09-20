@@ -106,6 +106,58 @@ upgrade_stat = 1
 upgrade_bonus = 1
 requires_upgrade = SubResource("ProducibleItem_infantry_armor_2")
 
+[sub_resource type="Resource" id="ResourceCost_lances"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 150
+
+[sub_resource type="Resource" id="ProducibleItem_lances"]
+script = ExtResource("3_item_script")
+item_name = "Lances"
+kind = 1
+build_time = 30.0
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_lances")])
+grants_unlock = &"lances"
+
+[sub_resource type="Resource" id="ResourceCost_shields"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 150
+
+[sub_resource type="Resource" id="ProducibleItem_shields"]
+script = ExtResource("3_item_script")
+item_name = "Shields"
+kind = 1
+build_time = 30.0
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_shields")])
+grants_unlock = &"shields"
+
+[sub_resource type="Resource" id="ResourceCost_crossbows"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 150
+
+[sub_resource type="Resource" id="ProducibleItem_crossbows"]
+script = ExtResource("3_item_script")
+item_name = "Crossbows"
+kind = 1
+build_time = 30.0
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_crossbows")])
+grants_unlock = &"crossbows"
+
+[sub_resource type="Resource" id="ResourceCost_halberds"]
+script = ExtResource("8_cost_script")
+resource_type = ExtResource("10_gold")
+amount = 150
+
+[sub_resource type="Resource" id="ProducibleItem_halberds"]
+script = ExtResource("3_item_script")
+item_name = "Halberds"
+kind = 1
+build_time = 30.0
+costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_halberds")])
+grants_unlock = &"halberds"
+
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(2.7111206, 2, 3.7789307)
 
@@ -195,7 +247,7 @@ transform = Transform3D(0.70710677, 0, 0.70710677, 0, 1, 0, -0.70710677, 0, 0.70
 script = ExtResource("1_building_script")
 building_name = "Blacksmith"
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_blacksmith_building")])
-producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_infantry_weapon_1"), SubResource("ProducibleItem_infantry_weapon_2"), SubResource("ProducibleItem_infantry_weapon_3"), SubResource("ProducibleItem_infantry_armor_1"), SubResource("ProducibleItem_infantry_armor_2"), SubResource("ProducibleItem_infantry_armor_3")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_infantry_weapon_1"), SubResource("ProducibleItem_infantry_weapon_2"), SubResource("ProducibleItem_infantry_weapon_3"), SubResource("ProducibleItem_infantry_armor_1"), SubResource("ProducibleItem_infantry_armor_2"), SubResource("ProducibleItem_infantry_armor_3"), SubResource("ProducibleItem_shields"), SubResource("ProducibleItem_crossbows"), SubResource("ProducibleItem_halberds"), SubResource("ProducibleItem_lances")])
 can_rally = false
 on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 

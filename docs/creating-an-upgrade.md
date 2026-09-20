@@ -41,6 +41,27 @@ ones produced later**, automatically picked up by
 No per-unit wiring needed; a unit only needs its own **Unit Category** field
 (see `docs/creating-a-unit.md`) set to match for this to apply to it.
 
+### B — Unlocking a unit somewhere else
+
+- **Grants Unlock** → a short tag (e.g. `&"lances"`). On completion,
+  `main.gd:_on_building_item_completed()` calls `UnitUnlocks.grant(owner_peer_id,
+  tag)`.
+- On the unit item that should appear, set **Requires Unlock** to the same
+  tag. That item stays off every command card its owner has until they hold
+  the tag, and `ProductionBuilding.enqueue()` refuses it server-side either
+  way.
+
+`UnitUnlocks` (`scripts/unit_unlocks.gd`) is a per-player autoload, host-authoritative
+and broadcast to every peer — unlike an upgrade's own one-time-purchase flag,
+which lives on the building that sold it. That's the whole point: Shields is
+researched at a *Blacksmith* and opens the Shieldman at every *Barracks* its
+owner has, present and future. An upgrade carrying **Grants Unlock** also
+leaves the menu of every other building that sells it once bought, so a
+second Blacksmith can't charge for the same unlock twice.
+
+**Requires Unlock** works on any item kind, not just units — an upgrade can
+gate another upgrade this way across buildings.
+
 ## 3. Tiering (optional)
 
 To make an upgrade line with multiple sequential tiers (e.g. Weapon Tier 1 →
@@ -60,7 +81,7 @@ and `main.gd:_producible_is_visible()` hides every tier from the menu except
 the next legitimately-buyable one, so a player never sees the whole line
 at once.
 
-## 4. A genuinely new upgrade *effect* (beyond A above)
+## 4. A genuinely new upgrade *effect* (beyond A and B above)
 
 If a weapon/armor bonus doesn't fit what you're adding, the extension point is `main.gd:_on_building_item_completed()`
 (the `if item.kind == ProducibleItem.Kind.UPGRADE:` branch): add a new
