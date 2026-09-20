@@ -172,6 +172,11 @@ var repeat_item: ProducibleItem = null
 ## all with zero builders — see _process().
 var construction_time: float = 0.0
 var builders: Array[Unit] = []
+## Host-only: what this site actually cost to place, so cancelling it
+## mid-construction refunds exactly that. Empty for buildings that were never
+## placed by a player (a level's starting Town Center), which is also what
+## makes those uncancellable.
+var construction_costs: Array[ResourceCost] = []
 
 ## mesh_instance -> Array of its original per-surface material overrides
 ## (null entries mean "no override", i.e. use the mesh's own material),
@@ -575,6 +580,23 @@ func cancel_at(index: int) -> bool:
 	queue_changed.emit()
 	return true
 
+## Host only. Abandons a half-built site: full refund of what it cost to
+## place, then the same destruction path a razed building takes (so the
+## deposit it claimed, its population cap and its builders all unwind the way
+## they already do). Refuses once the building is finished — a standing
+## building is demolished by being attacked, not cancelled.
+func cancel_construction() -> bool:
+	if is_destroyed or not is_under_construction:
+		return false
+	for cost in construction_costs:
+		ResourceStockpile.add(owner_peer_id, cost.resource_type, cost.amount)
+	construction_costs.clear()
+	for builder in builders.duplicate():
+		if is_instance_valid(builder):
+			builder.end_build_command()
+	_begin_destruction()
+	return true
+
 func time_remaining() -> float:
 	if queue.is_empty():
 		return 0.0
@@ -644,7 +666,8 @@ func _tick_tower_combat(delta: float) -> void:
 
 func _is_attack_target_in_range(target: Unit) -> bool:
 	return is_instance_valid(target) and target.status_activity != Unit.Activity.DEAD \
-			and global_position.distance_to(target.global_position) <= attack_range
+			and global_position.distance_to(target.global_position) <= attack_range \
+			and CombatUtils.is_visible_to(get_tree(), owner_peer_id, target.global_position)
 
 func _fire_projectile(target: Unit) -> void:
 	var dist := global_position.distance_to(target.global_position)

@@ -3600,6 +3600,13 @@ func _tick_attacking(delta: float) -> void:
 		_find_new_target_or_idle()
 		return
 
+	## Walked out of the side's sight while being shot at (only reachable for
+	## a unit shooting past its own vision_range): stop firing blind and look
+	## for something this side can actually see.
+	if not _can_see(attack_target):
+		_find_new_target_or_idle()
+		return
+
 	## Someone got between this unit and its target (pushed in, or the target
 	## stepped back behind another body): no swinging through them.
 	if _update_reach_blocked(delta):
@@ -3614,14 +3621,15 @@ func _tick_attacking(delta: float) -> void:
 		_last_swing_ms = Time.get_ticks_msec()
 		_play_attack_swing()
 		if projectile_scene != null:
-			## The shot leaves at the END of the draw/cast animation rather
+			## The shot leaves just before the draw/cast animation ends rather
 			## than the instant the swing starts, so an archer's arrow and a
-			## caster's bolt both come off the animation that throws them.
+			## caster's bolt both come off the animation that throws them
+			## (see _shot_release_delay).
 			## Damage then lands later still, when it arrives (see
 			## _tick_pending_projectiles) — the shooter keeps re-nocking on its
 			## own cooldown in the meantime rather than waiting for either.
 			_pending_shots.append({
-				"time_remaining": minf(_attack_swing_duration(), effective_cooldown),
+				"time_remaining": minf(_shot_release_delay(), effective_cooldown),
 				"target": attack_target,
 			})
 		else:
@@ -3696,6 +3704,14 @@ func _is_target_alive(target) -> bool:
 	if target is ProductionBuilding:
 		return target.can_be_attacked()
 	return false
+
+## Fog gate for target selection: a unit only fights what its own side can
+## actually see. Matters most for anything whose attack_range reaches past its
+## vision_range (every archer), which otherwise shot into the fog.
+func _can_see(target) -> bool:
+	if not is_instance_valid(target):
+		return false
+	return CombatUtils.is_visible_to(get_tree(), owner_peer_id, target.global_position)
 
 func _find_new_target_or_idle() -> void:
 	## A holding unit's own fight: switch to anything else already in reach,
@@ -3849,6 +3865,8 @@ func _nearest_in_assault_area(group: StringName) -> Node3D:
 			continue
 		if not CombatUtils.is_worth_attacking(candidate):
 			continue
+		if not _can_see(candidate):
+			continue
 		if _flat_distance(assault_center, candidate.global_position) > ASSAULT_AREA_RADIUS:
 			continue
 		var dist := _flat_distance(global_position, candidate.global_position)
@@ -3876,6 +3894,8 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 		## kill it isn't worth another shot. Skipping it here is what spreads a
 		## volley across the enemy line instead of stacking it on one dying unit.
 		if not CombatUtils.is_worth_attacking(other):
+			continue
+		if not _can_see(other):
 			continue
 		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
 			continue
@@ -4224,15 +4244,24 @@ func _apply_on_hit_effects(target) -> void:
 	if strips_buffs and "buffs" in target and target.buffs != null:
 		target.buffs.clear()
 
-## How long one attack animation runs, which is how long a drawn shot is held
-## before it is loosed. Matches the 10 fps the "attack" clip is built at (see
-## _role_animation).
+## How long one attack animation runs. Matches the 10 fps the "attack" clip is
+## built at (see _role_animation).
 func _attack_swing_duration() -> float:
 	return float(maxi(attack_frame_count, 1)) / 10.0
 
-## Host-side. Releases shots whose animation has played out. A target that
-## died while the shot was being drawn simply cancels it — nothing is fired
-## into a corpse, and no damage was reserved yet either.
+## Loosed this many animation frames before the clip ends, rather than on its
+## last frame: an arrow that only appears as the archer drops back to idle
+## reads as if it left the bow by itself. Clamped to at least one frame in, so
+## the shortest attack clips still show a draw before the release.
+const SHOT_RELEASE_LEAD_FRAMES: float = 2.0
+
+func _shot_release_delay() -> float:
+	return maxf(_attack_swing_duration() - SHOT_RELEASE_LEAD_FRAMES / 10.0, 0.1)
+
+## Host-side. Releases shots whose draw has played out. A target that died, or
+## slipped out of this side's sight, while the shot was being drawn simply
+## cancels it — nothing is fired into a corpse or into the fog, and no damage
+## was reserved yet either.
 func _tick_pending_shots(delta: float) -> void:
 	for i in range(_pending_shots.size() - 1, -1, -1):
 		var shot: Dictionary = _pending_shots[i]
@@ -4241,6 +4270,6 @@ func _tick_pending_shots(delta: float) -> void:
 			continue
 		_pending_shots.remove_at(i)
 		var target = shot["target"]
-		if projectile_scene == null or not _is_target_alive(target):
+		if projectile_scene == null or not _is_target_alive(target) or not _can_see(target):
 			continue
 		_fire_projectile(target)

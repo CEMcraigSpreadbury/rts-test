@@ -81,11 +81,79 @@ static func find_nearest_enemy_unit(tree: SceneTree, from_position: Vector3, own
 		var other: Unit = node
 		if not is_worth_attacking(other):
 			continue
+		## A tower whose attack_range reaches past what its side can see
+		## doesn't get to shoot at what's standing in the fog.
+		if not is_visible_to(tree, owner_peer_id, other.global_position):
+			continue
 		var dist := from_position.distance_to(other.global_position)
 		if dist <= nearest_dist:
 			nearest = other
 			nearest_dist = dist
 	return nearest
+
+## --- Sight ---
+##
+## Host-side "can that side actually see this spot?" — the combat counterpart
+## to FogOfWar, which is local-only and only exists on the viewing peer. Target
+## selection runs on the host for every player at once, so it can't ask a fog
+## overlay; it asks this instead, and the answer has the same shape: a position
+## is seen if any living friendly unit, or any finished friendly building, has
+## it inside its own vision_range. Without it an archer (attack_range 18,
+## vision_range 14) happily shot whatever stood in its owner's fog.
+
+## Neighbour-query radius for the unit half of the check: must cover the
+## largest Unit.vision_range in the game (20, the Ballista, as of writing),
+## since each candidate is still measured against its own.
+const VISION_QUERY_RADIUS: float = 24.0
+
+## Buildings don't move and there are few of them, so their eyes are gathered
+## as a flat list and reused for this long rather than re-walking the group on
+## every target scan. A tower finished mid-interval is blind for at most this,
+## which nothing in combat can tell apart from the scan cadence anyway.
+const BUILDING_EYE_CACHE_SECONDS: float = 0.5
+
+## [[position_x, position_z, vision_range, owner_peer_id], ...]
+static var _building_eyes: Array = []
+static var _building_eyes_time: float = -1.0
+
+## `viewer_peer_id` is the side asking (a unit's/building's owner_peer_id), not
+## necessarily the local player — this is asked on behalf of every player the
+## host simulates, AI included.
+static func is_visible_to(tree: SceneTree, viewer_peer_id: int, world_pos: Vector3) -> bool:
+	for node in UnitGrid.units_near(tree, world_pos, VISION_QUERY_RADIUS):
+		var unit: Unit = node
+		if not Teams.is_friendly(viewer_peer_id, unit.owner_peer_id):
+			continue
+		if unit.global_position.distance_to(world_pos) <= unit.vision_range:
+			return true
+	for eye in _building_vision_sources(tree):
+		if not Teams.is_friendly(viewer_peer_id, int(eye[3])):
+			continue
+		var dx: float = float(eye[0]) - world_pos.x
+		var dz: float = float(eye[1]) - world_pos.z
+		if dx * dx + dz * dz <= float(eye[2]) * float(eye[2]):
+			return true
+	return false
+
+static func _building_vision_sources(tree: SceneTree) -> Array:
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if now - _building_eyes_time < BUILDING_EYE_CACHE_SECONDS:
+		return _building_eyes
+	_building_eyes_time = now
+	_building_eyes = []
+	for node in tree.get_nodes_in_group("buildings"):
+		var building := node as ProductionBuilding
+		## Matches FogOfWar._update_vision_sources: a foundation sees nothing, so
+		## scattering unbuilt sites can't scout the map for free.
+		if building == null or building.is_destroyed or building.is_under_construction:
+			continue
+		_building_eyes.append([
+			building.global_position.x,
+			building.global_position.z,
+			building.vision_range,
+			building.owner_peer_id,
+		])
+	return _building_eyes
 
 ## --- Overkill prevention ---
 ##

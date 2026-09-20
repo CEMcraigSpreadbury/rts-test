@@ -127,7 +127,13 @@ func _on_unlocks_changed() -> void:
 func update(delta: float) -> void:
 	_update_resource_ticker(delta)
 	if main.selected_building:
-		_refresh_building_info()
+		## A building that has started sinking (razed, or a site its owner
+		## cancelled) is gone as far as commands go, so it hands the panels
+		## back immediately instead of sitting there until it frees itself.
+		if main.selected_building.is_destroyed:
+			main.select_building(null)
+		else:
+			_refresh_building_info()
 	elif not main.selected_units.is_empty():
 		## Catches every way selected_units can change (drag-select, control
 		## groups, a selected unit dying mid-fight) without needing a refresh
@@ -275,7 +281,14 @@ func show_building(building: ProductionBuilding) -> void:
 	if building.is_under_construction:
 		if not building.construction_finished.is_connected(_on_selected_building_constructed):
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
-		_fill_action_panel_grid([])
+		## Nothing can be produced here yet, so the only command a half-built
+		## site of yours offers is abandoning it for a refund.
+		var construction_buttons: Array[Control] = []
+		if main.can_command_building(building):
+			construction_buttons.append(
+				_make_command_button("X", "Cancel construction", null, main.cancel_construction.bind(building))
+			)
+		_fill_action_panel_grid(construction_buttons)
 		return
 
 	## Info panel and portrait are filled in above for any owner; the action

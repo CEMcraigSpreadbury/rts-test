@@ -507,6 +507,7 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 	if spawned is ProductionBuilding:
 		var building: ProductionBuilding = spawned
 		building.begin_construction(building_type.construction_time)
+		building.construction_costs = costs
 		if building.population_capacity > 0:
 			building.construction_finished.connect(func():
 				Population.add_cap(sender_id, building.population_capacity, building.population_pool)
@@ -1072,6 +1073,10 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 		if spawned is ProductionBuilding:
 			var building: ProductionBuilding = spawned
 			building.begin_construction(duration)
+			## The run was paid for as one merged total, so each piece refunds
+			## its own scaled share of it if cancelled on its own.
+			var piece_costs: Array[ResourceCost] = building_type.get_costs() if kind == "segment" else building_type.get_corner_costs()
+			building.construction_costs = MatchRules.active().scaled_costs(sender_id, piece_costs)
 			spawned_buildings.append(building)
 
 	_dispatch_builders_across(spawned_buildings, builder_paths, sender_id)
@@ -1205,4 +1210,5 @@ func _rpc_request_build_gate(type_index: int, target_path: NodePath, builder_pat
 	if spawned is ProductionBuilding:
 		var building: ProductionBuilding = spawned
 		building.begin_construction(building_type.construction_time)
+		building.construction_costs = costs
 		_dispatch_builders_to(building, builder_paths, sender_id, false)

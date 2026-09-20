@@ -2937,6 +2937,23 @@ func cancel_production_as(sender_id: int, building_path: NodePath, queue_index: 
 		return
 	building.cancel_at(queue_index)
 
+## Abandons a half-built site the local player owns, refunding what it cost.
+func cancel_construction(building: ProductionBuilding) -> void:
+	_rpc_cancel_construction.rpc_id(1, building.get_path())
+	play_command_sound()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_cancel_construction(building_path: NodePath) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	var building := get_node_or_null(building_path) as ProductionBuilding
+	if building == null or building.owner_peer_id != sender_id:
+		return
+	building.cancel_construction()
+
 ## --- Abilities ---
 
 ## Validation only — range isn't checked here, since an out-of-range target
