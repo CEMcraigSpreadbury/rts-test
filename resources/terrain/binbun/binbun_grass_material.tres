@@ -60,6 +60,7 @@ shader_parameter/atlas_size = 2
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_nf4t2")
 shader_parameter/color_gradient = ExtResource("2_sb365")
 shader_parameter/brightness = 1.0
+shader_parameter/noise_scale = 0.04
 shader_parameter/random_variation = 0.0
 shader_parameter/wind_texture = SubResource("NoiseTexture2D_7mycd")
 shader_parameter/wind_velocity = Vector2(0, 0)

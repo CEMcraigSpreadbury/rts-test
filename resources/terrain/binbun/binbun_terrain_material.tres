@@ -52,3 +52,4 @@ shader_parameter/ground_texture_index = 0
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_lquwl")
 shader_parameter/color_gradient = ExtResource("2_xrla4")
 shader_parameter/brightness = 1.0
+shader_parameter/noise_scale = 0.04

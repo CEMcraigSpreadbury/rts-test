@@ -14,6 +14,7 @@ uniform int ground_texture_index = 0;
 uniform sampler2D noise_texture;
 uniform sampler2D color_gradient : source_color;
 uniform float brightness : hint_range(0.0, 2.0, 0.01) = 1.0;
+uniform float noise_scale : hint_range(0.005, 0.2, 0.001) = 0.04;
 
 varying vec3 _worldVertex;
 varying vec3 _worldNormal;
@@ -66,7 +67,7 @@ void fragment() {
 	);
 
 	float weight = ground_weight(_worldVertex);
-	float noise_value = texture(noise_texture, world_pos.xz * 0.1).r;
+	float noise_value = texture(noise_texture, world_pos.xz * noise_scale).r;
 	vec4 color = texture(color_gradient, vec2(noise_value, 0.0));
 	ALBEDO = mix(ALBEDO, color.rgb * brightness, weight);
 	ROUGHNESS = mix(ROUGHNESS, 1.0, weight);

@@ -26,6 +26,7 @@ uniform sampler2D noise_texture;
 uniform sampler2D color_gradient : source_color;
 // Multiplies the palette; map lighting is far brighter than the demo scene.
 uniform float brightness : hint_range(0.0, 2.0, 0.01) = 1.0;
+uniform float noise_scale : hint_range(0.005, 0.2, 0.001) = 0.04;
 uniform float random_variation : hint_range(0.0, 1.0, 0.001) = 0.002;
 
 group_uniforms Wind;
@@ -124,7 +125,7 @@ void vertex() {
 void fragment() {
 	float shape_value = texture(shape_atlas, atlas_uv(UV, blade_index, atlas_size)).r;
 
-	float noise_value = texture(noise_texture, world_pos.xz * 0.1).r;
+	float noise_value = texture(noise_texture, world_pos.xz * noise_scale).r;
 	if (blade_random < random_variation) noise_value += 0.4;
 	ALBEDO = apply_fog(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, world_pos.xz, SPECULAR);
 
