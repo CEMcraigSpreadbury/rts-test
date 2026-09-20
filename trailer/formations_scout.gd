@@ -1,7 +1,7 @@
 extends Node
 ## Creek survey: an ASCII grid of water/walkability and top-down shots.
 
-const OUT: String = "C:/Users/craig/AppData/Local/Temp/claude/c--Users-craig-Documents-rts-test/eb5e49d5-4be1-481b-9cef-f400475e3fed/scratchpad/scout"
+const OUT: String = "C:/Users/craig/AppData/Local/Temp/claude/c--Users-craig-Documents-rts-test/32ae6fcf-3708-4121-8bf9-598249988924/scratchpad/scout"
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
