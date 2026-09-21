@@ -7,8 +7,8 @@ extends VBoxContainer
 ## Clicking (or the hotkey) arms the power; the next left-click on the ground
 ## casts it there (see Main.arm_power).
 
-const BAR_POSITION: Vector2 = Vector2(16.0, 76.0)
-const SEPARATION: int = 4
+const BAR_POSITION: Vector2 = Vector2(26.7, 126.7)
+const SEPARATION: int = 7
 
 var main: Main
 
@@ -50,7 +50,7 @@ func _rebuild() -> void:
 		var slot := _entries.size()
 		var hotkey_label: String = OS.get_keycode_string(Main.POWER_HOTKEYS[slot]) if slot < Main.POWER_HOTKEYS.size() else ""
 		var tooltip: String = "%s\n%s" % [node.node_name, node.description] if node.description != "" else node.node_name
-		var button: Button = main.hud._make_command_button(hotkey_label, tooltip, node.icon, main.arm_power.bind(index))
+		var button: Button = main.hud._make_command_button(hotkey_label, node.node_name, [], node.icon, main.arm_power.bind(index))
 		button.focus_mode = Control.FOCUS_NONE
 		button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		add_child(button)

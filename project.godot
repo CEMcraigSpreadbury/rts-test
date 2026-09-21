@@ -35,6 +35,8 @@ ui_editor/enabled=true
 
 [display]
 
+window/size/viewport_width=1920
+window/size/viewport_height=1080
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 mouse_cursor/custom_image="res://assets/art/cursor_64.png"
@@ -63,7 +65,6 @@ unit_night_lift={
 "type": "float",
 "value": 0.0
 }
-
 water_reflections={
 "type": "bool",
 "value": true

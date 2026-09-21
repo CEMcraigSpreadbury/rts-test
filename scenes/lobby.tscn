@@ -1,6 +1,9 @@
-﻿[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://scripts/lobby.gd" id="1_script"]
+
+[ext_resource type="Script" path="res://scripts/ui/ui_caps.gd" id="9_caps"]
+[ext_resource type="Script" path="res://scripts/ui/section_rule.gd" id="10_rule"]
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -9,108 +12,160 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1_script")
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.07, 0.055, 0.045, 1)
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -480.0
+offset_top = -270.0
+offset_right = 480.0
+offset_bottom = 270.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_type_variation = &"ModalPanel"
+
+[node name="Caps" type="Control" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_caps")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -100.0
-offset_right = 160.0
-offset_bottom = 100.0
+offset_left = -266.7
+offset_top = -166.7
+offset_right = 266.7
+offset_bottom = 166.7
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 23
 
-[node name="Title" type="Label" parent="VBox"]
+[node name="StatusLabel" type="Label" parent="Panel/VBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "Crowns of Aldmere - Multiplayer"
-horizontal_alignment = 1
-
-[node name="StatusLabel" type="Label" parent="VBox"]
-layout_mode = 2
+theme_type_variation = &"CaptionLabel"
+theme_override_colors/font_color = Color(0.851, 0.6745, 0.3294, 1)
 text = "Not connected."
-horizontal_alignment = 1
 
-[node name="Connect" type="VBoxContainer" parent="VBox"]
+[node name="Title" type="Label" parent="Panel/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_type_variation = &"TitleLabel"
+theme_override_font_sizes/font_size = 34
+text = "Multiplayer"
 
-[node name="SteamRow" type="HBoxContainer" parent="VBox/Connect"]
+[node name="Rule" type="Control" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
-theme_override_constants/separation = 14
+size_flags_horizontal = 3
+mouse_filter = 2
+script = ExtResource("10_rule")
 
-[node name="QuickPlayButton" type="Button" parent="VBox/Connect/SteamRow"]
+[node name="Connect" type="VBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 23
+
+[node name="SteamRow" type="HBoxContainer" parent="Panel/VBox/Connect"]
+layout_mode = 2
+theme_override_constants/separation = 23
+
+[node name="QuickPlayButton" type="Button" parent="Panel/VBox/Connect/SteamRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Quick Play"
 
-[node name="HostSteamButton" type="Button" parent="VBox/Connect/SteamRow"]
+[node name="HostSteamButton" type="Button" parent="Panel/VBox/Connect/SteamRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Host Steam Lobby"
 
-[node name="SearchingRow" type="HBoxContainer" parent="VBox/Connect"]
+[node name="SearchingRow" type="HBoxContainer" parent="Panel/VBox/Connect"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 23
 
-[node name="SearchingLabel" type="Label" parent="VBox/Connect/SearchingRow"]
+[node name="SearchingLabel" type="Label" parent="Panel/VBox/Connect/SearchingRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Searching for opponent..."
 
-[node name="CancelSearchButton" type="Button" parent="VBox/Connect/SearchingRow"]
+[node name="CancelSearchButton" type="Button" parent="Panel/VBox/Connect/SearchingRow"]
 layout_mode = 2
 text = "Cancel"
 
-[node name="DirectConnectLabel" type="Label" parent="VBox/Connect"]
+[node name="DirectConnectLabel" type="Label" parent="Panel/VBox/Connect"]
 layout_mode = 2
 text = "Direct Connect (IP)"
 
-[node name="ConnectRow" type="HBoxContainer" parent="VBox/Connect"]
+[node name="ConnectRow" type="HBoxContainer" parent="Panel/VBox/Connect"]
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 23
 
-[node name="AddressEdit" type="LineEdit" parent="VBox/Connect/ConnectRow"]
+[node name="AddressEdit" type="LineEdit" parent="Panel/VBox/Connect/ConnectRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "127.0.0.1"
 placeholder_text = "IP address"
 
-[node name="HostButton" type="Button" parent="VBox/Connect/ConnectRow"]
+[node name="HostButton" type="Button" parent="Panel/VBox/Connect/ConnectRow"]
 layout_mode = 2
 text = "Host"
 
-[node name="JoinButton" type="Button" parent="VBox/Connect/ConnectRow"]
+[node name="JoinButton" type="Button" parent="Panel/VBox/Connect/ConnectRow"]
 layout_mode = 2
 text = "Join"
 
-[node name="BackButton" type="Button" parent="VBox/Connect"]
+[node name="BackButton" type="Button" parent="Panel/VBox/Connect"]
 layout_mode = 2
 text = "Back"
 
-[node name="Room" type="VBoxContainer" parent="VBox"]
+[node name="Room" type="VBoxContainer" parent="Panel/VBox"]
 visible = false
 layout_mode = 2
-theme_override_constants/separation = 14
+theme_override_constants/separation = 23
 
-[node name="InviteButton" type="Button" parent="VBox/Room"]
+[node name="Body" type="HBoxContainer" parent="Panel/VBox/Room"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 26
+[node name="Left" type="VBoxContainer" parent="Panel/VBox/Room/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Right" type="VBoxContainer" parent="Panel/VBox/Room/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Foot" type="HBoxContainer" parent="Panel/VBox/Room"]
+layout_mode = 2
+alignment = 2
+[node name="MapOption" type="OptionButton" parent="Panel/VBox/Room/Body/Left"]
+layout_mode = 2
+[node name="PlayerList" type="VBoxContainer" parent="Panel/VBox/Room/Body/Right"]
+layout_mode = 2
+[node name="InviteButton" type="Button" parent="Panel/VBox/Room/Foot"]
 layout_mode = 2
 text = "Invite Friend"
-
-[node name="MapOption" type="OptionButton" parent="VBox/Room"]
-layout_mode = 2
-
-[node name="PlayerList" type="VBoxContainer" parent="VBox/Room"]
-layout_mode = 2
-
-[node name="StartButton" type="Button" parent="VBox/Room"]
+[node name="StartButton" type="Button" parent="Panel/VBox/Room/Foot"]
 layout_mode = 2
 text = "Start Game"
-
-[node name="DisconnectButton" type="Button" parent="VBox/Room"]
+[node name="DisconnectButton" type="Button" parent="Panel/VBox/Room/Foot"]
 layout_mode = 2
 text = "Leave"
+

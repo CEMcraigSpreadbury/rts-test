@@ -6,29 +6,25 @@ extends PanelContainer
 ## behind it, even in single player. Buying goes through Research.request_buy;
 ## the host decides, and the tree redraws once it's told (owned_changed).
 
-const COLUMN_WIDTH: float = 156.0
-const ROW_HEIGHT: float = 84.0
-const NODE_SIZE: Vector2 = Vector2(144.0, 56.0)
+const COLUMN_WIDTH: float = 260.0
+const ROW_HEIGHT: float = 140.0
+const NODE_SIZE: Vector2 = Vector2(240.0, 93.3)
 const COLUMNS: int = 4
 const TIERS: int = 4
-const TITLE_FONT_SIZE: int = 20
-const LINE_WIDTH: float = 2.0
-const LINE_OWNED_COLOR: Color = Color(0.95, 0.78, 0.35)
-const LINE_LOCKED_COLOR: Color = Color(0.45, 0.45, 0.5, 0.6)
-const UNAFFORDABLE_FONT_COLOR: Color = Color(1.0, 0.45, 0.4)
+const TITLE_FONT_SIZE: int = 33
+const LINE_WIDTH: float = 3.3
+const LINE_OWNED_COLOR: Color = UiStyle.ACCENT
+const LINE_LOCKED_COLOR: Color = Color(0.7294, 0.5608, 0.3098, 0.35)
+const UNAFFORDABLE_FONT_COLOR: Color = UiStyle.BAD
 ## An owned node keeps the gold (hover) frame with light gold text.
-const OWNED_FONT_COLOR: Color = Color(1.0, 0.88, 0.55)
-const LOCKED_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.6)
-const DETAIL_MIN_HEIGHT: float = 40.0
+const OWNED_FONT_COLOR: Color = UiStyle.ACCENT
+const LOCKED_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.55)
+const DETAIL_MIN_HEIGHT: float = 66.7
 ## Nudged up from dead centre so the bottom bar doesn't cover the last row.
-const VERTICAL_OFFSET: float = -60.0
-## Node buttons use the command card's SquareButton frames, but nine-patched
+const VERTICAL_OFFSET: float = -100.0
 ## so a wide button doesn't stretch the border. The frame is first shrunk to
 ## the command card's own 40px button size, so its border comes out the same
 ## thickness on screen as it does there.
-const FRAME_SIZE: Vector2i = Vector2i(40, 40)
-const FRAME_MARGIN: float = 10.0
-const NODE_STYLE_STATES: Array[StringName] = [&"normal", &"hover", &"pressed", &"disabled", &"focus"]
 
 var main: Main
 
@@ -37,8 +33,8 @@ var _canvas: TreeCanvas
 var _detail: Label
 ## Parallel to _ruler.nodes.
 var _buttons: Array[Button] = []
-## State name -> nine-patched SquareButton style.
 var _node_styles: Dictionary = {}
+var _owned_style: StyleBoxFlat
 
 ## Draws the requirement lines underneath the node buttons (its children).
 class TreeCanvas extends Control:
@@ -53,32 +49,49 @@ func _ready() -> void:
 	name = "ResearchPanel"
 	visible = false
 	_ruler = Research.ruler_for(main.my_peer_id())
-	for state in NODE_STYLE_STATES:
-		var source := get_theme_stylebox(state, &"SquareButton") as StyleBoxTexture
-		if source != null and source.texture != null:
-			_node_styles[state] = _nine_patch(source)
+	## Straight from the tokens. These used to be derived from the theme's
+	## SquareButton StyleBoxTexture, which no longer exists now that the theme is
+	## all StyleBoxFlat -- the lookup returned null and every node quietly fell
+	## back to the plain button look.
+	_node_styles = {
+		&"normal": UiStyle.slot_box(),
+		&"hover": UiStyle.slot_box(UiStyle.LINE_STRONG),
+		&"pressed": UiStyle.slot_box(UiStyle.ACCENT),
+		&"focus": UiStyle.slot_box(UiStyle.LINE_STRONG),
+		&"disabled": UiStyle.slot_box(Color(UiStyle.LINE, 0.22)),
+	}
+	## An owned node reads as bought: accent border, accent text.
+	_owned_style = UiStyle.slot_box(UiStyle.ACCENT)
 
 	var margin := MarginContainer.new()
 	for side in ["left", "top", "right", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 14)
 	add_child(margin)
+	add_child(UiCaps.new())
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 13)
 	margin.add_child(vbox)
 
 	var title := Label.new()
 	title.text = _ruler.ruler_name if _ruler != null else ""
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
+	title.theme_type_variation = &"TitleLabel"
+	title.add_theme_font_size_override("font_size", UiStyle.SIZE_MODAL_TITLE)
 	vbox.add_child(title)
+
+	var rule := SectionRule.new()
+	rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(rule)
 
 	_canvas = TreeCanvas.new()
 	_canvas.custom_minimum_size = Vector2(COLUMN_WIDTH * COLUMNS, ROW_HEIGHT * TIERS)
 	vbox.add_child(_canvas)
 
 	_detail = Label.new()
+	_detail.theme_type_variation = &"ProseLabel"
 	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	## Capped so a long description cannot grow the overlay while hovering.
+	_detail.max_lines_visible = 2
 	_detail.custom_minimum_size = Vector2(0.0, DETAIL_MIN_HEIGHT)
 	vbox.add_child(_detail)
 
@@ -96,16 +109,6 @@ func _ready() -> void:
 	ResourceStockpile.changed.connect(func(_resource_name: String, _amount: int):
 		if visible:
 			_refresh())
-
-func _nine_patch(source: StyleBoxTexture) -> StyleBoxTexture:
-	var image := source.texture.get_image()
-	if image.is_compressed():
-		image.decompress()
-	image.resize(FRAME_SIZE.x, FRAME_SIZE.y, Image.INTERPOLATE_LANCZOS)
-	var style := source.duplicate() as StyleBoxTexture
-	style.texture = ImageTexture.create_from_image(image)
-	style.set_texture_margin_all(FRAME_MARGIN)
-	return style
 
 func _make_node_button(index: int) -> Button:
 	var node: ResearchNode = _ruler.nodes[index]
@@ -185,7 +188,7 @@ func _refresh() -> void:
 		button.disabled = is_owned or not unlocked
 		button.modulate = Color.WHITE if is_owned or unlocked else LOCKED_MODULATE
 		if is_owned:
-			button.add_theme_stylebox_override(&"disabled", _node_styles.get(&"hover"))
+			button.add_theme_stylebox_override(&"disabled", _owned_style)
 			button.add_theme_color_override(&"font_disabled_color", OWNED_FONT_COLOR)
 		else:
 			button.add_theme_stylebox_override(&"disabled", _node_styles.get(&"disabled"))

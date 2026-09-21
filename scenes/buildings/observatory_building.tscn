@@ -105,6 +105,9 @@ properties/12/replication_mode = 2
 properties/13/path = NodePath(".:synced_unit_limit_reached")
 properties/13/spawn = true
 properties/13/replication_mode = 2
+properties/14/path = NodePath(".:synced_queue_names")
+properties/14/spawn = true
+properties/14/replication_mode = 2
 
 [node name="ProductionBuilding" type="StaticBody3D" unique_id=1180000300 groups=["buildings"]]
 script = ExtResource("1_building_script")

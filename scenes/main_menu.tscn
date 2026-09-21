@@ -1,8 +1,8 @@
-﻿[gd_scene format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/options_menu.tscn" id="2_options"]
-[ext_resource type="Texture2D" path="res://assets/ui/theme/divider.tres" id="3_divider"]
+[ext_resource type="Script" path="res://scripts/ui/section_rule.gd" id="4_rule"]
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -25,85 +25,91 @@ color = Color(0.07, 0.055, 0.045, 1)
 
 [node name="Menu" type="VBoxContainer" parent="."]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -170.0
-offset_right = 160.0
-offset_bottom = 170.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 14
-alignment = 1
+anchors_preset = 0
+offset_left = 140.0
+offset_top = 300.0
+offset_right = 840.0
+offset_bottom = 810.0
+theme_override_constants/separation = 3
+alignment = 0
 
 [node name="Title" type="Label" parent="Menu"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 48
+theme_type_variation = &"TitleLabel"
+theme_override_font_sizes/font_size = 52
 text = "Crowns of Aldmere"
-horizontal_alignment = 1
 
-[node name="TitleDivider" type="TextureRect" parent="Menu"]
-custom_minimum_size = Vector2(0, 10)
+[node name="TitleDivider" type="Control" parent="Menu"]
+custom_minimum_size = Vector2(300, 1)
 layout_mode = 2
-size_flags_horizontal = 3
+size_flags_horizontal = 0
 mouse_filter = 2
-texture = ExtResource("3_divider")
-expand_mode = 1
-stretch_mode = 5
+script = ExtResource("4_rule")
+strength = 1.0
+
+[node name="Gap" type="Control" parent="Menu"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+mouse_filter = 2
 
 [node name="SinglePlayerButton" type="Button" parent="Menu"]
-custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "Single Player"
+size_flags_horizontal = 0
+theme_type_variation = &"NavButton"
+text = "Skirmish"
+alignment = 0
 
 [node name="MultiplayerButton" type="Button" parent="Menu"]
-custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"NavButton"
 text = "Multiplayer"
+alignment = 0
 
 [node name="OptionsButton" type="Button" parent="Menu"]
-custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"NavButton"
 text = "Options"
+alignment = 0
 
 [node name="ExitButton" type="Button" parent="Menu"]
-custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
-text = "Exit"
+size_flags_horizontal = 0
+theme_type_variation = &"NavButton"
+text = "Quit"
+alignment = 0
 
-[node name="MapSelect" type="VBoxContainer" parent="."]
-visible = false
+[node name="VersionStamp" type="Label" parent="."]
 layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -52.0
+offset_right = -28.0
+offset_bottom = -22.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_type_variation = &"CaptionLabel"
+text = "v0.7.2"
+horizontal_alignment = 2
+
+[node name="MapSelect" type="PanelContainer" parent="."]
+visible = false
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -230.0
-offset_top = -80.0
-offset_right = 230.0
-offset_bottom = 80.0
+offset_left = -540.0
+offset_top = -250.0
+offset_right = 540.0
+offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 14
-alignment = 1
-
-[node name="MapOption" type="OptionButton" parent="MapSelect"]
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-
-[node name="StartButton" type="Button" parent="MapSelect"]
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-text = "Start"
-
-[node name="BackButton" type="Button" parent="MapSelect"]
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-text = "Back"
 
 [node name="OptionsMenu" parent="." instance=ExtResource("2_options")]
 visible = false

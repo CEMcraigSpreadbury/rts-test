@@ -14,32 +14,30 @@ extends Control
 ## Only created in Conquest mode (see Main._ready). Laid out by hand each
 ## frame rather than with containers, since the shake is a per-bar offset.
 
-const SLOT_TEXTURE: Texture2D = preload("res://assets/ui/HUD/elements/square_frame_dark.png")
-const SLOT_OWNED_TEXTURE: Texture2D = preload("res://assets/ui/HUD/elements/square_frame_gold_2.png")
 
-const PANEL_BG_COLOR: Color = Color(0.05, 0.05, 0.07, 0.82)
-const PANEL_BORDER_COLOR: Color = Color(0.72, 0.56, 0.28)
-const PANEL_PADDING: Vector2 = Vector2(8.0, 6.0)
-const SLOT_SIZE: float = 28.0
-const SLOT_GAP: float = 3.0
+const PANEL_BG_COLOR: Color = UiStyle.SURFACE
+const PANEL_BORDER_COLOR: Color = UiStyle.LINE
+const PANEL_PADDING: Vector2 = Vector2(13.3, 10.0)
+const SLOT_SIZE: float = 46.7
+const SLOT_GAP: float = 5.0
 ## How far the owner-colour fill sits inside the slot's frame.
-const SLOT_INSET: float = 4.5
-const SLOT_STRIP_HEIGHT: float = 3.0
-const SLOT_FONT_SIZE: int = 14
+const SLOT_INSET: float = 7.5
+const SLOT_STRIP_HEIGHT: float = 5.0
+const SLOT_FONT_SIZE: int = 23
 ## Bars share the slot row's width between them, but never shrink below this
 ## (the panel widens instead) so a score still fits inside.
-const BAR_MIN_WIDTH: float = 64.0
-const BAR_HEIGHT: float = 14.0
-const BAR_GAP: float = 4.0
-const BAR_FONT_SIZE: int = 11
-const BAR_BG_COLOR: Color = Color(0.03, 0.04, 0.08, 0.95)
-const SECTION_GAP: float = 4.0
-const TOP_MARGIN: float = 4.0
+const BAR_MIN_WIDTH: float = 106.7
+const BAR_HEIGHT: float = 23.3
+const BAR_GAP: float = 6.7
+const BAR_FONT_SIZE: int = 18
+const BAR_BG_COLOR: Color = UiStyle.SLOT
+const SECTION_GAP: float = 6.7
+const TOP_MARGIN: float = 6.7
 const NEAR_VICTORY_FRACTION: float = 0.85
 ## Shake amplitude in pixels, ramping from the first to the second as the
 ## leader goes from NEAR_VICTORY_FRACTION to the target itself.
-const SHAKE_MIN: float = 0.5
-const SHAKE_MAX: float = 2.0
+const SHAKE_MIN: float = 0.8
+const SHAKE_MAX: float = 3.3
 const NEUTRAL_FILL_COLOR: Color = Color(0.0, 0.0, 0.0, 0.0)
 const OWNER_FILL_ALPHA: float = 0.7
 const INACTIVE_DARKEN: float = 0.6
@@ -115,10 +113,8 @@ func _sync_nodes(objectives: Array, teams: Array) -> void:
 			_bars[team] = _make_bar()
 
 func _make_slot(letter: String) -> Dictionary:
-	var frame := TextureRect.new()
-	frame.texture = SLOT_TEXTURE
-	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	frame.stretch_mode = TextureRect.STRETCH_SCALE
+	var frame := Panel.new()
+	frame.add_theme_stylebox_override("panel", UiStyle.slot_box())
 	frame.size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(frame)
@@ -147,7 +143,7 @@ func _make_slot(letter: String) -> Dictionary:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.size = Vector2(SLOT_SIZE, SLOT_SIZE - 2.0)
 	label.add_theme_font_size_override("font_size", SLOT_FONT_SIZE)
-	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_constant_override("outline_size", 5)
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(label)
@@ -175,7 +171,7 @@ func _make_bar() -> Dictionary:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", BAR_FONT_SIZE)
-	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_constant_override("outline_size", 5)
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(label)
@@ -201,9 +197,12 @@ func _layout(objectives: Array, teams: Array) -> void:
 	var x: float = PANEL_PADDING.x + (content_width - slots_width) * 0.5
 	for o in objectives:
 		var slot: Dictionary = _slots[o]
-		var frame: TextureRect = slot.frame
+		var frame: Panel = slot.frame
 		frame.position = Vector2(x, PANEL_PADDING.y)
-		frame.texture = SLOT_OWNED_TEXTURE if o.owner_peer_id > 0 and me > 0 and Teams.is_friendly(me, o.owner_peer_id) else SLOT_TEXTURE
+		## Held by your side reads as brass, anything else as the plain hairline.
+		var held_by_us: bool = o.owner_peer_id > 0 and me > 0 and Teams.is_friendly(me, o.owner_peer_id)
+		frame.add_theme_stylebox_override("panel",
+				UiStyle.slot_box(UiStyle.ACCENT if held_by_us else UiStyle.LINE))
 		(slot.fill as ColorRect).color = Color(o.owner_tint(), OWNER_FILL_ALPHA) if o.owner_peer_id > 0 else NEUTRAL_FILL_COLOR
 		var moving: bool = not o.is_flag_at_rest()
 		(slot.strip_bg as ColorRect).visible = moving

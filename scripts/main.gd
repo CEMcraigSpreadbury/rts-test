@@ -53,7 +53,18 @@ const POWER_HOTKEYS: Array[Key] = [KEY_F5, KEY_F6, KEY_F7, KEY_F8, KEY_F9]
 ## a slot (shown disabled) so hotkeys stay stable regardless of ability order.
 const ABILITY_HOTKEYS: Array[Key] = [KEY_R, KEY_T, KEY_Y, KEY_U]
 const PRODUCIBLE_HOTKEYS: Array[Key] = [KEY_I, KEY_J, KEY_K, KEY_L]
-const BUILDING_HOTKEYS: Array[Key] = [KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_G, KEY_O]
+## One per building in the faction roster, in roster order, because the command
+## slots show the letter and nothing else -- a building without a hotkey would
+## render as "?" and be unidentifiable. Mnemonic where the letter is free:
+## C]entre, B]arracks, archery R]ange, H]ouse, M]ine, st[O]rehouse, s[T]ables,
+## blacksmith K], wall V], G]ate, watchtower X], siege J], arca[N]e, P]act hall.
+## W/A/S/D/Q/E are deliberately avoided -- those pan and rotate the camera, and
+## the build menu is open while the player is still moving around. The trailing
+## letters are spares for buildings added later.
+const BUILDING_HOTKEYS: Array[Key] = [
+	KEY_C, KEY_B, KEY_R, KEY_H, KEY_M, KEY_O, KEY_T, KEY_K, KEY_V, KEY_G,
+	KEY_X, KEY_J, KEY_N, KEY_P, KEY_L, KEY_U, KEY_Y, KEY_Z,
+]
 ## The unit/building roster. Only [0] is used — every player gets the same
 ## one (see _faction_for_peer).
 @export var available_factions: Array[Faction] = []
@@ -408,7 +419,6 @@ func _ready() -> void:
 	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
 	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
 	utility_buttons.get_node(^"FormationStaggeredButton").pressed.connect(_set_formation_type.bind(Formation.Type.STAGGERED))
-	_scale_bottom_bar()
 	UiDebugEditor.register_editable_root(ui_root, "main")
 
 	game_over_panel.visible = false
@@ -1100,8 +1110,7 @@ func _build_match_summary() -> void:
 	_summary_box.add_child(_scoreboard)
 
 	_time_label = Label.new()
-	_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_time_label.add_theme_color_override("font_color", Color(0.72, 0.64, 0.46))
+	_time_label.theme_type_variation = &"CaptionLabel"
 	_summary_box.add_child(_time_label)
 
 func _fill_match_summary(board: Array, winner_team: int) -> void:
@@ -1112,7 +1121,7 @@ func _fill_match_summary(board: Array, winner_team: int) -> void:
 	for row in board:
 		var swatch := ColorRect.new()
 		swatch.color = row.tint
-		swatch.custom_minimum_size = Vector2(14, 14)
+		swatch.custom_minimum_size = Vector2(18, 18)
 		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		_scoreboard.add_child(swatch)
 
@@ -1121,15 +1130,16 @@ func _fill_match_summary(board: Array, winner_team: int) -> void:
 		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		names.custom_minimum_size.x = 180
 		names.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		if row.team == my_team:
-			names.add_theme_color_override("font_color", Color.WHITE)
+		## Your own side reads at full strength, everyone else's dimmed.
+		names.add_theme_color_override("font_color",
+				UiStyle.INK if row.team == my_team else UiStyle.DIM)
 		_scoreboard.add_child(names)
 
 		if conquest_enabled:
 			var score := Label.new()
 			score.text = str(row.score)
 			score.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			score.add_theme_font_size_override("font_size", 20)
+			score.theme_type_variation = &"ValueLabel"
 			if row.team == winner_team:
 				score.add_theme_color_override("font_color", VICTORY_COLOR)
 			_scoreboard.add_child(score)
@@ -1148,7 +1158,7 @@ static func _format_duration(seconds: float) -> String:
 var _rematch_button: Button = null
 
 func _build_rematch_button() -> void:
-	_rematch_button = Button.new()
+	_rematch_button = UiButton.new()
 	_rematch_button.text = "Rematch"
 	_rematch_button.visible = false
 	_rematch_button.pressed.connect(_start_rematch)
@@ -1194,7 +1204,7 @@ func _start_next_mission(next: ScenarioInfo) -> void:
 	SceneLoader.change_scene(next.scene_path)
 
 func _build_spectate_button() -> void:
-	_spectate_button = Button.new()
+	_spectate_button = UiButton.new()
 	_spectate_button.text = "Spectate"
 	_spectate_button.visible = false
 	_spectate_button.pressed.connect(_start_spectating)
@@ -1217,9 +1227,9 @@ func _start_spectating() -> void:
 	select_resource(null)
 
 ## Result title colours: gold, blood red, and the theme's own parchment.
-const VICTORY_COLOR := Color(1.0, 0.82, 0.36)
-const DEFEAT_COLOR := Color(0.86, 0.29, 0.22)
-const DRAW_COLOR := Color(0.863, 0.769, 0.486)
+const VICTORY_COLOR := UiStyle.ACCENT
+const DEFEAT_COLOR := UiStyle.BAD
+const DRAW_COLOR := UiStyle.DIM
 
 ## Dims and blocks the battlefield behind the result panel. Follows the panel's
 ## visibility (Esc toggles it while spectating) rather than being driven
@@ -2187,19 +2197,6 @@ func _popup_kind_for_order(result: Dictionary) -> String:
 ## one that actually computes and enforces the resulting slot positions (see
 ## current_formation_type/_rpc_issue_command).
 ## Whole bottom HUD (minimap, info/action panels, chat) shrinks by this.
-const HUD_SCALE: float = 0.8
-
-## Control.scale rather than resized offsets, so every panel, nine-patch and
-## button inside keeps its authored proportions. Pivoted on the bottom-centre
-## so the bar still hugs the screen's bottom edge, re-pivoted on resize.
-func _scale_bottom_bar() -> void:
-	var bottom_bar: Control = $UI/BottomBar
-	bottom_bar.scale = Vector2.ONE * HUD_SCALE
-	var repivot := func() -> void:
-		bottom_bar.pivot_offset = Vector2(bottom_bar.size.x * 0.5, bottom_bar.size.y)
-	repivot.call()
-	bottom_bar.resized.connect(repivot)
-
 func _set_formation_type(type: Formation.Type) -> void:
 	if not MatchRules.active().hud_allowed(my_peer_id(), "formations"):
 		return

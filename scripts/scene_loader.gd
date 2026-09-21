@@ -17,9 +17,6 @@ const FADE_DURATION: float = 0.35
 ## Keeps the loading screen from flashing up for a single frame when the scene
 ## is already cached (e.g. the second time back to the lobby).
 const MIN_LOADING_TIME: float = 0.4
-const GAME_FONT: Font = preload("res://assets/fonts/MedievalSharp-Book.ttf")
-const BAR_FRAME_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_frame.png")
-const BAR_FILL_TEXTURE: Texture2D = preload("res://assets/ui/HUD/scaled/bar_fill_green.png")
 
 var is_transitioning: bool = false
 ## Bumped by every new load, so an in-flight one can tell it's been superseded.
@@ -28,7 +25,7 @@ var _generation: int = 0
 var _layer: CanvasLayer
 var _fade: ColorRect
 var _loading_root: Control
-var _progress_bar: TextureProgressBar
+var _progress_bar: ProgressBar
 var _status_label: Label
 
 ## --- Synced (multiplayer) load state ---
@@ -205,27 +202,25 @@ func _build_overlay() -> void:
 	_loading_root.visible = false
 	_loading_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_loading_root.set_anchors_preset(Control.PRESET_CENTER)
-	_loading_root.custom_minimum_size = Vector2(360, 0)
-	_loading_root.position = Vector2(-180, -30)
-	_loading_root.add_theme_constant_override("separation", 12)
+	_loading_root.custom_minimum_size = Vector2(600.0, 0.0)
+	_loading_root.position = Vector2(-300.0, -50.0)
+	_loading_root.add_theme_constant_override("separation", 20)
 	_layer.add_child(_loading_root)
 
 	_status_label = Label.new()
 	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_status_label.add_theme_font_override("font", GAME_FONT)
-	_status_label.add_theme_font_size_override("font_size", 28)
+	_status_label.add_theme_font_override("font", UiStyle.font_display())
+	_status_label.add_theme_font_size_override("font_size", UiStyle.SIZE_MODAL_TITLE)
 	_loading_root.add_child(_status_label)
 
-	_progress_bar = TextureProgressBar.new()
-	_progress_bar.custom_minimum_size = Vector2(0, 20)
+	## The last stretched bitmap in the UI. Now the same well and fill as every
+	## other bar in the game, straight from the tokens.
+	_progress_bar = ProgressBar.new()
+	_progress_bar.custom_minimum_size = Vector2(0.0, 30.0)
 	_progress_bar.max_value = 1.0
 	_progress_bar.step = 0.0
-	_progress_bar.texture_under = BAR_FRAME_TEXTURE
-	_progress_bar.texture_progress = BAR_FILL_TEXTURE
-	_progress_bar.fill_mode = TextureProgressBar.FILL_LEFT_TO_RIGHT
-	_progress_bar.nine_patch_stretch = true
-	_progress_bar.stretch_margin_left = 10
-	_progress_bar.stretch_margin_right = 10
-	_progress_bar.stretch_margin_top = 6
-	_progress_bar.stretch_margin_bottom = 6
+	_progress_bar.show_percentage = false
+	_progress_bar.add_theme_stylebox_override("background", UiStyle.slot_box())
+	_progress_bar.add_theme_stylebox_override("fill",
+			UiStyle.flat(UiStyle.ACCENT, UiStyle.ACCENT, UiStyle.RADIUS_SLOT))
 	_loading_root.add_child(_progress_bar)

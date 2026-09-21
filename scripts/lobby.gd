@@ -3,22 +3,22 @@ extends Control
 ## The screen is two panels, one at a time: Connect (how to get into a game)
 ## and Room (what to play and who is playing it). You only choose a map, a
 ## mission or an opponent once you are actually in a lobby.
-@onready var connect_panel: VBoxContainer = $VBox/Connect
-@onready var room_panel: VBoxContainer = $VBox/Room
+@onready var connect_panel: VBoxContainer = $Panel/VBox/Connect
+@onready var room_panel: VBoxContainer = $Panel/VBox/Room
 
-@onready var quick_play_button: Button = $VBox/Connect/SteamRow/QuickPlayButton
-@onready var host_steam_button: Button = $VBox/Connect/SteamRow/HostSteamButton
-@onready var searching_label: Label = $VBox/Connect/SearchingRow/SearchingLabel
-@onready var cancel_search_button: Button = $VBox/Connect/SearchingRow/CancelSearchButton
-@onready var address_edit: LineEdit = $VBox/Connect/ConnectRow/AddressEdit
-@onready var host_button: Button = $VBox/Connect/ConnectRow/HostButton
-@onready var join_button: Button = $VBox/Connect/ConnectRow/JoinButton
-@onready var status_label: Label = $VBox/StatusLabel
-@onready var invite_button: Button = $VBox/Room/InviteButton
-@onready var map_option: OptionButton = $VBox/Room/MapOption
-@onready var player_list: VBoxContainer = $VBox/Room/PlayerList
-@onready var start_button: Button = $VBox/Room/StartButton
-@onready var disconnect_button: Button = $VBox/Room/DisconnectButton
+@onready var quick_play_button: Button = $Panel/VBox/Connect/SteamRow/QuickPlayButton
+@onready var host_steam_button: Button = $Panel/VBox/Connect/SteamRow/HostSteamButton
+@onready var searching_label: Label = $Panel/VBox/Connect/SearchingRow/SearchingLabel
+@onready var cancel_search_button: Button = $Panel/VBox/Connect/SearchingRow/CancelSearchButton
+@onready var address_edit: LineEdit = $Panel/VBox/Connect/ConnectRow/AddressEdit
+@onready var host_button: Button = $Panel/VBox/Connect/ConnectRow/HostButton
+@onready var join_button: Button = $Panel/VBox/Connect/ConnectRow/JoinButton
+@onready var status_label: Label = $Panel/VBox/StatusLabel
+@onready var invite_button: Button = $Panel/VBox/Room/Foot/InviteButton
+@onready var map_option: OptionButton = $Panel/VBox/Room/Body/Left/MapOption
+@onready var player_list: VBoxContainer = $Panel/VBox/Room/Body/Right/PlayerList
+@onready var start_button: Button = $Panel/VBox/Room/Foot/StartButton
+@onready var disconnect_button: Button = $Panel/VBox/Room/Foot/DisconnectButton
 
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 
@@ -71,7 +71,7 @@ func _ready() -> void:
 	join_button.pressed.connect(_on_join_pressed)
 	start_button.pressed.connect(_on_start_pressed)
 	disconnect_button.pressed.connect(_on_disconnect_pressed)
-	$VBox/Connect/BackButton.pressed.connect(_on_back_pressed)
+	$Panel/VBox/Connect/BackButton.pressed.connect(_on_back_pressed)
 	invite_button.visible = false
 	_add_ai_button.visible = false
 	searching_label.get_parent().visible = false
@@ -267,6 +267,9 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 		var is_ai := Network.is_ai(id)
 		var name_label := Label.new()
 		name_label.text = "%s%s" % [Network.players[id].get("name", "Player %d" % id), " (you)" if id == Network.my_peer_id() else ""]
+		name_label.clip_text = true
+		## Bounded so one long player name cannot widen the lobby.
+		ModalShell.bound(name_label, 110)
 		row.add_child(name_label)
 
 		## Your own Ruler, or — for the host — an AI's.
@@ -277,15 +280,18 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 				ruler_option.ruler_picked.connect(func(i): Network.set_ai_ruler(id, i))
 			else:
 				ruler_option.ruler_picked.connect(Network.set_my_ruler)
+			ModalShell.bound(ruler_option, 104)
 			row.add_child(ruler_option)
 		else:
 			var ruler_label := Label.new()
 			ruler_label.text = Ruler.display_name_for(ruler_index)
+			ruler_label.clip_text = true
+			ModalShell.bound(ruler_label, 104)
 			row.add_child(ruler_label)
 
 		var swatch := ColorRect.new()
 		swatch.color = Network.players[id].get("color", Color.WHITE)
-		swatch.custom_minimum_size = Vector2(24, 24)
+		swatch.custom_minimum_size = Vector2(26.0, 26.0)
 		row.add_child(swatch)
 
 		## Your own colour, or — for the host — an AI's.
@@ -302,6 +308,7 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 				color_option.item_selected.connect(func(i): Network.set_ai_color(id, i))
 			else:
 				color_option.item_selected.connect(Network.set_my_color)
+			ModalShell.bound(color_option, 104)
 			row.add_child(color_option)
 
 		## Everyone else reads an AI's difficulty off its name ("AI 1 (Hard)").

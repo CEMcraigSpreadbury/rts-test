@@ -23,14 +23,12 @@
 [ext_resource type="Shader" uid="uid://bjd8hje8sk71w" path="res://shaders/cloud_shadows.gdshader" id="21_lsodw"]
 [ext_resource type="PackedScene" uid="uid://fjbl5xhrvk7l" path="res://scenes/rts_camera.tscn" id="22_80dis"]
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
-[ext_resource type="Texture2D" uid="uid://ciuuow8nb4saa" path="res://assets/ui/HUD/scaled/bar_band.png" id="24_i2k1h"]
-[ext_resource type="Texture2D" uid="uid://cj073ts2i4676" path="res://assets/ui/HUD/scaled/panel_stone.png" id="25_lrrmx"]
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="26_vqeq8"]
-[ext_resource type="Texture2D" uid="uid://dsspfeyaupfm4" path="res://assets/ui/HUD/scaled/panel_gold.png" id="27_1mebi"]
-[ext_resource type="Texture2D" uid="uid://bvgou06qtnrst" path="res://assets/ui/HUD/elements/square_frame_gold_2.png" id="28_wabaf"]
-[ext_resource type="Texture2D" uid="uid://b332nk4ryjtma" path="res://assets/ui/HUD/elements/ornate_divider_gold_a.png" id="29_dk18d"]
-[ext_resource type="Texture2D" uid="uid://bla58o01p357l" path="res://assets/ui/HUD/elements/lion_shield_badge.png" id="30_7taj2"]
-[ext_resource type="Texture2D" path="res://assets/ui/theme/divider.tres" id="31_nrmib"]
+[ext_resource type="Script" path="res://scripts/ui/stockpile_bar.gd" id="32_stockpile"]
+[ext_resource type="Script" path="res://scripts/ui/ui_panel.gd" id="33_uipanel"]
+[ext_resource type="Script" path="res://scripts/ui/section_rule.gd" id="34_rule"]
+[ext_resource type="Script" path="res://scripts/ui/ui_caps.gd" id="35_caps"]
+[ext_resource type="Script" path="res://scripts/ui/ui_button.gd" id="36_uibutton"]
 [ext_resource type="Shader" uid="uid://3jy7355quai3" path="res://shaders/ambient_dust.gdshader" id="ambient_dust_shader"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
@@ -205,74 +203,157 @@ visible = false
 mouse_filter = 2
 color = Color(0.3, 0.8, 1, 0.25)
 
-[node name="ResourceLabel" type="RichTextLabel" parent="UI" unique_id=233185810]
-offset_left = 16.0
-offset_top = 16.0
+[node name="Stockpile" type="PanelContainer" parent="UI"]
+offset_left = 24.0
+offset_top = 22.0
 offset_right = 620.0
-offset_bottom = 44.0
-theme_override_colors/default_color = Color(1, 1, 1, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
-bbcode_enabled = true
-text = "Wood: 0"
-scroll_active = false
+offset_bottom = 92.0
+size_flags_horizontal = 0
+size_flags_vertical = 0
+script = ExtResource("32_stockpile")
 
 [node name="FormationLabel" type="Label" parent="UI" unique_id=1631016066]
-offset_left = 16.0
-offset_top = 48.0
-offset_right = 300.0
-offset_bottom = 72.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
-theme_override_constants/shadow_offset_x = 1
-theme_override_constants/shadow_offset_y = 1
+visible = false
+offset_left = 24.0
+offset_top = 110.0
+offset_right = 500.0
+offset_bottom = 140.0
 text = "Formation: Box"
 
 [node name="BottomBar" type="Control" parent="UI" unique_id=1763954]
-texture_filter = 2
 layout_mode = 3
-anchor_left = 0.14
-anchor_top = 1.0
-anchor_right = 0.86
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -186.0
 grow_horizontal = 2
-grow_vertical = 0
+grow_vertical = 2
+mouse_filter = 2
 
-[node name="Band" type="NinePatchRect" parent="UI/BottomBar" unique_id=1827303254]
+[node name="InfoPanel" type="Control" parent="UI/BottomBar" unique_id=1790145163]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -248.0
+offset_right = 670.0
+offset_bottom = -24.0
+grow_vertical = 0
+script = ExtResource("33_uipanel")
+
+[node name="PortraitFrame" type="Panel" parent="UI/BottomBar/InfoPanel" unique_id=434533756]
+visible = false
+layout_mode = 0
+offset_left = 14.0
+offset_top = 14.0
+offset_right = 118.0
+offset_bottom = 118.0
+mouse_filter = 2
+
+[node name="Portrait" type="ColorRect" parent="UI/BottomBar/InfoPanel/PortraitFrame" unique_id=1144832001]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -4.0
-offset_bottom = 6.0
+offset_left = 1.0
+offset_top = 1.0
+offset_right = -1.0
+offset_bottom = -1.0
 grow_horizontal = 2
 grow_vertical = 2
-texture = ExtResource("24_i2k1h")
-patch_margin_left = 27
-patch_margin_top = 28
-patch_margin_right = 26
-patch_margin_bottom = 22
-axis_stretch_horizontal = 2
-axis_stretch_vertical = 2
+mouse_filter = 2
+color = Color(0.0706, 0.051, 0.0353, 1)
 
-[node name="MinimapFrame" type="NinePatchRect" parent="UI/BottomBar" unique_id=1354559317]
+[node name="PortraitHealthLabel" type="Label" parent="UI/BottomBar/InfoPanel" unique_id=1344886619]
+visible = false
+layout_mode = 0
+offset_left = 14.0
+offset_top = 122.0
+offset_right = 118.0
+offset_bottom = 146.0
+theme_type_variation = &"ValueLabel"
+theme_override_colors/font_color = Color(0.5608, 0.749, 0.3843, 1)
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 1
+
+[node name="Margin" type="Control" parent="UI/BottomBar/InfoPanel" unique_id=2083440396]
+clip_contents = true
+layout_mode = 0
+offset_left = 132.0
+offset_top = 14.0
+offset_right = 632.0
+offset_bottom = 88.0
+mouse_filter = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin" unique_id=763120765]
 layout_mode = 1
-anchors_preset = 9
+anchors_preset = 15
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 8.0
-offset_right = 186.0
-offset_bottom = -8.0
+grow_horizontal = 2
 grow_vertical = 2
-texture = ExtResource("25_lrrmx")
-patch_margin_left = 26
-patch_margin_top = 22
-patch_margin_right = 27
-patch_margin_bottom = 24
-axis_stretch_horizontal = 2
-axis_stretch_vertical = 2
+theme_override_constants/separation = 4
+mouse_filter = 2
+
+[node name="BuildingNameLabel" type="Label" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=554400450]
+visible = false
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "Building"
+
+[node name="TitleDivider" type="Control" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=1771542111]
+visible = false
+custom_minimum_size = Vector2(0, 1)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+script = ExtResource("34_rule")
+
+[node name="InfoContainer" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=2088732847]
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="ActionPanel" type="Control" parent="UI/BottomBar" unique_id=1264307044]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 156.0
+offset_top = -156.0
+offset_right = 656.0
+offset_bottom = -51.0
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="UI/BottomBar/ActionPanel" unique_id=1171046271]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="UI/BottomBar/ActionPanel/Margin" unique_id=1045780220]
+layout_mode = 2
+
+[node name="Grid" type="GridContainer" parent="UI/BottomBar/ActionPanel/Margin/VBox" unique_id=242851631]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/h_separation = 5
+theme_override_constants/v_separation = 5
+columns = 9
+
+[node name="MinimapFrame" type="Control" parent="UI/BottomBar" unique_id=1354559317]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -286.0
+offset_top = -286.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 0
+grow_vertical = 0
+script = ExtResource("33_uipanel")
 
 [node name="Minimap" type="Control" parent="UI/BottomBar/MinimapFrame" unique_id=860019162]
 clip_contents = true
@@ -280,9 +361,9 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = 21.0
-offset_right = -24.0
+offset_left = 13.0
+offset_top = 13.0
+offset_right = -13.0
 offset_bottom = -13.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -290,220 +371,73 @@ script = ExtResource("26_vqeq8")
 
 [node name="UtilityButtons" type="VBoxContainer" parent="UI/BottomBar" unique_id=351962982]
 layout_mode = 1
-anchors_preset = 9
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 190.0
-offset_top = 12.0
-offset_right = 222.0
-offset_bottom = -12.0
-grow_vertical = 2
-theme_override_constants/separation = 4
-alignment = 1
+offset_left = -334.0
+offset_top = -199.0
+offset_right = -294.0
+offset_bottom = -24.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 5
 
 [node name="IdleButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=605278022]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-tooltip_text = "Select all idle villagers"
+tooltip_text = "Idle Villagers"
 theme_type_variation = &"SquareButton"
 text = "I"
 
 [node name="FormationBoxButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=609675057]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-tooltip_text = "Box formation (F1)"
+tooltip_text = "Box Formation"
 theme_type_variation = &"SquareButton"
 text = "1"
 
 [node name="FormationLineButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=2084477781]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-tooltip_text = "Line formation (F2)"
+tooltip_text = "Line Formation"
 theme_type_variation = &"SquareButton"
 text = "2"
 
 [node name="FormationStaggeredButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=1775017322]
-custom_minimum_size = Vector2(32, 32)
+custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-tooltip_text = "Staggered formation (F3)"
+tooltip_text = "Staggered Formation"
 theme_type_variation = &"SquareButton"
 text = "3"
 
-[node name="InfoPanel" type="NinePatchRect" parent="UI/BottomBar" unique_id=1790145163]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 336.0
-offset_top = 8.0
-offset_right = -244.0
-offset_bottom = -8.0
-grow_horizontal = 2
-grow_vertical = 2
-texture = ExtResource("27_1mebi")
-patch_margin_left = 36
-patch_margin_top = 26
-patch_margin_right = 34
-patch_margin_bottom = 26
-axis_stretch_horizontal = 2
-axis_stretch_vertical = 2
-
-[node name="PortraitFrame" type="TextureRect" parent="UI/BottomBar/InfoPanel" unique_id=434533756]
-visible = false
-layout_mode = 1
-offset_left = -108.0
-offset_top = 8.0
-offset_right = -16.0
-offset_bottom = 100.0
-mouse_filter = 2
-texture = ExtResource("28_wabaf")
-expand_mode = 1
-
-[node name="Portrait" type="ColorRect" parent="UI/BottomBar/InfoPanel/PortraitFrame" unique_id=1144832001]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
-offset_bottom = -12.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-color = Color(0.16, 0.17, 0.2, 1)
-
-[node name="PortraitHealthLabel" type="Label" parent="UI/BottomBar/InfoPanel" unique_id=1344886619]
-visible = false
-layout_mode = 1
-offset_left = -112.0
-offset_top = 104.0
-offset_right = -12.0
-offset_bottom = 126.0
-theme_override_colors/font_color = Color(0.42, 0.85, 0.35, 1)
-theme_override_font_sizes/font_size = 15
-horizontal_alignment = 1
-
-[node name="Margin" type="MarginContainer" parent="UI/BottomBar/InfoPanel" unique_id=2083440396]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 32.0
-offset_top = 22.0
-offset_right = -30.0
-offset_bottom = -22.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="VBox" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin" unique_id=763120765]
-layout_mode = 2
-theme_override_constants/separation = 2
-
-[node name="BuildingNameLabel" type="Label" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=554400450]
-visible = false
-layout_mode = 2
-theme_override_font_sizes/font_size = 17
-text = "Building"
-
-[node name="TitleDivider" type="TextureRect" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=1771542111]
-visible = false
-custom_minimum_size = Vector2(0, 6)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-texture = ExtResource("29_dk18d")
-expand_mode = 1
-
-[node name="InfoContainer" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=2088732847]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="ActionPanel" type="NinePatchRect" parent="UI/BottomBar" unique_id=1264307044]
-layout_mode = 1
-anchors_preset = 11
-anchor_left = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = -236.0
-offset_top = 8.0
-offset_right = -8.0
-offset_bottom = -8.0
-grow_horizontal = 0
-grow_vertical = 2
-texture = ExtResource("27_1mebi")
-patch_margin_left = 36
-patch_margin_top = 26
-patch_margin_right = 34
-patch_margin_bottom = 26
-axis_stretch_horizontal = 2
-axis_stretch_vertical = 2
-
-[node name="Margin" type="MarginContainer" parent="UI/BottomBar/ActionPanel" unique_id=1171046271]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 32.0
-offset_top = 22.0
-offset_right = -30.0
-offset_bottom = -22.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="VBox" type="VBoxContainer" parent="UI/BottomBar/ActionPanel/Margin" unique_id=1045780220]
-layout_mode = 2
-theme_override_constants/separation = 2
-alignment = 1
-
-[node name="Grid" type="GridContainer" parent="UI/BottomBar/ActionPanel/Margin/VBox" unique_id=242851631]
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_constants/h_separation = 2
-theme_override_constants/v_separation = 2
-columns = 4
-
-[node name="LionBadge" type="TextureRect" parent="UI/BottomBar" unique_id=438641404]
-layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -42.0
-offset_top = -36.0
-offset_right = 42.0
-offset_bottom = 36.0
-grow_horizontal = 2
-mouse_filter = 2
-texture = ExtResource("30_7taj2")
-expand_mode = 1
-stretch_mode = 5
-
 [node name="ChatLog" type="RichTextLabel" parent="UI/BottomBar" unique_id=742747127]
-layout_mode = 0
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -555.0
-offset_top = -175.0
-offset_right = -143.0
-offset_bottom = -51.0
-grow_horizontal = 2
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -350.0
+offset_right = 584.0
+offset_bottom = -350.0
 grow_vertical = 0
 mouse_filter = 2
-theme_override_colors/default_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/normal_font_size = 15
+theme_override_colors/default_color = Color(0.9412, 0.898, 0.8196, 1)
+theme_override_font_sizes/normal_font_size = 17
 scroll_following = true
+fit_content = true
 
 [node name="ChatInput" type="LineEdit" parent="UI/BottomBar" unique_id=1666054379]
 visible = false
-layout_mode = 0
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -564.0
-offset_top = -47.0
-offset_right = -84.0
-offset_bottom = -16.0
-grow_horizontal = 2
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -342.0
+offset_right = 584.0
+offset_bottom = -304.0
 grow_vertical = 0
-placeholder_text = "Enter to send — try: cmd add wood 10"
+placeholder_text = "Enter to send"
 
 [node name="GameOverPanel" type="PanelContainer" parent="UI" unique_id=830488843]
 visible = false
@@ -512,49 +446,50 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -180.0
-offset_top = -90.0
-offset_right = 180.0
-offset_bottom = 90.0
+offset_left = -280.0
+offset_top = -95.0
+offset_right = 280.0
+offset_bottom = 95.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_type_variation = &"ModalPanel"
+
+[node name="Caps" type="Control" parent="UI/GameOverPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("35_caps")
 
 [node name="Margin" type="MarginContainer" parent="UI/GameOverPanel" unique_id=2129327244]
 layout_mode = 2
-theme_override_constants/margin_left = 28
-theme_override_constants/margin_top = 22
-theme_override_constants/margin_right = 28
-theme_override_constants/margin_bottom = 24
 
 [node name="VBox" type="VBoxContainer" parent="UI/GameOverPanel/Margin" unique_id=2129327243]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 18
 alignment = 1
 
 [node name="ResultLabel" type="Label" parent="UI/GameOverPanel/Margin/VBox" unique_id=1328889564]
 layout_mode = 2
-theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.85)
-theme_override_colors/font_outline_color = Color(0.08, 0.05, 0.02, 1)
-theme_override_constants/shadow_offset_x = 2
-theme_override_constants/shadow_offset_y = 3
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 48
+theme_type_variation = &"TitleLabel"
+theme_override_font_sizes/font_size = 34
 text = "Game Over"
-horizontal_alignment = 1
 
-[node name="TitleDivider" type="TextureRect" parent="UI/GameOverPanel/Margin/VBox" unique_id=842270089]
-custom_minimum_size = Vector2(0, 10)
+[node name="TitleDivider" type="Control" parent="UI/GameOverPanel/Margin/VBox" unique_id=842270089]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-texture = ExtResource("31_nrmib")
-expand_mode = 1
-stretch_mode = 5
+script = ExtResource("34_rule")
 
 [node name="ReturnButton" type="Button" parent="UI/GameOverPanel/Margin/VBox" unique_id=304735568]
-custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "Return to Main Menu"
+script = ExtResource("36_uibutton")
+primary = true
 
 [node name="PauseMenu" type="PanelContainer" parent="UI" unique_id=1401837800]
 visible = false
@@ -563,47 +498,62 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -160.0
-offset_top = -110.0
-offset_right = 160.0
-offset_bottom = 110.0
+offset_left = -215.0
+offset_top = -150.0
+offset_right = 215.0
+offset_bottom = 150.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_type_variation = &"ModalPanel"
+
+[node name="Caps" type="Control" parent="UI/PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("35_caps")
 
 [node name="Margin" type="MarginContainer" parent="UI/PauseMenu" unique_id=1401837801]
 layout_mode = 2
-theme_override_constants/margin_left = 12
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_right = 12
-theme_override_constants/margin_bottom = 12
 
 [node name="VBox" type="VBoxContainer" parent="UI/PauseMenu/Margin" unique_id=1401837802]
 layout_mode = 2
+theme_override_constants/separation = 8
 alignment = 1
 
 [node name="Title" type="Label" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837803]
 layout_mode = 2
-theme_override_font_sizes/font_size = 28
+theme_type_variation = &"TitleLabel"
+theme_override_font_sizes/font_size = 34
 text = "Paused"
-horizontal_alignment = 1
 
-[node name="TitleDivider" type="TextureRect" parent="UI/PauseMenu/Margin/VBox" unique_id=770555220]
-custom_minimum_size = Vector2(0, 10)
+[node name="TitleDivider" type="Control" parent="UI/PauseMenu/Margin/VBox" unique_id=770555220]
+custom_minimum_size = Vector2(0, 1)
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 2
-texture = ExtResource("31_nrmib")
-expand_mode = 1
-stretch_mode = 5
+script = ExtResource("34_rule")
+
+[node name="Spacer" type="Control" parent="UI/PauseMenu/Margin/VBox"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+mouse_filter = 2
 
 [node name="ResumeButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837816]
 layout_mode = 2
 text = "Resume"
+script = ExtResource("36_uibutton")
+primary = true
 
 [node name="OptionsButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837818]
 layout_mode = 2
 text = "Options"
+script = ExtResource("36_uibutton")
 
 [node name="LeaveButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837817]
 layout_mode = 2
 text = "Leave Match"
+script = ExtResource("36_uibutton")

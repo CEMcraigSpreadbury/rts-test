@@ -4,9 +4,20 @@ const LOBBY_SCENE_PATH: String = "res://scenes/lobby.tscn"
 
 var available_maps: Array[MapInfo] = MapInfo.list_all()
 
+## swatch, name, colour, ruler, difficulty, remove. A human row leaves the last
+## two empty rather than omitting them, so every row is the same shape and the
+## panel's width never depends on who is in it.
+const PLAYER_COLUMNS: int = 6
+const COL_NAME: int = 92
+const COL_PICKER: int = 104
+const COL_REMOVE: int = 40
+
 @onready var menu: VBoxContainer = $Menu
-@onready var map_select: VBoxContainer = $MapSelect
-@onready var map_option: OptionButton = $MapSelect/MapOption
+@onready var map_select: PanelContainer = $MapSelect
+## The map roster as a list rather than a dropdown, so the choice and the player
+## count are both readable without opening anything.
+var map_list: ItemList
+var _skirmish: ModalShell
 @onready var options_menu: OptionsMenu = $OptionsMenu
 
 ## Same row as the lobby's, but local — handed to Network only on Start.
@@ -15,7 +26,7 @@ var _settings_row: MatchSettingsRow
 ## whenever it changes. The single player screen runs on an offline peer from
 ## the moment it opens (see _on_single_player_pressed), so AI slots use the
 ## same Network.add_ai_player() etc. a lobby host does.
-var _players_box: VBoxContainer
+var _players_box: GridContainer
 var _add_ai_button: Button
 ## The campaign list and the mission list inside one, built only when there is
 ## a campaign to show.
@@ -27,23 +38,9 @@ func _ready() -> void:
 	$Menu/MultiplayerButton.pressed.connect(SceneLoader.change_scene.bind(LOBBY_SCENE_PATH))
 	$Menu/OptionsButton.pressed.connect(_on_options_pressed)
 	$Menu/ExitButton.pressed.connect(get_tree().quit)
-	$MapSelect/StartButton.pressed.connect(_on_start_pressed)
-	$MapSelect/BackButton.pressed.connect(_on_map_select_back_pressed)
-	for map in available_maps:
-		map_option.add_item(map.map_name)
-	_settings_row = MatchSettingsRow.new()
-	map_option.add_sibling(_settings_row)
-	_players_box = VBoxContainer.new()
-	_players_box.name = "Players"
-	_settings_row.add_sibling(_players_box)
-	_add_ai_button = Button.new()
-	_add_ai_button.name = "AddAiButton"
-	_add_ai_button.text = "Add AI"
-	_add_ai_button.custom_minimum_size = Vector2(0, 36)
-	_add_ai_button.pressed.connect(_on_add_ai_pressed)
-	_players_box.add_sibling(_add_ai_button)
+	_build_skirmish_panel()
 	## A new map always starts back on its own default target.
-	map_option.item_selected.connect(func(_i):
+	map_list.item_selected.connect(func(_i):
 		_show_map_default(_settings_row.get_mode())
 		_trim_ai_to_map()
 		_refresh_players())
@@ -55,6 +52,55 @@ func _ready() -> void:
 	options_menu.visible = false
 	options_menu.closed.connect(_on_options_closed)
 	UiDebugEditor.register_editable_root(self, "main_menu")
+
+## The skirmish setup screen: map and victory rule on the left, player slots on
+## the right, Back and Start in the footer -- the same shell the campaign and
+## lobby screens use.
+func _build_skirmish_panel() -> void:
+	_skirmish = ModalShell.dress(map_select, "Single Player", "Skirmish", 1080)
+
+	_skirmish.left.add_child(ModalShell.column_head("Map"))
+	map_list = ItemList.new()
+	map_list.custom_minimum_size = Vector2(0, 260)
+	map_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	for map in available_maps:
+		map_list.add_item(map.map_name)
+	if not available_maps.is_empty():
+		map_list.select(0)
+	_skirmish.left.add_child(map_list)
+	_settings_row = MatchSettingsRow.new()
+	_skirmish.left.add_child(_settings_row)
+
+	_skirmish.right.add_child(ModalShell.column_head("Players"))
+	_players_box = GridContainer.new()
+	_players_box.name = "Players"
+	_players_box.columns = PLAYER_COLUMNS
+	_players_box.add_theme_constant_override("h_separation", UiStyle.SPACE_S)
+	_players_box.add_theme_constant_override("v_separation", 5)
+	_skirmish.right.add_child(_players_box)
+	_add_ai_button = UiButton.new()
+	_add_ai_button.name = "AddAiButton"
+	_add_ai_button.text = "Add AI"
+	_add_ai_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_add_ai_button.pressed.connect(_on_add_ai_pressed)
+	_skirmish.right.add_child(_add_ai_button)
+
+	var back := UiButton.new()
+	back.text = "Back"
+	back.pressed.connect(_on_map_select_back_pressed)
+	_skirmish.footer.add_child(back)
+	var start := UiButton.new()
+	start.text = "Start"
+	start.primary = true
+	start.pressed.connect(_on_start_pressed)
+	_skirmish.footer.add_child(start)
+
+## -1 when nothing is chosen. ItemList reports a selection as an array.
+func _selected_map_index() -> int:
+	if map_list == null:
+		return -1
+	var picked: PackedInt32Array = map_list.get_selected_items()
+	return picked[0] if not picked.is_empty() else -1
 
 ## --- Campaigns ---
 
@@ -76,7 +122,11 @@ func _build_campaign_buttons() -> void:
 	var button := Button.new()
 	button.name = "CampaignButton"
 	button.text = "Campaign"
-	button.custom_minimum_size = Vector2(0, 36)
+	## Matches the nav entries authored in the scene rather than reading as a
+	## plated button dropped into the middle of them.
+	button.theme_type_variation = &"NavButton"
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.pressed.connect(_on_campaign_pressed)
 	menu.add_child(button)
 	menu.move_child(button, $Menu/SinglePlayerButton.get_index())
@@ -128,14 +178,14 @@ func _on_map_select_back_pressed() -> void:
 	menu.visible = true
 
 func _on_start_pressed() -> void:
-	if map_option.selected < 0 or not Network.can_start_match():
+	if _selected_map_index() < 0 or not Network.can_start_match():
 		return
 	Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target())
 	Network.resolve_random_rulers()
-	SceneLoader.change_scene(available_maps[map_option.selected].scene_path)
+	SceneLoader.change_scene(available_maps[_selected_map_index()].scene_path)
 
 func _show_map_default(mode: int) -> void:
-	var map: MapInfo = available_maps[map_option.selected] if map_option.selected >= 0 else null
+	var map: MapInfo = available_maps[_selected_map_index()] if _selected_map_index() >= 0 else null
 	_settings_row.show_values(mode, 0, map, true)
 
 func _on_options_pressed() -> void:
@@ -150,7 +200,7 @@ func _on_options_closed() -> void:
 ## Total players the chosen map has spawn points for (a map that doesn't say
 ## gets the transport cap).
 func _map_capacity() -> int:
-	var map: MapInfo = available_maps[map_option.selected] if map_option.selected >= 0 else null
+	var map: MapInfo = available_maps[_selected_map_index()] if _selected_map_index() >= 0 else null
 	var cap: int = map.max_players if map != null and map.max_players > 0 else Network.MAX_PLAYERS
 	return mini(cap, Network.MAX_PLAYERS)
 
@@ -171,23 +221,24 @@ func _refresh_players() -> void:
 		_players_box.remove_child(child)
 		child.queue_free()
 	if Network.players.has(1):
-		_players_box.add_child(_make_player_row(1))
+		_add_player_cells(1)
 	for id in Network.ai_peer_ids():
-		_players_box.add_child(_make_player_row(id))
+		_add_player_cells(id)
 	_add_ai_button.disabled = Network.players.size() >= _map_capacity()
 
-func _make_player_row(peer_id: int) -> HBoxContainer:
+func _add_player_cells(peer_id: int) -> void:
 	var data: Dictionary = Network.players[peer_id]
-	var row := HBoxContainer.new()
+	var row := _players_box
 
 	var swatch := ColorRect.new()
 	swatch.color = data.get("color", Color.WHITE)
-	swatch.custom_minimum_size = Vector2(24, 24)
+	swatch.custom_minimum_size = Vector2(26.0, 26.0)
 	row.add_child(swatch)
 
 	var name_label := Label.new()
 	name_label.text = "AI %d" % (Network.ai_peer_ids().find(peer_id) + 1) if Network.is_ai(peer_id) else data.get("name", "You")
-	name_label.custom_minimum_size = Vector2(60, 0)
+	name_label.clip_text = true
+	ModalShell.bound(name_label, COL_NAME)
 	row.add_child(name_label)
 
 	var color_option := OptionButton.new()
@@ -202,6 +253,7 @@ func _make_player_row(peer_id: int) -> HBoxContainer:
 		color_option.item_selected.connect(func(i): Network.set_ai_color(peer_id, i))
 	else:
 		color_option.item_selected.connect(Network.set_my_color)
+	ModalShell.bound(color_option, COL_PICKER)
 	row.add_child(color_option)
 
 	var ruler_option := RulerPicker.new(data.get("ruler_index", 0))
@@ -209,18 +261,31 @@ func _make_player_row(peer_id: int) -> HBoxContainer:
 		ruler_option.ruler_picked.connect(func(i): Network.set_ai_ruler(peer_id, i))
 	else:
 		ruler_option.ruler_picked.connect(Network.set_my_ruler)
+	ModalShell.bound(ruler_option, COL_PICKER)
 	row.add_child(ruler_option)
 
-	if Network.is_ai(peer_id):
-		var difficulty_option := OptionButton.new()
-		for difficulty_name in Network.AI_DIFFICULTY_NAMES:
-			difficulty_option.add_item(difficulty_name)
-		difficulty_option.select(data.get("difficulty", Network.AiDifficulty.NORMAL))
-		difficulty_option.item_selected.connect(func(i): Network.set_ai_difficulty(peer_id, i))
-		row.add_child(difficulty_option)
+	if not Network.is_ai(peer_id):
+		## The two AI-only columns still take their width, so the pickers above
+		## and below line up and the panel stays the same size either way.
+		row.add_child(ModalShell.spacer(COL_PICKER))
+		row.add_child(ModalShell.spacer(COL_REMOVE))
+		return
 
-		var remove_button := Button.new()
-		remove_button.text = "Remove"
-		remove_button.pressed.connect(Network.remove_ai_player.bind(peer_id))
-		row.add_child(remove_button)
-	return row
+	var difficulty_option := OptionButton.new()
+	for difficulty_name in Network.AI_DIFFICULTY_NAMES:
+		difficulty_option.add_item(difficulty_name)
+	difficulty_option.select(data.get("difficulty", Network.AiDifficulty.NORMAL))
+	difficulty_option.item_selected.connect(func(i): Network.set_ai_difficulty(peer_id, i))
+	ModalShell.bound(difficulty_option, COL_PICKER)
+	row.add_child(difficulty_option)
+
+	## A square glyph rather than the word: "Remove" in the display face needs
+	## ~155px, which would either clip to "REMO" or set the panel's width from
+	## one button's label.
+	var remove_button := Button.new()
+	remove_button.theme_type_variation = &"SquareButton"
+	remove_button.text = "×"
+	remove_button.custom_minimum_size = Vector2(COL_REMOVE, COL_REMOVE)
+	remove_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	remove_button.pressed.connect(Network.remove_ai_player.bind(peer_id))
+	row.add_child(remove_button)

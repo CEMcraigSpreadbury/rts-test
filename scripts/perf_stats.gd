@@ -98,7 +98,7 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	var panel := PanelContainer.new()
-	panel.position = Vector2(12, 60)
+	panel.position = Vector2(20.0, 100.0)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0, 0, 0, 0.6)
@@ -106,7 +106,7 @@ func _ready() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 	_label = Label.new()
-	_label.add_theme_font_size_override("font_size", 14)
+	_label.add_theme_font_size_override("font_size", 23)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(_label)
 	_refresh()

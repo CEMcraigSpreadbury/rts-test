@@ -1,5 +1,5 @@
 class_name CampaignMenu
-extends VBoxContainer
+extends PanelContainer
 ## Mission select for a campaign or the tutorial set: the list, what each
 ## mission is about, the difficulty and Ruler to play it with, and Start.
 ##
@@ -8,8 +8,8 @@ extends VBoxContainer
 
 signal closed
 
-const LOCKED_COLOR: Color = Color(0.55, 0.53, 0.48)
-const COMPLETED_COLOR: Color = Color(0.55, 0.85, 0.55)
+const LOCKED_COLOR: Color = UiStyle.DIM
+const COMPLETED_COLOR: Color = UiStyle.GOOD
 
 var _campaign: Campaign = null
 var _list: ItemList
@@ -20,38 +20,40 @@ var _ruler: RulerPicker
 var _start_button: Button
 ## Index into the campaign's missions, or -1.
 var _selected: int = -1
+var _shell: ModalShell
 
 func _init() -> void:
 	name = "CampaignMenu"
-	add_theme_constant_override("separation", 8)
+	## Same shell as Campaigns, Skirmish and the lobby.
+	_shell = ModalShell.dress(self, "Campaign", "Missions", 960)
+	var left := _shell.left
+	var right := _shell.right
 
-	var heading := Label.new()
-	heading.name = "Heading"
-	heading.add_theme_font_size_override("font_size", 24)
-	add_child(heading)
-
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	add_child(row)
-
+	left.add_child(ModalShell.column_head("Mission"))
 	_list = ItemList.new()
-	_list.custom_minimum_size = Vector2(260, 220)
+	_list.custom_minimum_size = Vector2(0, 330)
+	_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_list.item_selected.connect(_on_mission_selected)
-	row.add_child(_list)
+	left.add_child(_list)
 
-	var details := VBoxContainer.new()
-	details.custom_minimum_size = Vector2(340, 0)
-	row.add_child(details)
-	_mission_title = Label.new()
-	_mission_title.add_theme_font_size_override("font_size", 18)
-	details.add_child(_mission_title)
+	_mission_title = UiTextLine.make("", &"CaptionLabel", UiStyle.SIZE_LABEL, UiStyle.ACCENT).label
+	right.add_child(_mission_title.get_parent())
 	_mission_text = Label.new()
+	_mission_text.theme_type_variation = &"ProseLabel"
 	_mission_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_mission_text.custom_minimum_size = Vector2(340, 120)
-	details.add_child(_mission_text)
+	## Autowrap measures its height at its narrowest width, so a wrapping label
+	## needs an explicit minimum width or the column springs to maximum.
+	## Capped, not just given a minimum: a longer blurb would otherwise wrap to
+	## more lines and grow the panel, and picking a campaign must not resize the
+	## window it is being picked in.
+	_mission_text.custom_minimum_size = Vector2(420, 150)
+	_mission_text.max_lines_visible = 6
+	right.add_child(_mission_text)
 
+	right.add_child(SectionRule.new())
 	var settings := HBoxContainer.new()
-	add_child(settings)
+	settings.add_theme_constant_override("separation", UiStyle.SPACE_M)
+	right.add_child(settings)
 	_difficulty = OptionButton.new()
 	for difficulty_name in Network.AI_DIFFICULTY_NAMES:
 		_difficulty.add_item(difficulty_name)
@@ -60,21 +62,20 @@ func _init() -> void:
 	_ruler = RulerPicker.new(0)
 	settings.add_child(_ruler)
 
-	_start_button = Button.new()
-	_start_button.text = "Start mission"
-	_start_button.custom_minimum_size = Vector2(0, 36)
-	_start_button.pressed.connect(_on_start_pressed)
-	add_child(_start_button)
-
-	var back := Button.new()
+	var back := UiButton.new()
 	back.text = "Back"
 	back.pressed.connect(func(): closed.emit())
-	add_child(back)
+	_shell.footer.add_child(back)
+	_start_button = UiButton.new()
+	_start_button.text = "Begin Mission"
+	_start_button.primary = true
+	_start_button.pressed.connect(_on_start_pressed)
+	_shell.footer.add_child(_start_button)
 
 func open(campaign: Campaign) -> void:
 	_campaign = campaign
 	visible = true
-	get_node(^"Heading").text = campaign.campaign_name
+	_shell.eyebrow_label.text = campaign.campaign_name.to_upper()
 	_refresh()
 
 ## Locked missions stay on the list, greyed — seeing what is still to come is

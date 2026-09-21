@@ -27,14 +27,14 @@ const KEY_ACTION_NAMES := {
 const LABEL_WIDTH: float = 220.0
 const CONTROL_WIDTH: float = 260.0
 
-@onready var tab_buttons: HBoxContainer = $Margin/VBox/Tabs
+@onready var tab_buttons: BoxContainer = $Margin/VBox/Body/Tabs
 @onready var pages: Array[Control] = [
-	$Margin/VBox/Pages/Game,
-	$Margin/VBox/Pages/Visuals,
-	$Margin/VBox/Pages/SoundEffects,
-	$Margin/VBox/Pages/Controls,
+	$Margin/VBox/Body/Pages/Game,
+	$Margin/VBox/Body/Pages/Visuals,
+	$Margin/VBox/Body/Pages/SoundEffects,
+	$Margin/VBox/Body/Pages/Controls,
 ]
-@onready var key_list: VBoxContainer = $Margin/VBox/Pages/Controls/Scroll/KeyList
+@onready var key_list: VBoxContainer = $Margin/VBox/Body/Pages/Controls/Scroll/KeyList
 
 var _key_buttons: Dictionary = {}
 ## The action waiting for its next key press, or &"" when not rebinding.
@@ -47,12 +47,13 @@ func _ready() -> void:
 		tab.toggle_mode = true
 		tab.button_group = group
 		tab.pressed.connect(_show_page.bind(i))
-	$Margin/VBox/BackButton.pressed.connect(close)
-	$Margin/VBox/Pages/Controls/ResetButton.pressed.connect(_on_reset_keys_pressed)
+	$Margin/VBox/Foot/BackButton.pressed.connect(close)
+	$Margin/VBox/Body/Pages/Controls/ResetButton.pressed.connect(_on_reset_keys_pressed)
 
-	_build_game_page(pages[0])
-	_build_visuals_page($Margin/VBox/Pages/Visuals/List)
-	_build_sound_page(pages[2])
+	## Each page is a ScrollContainer now, so the rows go in its inner List.
+	_build_game_page($Margin/VBox/Body/Pages/Game/List)
+	_build_visuals_page($Margin/VBox/Body/Pages/Visuals/List)
+	_build_sound_page($Margin/VBox/Body/Pages/SoundEffects/List)
 	_build_controls_page()
 	Settings.changed.connect(_on_settings_changed)
 	visibility_changed.connect(_on_visibility_changed)

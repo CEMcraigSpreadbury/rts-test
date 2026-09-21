@@ -8,28 +8,36 @@ extends Control
 ## .presentation), so every player sees the same quest and nothing here is
 ## authoritative. Built by Main when the match is a scenario.
 
-const PANEL_BG: Color = Color(0.05, 0.05, 0.07, 0.82)
-const PANEL_BORDER: Color = Color(0.72, 0.56, 0.28)
-const TRACKER_WIDTH: float = 280.0
-const TRACKER_MARGIN: float = 12.0
-const DIALOGUE_WIDTH: float = 640.0
+const PANEL_BG: Color = UiStyle.SURFACE
+const PANEL_BORDER: Color = UiStyle.LINE_STRONG
+const TRACKER_WIDTH: float = 282.0
+const TRACKER_MARGIN: float = 24.0
+const DIALOGUE_WIDTH: float = 1020.0
 ## The dialogue band's distance up from the bottom of the screen. The UI is
 ## laid out in the project's stretch space (648 tall, whatever the window is),
 ## where the command bar and its frame take roughly the bottom 200.
-const DIALOGUE_BAND_TOP: float = 350.0
-const DIALOGUE_BAND_BOTTOM: float = 210.0
-const BRIEFING_WIDTH: float = 600.0
+## Above the selection panel, whose top edge is 248 up from the bottom (224
+## tall plus its 24 margin). The open centre of the HUD is exactly the space
+## this box was meant to land in -- at bottom 104 it sat on top of the
+## command grid instead.
+## The band must be TALLER than the box it centres, or the box overflows it at
+## both ends and reaches the command panel anyway -- a CenterContainer does
+## not clip. 220 clears the box (about 200 with its portrait) and the bottom
+## sits 268 up, leaving the selection panel at 248 a clear margin.
+const DIALOGUE_BAND_TOP: float = 488.0
+const DIALOGUE_BAND_BOTTOM: float = 268.0
+const BRIEFING_WIDTH: float = 720.0
 ## How long a finished objective stays on the tracker before dropping off.
 const COMPLETED_LINGER: float = 6.0
-const ACTIVE_COLOR: Color = Color(0.94, 0.92, 0.86)
-const COMPLETE_COLOR: Color = Color(0.55, 0.85, 0.55)
-const FAILED_COLOR: Color = Color(0.9, 0.45, 0.4)
-const OPTIONAL_COLOR: Color = Color(0.78, 0.74, 0.62)
-const HIGHLIGHT_COLOR: Color = Color(1.0, 0.85, 0.4)
+const ACTIVE_COLOR: Color = UiStyle.INK
+const COMPLETE_COLOR: Color = UiStyle.GOOD
+const FAILED_COLOR: Color = UiStyle.BAD
+const OPTIONAL_COLOR: Color = UiStyle.DIM
+const HIGHLIGHT_COLOR: Color = UiStyle.ACCENT
 ## How far a highlight's outline sits outside what it is pointing at.
-const HIGHLIGHT_PADDING: float = 4.0
+const HIGHLIGHT_PADDING: float = 6.7
 ## The crop itself (how much of the figure) is UnitPortrait.HEAD_FRACTION.
-const PORTRAIT_SIZE: float = 72.0
+const PORTRAIT_SIZE: float = 96.0
 
 ## The last line has been read and no briefing is up — the screen is the
 ## player's again. Main holds the end-of-match panel back until this.
@@ -88,14 +96,18 @@ func _ready() -> void:
 	if main.scenario != null and main.scenario.briefing_text.strip_edges() != "":
 		_show_briefing(main.scenario.briefing_title, main.scenario.briefing_text)
 
+## The same brass panel every other module uses, with the inset the quest
+## panels want. Corner caps are added per panel by _add_caps().
 func _panel_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL_BG
-	style.border_color = PANEL_BORDER
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(4)
-	style.set_content_margin_all(10)
+	var style := UiStyle.panel_box()
+	style.content_margin_left = UiStyle.SPACE_L
+	style.content_margin_right = UiStyle.SPACE_L
+	style.content_margin_top = UiStyle.SPACE_M
+	style.content_margin_bottom = UiStyle.SPACE_M
 	return style
+
+func _add_caps(panel: Control) -> void:
+	panel.add_child(UiCaps.new())
 
 ## --- Tracker ---
 
@@ -103,7 +115,7 @@ func _build_tracker() -> void:
 	_tracker_panel = PanelContainer.new()
 	_tracker_panel.add_theme_stylebox_override("panel", _panel_style())
 	_tracker_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tracker_panel.custom_minimum_size = Vector2(TRACKER_WIDTH, 0)
+	_tracker_panel.custom_minimum_size = Vector2(TRACKER_WIDTH, 0.0)
 	add_child(_tracker_panel)
 	## Pinned to the top-right corner by hand rather than through a preset:
 	## PRESET_MODE_MINSIZE measures the panel before it has any content and
@@ -118,7 +130,9 @@ func _build_tracker() -> void:
 	_tracker_panel.offset_right = -TRACKER_MARGIN
 	_tracker_panel.offset_top = TRACKER_MARGIN
 	_tracker_panel.offset_bottom = TRACKER_MARGIN
+	_add_caps(_tracker_panel)
 	_tracker_box = VBoxContainer.new()
+	_tracker_box.add_theme_constant_override("separation", 7)
 	_tracker_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tracker_panel.add_child(_tracker_box)
 
@@ -144,7 +158,7 @@ func _refresh_tracker() -> void:
 func _make_tracker_line(step: QuestStep, state: int, pairs: PackedInt32Array) -> Label:
 	var label := Label.new()
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(TRACKER_WIDTH - 24.0, 0)
+	label.custom_minimum_size = Vector2(TRACKER_WIDTH - 40.0, 0.0)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mark := "-"
 	var color := ACTIVE_COLOR if not step.optional else OPTIONAL_COLOR
@@ -187,30 +201,39 @@ func _build_dialogue() -> void:
 	## Stops clicks rather than ignoring them: the Continue button has to be
 	## clickable, and a click on the box must not also order units about.
 	_dialogue_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_dialogue_panel.custom_minimum_size = Vector2(DIALOGUE_WIDTH, 0)
+	_dialogue_panel.custom_minimum_size = Vector2(DIALOGUE_WIDTH, 0.0)
 	band.add_child(_dialogue_panel)
+	_add_caps(_dialogue_panel)
 
 	## The portrait and words sit in a row; the button goes under the whole box
 	## rather than inside that row, or it centres on the words alone and reads
 	## as off-centre by half the portrait's width.
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+	box.add_theme_constant_override("separation", 13)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_dialogue_panel.add_child(box)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", 20)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(row)
 
+	## A recessed well with the face in it, like every other portrait in the UI.
+	var portrait_frame := Panel.new()
+	portrait_frame.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
+	portrait_frame.add_theme_stylebox_override("panel",
+			UiStyle.slot_box(UiStyle.LINE_STRONG))
+	portrait_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(portrait_frame)
+
 	_dialogue_portrait = TextureRect.new()
-	_dialogue_portrait.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
 	_dialogue_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_dialogue_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	## Pixel art: keep it crisp rather than smeared when it is blown up.
+	## Pixel art at an integer multiple of its 32px source, nearest-neighbour.
 	_dialogue_portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_dialogue_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_dialogue_portrait)
+	_dialogue_portrait.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	portrait_frame.add_child(_dialogue_portrait)
 
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -218,21 +241,37 @@ func _build_dialogue() -> void:
 	row.add_child(column)
 
 	_dialogue_speaker = Label.new()
-	_dialogue_speaker.add_theme_color_override("font_color", PANEL_BORDER)
+	_dialogue_speaker.theme_type_variation = &"TitleLabel"
+	_dialogue_speaker.add_theme_font_size_override("font_size", UiStyle.SIZE_VALUE)
+	_dialogue_speaker.add_theme_color_override("font_color", UiStyle.ACCENT)
 	_dialogue_speaker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_dialogue_speaker)
 
+	var speaker_rule := SectionRule.new()
+	speaker_rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_child(speaker_rule)
+
+	## Dialogue is the only prose in the game, so it is the only place Spectral
+	## is used.
 	_dialogue_text = Label.new()
+	_dialogue_text.theme_type_variation = &"ProseLabel"
 	_dialogue_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_dialogue_text.custom_minimum_size = Vector2(520.0, 0)
+	## Autowrap measures at its narrowest width, so it needs an explicit one.
+	_dialogue_text.custom_minimum_size = Vector2(820.0, 0.0)
+	_dialogue_text.max_lines_visible = 3
 	_dialogue_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(_dialogue_text)
 
-	var continue_button := Button.new()
+	## Bottom-right rather than centred under the whole box: it is an
+	## affordance to move on, not the point of the panel.
+	var continue_row := HBoxContainer.new()
+	continue_row.alignment = BoxContainer.ALIGNMENT_END
+	continue_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(continue_row)
+	var continue_button := UiButton.new()
 	continue_button.text = "Continue"
-	continue_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	continue_button.pressed.connect(_next_line)
-	box.add_child(continue_button)
+	continue_row.add_child(continue_button)
 
 func _queue_line(payload: Dictionary) -> void:
 	_queue.append(payload)
@@ -285,7 +324,8 @@ func _portrait_for(line: Dictionary) -> Texture2D:
 
 func _build_briefing() -> void:
 	_briefing_shade = ColorRect.new()
-	_briefing_shade.color = Color(0.0, 0.0, 0.0, 0.45)
+	## Warm rather than neutral black, matching the menus' scrim.
+	_briefing_shade.color = Color(0.055, 0.042, 0.032, 0.72)
 	_briefing_shade.visible = false
 	_briefing_shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_briefing_shade)
@@ -300,27 +340,41 @@ func _build_briefing() -> void:
 	_briefing_panel = PanelContainer.new()
 	_briefing_panel.add_theme_stylebox_override("panel", _panel_style())
 	_briefing_panel.visible = false
-	_briefing_panel.custom_minimum_size = Vector2(BRIEFING_WIDTH, 0)
+	_briefing_panel.custom_minimum_size = Vector2(BRIEFING_WIDTH, 0.0)
+	_briefing_panel.theme_type_variation = &"ModalPanel"
 	centre.add_child(_briefing_panel)
 
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 12)
+	column.add_theme_constant_override("separation", UiStyle.SPACE_M)
 	_briefing_panel.add_child(column)
+	_add_caps(_briefing_panel)
 
 	_briefing_title = Label.new()
-	_briefing_title.add_theme_font_size_override("font_size", 24)
-	_briefing_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_briefing_title.theme_type_variation = &"TitleLabel"
+	_briefing_title.add_theme_font_size_override("font_size", UiStyle.SIZE_MODAL_TITLE)
 	column.add_child(_briefing_title)
 
+	var title_rule := SectionRule.new()
+	title_rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	column.add_child(title_rule)
+
 	_briefing_text = Label.new()
+	_briefing_text.theme_type_variation = &"ProseLabel"
 	_briefing_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_briefing_text.custom_minimum_size = Vector2(560.0, 0)
+	_briefing_text.custom_minimum_size = Vector2(BRIEFING_WIDTH - 80.0, 0.0)
+	## Capped, so a long brief cannot grow the panel past the screen.
+	_briefing_text.max_lines_visible = 10
 	column.add_child(_briefing_text)
 
-	var button := Button.new()
+	## Right-aligned and filled, like the primary action on every other modal.
+	var button_row := HBoxContainer.new()
+	button_row.alignment = BoxContainer.ALIGNMENT_END
+	column.add_child(button_row)
+	var button := UiButton.new()
 	button.text = "Continue"
+	button.primary = true
 	button.pressed.connect(_close_briefing)
-	column.add_child(button)
+	button_row.add_child(button)
 
 func _show_briefing(title: String, text: String) -> void:
 	_briefing_title.text = title

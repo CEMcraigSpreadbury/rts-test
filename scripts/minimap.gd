@@ -8,20 +8,20 @@ const TERRAIN_COLOR: Color = Color(0.22, 0.32, 0.19, 1.0)
 ## Per-map terrain picture (water, sand, rock, grass by height) saved by
 ## MapGenerator; maps without one draw flat TERRAIN_COLOR instead.
 @export var terrain_texture: Texture2D
-const OWN_OUTLINE_COLOR: Color = Color(1, 1, 1, 0.9)
-const UNIT_DOT_RADIUS: float = 2.5
-const BUILDING_DOT_RADIUS: float = 4.0
-const FRUSTUM_COLOR: Color = Color(1, 1, 1, 0.6)
-const PING_COLOR: Color = Color(1.0, 0.85, 0.1, 1.0)
+const OWN_OUTLINE_COLOR: Color = Color(0.9412, 0.8980, 0.8196, 0.9)
+const UNIT_DOT_RADIUS: float = 4.2
+const BUILDING_DOT_RADIUS: float = 6.7
+const FRUSTUM_COLOR: Color = Color(0.8392, 0.6745, 0.4078, 0.75)
+const PING_COLOR: Color = UiStyle.ACCENT
 const PING_DURATION: float = 3.0
-const ATTACK_PING_COLOR: Color = Color(1.0, 0.2, 0.15, 1.0)
+const ATTACK_PING_COLOR: Color = UiStyle.BAD
 const ATTACK_PING_DURATION: float = 4.0
 ## Three expanding rings staggered over the ping's life, so an under-attack
 ## warning reads as a repeated pulse rather than the single ripple a
 ## communication ping draws.
 const ATTACK_PING_PULSES: int = 3
-const OBJECTIVE_MARKER_RADIUS: float = 7.0
-const OBJECTIVE_FONT_SIZE: int = 11
+const OBJECTIVE_MARKER_RADIUS: float = 11.7
+const OBJECTIVE_FONT_SIZE: int = 18
 
 ## Right-click-to-ping (when there's no own selection to move — see
 ## _gui_input): main.gd relays this out to every player (see
@@ -210,8 +210,10 @@ func _draw_objective_letters() -> void:
 		if objective == null or objective.letter.is_empty():
 			continue
 		var p := _world_to_local(objective.global_position)
-		var tint: Color = objective.owner_tint().lightened(0.3) if objective.owner_peer_id > 0 else Color(0.85, 0.85, 0.85)
-		draw_circle(p, OBJECTIVE_MARKER_RADIUS, Color(0, 0, 0, 0.65))
+		## An unheld point reads as dim brass rather than white, so the letters
+		## sit with the rest of the UI instead of shouting over the fog.
+		var tint: Color = objective.owner_tint().lightened(0.3) if objective.owner_peer_id > 0 else UiStyle.DIM
+		draw_circle(p, OBJECTIVE_MARKER_RADIUS, UiStyle.SLOT)
 		draw_arc(p, OBJECTIVE_MARKER_RADIUS, 0.0, TAU, 16, tint, 1.5)
 		var baseline := p + Vector2(-OBJECTIVE_MARKER_RADIUS, OBJECTIVE_FONT_SIZE * 0.35)
 		draw_string(font, baseline, objective.letter, HORIZONTAL_ALIGNMENT_CENTER, OBJECTIVE_MARKER_RADIUS * 2.0, OBJECTIVE_FONT_SIZE, tint)

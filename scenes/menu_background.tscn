@@ -1,0 +1,251 @@
+[gd_scene load_steps=32 format=4]
+
+[ext_resource type="Script" path="res://scripts/menu_background.gd" id="menu_bg_script"]
+[ext_resource type="Shader" uid="uid://btuas428cwk2m" path="res://shaders/terrain/binbun_terrain.gdshader" id="2_i4q7t"]
+[ext_resource type="TextureSetsResource" uid="uid://vt73r0wu8y65" path="res://resources/terrain/binbun/binbun_texture_sets.tres" id="3_sttmp"]
+[ext_resource type="Shader" uid="uid://dd650cj0qosyd" path="res://shaders/terrain/binbun_foliage.gdshader" id="4_ybfwt"]
+[ext_resource type="Texture2D" uid="uid://dv6g2qxppq3ec" path="res://BinbunGrass/src/texture/basic/grass_basic_atlas.png" id="5_xfwpa"]
+[ext_resource type="Image" uid="uid://cxapgwn6e1sdq" path="res://scenes/maps/aethermoor_creek_data/Foliage_0_0_0.res" id="6_blih1"]
+[ext_resource type="Image" uid="uid://ccad37mv8k6x" path="res://scenes/maps/aethermoor_creek_data/Heightmap_0_0.res" id="7_lvyni"]
+[ext_resource type="Image" uid="uid://dmpm01nbst5jv" path="res://scenes/maps/aethermoor_creek_data/Splatmap_0_0_0.res" id="8_os7os"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+sky_top_color = Color(0.35, 0.5, 0.75, 1)
+sky_horizon_color = Color(0.75, 0.8, 0.85, 1)
+ground_bottom_color = Color(0.3, 0.28, 0.25, 1)
+ground_horizon_color = Color(0.75, 0.8, 0.85, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+background_energy_multiplier = 2.2
+sky = SubResource("Sky_1")
+ambient_light_source = 3
+ambient_light_energy = 0.4
+tonemap_mode = 3
+tonemap_exposure = 0.8
+ssao_enabled = true
+ssao_radius = 2.0
+ssao_intensity = 8.0
+glow_enabled = true
+glow_strength = 0.65
+glow_bloom = 0.3
+glow_hdr_threshold = 0.95
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.08
+volumetric_fog_albedo = Color(1, 1, 0.8392157, 1)
+volumetric_fog_anisotropy = 0.4
+volumetric_fog_length = 6.0
+volumetric_fog_ambient_inject = 0.05
+volumetric_fog_sky_affect = 0.0
+adjustment_enabled = true
+adjustment_brightness = 1.1
+adjustment_saturation = 1.25
+
+
+[sub_resource type="Gradient" id="Gradient_mm38a"]
+offsets = PackedFloat32Array(0.166667, 0.5, 0.833333)
+colors = PackedColorArray(0.658824, 0.792157, 0.345098, 1, 0.458824, 0.654902, 0.262745, 1, 0.27451, 0.509804, 0.196078, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_i4q7t"]
+gradient = SubResource("Gradient_mm38a")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_1bvp3"]
+seed = 6
+frequency = 0.008
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_lquwl"]
+noise = SubResource("FastNoiseLite_1bvp3")
+seamless = true
+seamless_blend_skirt = 0.2
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sttmp"]
+render_priority = 0
+shader = ExtResource("2_i4q7t")
+shader_parameter/InitialCellWidth = 1.0
+shader_parameter/OffsetPosition = Vector3(0, 0, 0)
+shader_parameter/ZonesSize = 0.0
+shader_parameter/Resolution = 0.0
+shader_parameter/NumberOfZones = 0.0
+shader_parameter/ApplyLockTextures = false
+shader_parameter/WaterFactor = 1.0
+shader_parameter/TexturesDetail = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/NumberOfTextures = 0
+shader_parameter/HasNormalTextures = false
+shader_parameter/HasRoughnessTextures = false
+shader_parameter/HasHeightTextures = false
+shader_parameter/UseAntitile = true
+shader_parameter/BlendFactor = 0.0
+shader_parameter/NearestFilter = false
+shader_parameter/AlbedoAlphaChannelUsage = 0
+shader_parameter/NormalAlphaChannelUsage = 0
+shader_parameter/Triplanar = true
+shader_parameter/TexturesTriplanar = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/TexturesMetallic = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/TexturesSpecular = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/UseSharpTransitions = false
+shader_parameter/SlopeTexturing = false
+shader_parameter/SlopeTextureIndex = 1
+shader_parameter/SlopeTextureThreshold = 0.2
+shader_parameter/ApplyMetaInfoTextures = false
+shader_parameter/MetaInfoColors = PackedVector4Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_enabled = false
+shader_parameter/fog_map_origin = Vector2(0, 0)
+shader_parameter/fog_map_size = Vector2(0, 0)
+shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_count = 0
+shader_parameter/ground_texture_index = 0
+shader_parameter/noise_texture = SubResource("NoiseTexture2D_lquwl")
+shader_parameter/color_gradient = SubResource("GradientTexture2D_i4q7t")
+shader_parameter/brightness = 0.5
+
+[sub_resource type="Gradient" id="Gradient_ybfwt"]
+offsets = PackedFloat32Array(0.166667, 0.5, 0.833333)
+colors = PackedColorArray(0.658824, 0.792157, 0.345098, 1, 0.458824, 0.654902, 0.262745, 1, 0.27451, 0.509804, 0.196078, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_xfwpa"]
+gradient = SubResource("Gradient_ybfwt")
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_yi24e"]
+seed = 6
+frequency = 0.008
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_nf4t2"]
+noise = SubResource("FastNoiseLite_yi24e")
+seamless = true
+seamless_blend_skirt = 0.2
+
+[sub_resource type="Gradient" id="Gradient_lquwl"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_lquwl"]
+noise_type = 0
+fractal_octaves = 3
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_7mycd"]
+width = 1024
+height = 1024
+noise = SubResource("FastNoiseLite_lquwl")
+color_ramp = SubResource("Gradient_lquwl")
+seamless = true
+seamless_blend_skirt = 0.2
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_blih1"]
+render_priority = 0
+shader = ExtResource("4_ybfwt")
+shader_parameter/GlobalPosition = Vector3(0, 0, 0)
+shader_parameter/OffsetPosition = Vector3(0, 0, 0)
+shader_parameter/InitialCellWidth = 1.0
+shader_parameter/LODRowsPerLevel = 10
+shader_parameter/LODLevels = 5
+shader_parameter/WindStrength = 0.1
+shader_parameter/FoliageAlbedo = Color(1, 1, 1, 1)
+shader_parameter/FoliageNumberOfTexture = 0
+shader_parameter/UseGroundColor = true
+shader_parameter/MeshScale = Vector3(1, 1, 1)
+shader_parameter/UseBrushScale = true
+shader_parameter/RandomPlacementRange = 2.0
+shader_parameter/ApplyOnTextureIndexes = PackedInt32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/NumberOfTexturesToApplyOn = 0
+shader_parameter/NearestFilter = false
+shader_parameter/TextureDetail = 0
+shader_parameter/NumberOfTextures = 0
+shader_parameter/WaterFactor = 0.0
+shader_parameter/ZonesSize = 0.0
+shader_parameter/Resolution = 0.0
+shader_parameter/NumberOfZones = 0.0
+shader_parameter/billboard = true
+shader_parameter/blade_scale_range = Vector2(0.4, 0.8)
+shader_parameter/lod_size_compensation = 0.5
+shader_parameter/max_focus_distance = 60.0
+shader_parameter/shape_atlas = ExtResource("5_xfwpa")
+shader_parameter/atlas_size = 2
+shader_parameter/noise_texture = SubResource("NoiseTexture2D_nf4t2")
+shader_parameter/color_gradient = SubResource("GradientTexture2D_xfwpa")
+shader_parameter/brightness = 0.5
+shader_parameter/random_variation = 0.0
+shader_parameter/wind_texture = SubResource("NoiseTexture2D_7mycd")
+shader_parameter/wind_velocity = Vector2(0, 0)
+shader_parameter/wind_offset = Vector2(0, 0)
+shader_parameter/alpha_cut_start = 0.4
+shader_parameter/alpha_cut_end = 0.6
+shader_parameter/alpha_mode = 0
+shader_parameter/fog_enabled = false
+shader_parameter/fog_map_origin = Vector2(0, 0)
+shader_parameter/fog_map_size = Vector2(0, 0)
+shader_parameter/fog_vision_positions = PackedVector2Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_radii = PackedFloat32Array(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+shader_parameter/fog_vision_count = 0
+
+[sub_resource type="QuadMesh" id="QuadMesh_48dlu"]
+size = Vector2(0.9, 1.3)
+subdivide_width = 2
+subdivide_depth = 2
+center_offset = Vector3(0, 0.65, 0)
+
+[sub_resource type="FoliageDefinitionResource" id="FoliageDefinitionResource_lvyni"]
+mesh = SubResource("QuadMesh_48dlu")
+windStrength = 0.0
+lodRowsPerLevel = 161
+lodInitialCellWidth = 0.15
+randomPlacementRange = 0.15
+applyOnTextureIndexes = Array[int]([0])
+customShader = SubResource("ShaderMaterial_blih1")
+maximumRenderDistance = 110
+editorMaximumRenderDistance = 110
+
+[sub_resource type="FoliageResource" id="FoliageResource_os7os"]
+definition = SubResource("FoliageDefinitionResource_lvyni")
+
+[sub_resource type="ZoneResource" id="ZoneResource_t5yhn"]
+heightMapImage = ExtResource("7_lvyni")
+splatmapsImage = Array[Image]([ExtResource("8_os7os")])
+foliagesImage = Array[Image]([ExtResource("6_blih1")])
+
+[sub_resource type="ZonesResource" id="ZonesResource_q422c"]
+zones = Array[ZoneResource]([SubResource("ZoneResource_t5yhn")])
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_g6bug"]
+size = Vector2(1024, 1024)
+subdivide_width = 255
+subdivide_depth = 255
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_map_clouds"]
+size = Vector2(320, 320)
+
+
+[node name="MenuBackground" type="Node3D"]
+script = ExtResource("menu_bg_script")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 30, 0)
+rotation_degrees = Vector3(-34, 126, 0)
+light_color = Color(1, 0.91, 0.76, 1)
+light_energy = 1.55
+light_angular_distance = 1.2
+shadow_enabled = true
+shadow_bias = 0.04
+directional_shadow_max_distance = 220.0
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 24, 0)
+rotation_degrees = Vector3(-62, -38, 0)
+light_color = Color(0.48, 0.63, 0.92, 1)
+light_energy = 0.32
+
+[node name="Terrain" type="TerraBrush" parent="."]
+dataPath = "res://scenes/maps/aethermoor_creek_data"
+zonesSize = 257
+customShader = SubResource("ShaderMaterial_sttmp")
+createCollisionInThread = false
+textureSets = ExtResource("3_sttmp")
+foliages = Array[FoliageResource]([SubResource("FoliageResource_os7os")])
+terrainZones = SubResource("ZonesResource_q422c")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+fov = 55.0

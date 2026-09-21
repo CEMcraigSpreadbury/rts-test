@@ -139,6 +139,10 @@ var linked_deposit: Gatherable = null
 ## item_name -> how many of that item are currently in queue (including the
 ## one in progress) — drives the small count badge on each producible button.
 @export var synced_queue_counts: Dictionary = {}
+## The queue in ORDER, including the item in production at index 0. Counts alone
+## cannot say what is coming next, and the HUD's queue slots show each pending
+## item's own portrait.
+@export var synced_queue_names: PackedStringArray = PackedStringArray()
 ## Whether the current owner is at max_alive_units_per_owner — lets the
 ## owner's command panel grey out its unit buttons.
 @export var synced_unit_limit_reached: bool = false
@@ -805,9 +809,12 @@ func _process(delta: float) -> void:
 			if not queue.is_empty() else 0.0
 
 	var counts: Dictionary = {}
+	var names := PackedStringArray()
 	for queued_item in queue:
 		counts[queued_item.item_name] = counts.get(queued_item.item_name, 0) + 1
+		names.append(queued_item.item_name)
 	synced_queue_counts = counts
+	synced_queue_names = names
 	synced_unit_limit_reached = is_at_unit_limit(owner_peer_id)
 
 func _update_health_bar_visual() -> void:
