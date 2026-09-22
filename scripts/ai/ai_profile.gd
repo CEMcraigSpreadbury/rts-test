@@ -49,6 +49,18 @@ extends Resource
 @export var military_queue: int = 2
 ## Soldiers (living plus queued) past which no more are trained.
 @export var max_army: int = 70
+## How many men this AI raises a regiment with — any multiple of
+## Regiment.STEP. 0 leaves its army loose, which is how it fought before
+## regiments existed and the fallback if they ever cost it a match.
+##
+## Deliberately small. The AI trains a weighted mix across four roles under
+## max_army, so it rarely holds more than a dozen of any single kind at once —
+## and a regiment is one kind of soldier. Measured over a five-minute match on
+## a four-player map, three AIs reached armies of 20-48 and raised no
+## regiments at all at 12; six is comfortably inside what its mix produces.
+## Bigger AI bodies would need its production biased toward finishing one
+## regiment's worth of a type before starting the next.
+@export var regiment_size: int = 6
 ## Whether a monster's cost is set aside at an owned Shrine until it can be
 ## afforded (otherwise one's only bought when the money happens to be there).
 @export var save_for_monsters: bool = true

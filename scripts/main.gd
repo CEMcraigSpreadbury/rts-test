@@ -1808,7 +1808,8 @@ func _refresh_formation_drag_preview() -> void:
 	feedback.show_formation_preview(group_movement.drag_preview_slots(
 			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing),
 			(_formation_drag_start_world + _formation_drag_end_world) * 0.5, _formation_drag_facing,
-			_formation_drag_start_world.distance_to(_formation_drag_end_world))
+			_formation_drag_start_world.distance_to(_formation_drag_end_world),
+			group_movement.drag_preview_officers(selected_units))
 
 ## Never dragged far enough: exactly the right-click order the press used to
 ## issue on its own, from where the button went down.
@@ -2393,7 +2394,7 @@ func selection_regiment_action() -> RegimentAction:
 		if loose_officers.is_empty() and loose_men.is_empty():
 			return RegimentAction.DISBAND
 		return RegimentAction.REINFORCE
-	if not loose_officers.is_empty() and regiment_tier_for(largest_same_type(loose_men).size()) >= 0:
+	if not loose_officers.is_empty() and Regiment.size_for(largest_same_type(loose_men).size()) >= 0:
 		return RegimentAction.FORM
 	return RegimentAction.NONE
 
@@ -2411,16 +2412,6 @@ static func largest_same_type(units: Array[Unit]) -> Array[Unit]:
 		var bucket: Array[Unit] = by_type[key]
 		if bucket.size() > best.size():
 			best = bucket
-	return best
-
-## The largest tier `count` men can fill, or -1 if they cannot fill even the
-## smallest. A regiment is never raised under strength: a known size is what
-## makes its shape and the cost of ordering it predictable.
-static func regiment_tier_for(count: int) -> int:
-	var best := -1
-	for i in Regiment.TIER_SIZES.size():
-		if count >= Regiment.TIER_SIZES[i]:
-			best = i
 	return best
 
 func toggle_regiment() -> void:
@@ -2566,10 +2557,12 @@ func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 	if officer == null:
 		return null
 	men = largest_same_type(men)
-	var tier := regiment_tier_for(men.size())
-	if tier < 0:
+	## Raised at whole ranks, taking as many as they fill and leaving any
+	## remainder loose — a regiment is never raised part of a rank strong.
+	var established := Regiment.size_for(men.size())
+	if established < 0:
 		return null
-	var regiment := Regiment.create(peer_id, tier)
+	var regiment := Regiment.create(peer_id, established)
 	regiment.set_officer(officer)
 	for man in men:
 		if not regiment.add(man):
@@ -2601,8 +2594,9 @@ func refresh_regiment_buffs(regiment: Regiment) -> void:
 	var damage: float = 0.0
 	var armor: int = 0
 	if regiment.has_officer():
-		damage = Regiment.DAMAGE_BONUS[regiment.tier]
-		armor = Regiment.ARMOR_BONUS[regiment.tier]
+		var band: int = regiment.bonus_band()
+		damage = Regiment.DAMAGE_BONUS[band]
+		armor = Regiment.ARMOR_BONUS[band]
 	for unit in regiment.all_units():
 		if is_instance_valid(unit):
 			unit.regiment_damage_bonus = damage

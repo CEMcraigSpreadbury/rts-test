@@ -149,6 +149,12 @@ func _choose_item(building: ProductionBuilding, counts: Dictionary) -> int:
 			continue
 		if not _is_available(item):
 			continue
+		## Officers are bought by AiRegiments, and only when there are men for
+		## one to lead. Left in here they are trained as ordinary infantry —
+		## which is how this AI first ended up fielding three commanders and
+		## four soldiers.
+		if ai.trains_officer(item):
+			continue
 		var role: int = ai.unit_role_of_scene(item.unit_scene)
 		if role == AiPlayer.UnitRole.WORKER or role == AiPlayer.UnitRole.MONSTER:
 			continue

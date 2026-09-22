@@ -56,13 +56,6 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	var forward := order_facing(units, target_pos, forward_override)
 	var right := Vector3(forward.z, 0.0, -forward.x)
 
-	var formation := Formation.new(units, formation_type, front_width)
-	var slots := formation.get_slot_positions(target_pos, forward, right)
-
-	## A group that is going to march (see _start_march) keeps its current
-	## arrangement: units are matched to slots by where they stand WITHIN the
-	## group rather than by raw distance, so the block translates instead of
-	## shuffling ranks on the way. A short hop still takes nearest slots.
 	## A regiment holds its places. Its men keep the arrangement they were
 	## raised in, so a block that turns, is re-targeted or closes up after
 	## losses rotates as one body — where re-matching every man to his nearest
@@ -70,8 +63,10 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	## order. Only whole, single regiments qualify; a mixed or partial
 	## selection has no shared arrangement to keep and matches as before.
 	if _sole_regiment_id(units) >= 0:
-		return _held_positions(units, slots)
+		return _regiment_places(units, target_pos, forward, right, formation_type, front_width)
 
+	var formation := Formation.new(units, formation_type, front_width)
+	var slots := formation.get_slot_positions(target_pos, forward, right)
 	## A group that is going to march (see _start_march) keeps its current
 	## arrangement: units are matched to slots by where they stand WITHIN the
 	## group rather than by raw distance, so the block translates instead of
@@ -91,6 +86,54 @@ static func _regiment_front(units: Array[Unit]) -> Vector3:
 		if unit.formation_facing != Vector3.ZERO:
 			return unit.formation_facing
 	return Vector3.ZERO
+
+## How far behind the rear rank an officer rides.
+const OFFICER_STANDOFF: float = 2.4
+
+## A regiment's places, with the officer given his own ground behind the block
+## rather than a slot among the men.
+##
+## Keeping him out of the grid is what lets the men lay out as whole ranks: a
+## body of N men plus an officer was laid out as N+1, leaving a ragged back
+## row that shuffled every time the block turned. It is also how he should
+## read on the field — a commander behind his men, not one of them.
+func _regiment_places(units: Array[Unit], target_pos: Vector3, forward: Vector3, right: Vector3, formation_type: Formation.Type, front_width: float) -> Array[Vector3]:
+	var men: Array[Unit] = []
+	var officers := 0
+	for unit in units:
+		if unit.is_officer:
+			officers += 1
+		else:
+			men.append(unit)
+	if men.is_empty():
+		var lone: Array[Vector3] = []
+		for i in units.size():
+			lone.append(target_pos)
+		return lone
+	var formation := Formation.new(men, formation_type, front_width)
+	var slots := formation.get_slot_positions(target_pos, forward, right)
+	var places := _held_positions(men, slots)
+	var out: Array[Vector3] = []
+	var next_man := 0
+	var next_officer := 0
+	for unit in units:
+		if unit.is_officer:
+			out.append(officer_ground(target_pos, forward, slots, next_officer, officers))
+			next_officer += 1
+		else:
+			out.append(places[next_man])
+			next_man += 1
+	return out
+
+## Where an officer stands: behind the rearmost rank, on the block's centre
+## line, spread sideways if a body somehow has more than one.
+func officer_ground(front_centre: Vector3, forward: Vector3, slots: Array[Vector3], index: int, count: int) -> Vector3:
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	var deepest := 0.0
+	for slot in slots:
+		deepest = maxf(deepest, (front_centre - slot).dot(forward))
+	var across: float = (index - (count - 1) * 0.5) * Formation.SPACING
+	return front_centre - forward * (deepest + OFFICER_STANDOFF) + right * across
 
 ## The regiment `units` all belong to, or -1 if they are not one body.
 static func _sole_regiment_id(units: Array[Unit]) -> int:
@@ -173,8 +216,36 @@ func drag_preview_slots(units: Array[Unit], line_start: Vector3, line_end: Vecto
 	var midpoint := (line_start + line_end) * 0.5
 	var right := Vector3(facing.z, 0.0, -facing.x)
 	var front_width := _flat_distance(line_start, line_end)
-	var formation := Formation.new(units, Formation.DEFAULT_TYPE, front_width)
-	return formation.get_slot_positions(midpoint, facing, right)
+	## Officers are kept out of the ranks and shown behind the block, so the
+	## preview is the shape the order will actually make. Appended last, which
+	## is what lets the preview mark them out (see drag_preview_officers).
+	var men: Array[Unit] = []
+	var officers := 0
+	for unit in units:
+		if unit.is_officer:
+			officers += 1
+		else:
+			men.append(unit)
+	if men.is_empty():
+		men = units
+		officers = 0
+	var formation := Formation.new(men, Formation.DEFAULT_TYPE, front_width)
+	var slots := formation.get_slot_positions(midpoint, facing, right)
+	for i in officers:
+		slots.append(officer_ground(midpoint, facing, slots, i, officers))
+	return slots
+
+## How many of drag_preview_slots' places belong to officers — the trailing
+## ones, drawn apart from the ranks.
+func drag_preview_officers(units: Array[Unit]) -> int:
+	var officers := 0
+	var men := 0
+	for unit in units:
+		if unit.is_officer:
+			officers += 1
+		else:
+			men += 1
+	return officers if men > 0 else 0
 
 ## Host-side memory of right-drag formations (see Unit.dragged_formation).
 ## A dragged order (front_width >= 0) stamps its units with a fresh shared id,

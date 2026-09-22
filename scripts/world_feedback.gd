@@ -882,6 +882,12 @@ func update_rally_marker() -> void:
 const REGIMENT_BANNER_HEIGHT: float = 2.6
 const REGIMENT_BANNER_PIXEL_SIZE: float = 0.0028
 const REGIMENT_BANNER_ALPHA: float = 0.95
+## Draw order against the other see-through things on the same ground. Two
+## transparent surfaces sort by distance to the camera unless one is given
+## priority, which put a unit's selection ring in front of a standard flying
+## well above it. Above the rings (10, see unit.tscn) and deliberately below
+## the health bars (20/21), which should stay readable over anything.
+const REGIMENT_BANNER_PRIORITY: int = 15
 ## How often the blocks are re-surveyed. The sprites ease toward the answer
 ## every frame, so this only has to keep up with a marching block, not be
 ## smooth in itself — and the survey walks every unit on the map.
@@ -942,6 +948,7 @@ func _make_regiment_banner() -> Sprite3D:
 	sprite.shaded = false
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	sprite.pixel_size = REGIMENT_BANNER_PIXEL_SIZE
+	sprite.render_priority = REGIMENT_BANNER_PRIORITY
 	## Blended rather than alpha-scissored: the standard is deliberately a
 	## little see-through so it never hides the block underneath it.
 	sprite.modulate = Color(1.0, 1.0, 1.0, REGIMENT_BANNER_ALPHA)
@@ -1653,6 +1660,8 @@ func _play_ability_effect(world_pos: Vector3, radius: float, color: Color, durat
 ## discs reads as how tight the finished formation will actually stand.
 const FORMATION_PREVIEW_DISC_SIZE: float = 1.0
 const FORMATION_PREVIEW_COLOR: Color = Color(1.0, 1.0, 1.0, 0.45)
+## The officer's ground, marked apart from the ranks.
+const FORMATION_PREVIEW_OFFICER_COLOR: Color = Color(1.0, 0.82, 0.25, 0.65)
 
 ## Pooled rather than rebuilt per mouse-motion event — a drag fires dozens of
 ## those a second, and the slot count only changes when the selection does.
@@ -1672,7 +1681,9 @@ var _formation_arrow_decal: Decal = null
 var _formation_arrow_texture: ImageTexture = null
 var _formation_arrow_emission_texture: ImageTexture = null
 
-func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing: Vector3, front_width: float) -> void:
+## The last `officers` places are drawn in the officer colour — see
+## GroupMovement.drag_preview_slots, which appends them behind the ranks.
+func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing: Vector3, front_width: float, officers: int = 0) -> void:
 	_show_formation_arrow(front_center, facing, front_width)
 	while _formation_preview_decals.size() < slots.size():
 		var decal := _make_ability_decal()
@@ -1685,6 +1696,7 @@ func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing
 		decal.visible = i < slots.size()
 		if decal.visible:
 			decal.global_position = slots[i]
+			decal.modulate = FORMATION_PREVIEW_OFFICER_COLOR if i >= slots.size() - officers else FORMATION_PREVIEW_COLOR
 
 func hide_formation_preview() -> void:
 	for decal in _formation_preview_decals:

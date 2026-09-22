@@ -58,6 +58,7 @@ var builder: AiBaseBuilder
 var military: AiMilitary
 var combat: AiCombat
 var research: AiResearch
+var regiments: AiRegiments
 ## Allied-race build-up (see AiPacts).
 var pacts: AiPacts
 
@@ -103,6 +104,7 @@ func setup(p_main: Main, p_peer_id: int, difficulty: int) -> void:
 	military = AiMilitary.new(self)
 	combat = AiCombat.new(self)
 	research = AiResearch.new(self)
+	regiments = AiRegiments.new(self)
 	pacts = AiPacts.new(self)
 
 func _ready() -> void:
@@ -177,6 +179,10 @@ func _think() -> void:
 		phase(&"military", military.think)
 	## Fighting before worker jobs, so villagers told to flee aren't handed
 	## a tree in the same breath.
+	## After the army has been trained and before it is committed: new men are
+	## folded into a body while they are still standing at the staging point,
+	## rather than half way to a fight.
+	phase(&"regiments", regiments.think)
 	phase(&"combat", combat.think)
 	## After combat, so powers are aimed off this think's view of the enemy.
 	phase(&"research", research.think)
@@ -212,6 +218,21 @@ func _refresh_world() -> void:
 		home = my_buildings[0].global_position
 
 ## --- Spending ---
+
+## Whether a producible trains an officer. Read off the scene itself
+## (Unit.is_officer) rather than its name, and cached because the only way to
+## ask is to build one.
+var _trains_officer_cache: Dictionary = {}
+
+func trains_officer(item: ProducibleItem) -> bool:
+	if item == null or item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
+		return false
+	var path: String = item.unit_scene.resource_path
+	if not _trains_officer_cache.has(path):
+		var probe: Unit = item.unit_scene.instantiate()
+		_trains_officer_cache[path] = probe.is_officer
+		probe.free()
+	return _trains_officer_cache[path]
 
 func stock(type: ResourceType) -> int:
 	return ResourceStockpile.get_amount(peer_id, type)

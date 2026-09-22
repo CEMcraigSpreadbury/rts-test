@@ -15,18 +15,30 @@ extends RefCounted
 ##
 ## Host-side only, like every other authoritative record (see Main.regiments).
 
-## Fixed tier sizes, as in Cossacks 3: an officer decides how big a body he
-## will lead when he forms it, and it does not change afterwards. Fixed sizes
-## are what make a formation's shape and an order's cost predictable, instead
-## of depending on however many men the player happened to box-select.
-const TIER_SIZES: Array[int] = [36, 72, 120]
+## A regiment is raised in whole ranks: any multiple of STEP, from a six-man
+## company up to MAX_SIZE. Whole ranks are what keep a block a clean rectangle
+## rather than a formation with a half-empty back row, and fixing the size at
+## forming is what makes its shape and the cost of ordering it predictable —
+## instead of both depending on however many men were box-selected.
+const STEP: int = 6
+const MIN_SIZE: int = 6
+const MAX_SIZE: int = 120
 
-## What being led is worth, by tier: a proportion added to damage, and armour
-## points on top of whatever the Blacksmith has given. Bigger bodies are worth
-## more because holding one together under one officer is the harder thing.
-## Applied while the officer lives and dropped the moment he falls.
+## What being led is worth: a proportion added to damage, and armour points on
+## top of whatever the Blacksmith has given. Bigger bodies are worth more,
+## because holding one together under a single officer is the harder thing —
+## SIZE_BANDS is the size each step up asks for. Applied while the officer
+## lives and dropped the moment he falls.
+const SIZE_BANDS: Array[int] = [0, 72, 120]
 const DAMAGE_BONUS: Array[float] = [0.10, 0.15, 0.20]
 const ARMOR_BONUS: Array[int] = [1, 2, 3]
+
+## The largest whole-rank body `count` men can fill, or -1 if they cannot even
+## make the smallest.
+static func size_for(count: int) -> int:
+	if count < MIN_SIZE:
+		return -1
+	return mini(count - count % STEP, MAX_SIZE)
 
 ## The officer's place: always behind his men, whatever the block's size.
 const OFFICER_RANK: int = 1 << 20
@@ -35,8 +47,8 @@ static var _next_id: int = 1
 
 var id: int = 0
 var owner_peer_id: int = 0
-## Index into TIER_SIZES.
-var tier: int = 0
+## How many men this body was raised to hold. A multiple of STEP.
+var size: int = MIN_SIZE
 ## The officer leading it. A regiment outlives its officer — the men hold
 ## together and still take orders — but loses its buffs until another one
 ## takes over (see has_officer).
@@ -51,17 +63,25 @@ var formation_type: Formation.Type = Formation.DEFAULT_TYPE
 var front_width: float = -1.0
 var facing: Vector3 = Vector3.ZERO
 
-static func create(peer_id: int, tier_index: int) -> Regiment:
+static func create(peer_id: int, established_size: int) -> Regiment:
 	var regiment := Regiment.new()
 	regiment.id = _next_id
 	_next_id += 1
 	regiment.owner_peer_id = peer_id
-	regiment.tier = clampi(tier_index, 0, TIER_SIZES.size() - 1)
+	regiment.size = clampi(established_size - established_size % STEP, MIN_SIZE, MAX_SIZE)
 	return regiment
 
 ## How many men this regiment is established to hold.
 func capacity() -> int:
-	return TIER_SIZES[clampi(tier, 0, TIER_SIZES.size() - 1)]
+	return size
+
+## Which step of the bonuses this body has earned by its size.
+func bonus_band() -> int:
+	var band := 0
+	for i in SIZE_BANDS.size():
+		if size >= SIZE_BANDS[i]:
+			band = i
+	return band
 
 ## Men still in it. prune() first if the answer has to be exact after a fight.
 func strength() -> int:

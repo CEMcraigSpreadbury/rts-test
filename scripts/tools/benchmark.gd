@@ -5,6 +5,14 @@ extends Node
 ##
 ##   godot --headless --path . res://scenes/tools/benchmark.tscn
 ##   godot --headless --path . res://scenes/tools/benchmark.tscn -- --units=160 --ticks=900
+##   godot --headless --path . res://scenes/tools/benchmark.tscn -- --mode=match --ai=2
+##
+## Two modes. `battle` (the default) is the perf harness: two equal armies
+## spawned nose to nose and sent into each other, for comparing two builds of
+## the same scenario. `match` is the behaviour gate: a whole game played out
+## with nobody interfering, reporting what each AI has managed — because a
+## change to how the AI fights can leave every perf number healthy while its
+## waves sit at home, which is exactly how regiments broke it last time.
 ##
 ## Starts a single-player match against one AI on a fixed map with a fixed RNG
 ## seed, spawns two equal armies at fixed positions either side of the midpoint
@@ -33,6 +41,12 @@ const DEFAULT_AI_COUNT: int = 1
 ## be worth measuring — off more than the one sample a single opening order
 ## would give.
 const DEFAULT_REORDER_TICKS: int = 150
+## A match is long enough for an AI to get a base up, train an army and push
+## it out — the short battle run says nothing about any of that. Five minutes
+## at 30 Hz.
+const DEFAULT_MATCH_TICKS: int = 9000
+## How often a match prints where everyone has got to.
+const MATCH_REPORT_TICKS: int = 900
 
 ## The match spawns its bases and starts the first navmesh bake as it loads,
 ## and that bake finishes on a worker thread — an army dropped in before it
@@ -63,6 +77,9 @@ var map_index: int = DEFAULT_MAP_INDEX
 var difficulty: int = DEFAULT_DIFFICULTY
 var reorder_ticks: int = DEFAULT_REORDER_TICKS
 var ai_count: int = DEFAULT_AI_COUNT
+var mode: String = "battle"
+var _ticks_set: bool = false
+var _ai_set: bool = false
 
 var _main: Main
 var _ai_peer: int = 0
@@ -77,6 +94,12 @@ var _wall_start_usec: int = 0
 
 func _ready() -> void:
 	_parse_args()
+	## A match wants a longer run and somebody to fight, unless told otherwise.
+	if mode == "match":
+		if not _ticks_set:
+			measure_ticks = DEFAULT_MATCH_TICKS
+		if not _ai_set:
+			ai_count = 2
 	seed(run_seed)
 	var maps: Array[MapInfo] = MapInfo.list_all()
 	if maps.is_empty():
@@ -97,8 +120,12 @@ func _ready() -> void:
 		_abort("could not add an AI player")
 		return
 	_ai_peer = _ai_peers[0]
-	print("benchmark: %s, %d units/side, %d AI, %d ticks, seed %d" % [
-		info.map_name, units_per_side, _ai_peers.size(), measure_ticks, run_seed])
+	if mode == "match":
+		print("benchmark: match on %s, %d AI, %d ticks, seed %d" % [
+			info.map_name, _ai_peers.size(), measure_ticks, run_seed])
+	else:
+		print("benchmark: %s, %d units/side, %d AI, %d ticks, seed %d" % [
+			info.map_name, units_per_side, _ai_peers.size(), measure_ticks, run_seed])
 	## Deferred: the root is still setting up this scene, so it refuses a
 	## sibling until that has finished. Nothing starts counting ticks until
 	## _main is set anyway (see _physics_process).
@@ -119,11 +146,15 @@ func _physics_process(_delta: float) -> void:
 	if _main == null:
 		return
 	_tick += 1
+	if mode == "match":
+		_match_tick()
+		return
 	if _tick == WARMUP_TICKS:
 		_spawn_armies()
 		return
 	if _tick == WARMUP_TICKS + SETTLE_TICKS:
 		_begin_measuring()
+		_push()
 		return
 	if not _measuring:
 		return
@@ -187,8 +218,55 @@ func _begin_measuring() -> void:
 	get_tree().root.add_child(_perf)
 	_measuring = true
 	_wall_start_usec = Time.get_ticks_usec()
-	_push()
 	print("benchmark: measuring %d ticks" % measure_ticks)
+
+## A whole game, with nobody interfering. The perf figures still come out of
+## it, but what it is really for is whether each AI is still playing: building,
+## raising bodies and pushing them away from home. Every one of those can stop
+## while the frame times stay perfectly healthy.
+func _match_tick() -> void:
+	if _tick == WARMUP_TICKS:
+		_begin_measuring()
+		print("")
+		print("  time    who        villagers army bodies  buildings points reach")
+		_match_report()
+		return
+	if not _measuring:
+		return
+	var measured: int = _tick - WARMUP_TICKS
+	if measured >= measure_ticks:
+		_match_report()
+		_finish()
+	elif measured % MATCH_REPORT_TICKS == 0:
+		_match_report()
+
+func _match_report() -> void:
+	var minutes: float = float(_tick - WARMUP_TICKS) / 30.0 / 60.0
+	for peer in _main.ai_players:
+		var ai: AiPlayer = _main.ai_players[peer]
+		var bodies := 0
+		var in_bodies := 0
+		for id in _main.regiments:
+			var regiment: Regiment = _main.regiments[id]
+			if regiment.owner_peer_id == peer:
+				bodies += 1
+				in_bodies += regiment.strength()
+		## How far its army has got from its own base. A wave that never
+		## leaves home is the failure this mode exists to catch.
+		var reach := 0.0
+		for unit in ai.army:
+			if is_instance_valid(unit):
+				reach = maxf(reach, ai.home.distance_to(unit.global_position))
+		print("  %4.1fm   ai %-6d %7d %6d %3d (%3d) %7d %6d %6.0f" % [
+			minutes, peer, ai.villagers.size(), ai.army.size(),
+			bodies, in_bodies, ai.my_buildings.size(), _points_held(peer), reach])
+
+func _points_held(peer: int) -> int:
+	var held := 0
+	for node in get_tree().get_nodes_in_group(&"objectives"):
+		if node.owner_peer_id == peer:
+			held += 1
+	return held
 
 ## Sends each side at the other, as a group attack-move. Deliberately the full
 ## group order path — formation solve, slot assignment, march — since that is
@@ -297,15 +375,26 @@ func _parse_args() -> void:
 		var parts: PackedStringArray = arg.lstrip("-").split("=")
 		if parts.size() != 2:
 			continue
+		var key: String = parts[0]
 		var value: String = parts[1]
-		match parts[0]:
-			"units": units_per_side = maxi(1, int(value))
-			"ticks": measure_ticks = maxi(1, int(value))
-			"seed": run_seed = int(value)
-			"map": map_index = maxi(0, int(value))
-			"difficulty": difficulty = clampi(int(value), 0, 2)
-			"reorder": reorder_ticks = maxi(1, int(value))
-			"ai": ai_count = maxi(1, int(value))
+		if key == "units":
+			units_per_side = maxi(1, int(value))
+		elif key == "ticks":
+			measure_ticks = maxi(1, int(value))
+			_ticks_set = true
+		elif key == "seed":
+			run_seed = int(value)
+		elif key == "map":
+			map_index = maxi(0, int(value))
+		elif key == "difficulty":
+			difficulty = clampi(int(value), 0, 2)
+		elif key == "reorder":
+			reorder_ticks = maxi(1, int(value))
+		elif key == "ai":
+			ai_count = maxi(1, int(value))
+			_ai_set = true
+		elif key == "mode":
+			mode = value
 
 func _abort(reason: String) -> void:
 	push_error("benchmark: " + reason)

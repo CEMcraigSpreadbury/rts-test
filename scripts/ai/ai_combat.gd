@@ -436,7 +436,10 @@ func _update_wave() -> void:
 	if wave.is_empty():
 		_clear_wave()
 		if not _defending:
+			var launch_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 			_maybe_launch_wave()
+			if PerfStats.enabled:
+				PerfStats.add_ai_phase(&"wave: launch", Time.get_ticks_usec() - launch_start)
 		return
 	if wave.size() < MIN_WAVE_SIZE:
 		_send_wave_home()
@@ -447,7 +450,11 @@ func _update_wave() -> void:
 	if ai.profile.retreat_threshold > 0.0 and enemy > 0.0 and own < enemy * ai.profile.retreat_threshold:
 		_retreat()
 		return
-	if is_instance_valid(_wave_target_objective) and _update_point_hold(centre):
+	var hold_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+	var holding: bool = is_instance_valid(_wave_target_objective) and _update_point_hold(centre)
+	if PerfStats.enabled:
+		PerfStats.add_ai_phase(&"wave: point hold", Time.get_ticks_usec() - hold_start)
+	if holding:
 		return
 	if ai.mode == AiPlayer.Mode.ATTACK:
 		_update_attack_hold()
@@ -468,7 +475,11 @@ func _update_wave() -> void:
 			break
 	var arrived: bool = Vector2(centre.x - wave_target.x, centre.z - wave_target.z).length() < WAVE_ARRIVE_RADIUS
 	if target_gone or (all_idle and arrived and _wave_target_objective == null):
-		if not _send_wave_to_next_target(centre):
+		var next_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+		var sent: bool = _send_wave_to_next_target(centre)
+		if PerfStats.enabled:
+			PerfStats.add_ai_phase(&"wave: next target", Time.get_ticks_usec() - next_start)
+		if not sent:
 			_send_wave_home()
 		return
 	## A wave that stops getting anywhere without being in a fight has
@@ -484,7 +495,11 @@ func _update_wave() -> void:
 		_wave_progress_pos = centre
 		_wave_progress_time = ai.game_time
 	elif ai.game_time - _wave_progress_time > WAVE_STALL_SECONDS:
-		if _breach(wave):
+		var breach_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+		var breached: bool = _breach(wave)
+		if PerfStats.enabled:
+			PerfStats.add_ai_phase(&"wave: breach", Time.get_ticks_usec() - breach_start)
+		if breached:
 			_wave_progress_pos = centre
 			_wave_progress_time = ai.game_time
 			return
@@ -494,13 +509,19 @@ func _update_wave() -> void:
 			if not _send_wave_to_next_target(centre, true):
 				_send_wave_home()
 			return
+		var resend_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		for unit in wave:
 			ai.order_move([unit], wave_target, true)
+		if PerfStats.enabled:
+			PerfStats.add_ai_phase(&"wave: resend one by one", Time.get_ticks_usec() - resend_start)
 		_wave_resent = true
 		_wave_progress_pos = centre
 		_wave_progress_time = ai.game_time
 		return
+	var stragglers_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	_send_stragglers_on()
+	if PerfStats.enabled:
+		PerfStats.add_ai_phase(&"wave: stragglers", Time.get_ticks_usec() - stragglers_start)
 
 ## ATTACK mode: the wave goes where it was sent and stays there. Neither the
 ## scouting rules nor "arrived, find something else" apply — an ally sent to
@@ -588,6 +609,9 @@ func find_blocker(from: Vector3, to: Vector3, tolerance: float) -> ProductionBui
 ## everyone inside the capture zone and watch the flag. Returns whether it
 ## handled the wave this think — false while the wave is still on its way,
 ## which leaves it to the ordinary walking/stall logic.
+## How many men are walked into a capture zone per think (see below).
+const POINT_HOLD_MOVES_PER_THINK: int = 4
+
 func _update_point_hold(centre: Vector3) -> bool:
 	var point = _wave_target_objective
 	var point_pos: Vector3 = point.global_position
@@ -609,11 +633,22 @@ func _update_point_hold(centre: Vector3) -> bool:
 	## Only soldiers inside the zone count, and a formation spreads wider than
 	## it — anyone standing about outside is walked in, one by one so they
 	## don't just reform the same shape.
+	##
+	## A few per think, not the whole wave. Each of these is a separate order,
+	## and an order is a full dispatch: formation solve, march, the lot. A
+	## thirty-strong wave arriving at a point sent thirty of them on one
+	## physics tick, which was the single largest hitch the AI caused — 34 ms
+	## of a 35 ms think. The rest are walked in over the next few thinks, and
+	## nobody can tell the difference from outside.
+	var walked_in := 0
 	for unit in wave:
+		if walked_in >= POINT_HOLD_MOVES_PER_THINK:
+			break
 		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(point_pos) > CAPTURE_STAND_RADIUS + 1.0:
 			var angle: float = randf() * TAU
 			var spot: Vector3 = point_pos + Vector3(cos(angle), 0.0, sin(angle)) * randf() * CAPTURE_STAND_RADIUS
 			ai.order_move([unit], ai.nearest_navmesh_point(spot), true)
+			walked_in += 1
 	return true
 
 ## Our side's (an ally's counts), flag fully up, and nobody fighting over it.
