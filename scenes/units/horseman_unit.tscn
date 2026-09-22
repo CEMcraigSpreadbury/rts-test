@@ -6,6 +6,8 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
 
+[ext_resource type="Texture2D" path="res://assets/art/Banners/cavalry.png" id="banner_tex"]
+
 [sub_resource type="Resource" id="ResourceCost_horseman_wood"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
@@ -40,3 +42,4 @@ damage_type = 2
 unit_category = 3
 can_charge = true
 armor_class = 4
+regiment_banner = ExtResource("banner_tex")

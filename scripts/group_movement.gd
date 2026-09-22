@@ -63,8 +63,65 @@ func formation_positions(units: Array[Unit], target_pos: Vector3, formation_type
 	## arrangement: units are matched to slots by where they stand WITHIN the
 	## group rather than by raw distance, so the block translates instead of
 	## shuffling ranks on the way. A short hop still takes nearest slots.
+	## A regiment holds its places. Its men keep the arrangement they were
+	## raised in, so a block that turns, is re-targeted or closes up after
+	## losses rotates as one body — where re-matching every man to his nearest
+	## slot made the whole formation break apart and reassemble on every
+	## order. Only whole, single regiments qualify; a mixed or partial
+	## selection has no shared arrangement to keep and matches as before.
+	if _sole_regiment_id(units) >= 0:
+		return _held_positions(units, slots)
+
+	## A group that is going to march (see _start_march) keeps its current
+	## arrangement: units are matched to slots by where they stand WITHIN the
+	## group rather than by raw distance, so the block translates instead of
+	## shuffling ranks on the way. A short hop still takes nearest slots.
 	var relative := _flat_distance(group_centroid(units), target_pos) >= MARCH_MIN_DISTANCE
 	return _assign_slots_to_units(units, slots, forward, relative)
+
+## A regiment's front, taken from whichever of its men still carries one,
+## rather than requiring all of them to agree as held_facing does for a loose
+## group. Reinforcements, a newly assigned officer and men pulled back out of
+## a fight all arrive carrying no front of their own, and a single one of
+## those would otherwise leave the whole block with none — which is exactly
+## when it stops noticing it has been ordered to turn about, and marches
+## through itself to get there.
+static func _regiment_front(units: Array[Unit]) -> Vector3:
+	for unit in units:
+		if unit.formation_facing != Vector3.ZERO:
+			return unit.formation_facing
+	return Vector3.ZERO
+
+## The regiment `units` all belong to, or -1 if they are not one body.
+static func _sole_regiment_id(units: Array[Unit]) -> int:
+	var id: int = units[0].regiment_id
+	if id < 0:
+		return -1
+	for unit in units:
+		if unit.regiment_id != id:
+			return -1
+	return id
+
+## Slots handed out in the order the men hold their places: the front rank
+## goes to the lowest ranks, the officer (highest of all) to the back, and a
+## body that has taken losses closes up rather than re-solving.
+static func _held_positions(units: Array[Unit], slots: Array[Vector3]) -> Array[Vector3]:
+	## Officers are held out of the ordering and put behind the block either
+	## way — turning about must not march the commander to the front rank.
+	var order: Array[int] = []
+	var officers: Array[int] = []
+	for i in units.size():
+		if units[i].regiment_rank >= Regiment.OFFICER_RANK:
+			officers.append(i)
+		else:
+			order.append(i)
+	order.sort_custom(func(a, b): return units[a].regiment_rank < units[b].regiment_rank)
+	order.append_array(officers)
+	var out: Array[Vector3] = []
+	out.resize(units.size())
+	for place in order.size():
+		out[order[place]] = slots[mini(place, slots.size() - 1)]
+	return out
 
 ## Which way a formation order faces. An explicit facing (a drag, a re-form)
 ## always wins. Otherwise a group already holding a front keeps it for anything

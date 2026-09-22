@@ -9,10 +9,12 @@
 [ext_resource type="PackedScene" uid="uid://dgkib7dffccxc" path="res://scenes/units/spearman_unit.tscn" id="9_spearman_scene"]
 [ext_resource type="PackedScene" path="res://scenes/units/halberdier_unit.tscn" id="9_halberdier_scene"]
 [ext_resource type="PackedScene" path="res://scenes/units/shieldman_unit.tscn" id="9_shieldman_scene"]
+[ext_resource type="PackedScene" path="res://scenes/units/officer_unit.tscn" id="9_officer_scene"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
 [ext_resource type="PackedScene" uid="uid://bk7f0u6jhxr5f" path="res://assets/art/Models/Barracks2/barracks2.glb" id="11_jxfkj"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/soldier.png" id="icon_soldier"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/units/officer.png" id="icon_officer"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/spearman.png" id="icon_spearman"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/halberdier.png" id="icon_halberdier"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/shieldman.png" id="icon_shieldman"]
@@ -28,6 +30,13 @@ item_name = "Soldier"
 icon = ExtResource("icon_soldier")
 build_time = 3.5
 unit_scene = ExtResource("5_soldier_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_officer"]
+script = ExtResource("3_item_script")
+item_name = "Officer"
+icon = ExtResource("icon_officer")
+build_time = 8.0
+unit_scene = ExtResource("9_officer_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_spearman"]
 script = ExtResource("3_item_script")
@@ -145,7 +154,7 @@ script = ExtResource("1_building_script")
 building_name = "Barracks"
 role = 1
 costs = Array[ExtResource("10_cost_script")]([SubResource("ResourceCost_barracks_building")])
-producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_shieldman"), SubResource("ProducibleItem_spearman"), SubResource("ProducibleItem_halberdier")])
+producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_soldier"), SubResource("ProducibleItem_shieldman"), SubResource("ProducibleItem_spearman"), SubResource("ProducibleItem_halberdier"), SubResource("ProducibleItem_officer")])
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_1ng4x"), ExtResource("9_jxfkj")])
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=838743970]

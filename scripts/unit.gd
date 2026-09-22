@@ -503,6 +503,16 @@ func _play_sprite_pop() -> void:
 ## Spear-armed: braces against a charge when standing in a block (see BRACE_TIME).
 @export var can_brace: bool = false
 
+@export_group("Regiment")
+## Can form and lead a Regiment (scripts/regiment.gd). Just another field on a
+## unit scene, like can_gather — an Officer is an ordinary unit that happens
+## to be allowed to raise a body of men.
+@export var is_officer: bool = false
+## The standard a regiment of these men flies. Set per unit scene so the
+## roster decides what its own banners are; a unit with none contributes no
+## opinion when its regiment picks one (see Regiment.banner_index).
+@export var regiment_banner: Texture2D = null
+
 @export_group("Pact")
 ## Gnolls fight as a pack: damage rises with every packmate fighting beside
 ## them (see PACK_COURAGE_RADIUS) and falls away when no pack leader is near,
@@ -1290,6 +1300,30 @@ var formation_attack_target: Node3D = null
 var attack_move_order: Dictionary = {}
 ## Which of GroupMovement's engagements this unit fights in.
 var formation_fight_id: int = -1
+
+## The Regiment this unit belongs to, or -1 while it is loose. Resolved
+## through Main.regiments rather than held as a reference, so a regiment that
+## is disbanded or wiped out leaves nothing dangling here.
+##
+## Replicated (see unit.tscn), even though only the host owns the regiment
+## records themselves: a client has to know its own men are in one to select
+## them as a body and to be offered the right command.
+var regiment_id: int = -1
+
+## This unit's share of its regiment's bonuses, or zero while it is loose or
+## its officer is down. Resolved onto the unit by Main.refresh_regiment_buffs
+## rather than looked up when a blow lands: damage and armour are the hottest
+## paths in the game, and a regiment's state changes about once a fight.
+## Host-side, like the regiment records themselves — these decide damage, and
+## damage is settled on the host.
+## This man's fixed place in his block, low at the front. Handed out once when
+## he joins and never re-solved, so a regiment that turns or is given a new
+## target rotates as one body instead of every man working out afresh which
+## corner of the shape he belongs in (see GroupMovement.formation_positions).
+var regiment_rank: int = -1
+var regiment_damage_bonus: float = 0.0
+var regiment_armor_bonus: int = 0
+
 ## Where this unit stands in the fighting block — its slot, or wherever its
 ## move actually ended if the slot couldn't be reached — which it walks back
 ## to when shoved out of place (see _tick_formation_place).
@@ -2578,7 +2612,7 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	## point, capped, rather than a flat amount: flat armour against hits of
 	## only 4-7 swamped the counter multipliers above. Never below 1 damage.
 	var armor: int = UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) \
-			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR))
+			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR)) + regiment_armor_bonus
 	if armor > 0:
 		var reduction := minf(armor * ARMOR_REDUCTION_PER_POINT, ARMOR_MAX_REDUCTION)
 		amount = maxi(roundi(amount * (1.0 - reduction)), 1)
@@ -2771,7 +2805,7 @@ func _physics_tick(delta: float) -> void:
 				## unit at a time. Targets further into the area — and enemy
 				## buildings — are picked up on arrival instead, by the idle
 				## scan below, and after each kill by _find_new_target_or_idle.
-				var target := _find_nearest_enemy_in_range(aggro_range)
+				var target := _find_nearest_enemy_in_range(_march_engage_range())
 				## A group attack-move stops and fights it as a block; a lone
 				## unit hands off to the normal ATTACK flow for this one fight,
 				## but keeps the assault so the destination isn't lost.
@@ -2876,6 +2910,26 @@ func _physics_tick(delta: float) -> void:
 		desired_velocity = Vector3.ZERO
 	_update_separation(delta)
 	_apply_velocity(desired_velocity)
+
+## How far ahead a marching block reacts to enemies.
+##
+## A lone man only notices what walks into his own aggro bubble, which for a
+## soldier is 7 m. A block is many times wider than one man and moving as one,
+## so a regiment could march an enemy down its flank without anybody reacting
+## and only turn round once it reached the spot it was sent to — which is what
+## it looked like from the outside: walking past a fight, then going back for
+## it. A body of men reacts as a body, from further out.
+##
+## Only for men who are actually in one. A unit on its own keeps its own
+## bubble, which is what makes it possible to walk a single scout past
+## something without it picking a fight.
+const MARCH_ENGAGE_MIN: float = 12.0
+const MARCH_ENGAGE_FACTOR: float = 1.5
+
+func _march_engage_range() -> float:
+	if regiment_id < 0:
+		return aggro_range
+	return maxf(MARCH_ENGAGE_MIN, maxf(aggro_range, attack_range) * MARCH_ENGAGE_FACTOR)
 
 ## Push away from any living unit overlapping this one (see SEPARATION_DISTANCE).
 ## Units sitting on exactly the same point part along a per-unit fixed angle so
@@ -3469,6 +3523,7 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 	if status_current_health < max_health * Research.LOW_HEALTH_FRACTION:
 		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
 	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
+	extra += regiment_damage_bonus
 	var result: int = roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
 	if pack_member and not is_equal_approx(_pack_multiplier, 1.0):
 		result = maxi(roundi(result * _pack_multiplier), 1)

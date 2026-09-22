@@ -870,6 +870,94 @@ func update_rally_marker() -> void:
 	elif rally_marker:
 		rally_marker.visible = false
 
+## --- Regiment standards ---
+
+## One standard per regiment, hanging over the middle of the block rather than
+## over any one man — a regiment is the thing being marked, and a flag pinned
+## to the officer reads as his rather than theirs.
+##
+## Worked out locally on every peer: Unit.regiment_id is replicated and
+## Unit.regiment_banner is authored into the unit scene, so nobody needs the
+## host's regiment records to draw the right flag in the right place.
+const REGIMENT_BANNER_HEIGHT: float = 2.6
+const REGIMENT_BANNER_PIXEL_SIZE: float = 0.0028
+const REGIMENT_BANNER_ALPHA: float = 0.95
+## How often the blocks are re-surveyed. The sprites ease toward the answer
+## every frame, so this only has to keep up with a marching block, not be
+## smooth in itself — and the survey walks every unit on the map.
+const REGIMENT_BANNER_RESURVEY: float = 0.2
+## How quickly a standard catches up with its block.
+const REGIMENT_BANNER_FOLLOW: float = 6.0
+
+var _regiment_banners: Dictionary = {}
+var _regiment_targets: Dictionary = {}
+var _regiment_resurvey_timer: float = 0.0
+
+func update_regiment_banners(delta: float) -> void:
+	_regiment_resurvey_timer -= delta
+	if _regiment_resurvey_timer <= 0.0:
+		_regiment_resurvey_timer = REGIMENT_BANNER_RESURVEY
+		_resurvey_regiments()
+	var weight: float = minf(1.0, REGIMENT_BANNER_FOLLOW * delta)
+	for id in _regiment_banners:
+		var sprite: Sprite3D = _regiment_banners[id]
+		sprite.global_position = sprite.global_position.lerp(_regiment_targets[id], weight)
+
+func _resurvey_regiments() -> void:
+	var sums: Dictionary = {}
+	var counts: Dictionary = {}
+	var tallies: Dictionary = {}
+	for node in get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit == null or unit.regiment_id < 0 or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		var id: int = unit.regiment_id
+		sums[id] = (sums.get(id, Vector3.ZERO) as Vector3) + unit.global_position
+		counts[id] = int(counts.get(id, 0)) + 1
+		if unit.regiment_banner != null:
+			var tally: Dictionary = tallies.get(id, {})
+			tally[unit.regiment_banner] = int(tally.get(unit.regiment_banner, 0)) + 1
+			tallies[id] = tally
+	## Retire standards whose block no longer has anybody standing.
+	for id in _regiment_banners.keys():
+		if not counts.has(id):
+			(_regiment_banners[id] as Sprite3D).queue_free()
+			_regiment_banners.erase(id)
+			_regiment_targets.erase(id)
+	for id in counts:
+		var centre: Vector3 = (sums[id] as Vector3) / float(counts[id])
+		centre.y += REGIMENT_BANNER_HEIGHT
+		_regiment_targets[id] = centre
+		var sprite: Sprite3D = _regiment_banners.get(id)
+		if sprite == null:
+			sprite = _make_regiment_banner()
+			_regiment_banners[id] = sprite
+			sprite.global_position = centre
+		sprite.texture = _majority_banner(tallies.get(id, {}))
+		sprite.visible = sprite.texture != null
+
+func _make_regiment_banner() -> Sprite3D:
+	var sprite := Sprite3D.new()
+	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	sprite.shaded = false
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.pixel_size = REGIMENT_BANNER_PIXEL_SIZE
+	## Blended rather than alpha-scissored: the standard is deliberately a
+	## little see-through so it never hides the block underneath it.
+	sprite.modulate = Color(1.0, 1.0, 1.0, REGIMENT_BANNER_ALPHA)
+	add_child(sprite)
+	return sprite
+
+## The flag most of a block is carrying; null for a block whose men carry none.
+func _majority_banner(tally: Dictionary) -> Texture2D:
+	var best: Texture2D = null
+	var best_count := 0
+	for texture in tally:
+		if tally[texture] > best_count:
+			best = texture
+			best_count = tally[texture]
+	return best
+
 func _ensure_rally_marker() -> void:
 	if rally_marker:
 		return

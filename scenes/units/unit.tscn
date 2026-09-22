@@ -101,6 +101,9 @@ properties/4/replication_mode = 2
 properties/5/path = NodePath(".:hold_position")
 properties/5/spawn = true
 properties/5/replication_mode = 2
+properties/6/path = NodePath(".:regiment_id")
+properties/6/spawn = true
+properties/6/replication_mode = 2
 
 [node name="Unit" type="CharacterBody3D" unique_id=1622850852 groups=["units"]]
 collision_layer = 4

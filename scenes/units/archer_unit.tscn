@@ -7,6 +7,8 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="5_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="6_gold"]
 
+[ext_resource type="Texture2D" path="res://assets/art/Banners/archers.png" id="banner_tex"]
+
 [sub_resource type="Resource" id="ResourceCost_archer_wood"]
 script = ExtResource("4_cost_script")
 resource_type = ExtResource("5_wood")
@@ -38,3 +40,4 @@ projectile_speed = 16.0
 damage_type = 3
 armor_class = 3
 unit_category = 2
+regiment_banner = ExtResource("banner_tex")

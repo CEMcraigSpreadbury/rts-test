@@ -31,6 +31,10 @@ const UNIT_HOLD_KEY: Key = KEY_G
 ## for the actual building choice — safe since only one of the two menus is
 ## ever live for a given selection state.
 const UNIT_BUILD_KEY: Key = KEY_B
+## Forms a regiment from the selection, or breaks up the one that is selected
+## — one key for both, since a selection can only ever be in a position to do
+## one of them (see selection_regiment_action).
+const UNIT_REGIMENT_KEY: Key = KEY_N
 ## Formation-shape hotkeys — cycles the active selection's move-order shape
 ## (see Formation.Type / current_formation_type / _set_formation_type). F1-F3
 ## are unused elsewhere (camera only reads W/A/S/D/Q/E, see above), matching
@@ -723,6 +727,29 @@ func _spawn_scenario_sides() -> void:
 ## Host-only: peer_id -> the AiPlayer brain playing that slot.
 var ai_players: Dictionary = {}
 
+## Host-side regiments by id (see scripts/regiment.gd). Like ai_players, this
+## is authoritative state the host owns outright and never replicates — a
+## client sees the men, not the body they belong to.
+var regiments: Dictionary = {}
+
+## The regiment `unit` belongs to, or null while it is loose. Goes through the
+## id rather than a held reference so a disbanded or wiped-out regiment can
+## never be resurrected by something still pointing at it.
+func regiment_of(unit: Unit) -> Regiment:
+	if unit == null or unit.regiment_id < 0:
+		return null
+	return regiments.get(unit.regiment_id)
+
+## Retires regiments with nobody left standing. Cheap enough to run whenever
+## something dies; membership is otherwise only changed deliberately.
+func prune_regiments() -> void:
+	for id in regiments.keys():
+		var regiment: Regiment = regiments[id]
+		regiment.prune()
+		if regiment.is_spent():
+			regiment.release()
+			regiments.erase(id)
+
 func _start_ai_player(peer_id: int) -> void:
 	var ai := AiPlayer.new()
 	ai.name = "AiPlayer%d" % peer_id
@@ -961,7 +988,10 @@ func _check_for_game_over() -> void:
 ## previous tick is judged together: two players crossing the line on the
 ## same tick is a draw.
 func _physics_process(delta: float) -> void:
-	if not multiplayer.is_server() or game_over or not conquest_enabled or favour_target <= 0:
+	if not multiplayer.is_server() or game_over:
+		return
+	_tick_regiments(delta)
+	if not conquest_enabled or favour_target <= 0:
 		return
 	## A mission scores Favour for its quest to count; it only ends the match
 	## by itself when the scenario asks for a plain race.
@@ -1531,6 +1561,7 @@ func _process(delta: float) -> void:
 	feedback.update_hover_ring()
 	feedback.update_ability_target_decal()
 	feedback.update_path_markers()
+	feedback.update_regiment_banners(delta)
 	_poll_formation_drag()
 	if PerfStats.enabled:
 		var start := Time.get_ticks_usec()
@@ -1688,6 +1719,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		elif event.keycode == UNIT_PATROL_KEY:
 			arm_patrol_mode()
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_REGIMENT_KEY and selection_regiment_action() != RegimentAction.NONE:
+			toggle_regiment()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_BUILD_KEY and any_selected_can_build():
@@ -1958,6 +1993,28 @@ func _select_next_idle_villager() -> void:
 ## Double-clicking a unit selects every other owned unit of the same type
 ## currently visible on screen — same "same type" notion as display_name
 ## already uses elsewhere (Villager/Soldier/Cavalry/...).
+## Clicking one man picks up the whole body he belongs to: a regiment is the
+## thing the player commands, so there is never a reason to be holding one
+## man of one. False for a loose unit, which selects on its own as before.
+##
+## Membership is read off the units themselves rather than the host's records,
+## so a client resolves the same block the host would (see Unit.regiment_id).
+func _select_regiment_of(clicked: Unit) -> bool:
+	if clicked.regiment_id < 0:
+		return false
+	var members: Array[Unit] = []
+	for node in get_tree().get_nodes_in_group("units"):
+		var unit := node as Unit
+		if unit != null and unit.regiment_id == clicked.regiment_id 				and unit.status_activity != Unit.Activity.DEAD:
+			members.append(unit)
+	if members.is_empty():
+		return false
+	for unit in members:
+		unit.selected = true
+		selected_units.append(unit)
+	clicked.play_select_sound()
+	return true
+
 func _select_all_visible_units_of_type(unit_type: String) -> void:
 	for u in selected_units:
 		u.selected = false
@@ -2097,7 +2154,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 			select_resource(null)
 			if double_click:
 				_select_all_visible_units_of_type(collider.display_name)
-			else:
+			elif not _select_regiment_of(collider):
 				collider.selected = true
 				selected_units.append(collider)
 				collider.play_select_sound()
@@ -2305,6 +2362,256 @@ func _rpc_set_hold_position(unit_paths: Array[NodePath], enabled: bool) -> void:
 		if unit != null and unit.owner_peer_id == sender_id:
 			unit.hold_position = enabled
 
+## --- Regiments ---
+
+## What UNIT_REGIMENT_KEY would do with what is selected right now. NONE hides
+## the command entirely rather than offering something that would fail.
+enum RegimentAction { NONE, FORM, DISBAND, REINFORCE }
+
+## Works entirely off the units themselves — regiment_id is replicated and
+## display_name is authored — so a client offers exactly the command the host
+## will carry out, without needing the regiment records.
+##
+## A regiment selected on its own can only be broken up. A regiment selected
+## alongside loose units is being topped up, never disbanded: that way a
+## fumbled selection can waste a click but can never destroy a block.
+func selection_regiment_action() -> RegimentAction:
+	var in_regiment: Unit = null
+	var loose_officers: Array[Unit] = []
+	var loose_men: Array[Unit] = []
+	for unit in selected_units:
+		if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if unit.regiment_id >= 0:
+			if in_regiment == null:
+				in_regiment = unit
+		elif unit.is_officer:
+			loose_officers.append(unit)
+		elif unit.can_fight:
+			loose_men.append(unit)
+	if in_regiment != null:
+		if loose_officers.is_empty() and loose_men.is_empty():
+			return RegimentAction.DISBAND
+		return RegimentAction.REINFORCE
+	if not loose_officers.is_empty() and regiment_tier_for(largest_same_type(loose_men).size()) >= 0:
+		return RegimentAction.FORM
+	return RegimentAction.NONE
+
+## The men of whichever single type is most numerous in `units`. A regiment is
+## always one kind of soldier — the officer aside — so a mixed selection forms
+## from its largest type and leaves the rest loose rather than being refused.
+static func largest_same_type(units: Array[Unit]) -> Array[Unit]:
+	var by_type: Dictionary = {}
+	for unit in units:
+		var bucket: Array[Unit] = by_type.get(unit.display_name, [] as Array[Unit])
+		bucket.append(unit)
+		by_type[unit.display_name] = bucket
+	var best: Array[Unit] = []
+	for key in by_type:
+		var bucket: Array[Unit] = by_type[key]
+		if bucket.size() > best.size():
+			best = bucket
+	return best
+
+## The largest tier `count` men can fill, or -1 if they cannot fill even the
+## smallest. A regiment is never raised under strength: a known size is what
+## makes its shape and the cost of ordering it predictable.
+static func regiment_tier_for(count: int) -> int:
+	var best := -1
+	for i in Regiment.TIER_SIZES.size():
+		if count >= Regiment.TIER_SIZES[i]:
+			best = i
+	return best
+
+func toggle_regiment() -> void:
+	prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+	_rpc_toggle_regiment.rpc_id(1, unit_paths)
+	play_command_sound()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_toggle_regiment(unit_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	toggle_regiment_as(sender_id, unit_paths)
+
+## Host only, and like the order paths an AI calls this directly with its own
+## peer id, so an AI raises regiments through exactly the same checks.
+func toggle_regiment_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var units: Array[Unit] = []
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit != null and unit.owner_peer_id == sender_id and unit.status_activity != Unit.Activity.DEAD:
+			units.append(unit)
+	if units.is_empty():
+		return
+	var regiment: Regiment = null
+	var loose_officers: Array[Unit] = []
+	var loose_men: Array[Unit] = []
+	for unit in units:
+		var existing: Regiment = regiment_of(unit)
+		if existing != null:
+			if regiment == null:
+				regiment = existing
+		elif unit.is_officer:
+			loose_officers.append(unit)
+		elif unit.can_fight:
+			loose_men.append(unit)
+	if regiment != null:
+		if loose_officers.is_empty() and loose_men.is_empty():
+			disband_regiment(regiment)
+		else:
+			reinforce_regiment(regiment, loose_men, loose_officers)
+		return
+	form_regiment(sender_id, units)
+
+## Tops `regiment` back up: men of its own type up to the room it has left,
+## and one officer if it is leaderless. Never past its established size and
+## never mixed — the two things a regiment's size and type are for. A body
+## worn down to nothing but its officer takes whichever single type is most
+## numerous among the men offered.
+func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_officers: Array[Unit]) -> int:
+	var added := 0
+	## The front the block is already holding, handed to everyone who joins it
+	## so a reinforced regiment still reads as one body facing one way — see
+	## GroupMovement._regiment_front for what a man with no front costs.
+	var front := Vector3.ZERO
+	for unit in regiment.all_units():
+		if is_instance_valid(unit) and unit.formation_facing != Vector3.ZERO:
+			front = unit.formation_facing
+			break
+	if not regiment.has_officer() and not loose_officers.is_empty():
+		if regiment.set_officer(loose_officers[0]):
+			loose_officers[0].formation_facing = front
+			added += 1
+	var wanted: String = regiment.unit_type()
+	var joining: Array[Unit] = loose_men if wanted != "" else largest_same_type(loose_men)
+	for unit in joining:
+		if regiment.room() == 0:
+			break
+		if wanted == "" or unit.display_name == wanted:
+			if regiment.add(unit):
+				unit.formation_facing = front
+				added += 1
+	if added > 0:
+		refresh_regiment_buffs(regiment)
+	return added
+
+## The regiment `units` are, if they are all of one body and it is all of
+## them — the case where the block has a shared front and held places worth
+## keeping. Null for a mixed or partial selection.
+func sole_regiment(units: Array[Unit]) -> Regiment:
+	if units.is_empty():
+		return null
+	var regiment: Regiment = regiment_of(units[0])
+	if regiment == null:
+		return null
+	for unit in units:
+		if unit.regiment_id != regiment.id:
+			return null
+	return regiment
+
+## An order to any part of a regiment is an order to the whole body. Clicking
+## a member already selects all of it (see _select_regiment_of), but a control
+## group, a drag that caught half the block, or an AI ordering the men it knows
+## about can all still arrive here with a piece of one — and half a regiment
+## walking off would undo the formation the regiment exists to hold.
+##
+## Order is preserved so the formation solve still sees the selection the
+## player made first, with the rest of each body appended behind it.
+func expand_to_regiments(units: Array[Unit]) -> Array[Unit]:
+	var seen: Dictionary = {}
+	var ids: Dictionary = {}
+	var out: Array[Unit] = []
+	for unit in units:
+		if not seen.has(unit):
+			seen[unit] = true
+			out.append(unit)
+		if unit.regiment_id >= 0:
+			ids[unit.regiment_id] = true
+	for id in ids:
+		var regiment: Regiment = regiments.get(id)
+		if regiment == null:
+			continue
+		for unit in regiment.all_units():
+			if is_instance_valid(unit) and unit.status_activity != Unit.Activity.DEAD and not seen.has(unit):
+				seen[unit] = true
+				out.append(unit)
+	return out
+
+## Raises a regiment from the officer and the loose men in `units`. Takes the
+## largest tier they can fill and leaves the remainder loose rather than
+## forming an under-strength body. Returns null if there is no officer, or not
+## enough men for the smallest tier.
+func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
+	var officer: Unit = null
+	var men: Array[Unit] = []
+	for unit in units:
+		if unit.regiment_id >= 0:
+			continue
+		if unit.is_officer:
+			if officer == null:
+				officer = unit
+		elif unit.can_fight:
+			men.append(unit)
+	if officer == null:
+		return null
+	men = largest_same_type(men)
+	var tier := regiment_tier_for(men.size())
+	if tier < 0:
+		return null
+	var regiment := Regiment.create(peer_id, tier)
+	regiment.set_officer(officer)
+	for man in men:
+		if not regiment.add(man):
+			break
+	regiments[regiment.id] = regiment
+	refresh_regiment_buffs(regiment)
+	return regiment
+
+## A regiment loses its bonuses the moment its officer falls and gets them
+## back when another takes over, so this is polled rather than set once at
+## forming — there is no death signal to hang it off, and a body that stops
+## being led should notice within a moment either way.
+const REGIMENT_UPKEEP_INTERVAL: float = 0.5
+var _regiment_upkeep_timer: float = 0.0
+
+func _tick_regiments(delta: float) -> void:
+	if regiments.is_empty():
+		return
+	_regiment_upkeep_timer -= delta
+	if _regiment_upkeep_timer > 0.0:
+		return
+	_regiment_upkeep_timer = REGIMENT_UPKEEP_INTERVAL
+	prune_regiments()
+	for id in regiments:
+		refresh_regiment_buffs(regiments[id])
+
+## Writes (or clears) a regiment's bonuses onto its men.
+func refresh_regiment_buffs(regiment: Regiment) -> void:
+	var damage: float = 0.0
+	var armor: int = 0
+	if regiment.has_officer():
+		damage = Regiment.DAMAGE_BONUS[regiment.tier]
+		armor = Regiment.ARMOR_BONUS[regiment.tier]
+	for unit in regiment.all_units():
+		if is_instance_valid(unit):
+			unit.regiment_damage_bonus = damage
+			unit.regiment_armor_bonus = armor
+
+func disband_regiment(regiment: Regiment) -> void:
+	regiment.release()
+	regiments.erase(regiment.id)
+
 func issue_stop_order() -> void:
 	prune_selected_units()
 	if selected_units.is_empty():
@@ -2349,6 +2656,7 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		var unit := get_node_or_null(path) as Unit
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
+	units = expand_to_regiments(units)
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: resolve units", Time.get_ticks_usec() - resolve_start)
 
@@ -2373,7 +2681,20 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## Resolved once here so the slots, the march and ranks closing later all
 	## share one facing (see GroupMovement.order_facing).
 	var formation_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+	## The front the block is holding, read before the order rewrites it.
+	var ordered_regiment: Regiment = sole_regiment(units)
+	var held_front := Vector3.ZERO
+	if ordered_regiment != null:
+		for unit in units:
+			if unit.formation_facing != Vector3.ZERO:
+				held_front = unit.formation_facing
+				break
 	facing = group_movement.order_facing(units, world_pos, facing)
+	## Sent somewhere behind its own front: the block turns about, and the
+	## renumbering sticks (see Regiment.turn_about). Without it the men would
+	## march through each other to face the other way.
+	if ordered_regiment != null and held_front != Vector3.ZERO and held_front.dot(facing) < 0.0:
+		ordered_regiment.turn_about()
 	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type, facing, front_width)
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: formation", Time.get_ticks_usec() - formation_start)
@@ -2424,6 +2745,20 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback, facing, front_width)
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: register", Time.get_ticks_usec() - register_start)
+	## Leave every man in a regiment holding the same front, whatever
+	## register_formation made of the group — it only stamps the members it
+	## still counts as walking the order, so a man who had already arrived, or
+	## who was pulled out of a fight, keeps an old front or none at all.
+	##
+	## That front is the only thing that tells the NEXT order whether it is a
+	## turn about (see GroupMovement.formation_positions), and one man out of
+	## step is enough to lose it for the whole block — at which point it
+	## marches through itself to face the other way instead of turning.
+	if ordered_regiment != null:
+		ordered_regiment.facing = facing
+		for unit in ordered_regiment.all_units():
+			if is_instance_valid(unit):
+				unit.formation_facing = facing
 	if attack_move_fallback and target_node == null and not append:
 		var engage_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		_engage_at_attack_move_destination(units, world_pos, sender_id)

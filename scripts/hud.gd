@@ -967,6 +967,15 @@ func _populate_unit_command_buttons() -> void:
 	buttons.append(_hold_button)
 	if main.any_selected_can_build():
 		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_BUILD_KEY), "Build", [], null, open_build_submenu))
+	var regiment_action: Main.RegimentAction = main.selection_regiment_action()
+	if regiment_action != Main.RegimentAction.NONE:
+		var label: String = "Form Regiment"
+		if regiment_action == Main.RegimentAction.DISBAND:
+			label = "Disband"
+		elif regiment_action == Main.RegimentAction.REINFORCE:
+			label = "Reinforce"
+		buttons.append(_make_command_button(
+			OS.get_keycode_string(Main.UNIT_REGIMENT_KEY), label, [], null, main.toggle_regiment))
 
 	## Promotion and abilities only make sense for a single selected unit — a
 	## group promote/activate has no sensible target.
