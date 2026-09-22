@@ -1390,6 +1390,13 @@ var _knockback_remaining: float = 0.0
 
 func _ready() -> void:
 	status_current_health = max_health
+	## Spread the aggro scans over the interval instead of letting them land
+	## together: the timer starts at zero for every unit and resets to the same
+	## interval, so a group spawned or ordered together scanned in lockstep on
+	## one physics tick forever after — and the assault scan is the most
+	## expensive thing a unit does (see _nearest_in_assault_area). Same reason
+	## AiPlayer staggers its think.
+	_enemy_scan_timer = randf() * ENEMY_SCAN_INTERVAL
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_sprite_base_position = sprite.position
@@ -1476,9 +1483,15 @@ func repath() -> void:
 func _path_ready() -> bool:
 	var target: Vector3 = nav_agent.target_position
 	var iteration := PathBudget.map_iteration(nav_agent.get_navigation_map())
-	if not _path_stale and target == _path_target and iteration == _path_iteration \
-			and not nav_agent.get_current_navigation_path().is_empty():
-		return true
+	if not _path_stale and target == _path_target and iteration == _path_iteration:
+		## Split out and measured: this hands back a copy of the whole path
+		## array, on every unit, on every tick that its path is still current.
+		var path_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+		var has_path: bool = not nav_agent.get_current_navigation_path().is_empty()
+		if PerfStats.enabled:
+			PerfStats.add_unit_section(&"nav: path copy", Time.get_ticks_usec() - path_start)
+		if has_path:
+			return true
 	PathBudget.serve()
 	if _path_granted_frame >= 0:
 		var fresh: bool = _path_granted_frame >= Engine.get_physics_frames() - 1
@@ -1596,6 +1609,14 @@ func end_march() -> void:
 ## Desired velocity while marching: keep pace with the anchor and close on this
 ## unit's own point, or path to that point when too far off to walk straight.
 func _march_desired_velocity(max_speed: float) -> Vector3:
+	if not PerfStats.enabled:
+		return _march_velocity_step(max_speed)
+	var start := Time.get_ticks_usec()
+	var result := _march_velocity_step(max_speed)
+	PerfStats.add_unit_section(&"march velocity", Time.get_ticks_usec() - start)
+	return result
+
+func _march_velocity_step(max_speed: float) -> Vector3:
 	var to_point := _march_point - global_position
 	to_point.y = 0.0
 	if to_point.length() > MARCH_CATCH_UP_DISTANCE:
@@ -1660,6 +1681,14 @@ func _funnel_can_arm() -> bool:
 ##     unreachable (blocked, or walled up mid-move) — without it a funnelled
 ##     unit could stand at a waypoint indefinitely.
 func _update_funnel(delta: float) -> void:
+	if not PerfStats.enabled:
+		_funnel_step(delta)
+		return
+	var start := Time.get_ticks_usec()
+	_funnel_step(delta)
+	PerfStats.add_unit_section(&"funnel", Time.get_ticks_usec() - start)
+
+func _funnel_step(delta: float) -> void:
 	if not _funnel_active:
 		return
 	_funnel_timer += delta
@@ -1878,6 +1907,14 @@ func hold_formation_fight() -> void:
 ## there, since it's never far. True while it's doing so (the rest of the
 ## tick's steering is skipped).
 func _tick_formation_place(delta: float) -> bool:
+	if not PerfStats.enabled:
+		return _formation_place_step(delta)
+	var start := Time.get_ticks_usec()
+	var handled := _formation_place_step(delta)
+	PerfStats.add_unit_section(&"formation place", Time.get_ticks_usec() - start)
+	return handled
+
+func _formation_place_step(delta: float) -> bool:
 	if not in_formation_fight or status_activity != Activity.IDLE or status_command != Command.NONE:
 		_returning_to_place = false
 		return false
@@ -2623,6 +2660,7 @@ func _physics_tick(delta: float) -> void:
 	else:
 		velocity.y -= GRAVITY * delta
 
+	var status_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	_tick_status_effects(delta)
 	if status_activity == Activity.DEAD:
 		return
@@ -2639,6 +2677,8 @@ func _physics_tick(delta: float) -> void:
 
 	_update_charge(delta)
 	_update_brace(delta)
+	if PerfStats.enabled:
+		PerfStats.add_unit_section(&"status ticks", Time.get_ticks_usec() - status_start)
 
 	## Knocked back by a charge: carried along, nothing else, until it's spent.
 	if _knockback_remaining > 0.0:
@@ -2803,7 +2843,12 @@ func _physics_tick(delta: float) -> void:
 	## cross-map search per unit, for a result the march would throw away.
 	var direction := Vector3.ZERO
 	if not _march_active:
-		if not _path_ready():
+		var nav_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+		var path_ready := _path_ready()
+		if PerfStats.enabled:
+			PerfStats.add_unit_section(&"nav: ready check", Time.get_ticks_usec() - nav_start)
+		var waypoint_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+		if not path_ready:
 			direction = _straight_direction()
 		elif not nav_agent.is_navigation_finished():
 			var next_pos: Vector3 = nav_agent.get_next_path_position()
@@ -2812,6 +2857,8 @@ func _physics_tick(delta: float) -> void:
 			direction.y = 0.0
 			if direction.length_squared() > 0.0001:
 				direction = direction.normalized()
+		if PerfStats.enabled:
+			PerfStats.add_unit_section(&"nav: waypoint", Time.get_ticks_usec() - waypoint_start)
 
 	## Units always travel at their own full speed, even in a mixed group —
 	## no slowest-member cap (formation_speed) and no cohesion throttle.
@@ -2834,6 +2881,14 @@ func _physics_tick(delta: float) -> void:
 ## Units sitting on exactly the same point part along a per-unit fixed angle so
 ## a stacked pair splits instead of both computing a zero-length direction.
 func _update_separation(delta: float) -> Vector3:
+	if not PerfStats.enabled:
+		return _separation_push(delta)
+	var start := Time.get_ticks_usec()
+	var push := _separation_push(delta)
+	PerfStats.add_unit_section(&"separation", Time.get_ticks_usec() - start)
+	return push
+
+func _separation_push(delta: float) -> Vector3:
 	_separation_timer -= delta
 	if _separation_timer > 0.0:
 		return _separation_velocity
@@ -2871,6 +2926,14 @@ func _update_separation(delta: float) -> Vector3:
 ## flickering frame to frame) and then eased toward smoothly so the unit's
 ## speed ramps rather than snaps.
 func _update_cohesion(delta: float, base_speed: float) -> void:
+	if not PerfStats.enabled:
+		_cohesion_step(delta, base_speed)
+		return
+	var start := Time.get_ticks_usec()
+	_cohesion_step(delta, base_speed)
+	PerfStats.add_unit_section(&"cohesion", Time.get_ticks_usec() - start)
+
+func _cohesion_step(delta: float, base_speed: float) -> void:
 	if formation_speed <= 0.0 or formation_group.is_empty() or formation_initial_distance <= 0.0:
 		_cohesion_speed_scale = 1.0
 		_cohesion_last_remaining_distance = -1.0
@@ -2992,6 +3055,14 @@ func _formation_progress() -> float:
 ## slide (and one that switched into them earlier this tick, e.g. a chase that
 ## just started attacking) are left alone.
 func _apply_velocity(desired: Vector3) -> void:
+	if not PerfStats.enabled:
+		_velocity_step(desired)
+		return
+	var start := Time.get_ticks_usec()
+	_velocity_step(desired)
+	PerfStats.add_unit_section(&"apply velocity", Time.get_ticks_usec() - start)
+
+func _velocity_step(desired: Vector3) -> void:
 	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD or status_activity == Activity.CASTING:
 		return
 
@@ -3419,6 +3490,14 @@ func _head_to_target() -> void:
 ## the target's current position rather than the one it held when the chase
 ## started. Buildings never move, so this only runs for unit targets.
 func _tick_chase(delta: float) -> void:
+	if not PerfStats.enabled:
+		_chase_step(delta)
+		return
+	var start := Time.get_ticks_usec()
+	_chase_step(delta)
+	PerfStats.add_unit_section(&"chase", Time.get_ticks_usec() - start)
+
+func _chase_step(delta: float) -> void:
 	if not _is_target_alive(attack_target) or attack_target is ProductionBuilding:
 		return
 	_chase_repath_timer -= delta
@@ -3568,6 +3647,14 @@ func _face_attack_target(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), rotation_speed * delta)
 
 func _tick_attacking(delta: float) -> void:
+	if not PerfStats.enabled:
+		_attacking_step(delta)
+		return
+	var start := Time.get_ticks_usec()
+	_attacking_step(delta)
+	PerfStats.add_unit_section(&"attacking", Time.get_ticks_usec() - start)
+
+func _attacking_step(delta: float) -> void:
 	if not _is_target_alive(attack_target):
 		_find_new_target_or_idle()
 		return
@@ -3852,22 +3939,34 @@ func _find_assault_target() -> Node3D:
 ## group agrees on which targets are in scope instead of each peeling off after
 ## whatever happens to be nearest to it personally; distance from this unit is
 ## only the tie-break between those in-scope targets.
+## Units come from the spatial hash rather than the whole "units" group. The
+## area is ASSAULT_AREA_RADIUS across and that group is every unit on the map,
+## so this used to visibility-test hundreds of units to find the handful
+## standing in a 12 m circle — and every assaulting unit did it on the same
+## tick. Buildings have no grid, so they still walk their group; the tests are
+## ordered cheapest-first either way, with _can_see last because it is the
+## only one that runs a spatial query of its own.
 func _nearest_in_assault_area(group: StringName) -> Node3D:
 	var nearest: Node3D = null
 	var nearest_dist := INF
-	for node in get_tree().get_nodes_in_group(group):
+	var candidates: Array
+	if group == &"units":
+		candidates = UnitGrid.enemies_near(get_tree(), assault_center, ASSAULT_AREA_RADIUS, owner_peer_id)
+	else:
+		candidates = get_tree().get_nodes_in_group(group)
+	for node in candidates:
 		var candidate := node as Node3D
 		if candidate == null or candidate == self:
 			continue
 		if not (candidate is Unit or candidate is ProductionBuilding):
+			continue
+		if _flat_distance(assault_center, candidate.global_position) > ASSAULT_AREA_RADIUS:
 			continue
 		if not Teams.is_enemy(owner_peer_id, candidate.owner_peer_id) or not _is_target_alive(candidate):
 			continue
 		if not CombatUtils.is_worth_attacking(candidate):
 			continue
 		if not _can_see(candidate):
-			continue
-		if _flat_distance(assault_center, candidate.global_position) > ASSAULT_AREA_RADIUS:
 			continue
 		var dist := _flat_distance(global_position, candidate.global_position)
 		if dist < nearest_dist:
@@ -3884,6 +3983,14 @@ func _flat_distance(a: Vector3, b: Vector3) -> float:
 ## this unit's own kind already on it (see _crowd_penalty), so melee and ranged
 ## alike spread across nearby enemies; `search_range` still limits the raw distance.
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
+	if not PerfStats.enabled:
+		return _nearest_enemy_scan(search_range)
+	var start := Time.get_ticks_usec()
+	var found := _nearest_enemy_scan(search_range)
+	PerfStats.add_unit_section(&"enemy scan", Time.get_ticks_usec() - start)
+	return found
+
+func _nearest_enemy_scan(search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_score := INF
 	for node in UnitGrid.enemies_near(get_tree(), global_position, search_range, owner_peer_id):
@@ -3895,12 +4002,19 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 		## volley across the enemy line instead of stacking it on one dying unit.
 		if not CombatUtils.is_worth_attacking(other):
 			continue
-		if not _can_see(other):
-			continue
 		if leash_radius > 0.0 and leash_origin.global_position.distance_to(other.global_position) > leash_radius:
 			continue
 		var dist := global_position.distance_to(other.global_position)
 		if dist > search_range:
+			continue
+		## This unit's own eyes before the shared check, and both after the
+		## cheap tests above. _can_see asks whether anyone on this side can see
+		## the spot, which runs a spatial query of its own for every candidate
+		## it is handed — and in a melee it is handed hundreds, nearly all of
+		## them already inside this unit's own vision. Anything this unit can
+		## see itself is visible to its side by definition, so the query only
+		## has to run for the ones further out than that.
+		if dist > vision_range and not _can_see(other):
 			continue
 		var score := dist + _crowd_penalty(other)
 		if score <= nearest_score:
@@ -4202,7 +4316,7 @@ func _tick_pack_courage(delta: float) -> void:
 	var mates: int = 0
 	var has_leader: bool = pack_leader
 	var radius_squared: float = PACK_COURAGE_RADIUS * PACK_COURAGE_RADIUS
-	for other in get_tree().get_nodes_in_group("units"):
+	for other in UnitGrid.units_near(get_tree(), global_position, PACK_COURAGE_RADIUS):
 		if other == self or not is_instance_valid(other) or other.status_activity == Activity.DEAD:
 			continue
 		if other.owner_peer_id != owner_peer_id or not other.pack_member:
@@ -4222,7 +4336,7 @@ func _tick_heal_aura(delta: float) -> void:
 		return
 	_heal_aura_timer = heal_aura_interval
 	var radius_squared: float = heal_aura_radius * heal_aura_radius
-	for other in get_tree().get_nodes_in_group("units"):
+	for other in UnitGrid.units_near(get_tree(), global_position, heal_aura_radius):
 		if not is_instance_valid(other) or other.status_activity == Activity.DEAD:
 			continue
 		if other.owner_peer_id != owner_peer_id:

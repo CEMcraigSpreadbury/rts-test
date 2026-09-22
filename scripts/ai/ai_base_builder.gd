@@ -30,7 +30,17 @@ const SITE_FACING_WEIGHT: float = 6.0
 ## Candidate spots actually tested per search (each costs a few physics
 ## queries). Generous, since the favoured side of a base is often forest; a
 ## search that still finds nothing isn't repeated for SITE_RETRY_SECONDS.
-const SITE_TESTS_PER_SEARCH: int = 160
+## Most candidates a search will ever test before giving up on the type.
+## Candidates are scored best-first, so this is the nearest quarter or so of
+## the ring — where a site essentially always is if there is one at all.
+const SITE_TESTS_PER_SEARCH: int = 64
+## How many of those a single think may run before handing the frame back
+## (see find_site). Each test costs a ground raycast, a navmesh closest-point
+## query over the whole map and a placement shape query, so this number is
+## very close to a straight multiplier on the hitch an AI causes when it goes
+## looking for somewhere to build. Together with the cap above, a search that
+## finds nothing concludes in 8 thinks.
+const SITE_TESTS_PER_THINK: int = 8
 ## Kept clear either side of the Town Center-to-Mine walk.
 const MINE_LANE_HALF_WIDTH: float = 2.5
 ## Deposits further than this from home aren't claimed...
@@ -63,6 +73,10 @@ var _site_progress: Dictionary = {}
 ## so they just stand there; the AI stops sending builders and doesn't count
 ## them as owned.
 var _abandoned: Dictionary = {}
+## Site searches still in progress, type -> {"candidates", "cursor", "tests"}.
+## Keyed by type so a house search and a build-order search running on
+## alternate thinks don't throw away each other's progress.
+var _searches: Dictionary = {}
 
 func _init(p_ai: AiPlayer) -> void:
 	ai = p_ai
@@ -190,25 +204,42 @@ func try_construct(type: BuildingType) -> bool:
 	var pos := Vector3.ZERO
 	var target_path := NodePath()
 	if type.requires_deposit:
+		var deposit_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		var deposit := _pick_deposit(type)
+		if PerfStats.enabled:
+			PerfStats.add_ai_phase(&"build: pick deposit", Time.get_ticks_usec() - deposit_start)
 		if deposit == null:
 			_no_site[type] = true
 			return false
 		pos = deposit.global_position
 		target_path = deposit.get_path()
 	else:
+		var site_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		var site = find_site(type)
+		if PerfStats.enabled:
+			PerfStats.add_ai_phase(&"build: find site", Time.get_ticks_usec() - site_start)
+		## Still working through its candidates: not "nowhere to build", just
+		## not answered yet, so the type mustn't be blacklisted in _no_site.
+		if site is bool:
+			return false
 		if site == null:
 			_no_site[type] = true
 			return false
 		pos = site
+	var builders_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	var builders: Array[Unit] = ai.economy.pick_builders(pos, maxi(ai.profile.builders_per_site, 1))
+	if PerfStats.enabled:
+		PerfStats.add_ai_phase(&"build: pick builders", Time.get_ticks_usec() - builders_start)
 	if builders.is_empty():
 		return false
 	var paths: Array[NodePath] = []
 	for unit in builders:
 		paths.append(unit.get_path())
-	return ai.main.placement.request_build_as(ai.peer_id, ai.building_type_index[type], pos, target_path, paths, false) != null
+	var request_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+	var placed = ai.main.placement.request_build_as(ai.peer_id, ai.building_type_index[type], pos, target_path, paths, false)
+	if PerfStats.enabled:
+		PerfStats.add_ai_phase(&"build: request", Time.get_ticks_usec() - request_start)
+	return placed != null
 
 ## Nearest unclaimed deposit to home that's out of harm's way and can be
 ## walked to. Our own side of the map while there's a choice — a mine out by
@@ -236,7 +267,14 @@ func _pick_deposit(type: BuildingType) -> Gatherable:
 
 ## A valid open-ground spot for `type` near home, or null. Rings of
 ## candidates around the Town Center, best-scored first (see the class notes).
-func find_site(type: BuildingType) -> Variant:
+## Concentric rings around home, scored so houses tuck in behind the Town
+## Center and everything else faces outward. Geometry only — nothing here
+## touches the world, so a search can work through it over several thinks.
+##
+## Deliberately rebuilt per search rather than cached between them: caching it
+## was tried and measured, and moved nothing. The ring maths is not where a
+## search spends its time — the per-candidate tests are (see find_site).
+func _site_candidates(type: BuildingType) -> Array:
 	var radius: float = type.footprint_radius
 	var is_house: bool = ai.building_roles.get(type) == AiPlayer.BuildingRole.HOUSE
 	var away: Vector3 = ai.away_from_centre()
@@ -257,22 +295,50 @@ func find_site(type: BuildingType) -> Variant:
 			candidates.append([score, pos])
 		r += SITE_RING_STEP
 	candidates.sort_custom(func(a, b): return a[0] < b[0])
-	var tests := 0
-	for candidate in candidates:
-		if tests >= SITE_TESTS_PER_SEARCH:
-			break
-		var pos: Vector3 = candidate[1]
+	return candidates
+
+## The next site for `type`: a Vector3 once one is found, null once the search
+## has exhausted its candidates, and false while it is still working.
+##
+## Every test can cost a ground raycast, a navmesh lookup, two placement
+## checks and a full A* across the map (AiPlayer.is_reachable), and a search
+## that finds nothing runs SITE_TESTS_PER_SEARCH of them. Doing that in one
+## think put the lot on a single physics tick, once a second per AI, and it
+## was the largest hitch left in a big match. So a search is now spread over
+## consecutive thinks, SITE_TESTS_PER_THINK at a time, the same way PathBudget
+## spreads path queries over frames — a site found a second later than it
+## would have been is invisible in play.
+func find_site(type: BuildingType) -> Variant:
+	var search: Dictionary = _searches.get(type, {})
+	if search.is_empty():
+		search = {"candidates": _site_candidates(type), "cursor": 0, "tests": 0}
+		_searches[type] = search
+	var candidates: Array = search["candidates"]
+	var cursor: int = search["cursor"]
+	var tests: int = search["tests"]
+	var radius: float = type.footprint_radius
+	var this_think: int = 0
+	while cursor < candidates.size() and tests < SITE_TESTS_PER_SEARCH and this_think < SITE_TESTS_PER_THINK:
+		var pos: Vector3 = candidates[cursor][1]
+		cursor += 1
 		if _near_objective(pos):
 			continue
 		tests += 1
+		this_think += 1
 		var ground = ai.ground_at(pos)
 		if ground == null or not ai.on_navmesh(ground):
 			continue
 		if not ai.main.placement.is_area_clear(ground, radius + SITE_CLEARANCE):
 			continue
 		if ai.main.placement.can_place_at(ground, type, ai.peer_id) and ai.is_reachable(ground, SITE_REACH_TOLERANCE):
+			_searches.erase(type)
 			return ground
-	return null
+	search["cursor"] = cursor
+	search["tests"] = tests
+	if cursor >= candidates.size() or tests >= SITE_TESTS_PER_SEARCH:
+		_searches.erase(type)
+		return null
+	return false
 
 func _near_objective(pos: Vector3) -> bool:
 	for objective in ai.objectives:

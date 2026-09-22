@@ -133,10 +133,28 @@ func _physics_process(delta: float) -> void:
 	if _think_timer > 0.0:
 		return
 	_think_timer = profile.think_interval
+	if not PerfStats.enabled:
+		_think()
+		return
+	var start := Time.get_ticks_usec()
 	_think()
+	PerfStats.record_ai_think(Time.get_ticks_usec() - start)
+
+## Runs one phase of a think, timed into PerfStats while the overlay is on
+## ("cmd perf"). An AI's cost is otherwise invisible there: every other system
+## is measured per frame, while a think is one spike every think_interval, so
+## a per-frame average would divide it away to nothing. First thing worth
+## ruling in or out when a match with AI players starts dropping frames.
+func phase(phase_name: StringName, work: Callable) -> void:
+	if not PerfStats.enabled:
+		work.call()
+		return
+	var phase_start := Time.get_ticks_usec()
+	work.call()
+	PerfStats.add_ai_phase(phase_name, Time.get_ticks_usec() - phase_start)
 
 func _think() -> void:
-	_refresh_world()
+	phase(&"refresh world", _refresh_world)
 	if my_buildings.is_empty():
 		return
 	reserved.clear()
@@ -146,27 +164,27 @@ func _think() -> void:
 	## them go first would put off every building until the villager target
 	## was reached. Villagers and soldiers take turns being first by how the
 	## army is keeping up (AiProfile.army_per_villager), for the same reason.
-	economy.think_houses()
-	builder.think()
+	phase(&"houses", economy.think_houses)
+	phase(&"build order", builder.think)
 	## Early on the economy comes first whatever the army ratio says — soldiers
 	## bought with the wood for villagers 6-10 cost the whole game.
 	var economy_started: bool = villagers.size() >= int(profile.target_villagers * profile.economy_first_share)
 	if economy_started and army.size() < villagers.size() * profile.army_per_villager:
-		military.think()
-		economy.think_villagers()
+		phase(&"military", military.think)
+		phase(&"villagers", economy.think_villagers)
 	else:
-		economy.think_villagers()
-		military.think()
+		phase(&"villagers", economy.think_villagers)
+		phase(&"military", military.think)
 	## Fighting before worker jobs, so villagers told to flee aren't handed
 	## a tree in the same breath.
-	combat.think()
+	phase(&"combat", combat.think)
 	## After combat, so powers are aimed off this think's view of the enemy.
-	research.think()
+	phase(&"research", research.think)
 	## Last of the spenders: a Pact is what an AI does with a surplus, never
 	## at the cost of its opening build order.
-	pacts.think()
+	phase(&"pacts", pacts.think)
 	## Orders last, so builders picked above aren't also handed a tree.
-	economy.think_workers()
+	phase(&"workers", economy.think_workers)
 
 func _refresh_world() -> void:
 	villagers.clear()

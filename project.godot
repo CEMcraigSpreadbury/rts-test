@@ -52,6 +52,8 @@ theme/custom="res://assets/ui/theme/dark_ages_theme.tres"
 
 [physics]
 
+common/physics_ticks_per_second=30
+common/max_physics_steps_per_frame=2
 3d/physics_engine="Jolt Physics"
 
 [rendering]

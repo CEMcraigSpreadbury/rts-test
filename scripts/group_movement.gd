@@ -737,12 +737,18 @@ func _formation_record_members(group: Array[Unit]) -> Array[Unit]:
 func update_reformation(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
+	var engagements_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	_update_engagements(delta)
+	if PerfStats.enabled:
+		PerfStats.add_section(&"march: engagements", Time.get_ticks_usec() - engagements_start)
 	if _active_formations.is_empty():
 		return
 	for i in range(_active_formations.size() - 1, -1, -1):
 		var record: Dictionary = _active_formations[i]
+		var holding_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		var members := _record_holding(record)
+		if PerfStats.enabled:
+			PerfStats.add_section(&"march: holding", Time.get_ticks_usec() - holding_start)
 		## Nothing left to hold a shape (everyone died or moved on), or nothing
 		## left to close ranks on the way to (everyone still here has arrived).
 		if members.size() < 2 or not _any_walking(record, members):
@@ -752,7 +758,10 @@ func update_reformation(delta: float) -> void:
 			record["count"] = members.size()
 			record["dirty"] = true
 			record["timer"] = REFORM_DEBOUNCE
+		var advance_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		_advance_march(record, members, delta)
+		if PerfStats.enabled:
+			PerfStats.add_section(&"march: advance", Time.get_ticks_usec() - advance_start)
 		if not record["dirty"]:
 			continue
 		record["timer"] = float(record["timer"]) - delta
@@ -767,6 +776,7 @@ func update_reformation(delta: float) -> void:
 		if any_funnelling(members):
 			record["timer"] = REFORM_FUNNEL_RETRY
 			continue
+		var reform_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		record["dirty"] = false
 		reform_group(members, record["target"], record["type"], record["attack_move"], record["forward"], record["front_width"])
 		## Re-issuing the move ended any formation fight; the block is still
@@ -789,6 +799,8 @@ func update_reformation(delta: float) -> void:
 				march["slots"] = record["slots"]
 				_set_march_offsets(march, _march_members(march, members))
 				_set_route_offsets(march)
+		if PerfStats.enabled:
+			PerfStats.add_section(&"march: reform", Time.get_ticks_usec() - reform_start)
 
 ## How far an idle member that finished this order (Unit.arrived_group) may
 ## have been nudged off its slot — by separation in a crowd, or by settling
@@ -1173,13 +1185,35 @@ func formation_contact(unit: Unit, enemy: Node3D) -> bool:
 	if not multiplayer.is_server():
 		return false
 	var order: Dictionary = unit.attack_move_order
+	var members := _attack_move_members(order)
+	if not members.has(unit):
+		return false
+	return _order_contact(members, order, enemy)
+
+## Whether the block behind `order` came round onto `enemy`. Takes the order
+## rather than one of its members, for a caller that already has the whole
+## group in hand: every member carries the same order and would build the same
+## member list, so asking once per member repeated the same O(group) scan as
+## many times as the group is strong — an n-squared that only shows itself at
+## army size (see Main._engage_at_attack_move_destination).
+func order_contact(order: Dictionary, enemy: Node3D) -> bool:
+	if not multiplayer.is_server():
+		return false
+	return _order_contact(_attack_move_members(order), order, enemy)
+
+## The members of `order` still free to be pulled into a block fight: alive,
+## able to fight, still carrying this exact order, and not already in one.
+func _attack_move_members(order: Dictionary) -> Array[Unit]:
 	var members: Array[Unit] = []
 	for other in order.get("units", []):
 		if is_instance_valid(other) and other.status_activity != Unit.Activity.DEAD and other.can_fight \
 				and is_same(other.attack_move_order, order) and not other.in_formation_fight \
 				and (other.status_command == Unit.Command.ATTACK_MOVE or other.status_command == Unit.Command.NONE):
 			members.append(other)
-	if members.size() < 2 or not members.has(unit) or not can_formation_attack(members, enemy):
+	return members
+
+func _order_contact(members: Array[Unit], order: Dictionary, enemy: Node3D) -> bool:
+	if members.size() < 2 or not can_formation_attack(members, enemy):
 		return false
 	formation_attack(members, enemy, order["type"], order["front_width"])
 	_engagements[_engagements.size() - 1]["resume"] = order

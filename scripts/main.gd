@@ -2343,11 +2343,14 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 
 	var target_node: Node = get_node_or_null(target_path) if target_path != NodePath() else null
 
+	var resolve_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	var units: Array[Unit] = []
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
+	if PerfStats.enabled:
+		PerfStats.record_event(&"order: resolve units", Time.get_ticks_usec() - resolve_start)
 
 	## A ranged group ordered onto an enemy attacks as a block (see
 	## GroupMovement.formation_attack). A shift-queued attack still queues
@@ -2369,8 +2372,11 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		front_width = group_movement.resolve_dragged_width(units, formation_type, front_width)
 	## Resolved once here so the slots, the march and ranks closing later all
 	## share one facing (see GroupMovement.order_facing).
+	var formation_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	facing = group_movement.order_facing(units, world_pos, facing)
 	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type, facing, front_width)
+	if PerfStats.enabled:
+		PerfStats.record_event(&"order: formation", Time.get_ticks_usec() - formation_start)
 	## Chokepoints are handled by the march itself (see register_formation
 	## below and GroupMovement's Marching section), which squeezes the block
 	## into a column wherever the route narrows.
@@ -2391,6 +2397,7 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## skipping `other == self` when it averages this group's progress, so a
 	## unit's own progress never counts toward its own "group average".
 	var cohesion_group: Array[Unit] = units if group_speed > 0.0 else ([] as Array[Unit])
+	var dispatch_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	for i in units.size():
 		var unit := units[i]
 		## append only actually queues if the unit is currently mid-order —
@@ -2404,6 +2411,8 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		else:
 			unit.clear_order_queue()
 			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
+	if PerfStats.enabled:
+		PerfStats.record_event(&"order: dispatch", Time.get_ticks_usec() - dispatch_start)
 	## Reformation bookkeeping: remember this group's destination and shape so
 	## the host can close ranks around whoever is still walking it when members
 	## die en route (see update_reformation). Registered from the units'
@@ -2411,9 +2420,15 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## member hasn't started this leg yet, and a gather/attack/build target
 	## ignores formation slots entirely, so neither belongs in a record whose
 	## whole job is re-solving move slots.
+	var register_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback, facing, front_width)
+	if PerfStats.enabled:
+		PerfStats.record_event(&"order: register", Time.get_ticks_usec() - register_start)
 	if attack_move_fallback and target_node == null and not append:
+		var engage_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		_engage_at_attack_move_destination(units, world_pos, sender_id)
+		if PerfStats.enabled:
+			PerfStats.record_event(&"order: engage", Time.get_ticks_usec() - engage_start)
 	if PerfStats.enabled:
 		PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
 
@@ -2436,11 +2451,26 @@ func _engage_at_attack_move_destination(units: Array[Unit], world_pos: Vector3, 
 	## One of these brings the whole block round; all false means there's no
 	## group to bring (a lone unit, or a target it can't formation-attack), so
 	## each marcher goes in on its own.
+	## Once per distinct order, not once per marcher: a group attack-move
+	## stamps one shared order on every member, and the answer comes from that
+	## order alone — so a 120-strong push used to rebuild and re-test the same
+	## 120-member list 120 times before giving up.
+	var tried: Array[Dictionary] = []
 	for unit in marchers:
-		if group_movement.formation_contact(unit, enemy):
+		var order: Dictionary = unit.attack_move_order
+		if _order_tried(tried, order):
+			continue
+		tried.append(order)
+		if group_movement.order_contact(order, enemy):
 			return
 	for unit in marchers:
 		unit.command_attack(enemy, true)
+
+func _order_tried(tried: Array[Dictionary], order: Dictionary) -> bool:
+	for other in tried:
+		if is_same(other, order):
+			return true
+	return false
 
 ## Nearest enemy of `owner` standing inside the assault area a click at
 ## `point` would cover — a unit if there is one, otherwise an attackable

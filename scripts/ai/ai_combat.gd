@@ -136,13 +136,13 @@ func _init(p_ai: AiPlayer) -> void:
 
 func think() -> void:
 	_prune(wave)
-	_perceive()
-	_update_defence()
-	_update_wave()
-	tactics.think()
-	_manage_home_units()
-	_unstick_units()
-	_use_abilities()
+	ai.phase(&"combat: perceive", _perceive)
+	ai.phase(&"combat: defence", _update_defence)
+	ai.phase(&"combat: wave", _update_wave)
+	ai.phase(&"combat: tactics", tactics.think)
+	ai.phase(&"combat: home units", _manage_home_units)
+	ai.phase(&"combat: unstick", _unstick_units)
+	ai.phase(&"combat: abilities", _use_abilities)
 
 ## --- Abilities ---
 

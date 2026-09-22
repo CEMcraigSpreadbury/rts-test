@@ -153,7 +153,10 @@ func _process(delta: float) -> void:
 	if _poll_timer > 0.0:
 		return
 	_poll_timer = POLL_INTERVAL
+	var poll_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	var signature: int = _blocker_state_hash()
+	if PerfStats.enabled:
+		PerfStats.record_event(&"nav poll", Time.get_ticks_usec() - poll_start)
 	if signature == _blocker_signature:
 		return
 	_blocker_signature = signature
@@ -215,8 +218,17 @@ func is_baking() -> bool:
 func _on_bake_finished(mesh: NavigationMesh) -> void:
 	_bake_in_flight = false
 	if is_instance_valid(_region) and mesh.get_polygon_count() > 0:
+		## Both of these land on the main thread, however the bake itself was
+		## produced: handing the region a whole map's navmesh rebuilds it in
+		## the server, and the repath then touches every unit alive.
+		var swap_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		_region.navigation_mesh = mesh
+		if PerfStats.enabled:
+			PerfStats.record_event(&"nav mesh swap", Time.get_ticks_usec() - swap_start)
+		var repath_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		_repath_units()
+		if PerfStats.enabled:
+			PerfStats.record_event(&"nav repath", Time.get_ticks_usec() - repath_start)
 		_build_walkability(mesh)
 	if _rebake_queued:
 		_rebake_queued = false

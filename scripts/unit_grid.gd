@@ -54,6 +54,14 @@ static func _ensure_built(tree: SceneTree) -> void:
 	if frame == _built_frame:
 		return
 	_built_frame = frame
+	if not PerfStats.enabled:
+		_rebuild(tree)
+		return
+	var start := Time.get_ticks_usec()
+	_rebuild(tree)
+	PerfStats.add_unit_section(&"grid rebuild", Time.get_ticks_usec() - start)
+
+static func _rebuild(tree: SceneTree) -> void:
 	_cells.clear()
 	_owner_cells.clear()
 	for node in tree.get_nodes_in_group("units"):
