@@ -794,7 +794,11 @@ const REFORM_DEFAULT_FORWARD: Vector3 = Vector3.FORWARD
 ## now holds. `front_width` is kept for a dragged formation so closing ranks
 ## keeps the shape the player laid out rather than falling back to the default.
 ## `speed_cap` holds the march to at most that pace (see formation_attack).
-func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward: Vector3 = Vector3.ZERO, front_width: float = -1.0, speed_cap: float = INF) -> Dictionary:
+## `start_march` false records the formation without planning a march for it —
+## for an order whose block is going to stop and fight before it has walked
+## anywhere, where the route would be planned and thrown away in the same
+## breath (see Main.issue_command_as).
+func register_formation(group: Array[Unit], target_pos: Vector3, formation_type: Formation.Type, attack_move: bool, forward: Vector3 = Vector3.ZERO, front_width: float = -1.0, speed_cap: float = INF, start_march: bool = true) -> Dictionary:
 	if not multiplayer.is_server() or group.size() < 2:
 		return {}
 	var members := _formation_record_members(group)
@@ -833,7 +837,8 @@ func register_formation(group: Array[Unit], target_pos: Vector3, formation_type:
 		"fight_id": -1,
 		"speed_cap": speed_cap,
 	}
-	_start_march(record, members)
+	if start_march:
+		_start_march(record, members)
 	_active_formations.append(record)
 	return record
 

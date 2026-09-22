@@ -2735,8 +2735,17 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	## member hasn't started this leg yet, and a gather/attack/build target
 	## ignores formation slots entirely, so neither belongs in a record whose
 	## whole job is re-solving move slots.
+	## Whether this order is going to stop and fight where it lands, settled
+	## before the march is planned rather than after. A block sent onto ground
+	## that already has enemies standing on it engages the moment it is given
+	## the order, and the route planned just below — an A* across the map, plus
+	## straightening — would be torn down again a few lines later.
+	var engage_target: Node3D = null
+	if attack_move_fallback and target_node == null and not append:
+		engage_target = _nearest_enemy_at(world_pos, sender_id)
 	var register_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback, facing, front_width)
+	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback,
+			facing, front_width, INF, engage_target == null)
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: register", Time.get_ticks_usec() - register_start)
 	## Leave every man in a regiment holding the same front, whatever
@@ -2753,9 +2762,9 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		for unit in ordered_regiment.all_units():
 			if is_instance_valid(unit):
 				unit.formation_facing = facing
-	if attack_move_fallback and target_node == null and not append:
+	if engage_target != null:
 		var engage_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-		_engage_at_attack_move_destination(units, world_pos, sender_id)
+		_engage_at_attack_move_destination(units, engage_target)
 		if PerfStats.enabled:
 			PerfStats.record_event(&"order: engage", Time.get_ticks_usec() - engage_start)
 	if PerfStats.enabled:
@@ -2767,15 +2776,12 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 ## they had met it on the march (GroupMovement.formation_contact for a group,
 ## a keep_assault attack for a lone unit). The assault survives either way, so
 ## the rest of the area is still cleared once that target is down.
-func _engage_at_attack_move_destination(units: Array[Unit], world_pos: Vector3, sender_id: int) -> void:
+func _engage_at_attack_move_destination(units: Array[Unit], enemy: Node3D) -> void:
 	var marchers: Array[Unit] = []
 	for unit in units:
 		if unit.status_command == Unit.Command.ATTACK_MOVE and unit.assault_active:
 			marchers.append(unit)
 	if marchers.is_empty():
-		return
-	var enemy := _nearest_enemy_at(world_pos, sender_id)
-	if enemy == null:
 		return
 	## One of these brings the whole block round; all false means there's no
 	## group to bring (a lone unit, or a target it can't formation-attack), so
