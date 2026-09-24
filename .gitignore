@@ -4,3 +4,14 @@
 
 # Windows DLL-lock artefacts left behind when an addon .dll is in use
 *.TMP
+
+# Native sim build (godot-cpp is a local copy; see native/SConstruct)
+native/godot-cpp/
+native/**/*.obj
+native/**/*.os
+native/**/*.pdb
+native/.sconsign.dblite
+addons/army_sim/bin/*.exp
+addons/army_sim/bin/*.lib
+addons/army_sim/bin/*.pdb
+addons/army_sim/bin/~*
