@@ -7,9 +7,11 @@ extends Node
 ##   godot --headless --path . res://scenes/tools/benchmark.tscn -- --units=160 --ticks=900
 ##   godot --headless --path . res://scenes/tools/benchmark.tscn -- --mode=match --ai=2
 ##
-## Two modes. `battle` (the default) is the perf harness: two equal armies
+## Three modes. `battle` (the default) is the perf harness: two equal armies
 ## spawned nose to nose and sent into each other, for comparing two builds of
-## the same scenario. `match` is the behaviour gate: a whole game played out
+## the same scenario. `march` is the same two armies never meeting: each is
+## marched sideways and back on every re-order, so what it measures is moving
+## an army, with no fighting in it. `match` is the behaviour gate: a whole game played out
 ## with nobody interfering, reporting what each AI has managed — because a
 ## change to how the AI fights can leave every perf number healthy while its
 ## waves sit at home, which is exactly how regiments broke it last time.
@@ -272,10 +274,19 @@ func _points_held(peer: int) -> int:
 ## group order path — formation solve, slot assignment, march — since that is
 ## what both an AI wave and a player push go through, and it is re-issued
 ## through the run rather than once at the start.
+## How far a `march` run sends each army, alternately one way and back.
+const MARCH_LEG: float = 60.0
+var _march_leg: int = 0
+
 func _push() -> void:
 	var mine: Array[Unit] = _living(1)
 	var theirs: Array[Unit] = _living(_ai_peer)
 	if mine.is_empty() or theirs.is_empty():
+		return
+	if mode == "march":
+		_march_side(1, mine)
+		_march_side(_ai_peer, theirs)
+		_march_leg += 1
 		return
 	_order_side(1, mine, theirs)
 	_order_side(_ai_peer, theirs, mine)
@@ -290,11 +301,28 @@ func _order_side(peer_id: int, army: Array[Unit], enemy: Array[Unit]) -> void:
 	centroid /= enemy.size()
 	_main.issue_command_as(peer_id, paths, NodePath(), centroid, true, false)
 
+## Sideways along the line the armies face each other across, so they never meet.
+func _march_side(peer_id: int, army: Array[Unit]) -> void:
+	var paths: Array[NodePath] = []
+	var centroid := Vector3.ZERO
+	for unit in army:
+		paths.append(unit.get_path())
+		centroid += unit.global_position
+	centroid /= army.size()
+	var spawns: Node3D = _main.player_spawn_points
+	var across: Vector3 = (spawns.get_child(1) as Node3D).global_position - (spawns.get_child(0) as Node3D).global_position
+	across = Vector3(across.z, 0.0, -across.x).normalized()
+	var side: float = 1.0 if _march_leg % 2 == 0 else -1.0
+	_main.issue_command_as(peer_id, paths, NodePath(), centroid + across * MARCH_LEG * side, false, false)
+
 func _living(peer_id: int) -> Array[Unit]:
 	var out: Array[Unit] = []
 	for entry in _armies[peer_id]:
+		## Checked before the cast: casting a freed unit is itself an error.
+		if not is_instance_valid(entry):
+			continue
 		var unit := entry as Unit
-		if is_instance_valid(unit) and unit.status_activity != Unit.Activity.DEAD:
+		if unit.status_activity != Unit.Activity.DEAD:
 			out.append(unit)
 	return out
 
@@ -313,14 +341,25 @@ func _finish() -> void:
 	print("units alive at end %d   samples %d" % [alive, _samples.size()])
 	print("")
 	print("unit script      %7.2f ms/tick   peak %7.2f" % [_avg("unit_ms"), _peak("unit_ms_peak")])
-	print("  of which slide %7.2f ms/tick" % _avg("slide_ms"))
-	print("path queries     %7.2f /frame" % _avg("paths"))
 	print("order dispatch   %7.2f ms peak" % _peak("command_peak_ms"))
 	print("ai think         %7.2f ms peak" % _peak("ai_think_peak_ms"))
+	print("native sim       %7.3f ms/tick   %d ticks   %d units registered" % [
+		float(_avg_group("sim_sections").get("tick", 0.0)), _main.army_sim.get_tick_count(),
+		_main.army_sim.get_unit_count()])
+	_print_group("sim", "sim_sections", true)
 	_print_group("unit", "unit_sections", true)
 	_print_group("frame", "frame_sections", true)
 	_print_group("ai", "ai_phase_peak_ms", false)
 	_print_group("peak", "event_peak_ms", false)
+	if not _samples.is_empty():
+		var last: Dictionary = _samples[-1]
+		print("worst unit tick  %7.2f ms at physics frame %d" % [float(last.worst_tick_ms), int(last.worst_tick_frame)])
+		## That one tick's own sections (each sample holds the worst so far).
+		var worst: Dictionary = last.worst_tick_sections
+		var names: Array = worst.keys()
+		names.sort_custom(func(a, b): return float(worst[a]) > float(worst[b]))
+		for section in names.slice(0, 14):
+			print("worst: %-24s %7.2f ms" % [section, float(worst[section])])
 	## Taken out of the tree, and deliberately not freed, before quitting:
 	## tearing a live match down at exit crashes in the engine's shutdown
 	## (see the note in the class docs). The process is ending anyway, so
@@ -338,6 +377,17 @@ func _avg(key: String) -> float:
 	for sample in _samples:
 		total += float(sample[key])
 	return total / _samples.size()
+
+## Mean over the run of each entry of a per-tick group (see _print_group).
+func _avg_group(key: String) -> Dictionary:
+	var totals: Dictionary = {}
+	for sample in _samples:
+		var group: Dictionary = sample[key]
+		for section in group:
+			totals[section] = float(totals.get(section, 0.0)) + float(group[section])
+	for section in totals:
+		totals[section] = float(totals[section]) / maxi(_samples.size(), 1)
+	return totals
 
 func _peak(key: String) -> float:
 	var best := 0.0

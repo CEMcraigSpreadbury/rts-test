@@ -1,4 +1,4 @@
-extends CharacterBody3D
+extends Node3D
 class_name Unit
 
 const SpriteSheetFrames = preload("res://scripts/sprite_sheet_frames.gd")
@@ -19,7 +19,9 @@ const WORK_ROLE_HOP_HEIGHT: float = 0.25
 const UnitSilhouetteMaterial = preload("res://scripts/unit_silhouette_material.gd")
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 
-const GRAVITY: float = 20.0
+## How it is moving this tick, as CharacterBody3D.velocity was: a unit has no
+## physics body, the sim and _slide move it.
+var velocity: Vector3 = Vector3.ZERO
 ## The sheets in assets/art face right by default; flip_h mirrors them to face left.
 const FLIP_DOT_THRESHOLD: float = 0.15
 ## Nudges the crew sprite (see crew_sprite_sheet) slightly away from the
@@ -28,28 +30,6 @@ const CREW_DEPTH_OFFSET: float = 0.05
 ## Below this actual speed the unit is considered stopped (e.g. blocked by another unit).
 const MOVING_SPEED_THRESHOLD: float = 0.15
 const MOVE_ARRIVAL_DISTANCE: float = 0.5
-## A unit's footprint radius for group planning — the physical capsule on
-## scenes/units/unit.tscn is 0.4, plus a little room. Used by GroupMovement to
-## decide which openings a unit can fit through.
-const FORMATION_BASE_RADIUS: float = 0.45
-## Chokepoint funnelling (see funnel_point / _update_funnel, armed host-side by
-## main.gd's _find_funnel_point when a formation move's route has to thread a
-## gap narrower than the formation is wide). How close to the funnel waypoint
-## this unit has to get before it's considered through the gap and released to
-## its real formation slot. Deliberately much larger than MOVE_ARRIVAL_DISTANCE:
-## the waypoint is a shared convergence point for the whole group, so demanding
-## everyone actually reach it would just build a traffic jam on top of it, and
-## the point of the waypoint is only to make units commit to the gap rather
-## than to be a destination in its own right. Also has to stay comfortably
-## above MOVE_ARRIVAL_DISTANCE + 0.5 so the funnel leg can never be mistaken
-## for the move order itself completing (see _physics_process's arrival check).
-const FUNNEL_CLEAR_DISTANCE: float = 3.0
-## Hard ceiling on how long a unit will keep heading for the funnel waypoint
-## before giving up and going straight to its slot. Pure safety valve: a unit
-## that can't reach the gap at all (blocked, or the gap got walled up mid-move)
-## must never be left standing at a waypoint forever, which is the one way a
-## two-stage move can be worse than no funnelling at all.
-const FUNNEL_TIMEOUT: float = 12.0
 ## Drop-off points sit outside a building's footprint, so this
 ## needs more slack than a plain move order to reliably register as "arrived".
 const DROPOFF_ARRIVAL_DISTANCE: float = 1.0
@@ -90,22 +70,6 @@ const WANDER_MIN_LEG_FRACTION: float = 0.35
 ## inside this circle — enemy buildings included — until the area is clear or
 ## it's given another order. See _find_assault_target().
 const ASSAULT_AREA_RADIUS: float = 12.0
-
-## Separation: units have no avoidance and don't physically collide with other
-## units, so this is the only thing keeping two units from standing in exactly
-## the same spot — marching blocks, crowds and melee scrums alike. Any two
-## living units closer than SEPARATION_DISTANCE (a little over two 0.4 body
-## capsules) get nudged apart — except that a unit is never pushed by an enemy
-## that is attacking it (see _update_separation).
-## Only overlapping bodies are pushed, so formation slots (Formation.SPACING
-## apart) and melee contact (attack_range apart) are never disturbed by it.
-const SEPARATION_DISTANCE: float = 0.85
-## Push speed at full overlap, scaled down linearly as bodies part.
-const SEPARATION_SPEED: float = 3.0
-const SEPARATION_MAX_SPEED: float = 2.5
-## Recomputed on a short timer rather than every frame — cheap, and the push
-## only has to be roughly current to read as bodies jostling apart.
-const SEPARATION_INTERVAL: float = 0.1
 
 ## Flank and rear hits on a unit standing in a block (see _flank_multiplier):
 ## within ±60° of its front is x1, ±60-120° is the flank, the rest the rear.
@@ -268,11 +232,15 @@ signal status_applied(dot_seconds: float, slow_seconds: float, stun_seconds: flo
 	set(value):
 		team_tint = value
 		_update_team_tint_visual()
+		_net_state_changed()
 ## Which player controls this unit. The host is always peer 1.
 @export var owner_peer_id: int = 1:
 	set(value):
 		owner_peer_id = value
 		_update_team_tint_visual()
+		_net_state_changed()
+		if sim_id >= 0 and ArmyBridge.current != null:
+			ArmyBridge.current.sim.set_unit_team(sim_id, ArmyBridge.current.sim_team(value))
 
 ## How much an enemy's team_tint still shows through — kept well under 1.0 so
 ## it reads as a subtle recolor rather than a flat-painted sprite.
@@ -301,6 +269,8 @@ func _update_team_tint_visual() -> void:
 		## Rebuilt here too so an Objective capture recolors the silhouette.
 		if sprite_sheet and not _death_playing:
 			sprite.material_overlay = UnitSilhouetteMaterial.build(_current_sheet(), team_tint)
+		if Main.sprite_batcher_current != null:
+			Main.sprite_batcher_current.set_team_color(sprite, team_tint)
 	if crew_sprite:
 		crew_sprite.modulate = sprite.modulate
 		if not _death_playing:
@@ -411,7 +381,11 @@ func _play_sprite_pop() -> void:
 	_sprite_move_tween.tween_property(sprite, "position", base, 0.18) \
 			.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 ## How far this unit reveals fog of war around itself.
-@export var vision_range: float = 11.0
+@export var vision_range: float = 11.0:
+	set(value):
+		vision_range = value
+		if sim_id >= 0 and ArmyBridge.current != null:
+			ArmyBridge.current.sim.set_unit_vision(sim_id, value)
 ## One is picked at random and played through select_audio_player whenever
 ## this unit becomes newly selected (see main.gd's selection code — never
 ## replayed for a selection refresh, only an actual new selection action).
@@ -544,7 +518,7 @@ func _play_sprite_pop() -> void:
 @export var projectile_speed: float = 14.0
 
 @export_group("Order Sounds")
-## One is picked at random and played through unit_audio_player whenever this
+## One is picked at random and played through UnitVoices whenever this
 ## unit is actually given the matching player order (see main.gd's
 ## _play_unit_order_sound) — not for automatic behavior like auto-retaliation
 ## or idle standing-guard engaging an enemy on its own, only real orders.
@@ -584,15 +558,28 @@ func _play_sprite_pop() -> void:
 
 @export_group("Status", "status_")
 ## Read/write here for debugging; normally driven by command_move / command_gather / command_attack.
-@export var status_command: Command = Command.NONE
+## Any change of command takes a unit out of its block's places (sim_follow):
+## whatever it was told, it is now doing that rather than holding its place.
+## follow_block and arrive_in_block set it back afterwards.
+@export var status_command: Command = Command.NONE:
+	set(value):
+		status_command = value
+		sim_follow = false
+		if quiet:
+			wake()
 @export var status_activity: Activity = Activity.IDLE
 @export var status_carried_amount: int = 0
 @export var status_carried_type: ResourceType = null
 ## Was a plain (non-exported, non-networked) var, so it never showed a live
 ## value in the remote inspector and never updated on non-authoritative peers.
-@export var status_current_health: int = 1
+@export var status_current_health: int = 1:
+	set(value):
+		status_current_health = value
+		_net_state_changed()
 
-@onready var nav_agent: NavigationAgent3D = $NavigationAgent3D
+## Where it is headed and how close counts as there (see NavTarget). Made in
+## _ready.
+var nav_agent = null
 @onready var sprite: AnimatedSprite3D = $Sprite
 ## Built in _ready when crew_sprite_sheet is set; a child of `sprite` so it
 ## rides along with every recoil, squash and death-knockback tween.
@@ -600,23 +587,17 @@ var crew_sprite: AnimatedSprite3D = null
 @onready var selection_ring: MeshInstance3D = $SelectionRing
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
-## Inspector-configurable (amount/color/spread/etc. all live on the node
-## itself) — see _process() for when it's toggled on/off.
-@onready var walk_dust: GPUParticles3D = get_node_or_null("WalkDust")
-## Positional — the battlefield half of this unit's voice, which currently
-## means just its attack bark. See _order_sound_player.
-@onready var unit_audio_player: AudioStreamPlayer3D = $UnitAudioPlayer
-## Non-positional — feedback on the local player's own click (selecting this
-## unit, and acknowledging orders given to it). Same reasoning, and the same
-## node name, as main.gd's own CommandAudioPlayer: this is interface feedback
-## rather than something happening at a world location, so attenuating it by
-## camera distance only makes your own units harder to hear.
-@onready var command_audio_player: AudioStreamPlayer = $CommandAudioPlayer
+## Its voice comes from UnitVoices' shared players: the attack bark
+## positional, where it stands (the battlefield half of its voice), everything
+## else flat — feedback on the local player's own click (selecting this unit,
+## and acknowledging orders given to it), as main.gd's own CommandAudioPlayer:
+## attenuating it by camera distance only makes your own units harder to hear.
 
 ## Always interface feedback: selection is only ever triggered locally, on the
 ## selecting player's own machine, and never relayed.
 func play_select_sound() -> void:
-	AudioUtils.play_random(command_audio_player, on_select_sound_effects)
+	if UnitVoices.current != null:
+		AudioUtils.play_random(UnitVoices.current.interface_player(), on_select_sound_effects)
 
 ## This unit type's authored lines for `kind`, or an empty list if it has
 ## none (see the Command Lines group — empty means silent). A match rather
@@ -653,7 +634,11 @@ func play_order_sound(kind: OrderSoundKind) -> void:
 ## always the local player's own unit. Untyped return for the same duck-typing
 ## reason as AudioUtils.play_random.
 func _order_sound_player(kind: OrderSoundKind):
-	return unit_audio_player if kind == OrderSoundKind.ATTACK else command_audio_player
+	if UnitVoices.current == null:
+		return null
+	if kind == OrderSoundKind.ATTACK:
+		return UnitVoices.current.positional_player(global_position)
+	return UnitVoices.current.interface_player()
 
 var selected: bool = false:
 	set(value):
@@ -776,15 +761,18 @@ func play_hit_reaction(from_position: Vector3, flanked: bool = false) -> void:
 	_restart_sprite_move_tween()
 	_sprite_move_tween.tween_property(
 			sprite, "position", base + local_away * HIT_RECOIL_DISTANCE, HIT_RECOIL_DURATION
-	) 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	_sprite_move_tween.tween_property(sprite, "position", base, HIT_RECOVER_DURATION) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_sprite_move_tween.tween_property(sprite, "position", base, HIT_RECOVER_DURATION) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _play_hit_squash() -> void:
 	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
 		_sprite_scale_tween.kill()
 	sprite.scale = _sprite_base_scale * HIT_SQUASH_SCALE
 	_sprite_scale_tween = create_tween()
-	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, HIT_SQUASH_DURATION) 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, HIT_SQUASH_DURATION) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 ## Windup-then-drive-forward on the sprite, along the unit's own facing (local
 ## +Z — see _process, which reads the same forward vector off rotation.y to
@@ -799,13 +787,16 @@ func play_attack_lunge() -> void:
 	_restart_sprite_move_tween()
 	_sprite_move_tween.tween_property(
 			sprite, "position", base - Vector3(0.0, 0.0, ATTACK_WINDUP_DISTANCE), ATTACK_WINDUP_DURATION
-	) 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	## Eased IN so the sprite accelerates through the contact point rather than
 	## arriving already slowing down.
 	_sprite_move_tween.tween_property(
 			sprite, "position", base + Vector3(0.0, 0.0, ATTACK_LUNGE_DISTANCE), ATTACK_LUNGE_DURATION
-	) 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_sprite_move_tween.tween_property(sprite, "position", base, ATTACK_RECOVER_DURATION) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_sprite_move_tween.tween_property(sprite, "position", base, ATTACK_RECOVER_DURATION) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 ## Freezes this unit's animation for a beat after it lands a killing blow.
 ## speed_scale rather than pause() so the clip resumes from where it stopped,
@@ -965,180 +956,19 @@ func _restart_sprite_move_tween() -> void:
 		_sprite_move_tween.kill()
 	_sprite_move_tween = create_tween()
 
-## -1 = no override, move at this unit's own move_speed. Set only by a
-## multi-unit formation move (main.gd:_rpc_issue_command/_slowest_move_speed)
-## so the whole group travels at its slowest member's pace instead of faster
-## units outrunning slower ones and scrambling the formation shape mid-transit
-## — the arrival slots were already correct, only the pacing during the move
-## wasn't. Cleared back to -1 by every other command (see each command_*
-## below) so a stale slowdown never outlives the move it was set for.
-var formation_speed: float = -1.0
-
-## Group cohesion (on top of formation_speed): the OTHER units this unit was
-## dispatched together with in the same formation move (this unit itself is
-## deliberately excluded — see _set_formation_cohesion — so it never counts
-## its own progress toward its own "group average"), and this unit's
-## straight-line distance to its own assigned slot, recomputed at the moment
-## this leg of the move actually starts (see _set_formation_cohesion) rather
-## than only once back at original order-issue time — a shift-queued order
-## only starts later, after the unit has moved for a prior leg, so a baseline
-## frozen at issue time would be stale from tick one of this leg. Both empty/
-## 0.0 outside an active formation move. formation_speed alone only stops a
-## fast unit from *finishing* early; it does nothing about a unit whose
-## particular path happens to be longer/blocked and falls behind, so
-## _update_cohesion below compares each unit's progress fraction toward its
-## own slot against the group's average and further throttles effective_speed
-## for anyone running ahead of the pack.
+## The units this one was ordered to move with (see _set_formation_cohesion);
+## empty outside a group move. Becomes arrived_group once it gets there.
 var formation_group: Array[Unit] = []
-var formation_initial_distance: float = 0.0
-var _cohesion_recheck_timer: float = 0.0
-var _cohesion_target_speed_scale: float = 1.0
-var _cohesion_speed_scale: float = 1.0
-## Stall tracking so a permanently-blocked groupmate doesn't drag the whole
-## group's average (and therefore everyone else's throttle) down forever —
-## same idea as _build_stuck_timer/_tick_build_approach's give-up-after-
-## timeout pattern below, applied to formation progress instead of build
-## approach. Tracked as raw remaining path distance (meters), not a fraction
-## of formation_initial_distance — a fraction-of-total epsilon would demand a
-## fixed number of meters of progress per recheck regardless of how long the
-## leg is, so on any sufficiently long leg even a fully healthy, unthrottled
-## unit would structurally fail to clear it every single tick (see
-## _update_cohesion). Comparing raw meters-per-recheck against what this
-## unit's own current pace should cover scales correctly with leg length.
-var _cohesion_last_remaining_distance: float = -1.0
-var _cohesion_stall_timer: float = 0.0
-## Separate, shorter-fused timer for "literally not moving at all" (as
-## opposed to just slower than expected) — see COHESION_HARD_STALL_*.
-var _cohesion_hard_stall_timer: float = 0.0
-var _cohesion_stalled: bool = false
-
-## Chokepoint funnelling state — host-only, same as everything else that
-## actually simulates movement. While _funnel_active, nav_agent is steered at
-## funnel_point (a spot just past a narrow gap the group has to thread) instead
-## of at this unit's real formation slot, which is parked in _funnel_final_target
-## until the unit is through. _funnel_forward is the group's direction of travel
-## through the gap, used to release a unit that has passed the waypoint off to
-## one side rather than driving it back to a point it has already overshot.
-var _funnel_active: bool = false
-var funnel_point: Vector3 = Vector3.ZERO
-var _funnel_forward: Vector3 = Vector3.FORWARD
-var _funnel_final_target: Vector3 = Vector3.ZERO
-var _funnel_timer: float = 0.0
-
-## Host-only: the right-drag formation this unit was last laid out in, if its
-## group is still using it — see GroupMovement.resolve_dragged_width.
-var dragged_formation: Dictionary = {}
 
 ## Host-only: the way this unit's last formation order faced (see
-## GroupMovement.order_facing), or ZERO once it has had a solo move or a
+## ArmyBridge.order_blocks), or ZERO once it has had a solo move or a
 ## non-formation order. An idle unit turns back to it, so a block stands facing
 ## its front however it walked there and the next order reads that front.
 var formation_facing: Vector3 = Vector3.ZERO
 ## Host-only. The formation group (see formation_group) whose move this unit
-## finished — at its slot, or settled short of one it couldn't reach — so
-## GroupMovement's ranks-closing knows it's standing in its place even after
-## separation has nudged it about. Cleared by the next move leg.
+## finished, so it stands as that block (see in_idle_block). Cleared by the
+## next move leg.
 var arrived_group: Array[Unit] = []
-
-## Formation marching state (see GroupMovement's Marching section) — host-only.
-## While _march_active the unit holds its place relative to the group's moving
-## anchor, steering at _march_point and matching _march_velocity, rather than
-## walking straight to its slot; the slot itself is parked in
-## _march_final_target until end_march hands it back to the nav agent.
-var _march_active: bool = false
-var _march_point: Vector3 = Vector3.ZERO
-var _march_velocity: Vector3 = Vector3.ZERO
-var _march_final_target: Vector3 = Vector3.ZERO
-## Within this distance of its marching point a unit steers straight at it;
-## further out (knocked aside, or held up behind something) it paths there.
-const MARCH_DIRECT_DISTANCE: float = 2.0
-## How hard a marching unit is pulled back onto its point, per meter off it.
-const MARCH_CORRECTION_GAIN: float = 2.0
-## A marching unit more than MARCH_CATCH_UP_DISTANCE off its point hurries at
-## this multiple of its speed — the anchor walks at nearly full pace, so at
-## normal speed a straggler that went round an obstacle would barely gain on it.
-const MARCH_CATCH_UP_SPEED: float = 1.3
-const MARCH_CATCH_UP_DISTANCE: float = 1.0
-## How far the marching point may drift from the nav target before re-pathing.
-## The path only has to get the unit round whatever it's stuck behind — once
-## it's finished the unit closes the rest straight — so it can go a while stale.
-const MARCH_REPATH_DISTANCE: float = 2.0
-## Fewest seconds between those re-paths — each is a full navmesh query, and
-## a block flowing round a wood has a hundred members pathing at once. Game
-## time, so it holds at any frame rate or game speed.
-const MARCH_REPATH_INTERVAL: float = 1.0
-var _march_recheck_in: float = 0.0
-## Pathing to its marching point rather than steering straight at it (see
-## _march_desired_velocity).
-var _march_pathing: bool = false
-
-## Path-query gating (see PathBudget). The agent only searches for a path when
-## asked for its next waypoint, so the two places that ask go through
-## _path_ready() first: a target the agent hasn't pathed to yet waits for its
-## turn in the budget, and meanwhile the unit steers straight at it.
-## The target the agent last computed a path to.
-var _path_target: Vector3 = Vector3.INF
-## repath() re-issues the same target on purpose, which the comparison above
-## can't see.
-var _path_stale: bool = false
-## Waiting in PathBudget's queue / cleared to query on this or the next tick.
-var _path_queued: bool = false
-## Physics frame PathBudget gave this unit its turn on, or -1.
-var _path_granted_frame: int = -1
-## The navigation map iteration the agent's path was computed on (see
-## PathBudget.map_iteration).
-var _path_iteration: int = -1
-
-const COHESION_RECHECK_INTERVAL: float = 0.2
-## Most groupmates a unit averages over per recheck (see _update_cohesion).
-const COHESION_SAMPLE_SIZE: int = 24
-## This unit's _formation_progress() as of its last cohesion recheck — what
-## groupmates read instead of recomputing it.
-var _cohesion_progress: float = 0.0
-## Progress-fraction lead (0-1) over the group average tolerated before any
-## throttling kicks in — small formation-keeping wobble/noise shouldn't cause
-## constant micro-braking.
-const COHESION_AHEAD_DEADBAND: float = 0.08
-## Lead fraction at which throttling bottoms out at COHESION_MIN_SPEED_SCALE.
-const COHESION_MAX_THROTTLE_RANGE: float = 0.35
-## Never fully halts a unit that's ahead — just slows it — so it keeps
-## drifting forward instead of visibly stopping and starting.
-const COHESION_MIN_SPEED_SCALE: float = 0.35
-## How fast _cohesion_speed_scale eases toward its newly-recomputed target
-## per second — smooths the throttle instead of it snapping frame to frame.
-const COHESION_SCALE_LERP_RATE: float = 1.5
-## A unit must cover at least this fraction of (its own current commanded
-## pace x the recheck interval) in raw meters each recheck to count as
-## "still making progress". Deliberately not tiny (e.g. 0.25) — a unit only
-## has to dodge below near-total-standstill to keep resetting the timer at
-## that level, so a genuinely struggling unit (bumping an obstacle, weaving,
-## covering 30-40% of its expected pace) never crosses the bar and drags the
-## whole group down indefinitely, which is exactly what stall-exclusion is
-## supposed to prevent. 0.55 catches that "still crawling but clearly
-## struggling" case while the sustained COHESION_STUCK_TIMEOUT window below
-## (see its own comment) — not a loose per-tick tolerance — is what absorbs
-## normal one-off RVO jostling: a unit briefly slowing to negotiate around a
-## groupmate loses at most one or two ticks below 0.55x pace before resuming,
-## nowhere near the consecutive resets-that-don't-happen needed to accumulate
-## the full timeout, so transient avoidance noise still can't false-flag it.
-const COHESION_STALL_TOLERANCE: float = 0.55
-## 3.5s (not 2.0s) gives real margin for legitimate single-file chokepoint
-## queuing — this project has wall gate/segment/corner pieces
-## (scenes/buildings/wall_gate.tscn etc.) a formation can plausibly funnel
-## through, where several units waiting their turn via normal RVO negotiation
-## could sustain sub-0.55x pace for longer than a brief one-off jostle. A
-## genuinely stuck unit (boxed in, pathing failure) still gets excluded well
-## within a few seconds — an acceptable tradeoff for an RTS — while normal
-## queuing at a gate has room to clear before that happens.
-const COHESION_STUCK_TIMEOUT: float = 3.5
-## Raw meters progressed within one recheck window below which a unit counts
-## as making literally no progress at all, not merely slower progress than
-## expected — this can't legitimately happen from throttled pacing under any
-## circumstance, so it's excluded from the group average on a much shorter
-## fuse than the general stall timeout above, capping how long a dead-stopped
-## groupmate can drag down the pace-setter's own throttle.
-const COHESION_HARD_STALL_DISTANCE_EPS: float = 0.05
-const COHESION_HARD_STUCK_TIMEOUT: float = 0.6
 
 var target_resource: Gatherable = null
 var dropoff_point: Node3D = null
@@ -1150,6 +980,15 @@ var _last_resource_position: Vector3 = Vector3.ZERO
 ## How far from the felled node a replacement may be — past this the unit
 ## idles rather than trekking off across the map on its own.
 const RESOURCE_RETARGET_RADIUS: float = 15.0
+## Where a gatherer heads: this fraction of the node's gather_range out from
+## its centre, on the gatherer's own side (see _gather_approach_point).
+const GATHER_APPROACH_FRACTION: float = 0.6
+## Arrived further than gather_range + this from the node: it could not get
+## in (a tree walled in by others), so it tries a node it can reach instead,
+## up to GATHER_APPROACH_TRIES times before working from where it stands.
+const GATHER_REACH_SLACK: float = 0.5
+const GATHER_APPROACH_TRIES: int = 3
+var _gather_approach_tries: int = 0
 ## Unit or ProductionBuilding — anything with owner_peer_id/current_health/take_damage().
 ## Setter keeps the target's melee_attackers/ranged_attackers count in step,
 ## whichever of the many code paths below retargets this unit.
@@ -1174,17 +1013,11 @@ var attack_target: Node3D = null:
 var melee_attackers: int = 0
 ## Host only: the same for ranged units — spreads a volley (see RANGED_SPREAD_PENALTY).
 var ranged_attackers: int = 0
-var _separation_timer: float = randf() * SEPARATION_INTERVAL
-var _separation_velocity: Vector3 = Vector3.ZERO
 var _overflow_scan_timer: float = 0.0
 var _reach_check_timer: float = randf() * MELEE_BLOCK_CHECK_INTERVAL
 var _reach_blocked: bool = false
 ## Earliest Time.get_ticks_msec() this unit may call allies in again (see take_damage).
 var _next_alert_ms: int = 0
-## How long this unit's move path has been over without reaching its target
-## (see _apply_velocity), and how long that's allowed before it gives up.
-var _path_end_timer: float = 0.0
-const PATH_END_GIVE_UP: float = 1.0
 var attack_timer: float = 0.0
 var build_target: ProductionBuilding = null
 ## Progress-stall tracking for _tick_build_approach() while heading to
@@ -1231,51 +1064,17 @@ func queue_order(target_path: NodePath, world_pos: Vector3, attack_move_fallback
 func clear_order_queue() -> void:
 	order_queue.clear()
 
-## Arms group-cohesion tracking for a fresh formation-move leg — see
-## formation_group/formation_initial_distance declaration above. Called only
-## from command_move/command_attack_move, i.e. exactly when this leg actually
-## starts (whether dispatched immediately or popped later off order_queue for
-## a shift-queued order), so the distance baseline is always taken from this
-## unit's real starting position for THIS leg rather than a stale position
-## from whenever the original order was issued. `group` deliberately should
-## NOT include this unit itself (see main.gd:_rpc_issue_command) — kept as-is
-## here rather than filtered, since _update_cohesion is what actually skips
-## self when averaging; an empty group (single-unit selection, or any
-## non-formation dispatch) leaves cohesion inert since _update_cohesion bails
-## out on an empty formation_group.
-func _set_formation_cohesion(group: Array[Unit], target_position: Vector3) -> void:
+## Starts a fresh move leg with `group` (see formation_group). Called from
+## command_move/command_attack_move, i.e. exactly when this leg starts.
+func _set_formation_cohesion(group: Array[Unit], _target_position: Vector3) -> void:
 	formation_group = group
 	arrived_group = []
 	if group.is_empty():
 		formation_facing = Vector3.ZERO
-	formation_initial_distance = global_position.distance_to(target_position) if not group.is_empty() else 0.0
-	_cohesion_recheck_timer = 0.0
-	_cohesion_progress = 0.0
-	_cohesion_target_speed_scale = 1.0
-	_cohesion_speed_scale = 1.0
-	_cohesion_last_remaining_distance = -1.0
-	_cohesion_stall_timer = 0.0
-	_cohesion_hard_stall_timer = 0.0
-	_cohesion_stalled = false
-	_march_active = false
-	## Any fresh move leg starts un-funnelled by definition; main.gd re-arms it
-	## immediately afterwards (via set_funnel_waypoint) if this particular leg's
-	## route actually needs one. Clearing here rather than only in command_move
-	## means every path that (re)baselines cohesion also drops a stale funnel,
-	## including the re-baseline _update_funnel itself does on release.
-	_funnel_active = false
 
 func _clear_formation_cohesion() -> void:
-	_funnel_active = false
-	_march_active = false
 	formation_group = []
-	formation_initial_distance = 0.0
-	_cohesion_target_speed_scale = 1.0
-	_cohesion_speed_scale = 1.0
-	_cohesion_last_remaining_distance = -1.0
-	_cohesion_stall_timer = 0.0
-	_cohesion_hard_stall_timer = 0.0
-	_cohesion_stalled = false
+
 ## Set directly by Objective for its guards; 0.0 = no leash (every normal
 ## player unit) — a leashed unit breaks off a chase and resumes patrol
 ## instead of following a fleeing/kiting target indefinitely.
@@ -1285,30 +1084,36 @@ var leash_radius: float = 0.0
 ## the unit only takes on enemies already within attack_range and never walks
 ## out to meet them. Replicated so every peer's command card shows the state.
 ## Explicit orders (move, attack, attack-move, patrol) still behave as normal.
-var hold_position: bool = false
+var hold_position: bool = false:
+	set(value):
+		hold_position = value
+		_net_state_changed()
 ## Host-only. Set when this unit's group was ordered to attack as a formation
-## (see GroupMovement.formation_attack): it marches to its slot in the block,
+## (see ArmyBridge.attack_blocks): it marches to its place in the block,
 ## then fights from there like a holding unit — only what's within reach, the
 ## ordered target first — instead of each man chasing the target down on his
 ## own and the block ending up as a ring round it. Any other order ends it.
 var in_formation_fight: bool = false
 var formation_attack_target: Node3D = null
 ## Host-only. The group attack-move this unit is on, shared by the whole group
-## (see GroupMovement.register_formation): what lets the group stop and fight
-## an enemy as a block and then carry on (GroupMovement.formation_contact).
+## (see ArmyBridge.order_blocks): what lets the group stop and fight an enemy
+## as a block and then carry on (ArmyBridge.block_contact).
 ## Empty for a lone unit, and forgotten on any other order.
 var attack_move_order: Dictionary = {}
-## Which of GroupMovement's engagements this unit fights in.
+## The engagement this unit fights in, kept across _engage_from_hold.
 var formation_fight_id: int = -1
 
 ## The Regiment this unit belongs to, or -1 while it is loose. Resolved
 ## through Main.regiments rather than held as a reference, so a regiment that
 ## is disbanded or wiped out leaves nothing dangling here.
 ##
-## Replicated (see unit.tscn), even though only the host owns the regiment
+## Replicated (through ArmyNet), even though only the host owns the regiment
 ## records themselves: a client has to know its own men are in one to select
 ## them as a body and to be offered the right command.
-var regiment_id: int = -1
+var regiment_id: int = -1:
+	set(value):
+		regiment_id = value
+		_net_state_changed()
 
 ## This unit's share of its regiment's bonuses, or zero while it is loose or
 ## its officer is down. Resolved onto the unit by Main.refresh_regiment_buffs
@@ -1319,7 +1124,7 @@ var regiment_id: int = -1
 ## This man's fixed place in his block, low at the front. Handed out once when
 ## he joins and never re-solved, so a regiment that turns or is given a new
 ## target rotates as one body instead of every man working out afresh which
-## corner of the shape he belongs in (see GroupMovement.formation_positions).
+## corner of the shape he belongs in (see ArmyBridge.order_blocks).
 var regiment_rank: int = -1
 var regiment_damage_bonus: float = 0.0
 var regiment_armor_bonus: int = 0
@@ -1422,6 +1227,189 @@ var _charge_armed_until_ms: int = 0
 var _knockback_velocity: Vector3 = Vector3.ZERO
 var _knockback_remaining: float = 0.0
 
+## This unit's id in ArmyNet's movement snapshots: handed out by the host
+## when it joins the sim, synced once to every client. -1 until then.
+@export var net_id: int = -1:
+	set(value):
+		net_id = value
+		if value >= 0 and is_inside_tree() and not multiplayer.is_server():
+			ArmyNet.register(self)
+
+## Health, owner, tint, hold and regiment reach the other peers through
+## ArmyNet (in bulk, on change) rather than a synchronizer on every unit.
+func _net_state_changed() -> void:
+	if net_id >= 0 and ArmyNet.current != null:
+		ArmyNet.current.mark_state(self)
+
+## This unit's index in the native ArmySim (see ArmyBridge), host only; -1
+## when it is not registered. A registered unit does not move itself: _slide
+## hands the sim its wanted velocity, and the sim — separation, the ground and
+## all — puts it where it ends up.
+var sim_id: int = -1
+## Set by the sim when this unit could not go where it wanted last tick.
+var sim_wedged: bool = false
+## Holding its place in its block: the sim walks it there (on the march and
+## standing alike) and its own movement logic stays out of the way. Cleared by
+## any new command (see status_command).
+var sim_follow: bool = false
+## Walking on its own under the sim (see move_to) rather than holding a place
+## in a block. solo_arrived: the sim says the walk is over.
+var sim_solo: bool = false
+var solo_arrived: bool = false
+## How the sim moved it last tick, for facing and the walk animation.
+var sim_velocity: Vector2 = Vector2.ZERO
+## The enemy the sim says this unit, fighting from its place, should hit (see
+## ArmySim.get_fight_targets); null when none is in reach.
+var sim_target: Unit = null
+
+## How fast a man holding his place must be going to walk and turn to face it:
+## Very War's threshold (speed squared over 0.35).
+const FOLLOW_WALK_SPEED: float = 0.59
+
+## Takes up a place in a block the sim is moving (ArmyBridge.order_blocks).
+## `append` with the unit already marching in that block leaves it be: the leg
+## is queued on the block itself.
+func follow_block(attack_move: bool, append: bool, destination: Vector3, forward: Vector3, block: Array[Unit], order: Dictionary) -> void:
+	if status_activity == Activity.DEAD or (attack_move and not can_fight):
+		return
+	if append and sim_follow and status_activity == Activity.MOVING:
+		return
+	_end_formation_fight()
+	_leave_build_site()
+	_leave_gather_site()
+	_set_work_role("")
+	_clear_formation_cohesion()
+	attack_target = null
+	attack_move_order = order
+	assault_active = attack_move
+	assault_center = destination
+	status_command = Command.ATTACK_MOVE if attack_move else Command.MOVE
+	status_activity = Activity.MOVING
+	formation_facing = forward
+	arrived_group = []
+	## Its own path would only fight the block for where it goes.
+	nav_agent.target_position = global_position
+	clear_order_queue()
+	sim_solo = false
+	sim_follow = true
+
+## Goes in with its block against `target` (ArmySim.order_attack): holds its
+## place in the block while it advances, and fights whatever the sim puts in
+## reach from there — never breaking off to chase. `order` is the attack-move
+## to pick back up once the fight is over, if any.
+func fight_in_block(target: Node3D, order: Dictionary) -> void:
+	if status_activity == Activity.DEAD or not can_fight:
+		return
+	_end_formation_fight()
+	_leave_build_site()
+	_leave_gather_site()
+	_set_work_role("")
+	_clear_formation_cohesion()
+	attack_target = null
+	attack_move_order = order
+	status_command = Command.ATTACK
+	status_activity = Activity.MOVING
+	## Counts as fighting as part of its block, for flanks and braces.
+	in_formation_fight = true
+	formation_attack_target = target
+	arrived_group = []
+	nav_agent.target_position = global_position
+	clear_order_queue()
+	sim_solo = false
+	sim_follow = true
+
+## A man holding his place who is not merely marching (idle in his block,
+## attack-moving, or in a block's attack) hits what comes into his reach.
+func _fights_from_place() -> bool:
+	return can_fight and status_command != Command.MOVE and status_activity != Activity.DEAD
+
+## One tick of fighting from his place: the sim's pick of target (or his
+## block's building, once he is close enough), faced and struck on the usual
+## cooldown. True while he has someone to fight.
+func _tick_block_fight(delta: float) -> bool:
+	var target: Node3D = sim_target if _is_target_alive(sim_target) else null
+	## Checked before the cast: the block's enemy may already be freed.
+	var building: ProductionBuilding = null
+	if is_instance_valid(formation_attack_target) and formation_attack_target is ProductionBuilding:
+		building = formation_attack_target
+	if target == null and building != null and _is_target_alive(building) \
+			and _flat_distance(global_position, building.global_position) <= _reach_to(building) + 0.5:
+		target = building
+	var effective_cooldown := _effective_cooldown()
+	if target == null:
+		attack_target = null
+		## Ready to strike the moment someone steps into reach.
+		attack_timer = minf(attack_timer + delta, effective_cooldown)
+		return false
+	attack_target = target
+	var to_target := target.global_position - global_position
+	if Vector2(to_target.x, to_target.z).length_squared() > 0.0001:
+		rotation.y = lerp_angle(rotation.y, atan2(to_target.x, to_target.z), rotation_speed * delta)
+	## A man's blows come from the sim (sim_swing), which times them asleep
+	## or awake; only a building, which the sim does not fight, is timed here.
+	if target == building:
+		attack_timer += delta
+		if attack_timer >= effective_cooldown:
+			_land_swing(effective_cooldown, false)
+	return true
+
+## A blow the sim says is due (World::update_swings): this man, fighting from
+## his place, strikes `target` — awake or asleep.
+func sim_swing(target: Unit) -> void:
+	if status_activity == Activity.DEAD or status_activity == Activity.CASTING or not sim_follow \
+			or not _fights_from_place() or _stun_remaining > 0.0 or not _is_target_alive(target):
+		return
+	sim_target = target
+	attack_target = target
+	var to_target := target.global_position - global_position
+	if Vector2(to_target.x, to_target.z).length_squared() > 0.0001:
+		rotation.y = atan2(to_target.x, to_target.z)
+	var effective_cooldown := _effective_cooldown()
+	_land_swing(effective_cooldown, false)
+	## A shot leaves on the draw, some ticks later (_tick_pending_shots).
+	if projectile_scene != null:
+		wake()
+	## Buffs to attack speed reach the sim with the next blow.
+	if sim_id >= 0 and ArmyBridge.current != null:
+		ArmyBridge.current.sim.set_unit_cooldown(sim_id, effective_cooldown)
+
+## Its block has marched its last leg: stand as that block, still holding the
+## place (see in_idle_block), and let anything queued behind the order run.
+func arrive_in_block(block: Array[Unit]) -> void:
+	if status_activity != Activity.MOVING:
+		return
+	in_formation_fight = false
+	formation_attack_target = null
+	attack_target = null
+	arrived_group = block
+	status_activity = Activity.IDLE
+	status_command = Command.NONE
+	sim_follow = true
+	order_completed.emit()
+
+## The movement step of a unit holding its place: the sim does the walking, so
+## all that is left here is turning to where it goes (or its block's front
+## when it stands) and the walk animation.
+func _tick_follow(delta: float) -> void:
+	velocity.x = sim_velocity.x
+	velocity.z = sim_velocity.y
+	## In a fight the swing drives the animation and the facing.
+	if _fights_from_place() and _tick_block_fight(delta):
+		_slide()
+		return
+	var speed := sim_velocity.length()
+	## A packed block never stands perfectly still — men settle against each
+	## other at a few centimetres a second — so, as Very War does, only real
+	## walking walks and turns the man; the settling shuffle does neither.
+	var moving := speed > FOLLOW_WALK_SPEED
+	if moving:
+		rotation.y = lerp_angle(rotation.y, atan2(sim_velocity.x, sim_velocity.y), rotation_speed * delta)
+	elif formation_facing != Vector3.ZERO:
+		rotation.y = lerp_angle(rotation.y, atan2(formation_facing.x, formation_facing.z), rotation_speed * delta)
+	if sprite.sprite_frames:
+		_set_animation("walk" if moving else "idle")
+	_slide()
+
 func _ready() -> void:
 	status_current_health = max_health
 	## Spread the aggro scans over the interval instead of letting them land
@@ -1453,109 +1441,57 @@ func _ready() -> void:
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, animations)
 		sprite.play("idle")
 		sprite.animation_changed.connect(_on_sprite_animation_changed)
+		## Drawn with every other unit of its sheet (SpriteBatcher), not by itself.
+		if Main.sprite_batcher_current != null:
+			Main.sprite_batcher_current.add_sprite(sprite, team_tint)
 	if crew_sprite_sheet:
 		_build_crew_sprite()
 	sprite.animation_finished.connect(_on_attack_animation_finished)
 	_update_team_tint_visual()
-	## Waypoints sit on the navmesh, which on hilly terrain can be a few tenths
-	## of a metre off the ground the unit stands on, and the agent measures this
-	## in 3D: too tight and a unit can fail to "reach" a waypoint it has walked
-	## past, turning back to it and sticking on the slope.
-	nav_agent.path_desired_distance = 1.0
-	## Keeps a unit on the ground walking down hills instead of briefly
-	## leaving it (and falling) each time the slope steepens.
-	floor_snap_length = 0.4
+	nav_agent = NavTarget.new()
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
-	## The agent re-runs its path query by itself once the unit is this far off
-	## its path, which goes round PathBudget — a marching unit that followed its
-	## anchor away from an old catch-up path set off hundreds at once. Wedged
-	## units re-path through the budget instead (see _track_blocked).
-	nav_agent.path_max_distance = 1000.0
-	## No RVO avoidance: it ran every agent (and every tree's obstacle) through
-	## the avoidance solver each physics frame and answered through a callback,
-	## which didn't scale to armies. The agent only plans paths now; units keep
-	## apart with _update_separation and steer in _physics_tick directly.
-	nav_agent.avoidance_enabled = false
-	## The agent's target defaults to the world origin, which repath() would
-	## otherwise re-issue after the first navmesh rebake — sending every idle
-	## unit walking to the middle of the map.
 	nav_agent.target_position = global_position
-	if is_multiplayer_authority() and OS.is_debug_build():
-		nav_agent.path_changed.connect(_on_path_changed)
 
-func _on_path_changed() -> void:
-	if PerfStats.enabled:
-		PerfStats.count_path()
+## Paired with _exit_tree rather than _ready, so a unit moved to another
+## parent (Main._adopt_scenario_entities) leaves the sim and comes back.
+func _enter_tree() -> void:
+	if sim_id < 0 and ArmyBridge.current != null:
+		sim_id = ArmyBridge.current.register_unit(self)
+	## A client may learn the id before the unit is in the tree.
+	if net_id >= 0 and not multiplayer.is_server():
+		ArmyNet.register(self)
+
+func _exit_tree() -> void:
+	if Main.sprite_batcher_current != null:
+		Main.sprite_batcher_current.remove_sprite(sprite)
+		if crew_sprite != null:
+			Main.sprite_batcher_current.remove_sprite(crew_sprite)
+	if net_id >= 0:
+		ArmyNet.unregister(self)
+	if sim_id >= 0 and ArmyBridge.current != null:
+		ArmyBridge.current.unregister_unit(sim_id)
+	sim_id = -1
 
 ## Raw navigation command; prefer command_move / command_gather / command_attack which also manage status.
+## With the sim moving units, this is an order to the unit's own formation of
+## one (ArmyBridge.solo_move): the sim finds the route and walks it there.
 func move_to(target_position: Vector3) -> void:
 	nav_agent.target_position = target_position
+	sim_solo = true
+	solo_arrived = false
+	if sim_id >= 0 and ArmyBridge.current != null:
+		ArmyBridge.current.solo_move(self, target_position)
 
-## Re-runs the path query against whatever the navmesh looks like right now,
-## without disturbing where this unit was already heading. Called by
-## NavigationBlockers after it rebakes the region around a building that was
-## just placed or destroyed, so a unit mid-walk stops following a route that
-## no longer exists. Assigning target_position is the hook for this:
-## NavigationAgent3D deliberately never early-outs on an unchanged value.
+## Asks the sim for a fresh route from where it stands to where it was going
+## (see _track_blocked) — for a lone walker wedged somewhere.
 func repath() -> void:
-	## nav_agent is @onready, and group membership starts one notification
-	## earlier than _ready — a bake landing in that window would otherwise
-	## reach a unit that hasn't resolved it yet.
-	if nav_agent == null or status_activity == Activity.DEAD:
+	if status_activity == Activity.DEAD or not sim_solo or solo_arrived or sim_id < 0 or ArmyBridge.current == null:
 		return
-	var target: Vector3 = nav_agent.target_position
-	nav_agent.target_position = target
-	_path_stale = true
+	ArmyBridge.current.solo_move(self, nav_agent.target_position)
 
-## True when the agent may be asked about its path this tick — its path is
-## already for the current target, or PathBudget has just given this unit its
-## turn to compute one. Otherwise queues the unit (once) and returns false.
-## Gates is_navigation_finished() as well as get_next_path_position(): both
-## run the path query themselves whenever the target has changed. An empty
-## path counts as not ready too, since the agent re-queries an empty path on
-## every call (a unit stuck off the navmesh would otherwise search each frame).
-func _path_ready() -> bool:
-	var target: Vector3 = nav_agent.target_position
-	var iteration := PathBudget.map_iteration(nav_agent.get_navigation_map())
-	if not _path_stale and target == _path_target and iteration == _path_iteration:
-		## Split out and measured: this hands back a copy of the whole path
-		## array, on every unit, on every tick that its path is still current.
-		var path_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-		var has_path: bool = not nav_agent.get_current_navigation_path().is_empty()
-		if PerfStats.enabled:
-			PerfStats.add_unit_section(&"nav: path copy", Time.get_ticks_usec() - path_start)
-		if has_path:
-			return true
-	PathBudget.serve()
-	if _path_granted_frame >= 0:
-		var fresh: bool = _path_granted_frame >= Engine.get_physics_frames() - 1
-		_path_granted_frame = -1
-		_path_queued = false
-		## A turn only counts on the tick it's given or the next. An unused one
-		## (a marching unit that stopped needing its path) would otherwise sit
-		## there until the next retarget, and a whole army spending theirs on
-		## the same tick — every member released at the end of a march — is
-		## exactly the burst the budget exists to prevent.
-		if fresh:
-			_path_stale = false
-			_path_target = target
-			_path_iteration = iteration
-			return true
-	if not _path_queued:
-		_path_queued = true
-		PathBudget.enqueue(self)
-	return false
-
-## is_navigation_finished() through the path budget: a target that's still
-## waiting for its path isn't finished.
+## The sim says the walk is over (see move_to), or it is standing on the spot.
 func _nav_finished() -> bool:
-	return _path_ready() and nav_agent.is_navigation_finished()
-
-## Flat direction to the nav target, for steering while a path is still queued.
-func _straight_direction() -> Vector3:
-	var direction := nav_agent.target_position - global_position
-	direction.y = 0.0
-	return direction.normalized() if direction.length_squared() > 0.0001 else Vector3.ZERO
+	return solo_arrived or _flat_distance(global_position, nav_agent.target_position) <= nav_agent.target_desired_distance
 
 func command_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
 	if status_activity == Activity.DEAD:
@@ -1569,172 +1505,9 @@ func command_move(target_position: Vector3, speed_override: float = -1.0, group:
 	status_activity = Activity.MOVING
 	attack_target = null
 	assault_active = false
-	formation_speed = speed_override
 	_set_formation_cohesion(group, target_position)
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	move_to(target_position)
-
-## Two-stage formation move: steer at `point` (a spot just past a narrow gap the
-## group's route has to thread) first, and only head for the slot this unit was
-## actually given once it's through. Host-only, and armed by main.gd right after
-## command_move/command_attack_move — so the caller has already set the real
-## slot as nav_agent.target_position, which is what gets parked here.
-## `forward` is the group's direction of travel through the gap.
-func set_funnel_waypoint(point: Vector3, forward: Vector3) -> void:
-	if not _funnel_can_arm():
-		return
-	var final_target: Vector3 = nav_agent.target_position
-	## Re-baselines cohesion onto the leg this unit is actually walking now
-	## (here -> gap) rather than leaving it pointed at the far-side slot. Both
-	## _update_cohesion and _formation_progress read progress as
-	## 1 — nav_agent.distance_to_target() / formation_initial_distance, so a
-	## baseline measured to the distant slot while nav_agent steers at the much
-	## nearer gap would read as "nearly arrived" from the first frame. Giving
-	## each leg its own baseline is exactly what _set_formation_cohesion already
-	## does for shift-queued orders. It also clears any stale funnel, hence the
-	## ordering here — arm afterwards, never before.
-	_set_formation_cohesion(formation_group, point)
-	_funnel_final_target = final_target
-	funnel_point = point
-	_funnel_forward = forward
-	_funnel_timer = 0.0
-	_funnel_active = true
-	nav_agent.target_position = point
-
-## Read-only view of the funnel state for the host-side reformation pass
-## (main.gd:_update_reformation): a group that is currently threading a
-## chokepoint must not have its slots re-solved underneath it, or units
-## mid-gap get sent straight at a far-side slot through the wall they were
-## being funnelled around. Reformation defers until nobody is funnelling.
-func is_funnelling() -> bool:
-	return _funnel_active
-
-## Where this unit's current formation order is taking it, even while a
-## funnel waypoint is steering it somewhere nearer first.
-func formation_slot() -> Vector3:
-	if _march_active:
-		return _march_final_target
-	return _funnel_final_target if _funnel_active else nav_agent.target_position
-
-## Arms (or updates) marching for this move leg — see _march_active. A no-op
-## once the unit has left the move, e.g. peeled off into a fight.
-func set_march_target(point: Vector3, anchor_velocity: Vector3) -> void:
-	if not _funnel_can_arm():
-		return
-	if not _march_active:
-		_march_final_target = nav_agent.target_position
-		_march_active = true
-		## A fresh march may re-path to its point straight away, rather than
-		## wait out a timer left over from an earlier one and meanwhile ask
-		## the agent about the far-off slot it's still targeting.
-		_march_recheck_in = 0.0
-		_march_pathing = false
-	_march_point = point
-	_march_velocity = anchor_velocity
-
-## The group's anchor has arrived: walk the rest of the way to the real slot.
-func end_march() -> void:
-	if not _march_active:
-		return
-	_march_active = false
-	_path_end_timer = 0.0
-	nav_agent.target_position = _march_final_target
-
-## Desired velocity while marching: keep pace with the anchor and close on this
-## unit's own point, or path to that point when too far off to walk straight.
-func _march_desired_velocity(max_speed: float) -> Vector3:
-	if not PerfStats.enabled:
-		return _march_velocity_step(max_speed)
-	var start := Time.get_ticks_usec()
-	var result := _march_velocity_step(max_speed)
-	PerfStats.add_unit_section(&"march velocity", Time.get_ticks_usec() - start)
-	return result
-
-func _march_velocity_step(max_speed: float) -> Vector3:
-	var to_point := _march_point - global_position
-	to_point.y = 0.0
-	if to_point.length() > MARCH_CATCH_UP_DISTANCE:
-		max_speed *= MARCH_CATCH_UP_SPEED
-	if to_point.length() <= MARCH_DIRECT_DISTANCE:
-		_march_pathing = false
-		_march_recheck_in = 0.0
-	else:
-		## Every MARCH_REPATH_INTERVAL: walk straight back if nothing's in the
-		## way (most stragglers), and only path — a full navmesh query — when
-		## something is. Starting to path afresh always re-targets: the agent
-		## may still hold a path to wherever the point was the last time.
-		_march_recheck_in -= get_physics_process_delta_time()
-		if _march_recheck_in <= 0.0:
-			_march_recheck_in = MARCH_REPATH_INTERVAL
-			var was_pathing := _march_pathing
-			_march_pathing = not _line_walkable(_march_point)
-			if _march_pathing and (not was_pathing \
-					or nav_agent.target_position.distance_to(_march_point) > MARCH_REPATH_DISTANCE):
-				nav_agent.target_position = _march_point
-		if _march_pathing and _path_ready() and not nav_agent.is_navigation_finished():
-			_path_waypoint = nav_agent.get_next_path_position()
-			var next := _path_waypoint - global_position
-			next.y = 0.0
-			if next.length_squared() > 0.0001:
-				return next.normalized() * max_speed
-	return (_march_velocity + to_point * MARCH_CORRECTION_GAIN).limit_length(max_speed)
-
-## Whether the straight line from here to `to` stays on walkable ground,
-## sampled along the navmesh index (each sample hinted with the last one's
-## polygon, so it's mostly one polygon test apiece). Lines longer than
-## LINE_CHECK_MAX count as blocked — past that a path is worth its cost anyway.
-const LINE_CHECK_MAX: float = 12.0
-const LINE_CHECK_STEP: float = 0.5
-func _line_walkable(to: Vector3) -> bool:
-	var walkability := NavWalkability.current
-	if walkability == null:
-		return false
-	var distance := _flat_distance(global_position, to)
-	if distance > LINE_CHECK_MAX:
-		return false
-	var steps: int = maxi(1, ceili(distance / LINE_CHECK_STEP))
-	var poly := _walk_poly
-	for step in range(1, steps + 1):
-		poly = walkability.polygon_at(global_position.lerp(to, float(step) / steps), poly)
-		if poly < 0:
-			return false
-	return true
-
-func _funnel_can_arm() -> bool:
-	return status_activity == Activity.MOVING \
-			and (status_command == Command.MOVE or status_command == Command.ATTACK_MOVE)
-
-## Releases the unit from the funnel waypoint onto its real slot once it's
-## through the gap. Three exits, any of which is enough:
-##   — it got within FUNNEL_CLEAR_DISTANCE of the waypoint (the normal case —
-##     the waypoint sits past the gap, so being near it means being through it);
-##   — it's already past the waypoint's plane, which catches a unit that
-##     squeezed through wide of the point and would otherwise be dragged
-##     backwards to reach it;
-##   — FUNNEL_TIMEOUT expired, the safety valve for a gap that turned out to be
-##     unreachable (blocked, or walled up mid-move) — without it a funnelled
-##     unit could stand at a waypoint indefinitely.
-func _update_funnel(delta: float) -> void:
-	if not PerfStats.enabled:
-		_funnel_step(delta)
-		return
-	var start := Time.get_ticks_usec()
-	_funnel_step(delta)
-	PerfStats.add_unit_section(&"funnel", Time.get_ticks_usec() - start)
-
-func _funnel_step(delta: float) -> void:
-	if not _funnel_active:
-		return
-	_funnel_timer += delta
-	var offset: Vector3 = funnel_point - global_position
-	offset.y = 0.0
-	if offset.length() > FUNNEL_CLEAR_DISTANCE \
-			and offset.dot(_funnel_forward) > 0.0 \
-			and _funnel_timer < FUNNEL_TIMEOUT:
-		return
-	var final_target: Vector3 = _funnel_final_target
-	_set_formation_cohesion(formation_group, final_target)
-	nav_agent.target_position = final_target
 
 func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	if status_activity == Activity.DEAD or not can_gather or resource_node == null:
@@ -1752,7 +1525,6 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 	status_command = Command.GATHER
 	attack_target = null
 	assault_active = false
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	target_resource = resource_node
 	dropoff_point = dropoff
@@ -1779,7 +1551,6 @@ func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 	_hold_engagement = false
 	status_command = Command.ATTACK
 	attack_target = target
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	_head_to_target()
 
@@ -1801,7 +1572,6 @@ func command_attack_move(target_position: Vector3, speed_override: float = -1.0,
 	_set_work_role("")
 	status_command = Command.ATTACK_MOVE
 	attack_target = null
-	formation_speed = speed_override
 	_set_formation_cohesion(group, target_position)
 	status_activity = Activity.MOVING
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
@@ -1821,7 +1591,6 @@ func command_patrol(points: Array[Vector3]) -> void:
 	status_command = Command.PATROL
 	attack_target = null
 	assault_active = false
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	patrol_points = points
 	patrol_index = 0
@@ -1864,7 +1633,6 @@ func _begin_wander_command(origin: Node3D, radius: float) -> void:
 	status_command = Command.PATROL
 	attack_target = null
 	assault_active = false
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	patrol_points.clear()
 	patrol_index = 0
@@ -1887,11 +1655,9 @@ func _engage_from_hold(target: Node3D) -> void:
 	_hold_engagement = true
 
 ## Hands an enemy met on a group attack-move to the group, which fights it as
-## a block (GroupMovement.formation_contact). False for a lone unit.
+## a block (ArmyBridge.block_contact). False for a lone unit.
 func _group_contact(enemy: Node3D) -> bool:
-	if attack_move_order.is_empty() or GroupMovement.current == null:
-		return false
-	return GroupMovement.current.formation_contact(self, enemy)
+	return sim_follow and ArmyBridge.current != null and ArmyBridge.current.block_contact(self, enemy, true)
 
 ## Standing idle in the block it last walked to as a group (see arrived_group,
 ## formation_facing), free to answer as one — not holding its ground or already
@@ -1910,31 +1676,21 @@ func in_idle_block() -> bool:
 func _block_contact(enemy: Node3D) -> bool:
 	if not in_idle_block() or enemy == null or not is_instance_valid(enemy):
 		return false
-	if _flank_multiplier(enemy.global_position) <= 1.0 and GroupMovement.current != null \
-			and GroupMovement.current.idle_block_contact(self, enemy):
+	## A block the sim moves goes in as one from the front; met from the flank
+	## or rear it stands, and its men fight from their places whatever steps
+	## into reach (see _tick_block_fight).
+	if sim_follow and ArmyBridge.current != null:
+		if _flank_multiplier(enemy.global_position) <= 1.0:
+			ArmyBridge.current.block_contact(self, enemy, false)
 		return true
 	if status_command == Command.NONE and _flat_distance(global_position, enemy.global_position) <= _reach_to(enemy):
 		_engage_from_hold(enemy)
 	return true
 
-## Joins a formation attack on `target` (see in_formation_fight). Called by
-## GroupMovement right after the move to this unit's slot is issued.
-func begin_formation_fight(target: Node3D, place: Vector3, fight_id: int) -> void:
-	in_formation_fight = true
-	formation_attack_target = target
-	formation_fight_id = fight_id
-	formation_fight_place = place
-	_returning_to_place = false
-
 func _end_formation_fight() -> void:
 	in_formation_fight = false
 	formation_attack_target = null
 	formation_fight_id = -1
-
-## The block has lost its target and found nothing to go after: members hold
-## their places and fight whatever comes within reach.
-func hold_formation_fight() -> void:
-	formation_attack_target = null
 
 ## Walks an idle member of a fighting block back to its place once it's been
 ## pushed out of it — by separation, or an enemy shoving through — straight
@@ -1961,7 +1717,6 @@ func _formation_place_step(delta: float) -> bool:
 		_returning_to_place = false
 	if not _returning_to_place:
 		return false
-	_update_separation(delta)
 	## Slows over the last stretch so it settles instead of overshooting.
 	var speed: float = minf(move_speed, distance * 4.0)
 	_apply_velocity(to_place / distance * speed)
@@ -2033,12 +1788,6 @@ func _nearest_in_place_reach() -> Node3D:
 	var enemy := _find_nearest_enemy_in_range(pick_range + step)
 	return enemy if enemy and _formation_can_reach(enemy) else null
 
-## Idle in its place in a formation — or fighting from it (see
-## in_formation_fight, hold_position) — as opposed to off on an errand of its
-## own. What GroupMovement's ranks-closing counts as still holding the shape.
-func holds_place() -> bool:
-	return (status_command == Command.NONE and attack_target == null) or _in_hold_fight()
-
 ## Only while that self-picked fight is still the unit's order — any other
 ## command either replaces Command.ATTACK or comes back through command_attack.
 func _in_hold_fight() -> bool:
@@ -2056,7 +1805,6 @@ func command_stop() -> void:
 	status_activity = Activity.IDLE
 	attack_target = null
 	assault_active = false
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	patrol_points.clear()
 	wander_origin = null
@@ -2079,7 +1827,6 @@ func command_build(building: ProductionBuilding) -> void:
 	status_command = Command.BUILD
 	attack_target = null
 	assault_active = false
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	build_target = building
 	_head_to_build_site()
@@ -2161,7 +1908,8 @@ func execute_teleport_ability(ability: Ability, target_pos: Vector3) -> void:
 				or ally.global_position.distance_to(old_position) > ability.affected_ally_radius):
 			continue
 		ally.global_position += delta
-		ally._grounded = false
+		if ally.sim_id >= 0 and ArmyBridge.current != null:
+			ArmyBridge.current.sim.set_unit_position(ally.sim_id, Vector2(ally.global_position.x, ally.global_position.z))
 		## Clears any in-flight path the same way command_stop() does, so a
 		## teleported unit doesn't immediately try to walk back to where it
 		## was heading from its old position.
@@ -2213,7 +1961,6 @@ func command_cast_ability(ability_index: int, target_pos: Vector3) -> void:
 	status_activity = Activity.TO_CAST
 	attack_target = null
 	assault_active = false
-	formation_speed = -1.0
 	_clear_formation_cohesion()
 	_cast_ability_index = ability_index
 	_cast_target = target_pos
@@ -2365,6 +2112,7 @@ const ZONE_EFFECT_SECONDS: float = 1.25
 ## tick would re-stack the DoT and chain the stun forever. The zone's own
 ## damage stands in for the DoT, and only the slow is refreshed.
 func apply_zone_tick(ability: Ability, source) -> void:
+	wake()
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.linger_damage_per_second > 0:
@@ -2384,6 +2132,7 @@ func apply_zone_tick(ability: Ability, source) -> void:
 ## carries. `source` is who to credit for the damage — untyped for the same
 ## freed-object reason as _is_target_alive, since a DoT can outlive its caster.
 func apply_ability_hit(ability: Ability, source) -> void:
+	wake()
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.area_damage > 0:
@@ -2466,7 +2215,7 @@ func ability_cooldown(ability: Ability) -> float:
 ## --- Cavalry charge ---
 
 ## Ready to charge, with its target (its own, or its block's) close enough to
-## sprint at. Read by the movement step and by GroupMovement's march pacing.
+## sprint at. Read by the movement step (see _sim_slide).
 func is_charging() -> bool:
 	if not can_charge or not _charge_ready:
 		return false
@@ -2511,6 +2260,7 @@ func _spend_charge() -> void:
 func receive_charge(charger: Unit) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
+	wake()
 	if armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER:
 		return
 	var away := global_position - charger.global_position
@@ -2551,6 +2301,7 @@ func counter_charge(charger: Unit) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	_play_attack_swing()
+	charger.wake()
 	charger._stun_remaining = maxf(charger._stun_remaining, BRACE_STOP_SECONDS)
 	charger.status_applied.emit(0.0, 0.0, BRACE_STOP_SECONDS, CHARGE_STUN_COLOR)
 	charger.take_damage(roundi(_effective_attack_damage(charger) * BRACE_COUNTER_MULTIPLIER), self)
@@ -2592,6 +2343,10 @@ func _slow_multiplier() -> float:
 func take_damage(amount: int, attacker: Node3D = null, directional: bool = true) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
+	## A man fighting in his block's fight takes his blows asleep; what a
+	## blow does beyond damage (a stun, a charge, an ability) wakes him itself.
+	if not (sim_follow and in_formation_fight):
+		wake()
 	## Sanctuary: nothing gets through while it lasts.
 	if buffs.amount(ResearchNode.Buff.INVULNERABLE) > 0.0:
 		return
@@ -2665,17 +2420,103 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 func _physics_process(delta: float) -> void:
 	if not PerfStats.enabled:
 		_physics_tick(delta)
+		_maybe_sleep(delta)
 		return
 	var start := Time.get_ticks_usec()
+	## Whole ticks by what the unit was doing, so the named sections inside
+	## can be read against where the time went in total.
+	var state: StringName = _PERF_STATE_FOLLOW if sim_follow else _PERF_STATES[status_activity]
 	_physics_tick(delta)
+	var ticked := Time.get_ticks_usec()
+	PerfStats.add_unit_section(state, ticked - start)
+	_maybe_sleep(delta)
+	PerfStats.add_unit_section(&"state: sleep check", Time.get_ticks_usec() - ticked)
 	PerfStats.add_unit_time(Time.get_ticks_usec() - start)
+
+const _PERF_STATE_FOLLOW: StringName = &"state: in block"
+static var _PERF_STATES: Array[StringName] = _perf_state_names()
+
+static func _perf_state_names() -> Array[StringName]:
+	var names: Array[StringName] = []
+	for key in Activity.keys():
+		names.append(StringName("state: " + String(key).to_lower()))
+	return names
+
+## --- Quiet (asleep) ---
+##
+## A man holding his place in a block with nothing of his own to do — marching
+## or standing, nobody in reach, nothing in flight, no effect ticking on him —
+## runs no script at all: the sim moves him, and ArmyBridge turns him and
+## switches walk/idle as he goes (quiet_motion). Anything that could give him
+## something to do wakes him: a new command, damage, an ability or a charge, a
+## target from the sim, or the sim seeing an enemy near his block.
+
+## Asleep; see above.
+var quiet: bool = false
+## Time to the next puff of walking dust.
+var _dust_timer: float = 0.0
+## Seconds before he may go back to sleep (see wake).
+var _stay_awake: float = 0.0
+## Woken men stay up at least this long, so their own enemy scan gets to run.
+const QUIET_MIN_AWAKE: float = 1.0
+
+func wake(for_seconds: float = QUIET_MIN_AWAKE) -> void:
+	_stay_awake = maxf(_stay_awake, for_seconds)
+	if quiet:
+		quiet = false
+		set_physics_process(true)
+
+func _maybe_sleep(delta: float) -> void:
+	_stay_awake -= delta
+	if _stay_awake > 0.0 or not sim_follow or ArmyBridge.current == null:
+		return
+	if status_activity != Activity.MOVING and status_activity != Activity.IDLE:
+		return
+	## A block's attack counts: its men fight from their places, their blows
+	## timed by the sim (sim_swing) — unless it is after a building, which is
+	## timed here.
+	var block_attack := status_command == Command.ATTACK and in_formation_fight \
+			and not (is_instance_valid(formation_attack_target) and formation_attack_target is ProductionBuilding)
+	if status_command != Command.MOVE and status_command != Command.NONE and status_command != Command.ATTACK_MOVE \
+			and not block_attack:
+		return
+	if not abilities.is_empty() or heal_aura_amount > 0 or pack_member:
+		return
+	if not (_pending_projectile_hits.is_empty() and _pending_ability_hits.is_empty() \
+			and _pending_shots.is_empty() and _pending_casts.is_empty() and _dots.is_empty()):
+		return
+	if _stun_remaining > 0.0 or _slow_remaining > 0.0 or _knockback_remaining > 0.0:
+		return
+	## Standing: only once settled, facing its block's front (or fighting).
+	if status_activity == Activity.IDLE and sim_target == null:
+		if sim_velocity.length() > FOLLOW_WALK_SPEED:
+			return
+		if formation_facing != Vector3.ZERO \
+				and absf(angle_difference(rotation.y, atan2(formation_facing.x, formation_facing.z))) > 0.05:
+			return
+	quiet = true
+	set_physics_process(false)
+
+## What _tick_follow would have done this tick, for a man asleep: face the way
+## the sim is moving him, and walk or stand. Called by ArmyBridge.
+func quiet_motion(vel: Vector2) -> void:
+	sim_velocity = vel
+	velocity.x = vel.x
+	velocity.z = vel.y
+	## Fighting in his sleep: his blows turn him and drive the animation.
+	if sim_target != null:
+		return
+	var moving := vel.length() > FOLLOW_WALK_SPEED
+	if moving:
+		rotation.y = lerp_angle(rotation.y, atan2(vel.x, vel.y), rotation_speed / 30.0)
+	if sprite.sprite_frames:
+		_set_animation("walk" if moving else "idle")
 
 func _physics_tick(delta: float) -> void:
 	## Only the host simulates movement/gathering/combat; other peers just display
-	## the position/animation replicated by this unit's MultiplayerSynchronizer.
+	## the position/animation sent by ArmyNet.
 	if not is_multiplayer_authority():
 		return
-	_path_waypoint = Vector3.INF
 
 	## Runs even if this unit just died — an arrow already in the air should
 	## still land rather than vanish because its shooter is gone.
@@ -2687,12 +2528,8 @@ func _physics_tick(delta: float) -> void:
 		_slide()
 		return
 
-	## Following the terrain directly (see _slide) keeps a unit on the ground
-	## by construction; only the move_and_slide() fallback needs gravity.
-	if GroundHeight.terrain(get_tree()) != null or is_on_floor():
-		velocity.y = 0.0
-	else:
-		velocity.y -= GRAVITY * delta
+	## Moving keeps a unit on the ground by construction (see _slide).
+	velocity.y = 0.0
 
 	var status_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	_tick_status_effects(delta)
@@ -2752,9 +2589,9 @@ func _physics_tick(delta: float) -> void:
 		return
 
 	if status_activity == Activity.ATTACKING:
-		var push := _update_separation(delta)
-		velocity.x = push.x
-		velocity.z = push.z
+		## The sim keeps him apart from the others.
+		velocity.x = 0.0
+		velocity.z = 0.0
 		_face_attack_target(delta)
 		_tick_attacking(delta)
 		_slide()
@@ -2769,7 +2606,20 @@ func _physics_tick(delta: float) -> void:
 		_slide()
 		return
 
-	if status_activity == Activity.TO_RESOURCE and _nav_finished():
+	_decide(delta)
+
+	if sim_follow:
+		_tick_follow(delta)
+		return
+
+	if _tick_formation_place(delta):
+		return
+	_physics_tick_rest(delta)
+
+## The part of _physics_tick that picks up new work each tick: arrivals,
+## chases and the enemy scans.
+func _decide(delta: float) -> void:
+	if status_activity == Activity.TO_RESOURCE and (_in_gather_reach() or _nav_finished()):
 		_start_gathering()
 	elif status_activity == Activity.TO_DROPOFF and _nav_finished():
 		_deposit_and_continue()
@@ -2847,68 +2697,30 @@ func _physics_tick(delta: float) -> void:
 				if enemy and not (assault_active and _group_contact(enemy)):
 					command_attack(enemy, true)
 
-	if _tick_formation_place(delta):
+## The rest of _physics_tick, for a unit not held in a block's place.
+func _physics_tick_rest(delta: float) -> void:
+	## Standing idle with no order — most of an army, most of the time —
+	## there's no steering or arrival work to do. It still turns to hold its
+	## formation's front (the sim keeps it apart from the others).
+	if status_activity == Activity.IDLE and status_command == Command.NONE:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		if formation_facing != Vector3.ZERO:
+			var front_angle: float = atan2(formation_facing.x, formation_facing.z)
+			if absf(angle_difference(rotation.y, front_angle)) > 0.01:
+				rotation.y = lerp_angle(rotation.y, front_angle, rotation_speed * delta)
+		if sprite.sprite_frames:
+			_set_animation("idle")
+		_slide()
 		return
 
-	## Standing idle with no order and nothing shoving it — most of an army,
-	## most of the time — there's no steering, path or arrival work to do. It
-	## still turns to hold its formation's front, and still gets pushed apart.
-	if status_activity == Activity.IDLE and status_command == Command.NONE:
-		_update_separation(delta)
-		if _separation_velocity == Vector3.ZERO:
-			velocity.x = 0.0
-			velocity.z = 0.0
-			if formation_facing != Vector3.ZERO:
-				var front_angle: float = atan2(formation_facing.x, formation_facing.z)
-				if absf(angle_difference(rotation.y, front_angle)) > 0.01:
-					rotation.y = lerp_angle(rotation.y, front_angle, rotation_speed * delta)
-			if sprite.sprite_frames:
-				_set_animation("idle")
-			_slide()
-			return
-
-	## Before the steering read below, so a unit released from its funnel
-	## waypoint this frame immediately starts steering at its real slot instead
-	## of spending one more frame closing on a waypoint it's already through.
-	_update_funnel(delta)
-
-	## A marching unit steers off its anchor (see _march_desired_velocity), so
-	## it never asks for the path to its far-off slot — that query is a full
-	## cross-map search per unit, for a result the march would throw away.
-	var direction := Vector3.ZERO
-	if not _march_active:
-		var nav_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-		var path_ready := _path_ready()
-		if PerfStats.enabled:
-			PerfStats.add_unit_section(&"nav: ready check", Time.get_ticks_usec() - nav_start)
-		var waypoint_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-		if not path_ready:
-			direction = _straight_direction()
-		elif not nav_agent.is_navigation_finished():
-			var next_pos: Vector3 = nav_agent.get_next_path_position()
-			_path_waypoint = next_pos
-			direction = next_pos - global_position
-			direction.y = 0.0
-			if direction.length_squared() > 0.0001:
-				direction = direction.normalized()
-		if PerfStats.enabled:
-			PerfStats.add_unit_section(&"nav: waypoint", Time.get_ticks_usec() - waypoint_start)
-
-	## Units always travel at their own full speed, even in a mixed group —
-	## no slowest-member cap (formation_speed) and no cohesion throttle.
-	var effective_speed: float = move_speed
-	var buff_speed := _buff_speed_multiplier()
-	effective_speed *= _slow_multiplier() * buff_speed
-	if is_charging():
-		effective_speed *= CHARGE_SPEED_MULTIPLIER
-	var desired_velocity := Vector3(direction.x * effective_speed, 0.0, direction.z * effective_speed)
-	if _march_active:
-		desired_velocity = _march_desired_velocity(effective_speed)
+	## The sim walks it (move_to): all that is wanted here is how it went,
+	## for facing and the animation.
+	var desired_velocity := Vector3(sim_velocity.x, 0.0, sim_velocity.y) if sim_solo else Vector3.ZERO
 	## Held behind the front rank: stand and wait for a gap rather than walk
 	## into the backs of the units already fighting.
 	if status_activity == Activity.TO_TARGET and _reach_blocked:
 		desired_velocity = Vector3.ZERO
-	_update_separation(delta)
 	_apply_velocity(desired_velocity)
 
 ## How far ahead a marching block reacts to enemies.
@@ -2931,178 +2743,6 @@ func _march_engage_range() -> float:
 		return aggro_range
 	return maxf(MARCH_ENGAGE_MIN, maxf(aggro_range, attack_range) * MARCH_ENGAGE_FACTOR)
 
-## Push away from any living unit overlapping this one (see SEPARATION_DISTANCE).
-## Units sitting on exactly the same point part along a per-unit fixed angle so
-## a stacked pair splits instead of both computing a zero-length direction.
-func _update_separation(delta: float) -> Vector3:
-	if not PerfStats.enabled:
-		return _separation_push(delta)
-	var start := Time.get_ticks_usec()
-	var push := _separation_push(delta)
-	PerfStats.add_unit_section(&"separation", Time.get_ticks_usec() - start)
-	return push
-
-func _separation_push(delta: float) -> Vector3:
-	_separation_timer -= delta
-	if _separation_timer > 0.0:
-		return _separation_velocity
-	_separation_timer = SEPARATION_INTERVAL
-	var push := Vector3.ZERO
-	for other in UnitGrid.units_near(get_tree(), global_position, SEPARATION_DISTANCE):
-		if other == self:
-			continue
-		## Enemies shove each other like anyone else, except that an enemy
-		## attacking this unit doesn't push it: every attacker crowding a target
-		## would otherwise sum into one big shove and bulldoze a mobbed unit
-		## across the field. The attacker still yields to its target, and a
-		## pair fighting each other push both ways.
-		if Teams.is_enemy(owner_peer_id, other.owner_peer_id) and other.attack_target == self and other != attack_target:
-			continue
-		var away := global_position - other.global_position
-		away.y = 0.0
-		var distance := away.length()
-		if distance < 0.01:
-			var angle := float(get_instance_id() % 6283) * 0.001
-			away = Vector3(cos(angle), 0.0, sin(angle))
-		else:
-			away /= distance
-		push += away * (1.0 - distance / SEPARATION_DISTANCE) * SEPARATION_SPEED
-	_separation_velocity = push.limit_length(SEPARATION_MAX_SPEED)
-	return _separation_velocity
-
-## Group cohesion on top of formation_speed's flat pacing cap: throttles this
-## unit further, proportionally, when it's running ahead of the formation
-## group's average progress toward their slots — a unit with a short/clear
-## path would otherwise still reach its slot early and sit there drifting
-## while a unit stuck going around an obstacle catches up, even though both
-## have the same raw move_speed. Recomputed on a short timer (not every
-## frame, both for cost — O(group size) — and to avoid the target scale
-## flickering frame to frame) and then eased toward smoothly so the unit's
-## speed ramps rather than snaps.
-func _update_cohesion(delta: float, base_speed: float) -> void:
-	if not PerfStats.enabled:
-		_cohesion_step(delta, base_speed)
-		return
-	var start := Time.get_ticks_usec()
-	_cohesion_step(delta, base_speed)
-	PerfStats.add_unit_section(&"cohesion", Time.get_ticks_usec() - start)
-
-func _cohesion_step(delta: float, base_speed: float) -> void:
-	if formation_speed <= 0.0 or formation_group.is_empty() or formation_initial_distance <= 0.0:
-		_cohesion_speed_scale = 1.0
-		_cohesion_last_remaining_distance = -1.0
-		_cohesion_stall_timer = 0.0
-		_cohesion_hard_stall_timer = 0.0
-		_cohesion_stalled = false
-		return
-
-	_cohesion_recheck_timer -= delta
-	if _cohesion_recheck_timer <= 0.0:
-		_cohesion_recheck_timer = COHESION_RECHECK_INTERVAL
-		var self_progress := _formation_progress()
-		_cohesion_progress = self_progress
-
-		## Stall detection compares RAW meters progressed this recheck window
-		## against what this unit's own current commanded pace should cover —
-		## not a flat fraction of formation_initial_distance. A fixed fraction
-		## (e.g. "must gain 3% progress per tick") demands more raw meters on a
-		## longer leg, since progress is normalized by the whole leg length; a
-		## 50m leg needs 10x the ground-speed a 5m leg does just to clear the
-		## same fractional bar, so a fully healthy unit on a long enough leg
-		## would fail it every tick and never be able to reset the timer. Raw
-		## distance against this unit's own pace scales correctly regardless
-		## of leg length.
-		var remaining := nav_agent.distance_to_target()
-		var progressed_distance: float = (_cohesion_last_remaining_distance - remaining) if _cohesion_last_remaining_distance >= 0.0 else INF
-		## Reference pace is base_speed x this unit's own current throttle
-		## scale — i.e. what it was actually just commanded to do — so a
-		## unit that's legitimately pacing itself down (formation_speed cap,
-		## or its own cohesion throttle) is judged against its own reduced
-		## target, not against an unthrottled top speed it was never asked
-		## to hit.
-		var expected_min_distance: float = base_speed * _cohesion_speed_scale * COHESION_RECHECK_INTERVAL * COHESION_STALL_TOLERANCE
-		if progressed_distance >= expected_min_distance:
-			_cohesion_stall_timer = 0.0
-		else:
-			_cohesion_stall_timer += COHESION_RECHECK_INTERVAL
-		## Faster-fused "literally zero movement" check — this can't happen
-		## from any legitimate throttled pacing, so it doesn't need to wait
-		## out the full grace window above before this groupmate stops
-		## counting toward everyone else's average (see the critic's
-		## compounding-throttle concern: while a stuck unit is still counted,
-		## it can drag even the pace-setter below its own formation_speed
-		## floor).
-		if progressed_distance < COHESION_HARD_STALL_DISTANCE_EPS:
-			_cohesion_hard_stall_timer += COHESION_RECHECK_INTERVAL
-		else:
-			_cohesion_hard_stall_timer = 0.0
-		_cohesion_last_remaining_distance = remaining
-		_cohesion_stalled = _cohesion_stall_timer >= COHESION_STUCK_TIMEOUT or _cohesion_hard_stall_timer >= COHESION_HARD_STUCK_TIMEOUT
-
-		var total_progress := 0.0
-		var count := 0
-		## A big group is averaged over an evenly spaced sample rather than every
-		## member (offset per unit, so different units sample different members)
-		## — the whole-group loop is O(n^2) across the group, which a large army
-		## selection turns into most of the frame.
-		var group_size: int = formation_group.size()
-		var stride: int = maxi(1, ceili(float(group_size) / COHESION_SAMPLE_SIZE))
-		for i in range(get_instance_id() % stride, group_size, stride):
-			var other: Unit = formation_group[i]
-			## formation_group is built by main.gd as "the units dispatched
-			## together" and deliberately does NOT exclude this unit itself
-			## (it's a single shared array reference across the whole group,
-			## cheaper than building a per-unit copy) — skip self here so a
-			## unit's own progress never counts toward its own "group average"
-			## (that would shrink the ahead-signal, worse for smaller groups).
-			if other == self or other == null or not is_instance_valid(other) or other.status_activity == Activity.DEAD:
-				continue
-			if other.formation_speed <= 0.0 or other.formation_initial_distance <= 0.0:
-				continue
-			## Excludes a stalled groupmate from the average rather than letting
-			## it drag every other unit's throttle down (and compounding, since
-			## effective_speed already stacks formation_speed x cohesion scale)
-			## indefinitely while it's stuck.
-			if other._cohesion_stalled:
-				continue
-			## Only compare against groupmates walking the SAME leg. Progress is
-			## a fraction of whatever leg a unit is currently on, and a funnel
-			## splits the group across two of them (see set_funnel_waypoint): a
-			## unit still heading for the gap is 90% through its leg while one
-			## just released onto its final slot is at 0% of a brand new one.
-			## Mixing the two collapses the average for everyone still queueing
-			## at the gap, which reads as a huge lead and throttles the back of
-			## the column to COHESION_MIN_SPEED_SCALE at exactly the moment it
-			## should be streaming through. Each side of the funnel therefore
-			## paces itself against its own half.
-			if other._funnel_active != _funnel_active:
-				continue
-			## Each member's own progress as of its last recheck, rather than a
-			## fresh _formation_progress() (a full remaining-path walk) per
-			## groupmate per recheck.
-			total_progress += other._cohesion_progress
-			count += 1
-
-		_cohesion_target_speed_scale = 1.0
-		if count > 0:
-			var avg_progress: float = total_progress / count
-			var ahead: float = self_progress - avg_progress
-			if ahead > COHESION_AHEAD_DEADBAND:
-				var t: float = clampf((ahead - COHESION_AHEAD_DEADBAND) / (COHESION_MAX_THROTTLE_RANGE - COHESION_AHEAD_DEADBAND), 0.0, 1.0)
-				_cohesion_target_speed_scale = lerpf(1.0, COHESION_MIN_SPEED_SCALE, t)
-
-	_cohesion_speed_scale = move_toward(_cohesion_speed_scale, _cohesion_target_speed_scale, COHESION_SCALE_LERP_RATE * delta)
-
-## 0 (just started) to 1 (arrived) fraction of this unit's straight-line
-## distance-to-slot at the start of this leg (see _set_formation_cohesion)
-## that its actual remaining nav path distance now represents — used instead
-## of raw move_speed comparisons so a unit taking a longer/curved path around
-## an obstacle reads as "behind" even if its speed stat matches everyone else's.
-func _formation_progress() -> float:
-	if formation_initial_distance <= 0.0:
-		return 1.0
-	return clampf(1.0 - nav_agent.distance_to_target() / formation_initial_distance, 0.0, 1.0)
-
 ## The movement step for every activity that walks: applies `desired` plus the
 ## separation push, turns and animates the unit, slides it, and notices a
 ## finished move/patrol leg. Activities that manage their own animation and
@@ -3120,8 +2760,8 @@ func _velocity_step(desired: Vector3) -> void:
 	if status_activity == Activity.GATHERING or status_activity == Activity.ATTACKING or status_activity == Activity.BUILDING or status_activity == Activity.DEAD or status_activity == Activity.CASTING:
 		return
 
-	velocity.x = desired.x + _separation_velocity.x
-	velocity.z = desired.z + _separation_velocity.z
+	velocity.x = desired.x
+	velocity.z = desired.z
 
 	var flat_speed := Vector2(velocity.x, velocity.z).length()
 	var is_moving := flat_speed > MOVING_SPEED_THRESHOLD
@@ -3140,50 +2780,15 @@ func _velocity_step(desired: Vector3) -> void:
 
 	## Gated on Activity.MOVING specifically (not just nav-finished) because
 	## PATROL stays Command.PATROL while chasing/fighting (Activity.TO_TARGET/
-	## ATTACKING) too — this runs every physics frame regardless of
-	## activity, and without this gate, a patrolling unit closing to within
+	## ATTACKING) too — without this gate, a patrolling unit closing to within
 	## attack range of its target would look "finished navigating" while still
 	## mid-chase and get yanked into _advance_patrol() before _start_attacking()
-	## ever got a chance to run, causing it to circle the enemy instead of fighting.
-	##
-	## The extra distance check guards against a NavigationAgent3D quirk: right
-	## after move_to() sets a brand new target_position from a cold/idle start,
-	## is_navigation_finished() can read true for a frame or two before the
-	## async path is actually computed (no path yet reads as "nothing left to
-	## do"). That was always harmless before this flag existed — resetting
-	## status_command a frame early didn't stop the unit's real navigation —
-	## but with a shift-queued order waiting, this false completion would
-	## immediately pop and dispatch it, making the unit skip straight to the
-	## next waypoint instead of ever visiting the first one.
-	##
-	## A path can also end short of its target for good — a destination the
-	## navmesh can't reach, where the path stops at the nearest point it can.
-	## Without a way out the unit would stand there on its move order forever
-	## (never idle, so never re-formed, never scanning), so a path that has
-	## been over for PATH_END_GIVE_UP counts as arrived wherever it left the unit.
-	## A marching unit's nav target is only its marching point, not the order's
-	## destination — reaching it isn't arriving (see end_march).
-	var path_over := status_activity == Activity.MOVING and not _march_active and _nav_finished()
-	var at_target := path_over and global_position.distance_to(nav_agent.target_position) <= nav_agent.target_desired_distance + 0.5
-	## Standing on the spot counts whatever the agent says: slots carry the
-	## clicked point's height, so on uneven ground a unit exactly on its slot
-	## can be further than target_desired_distance from it in 3D and the agent
-	## never reports the path finished.
-	if status_activity == Activity.MOVING and not _march_active \
-			and _flat_distance(global_position, nav_agent.target_position) <= nav_agent.target_desired_distance:
-		at_target = true
-	## Wedged against whatever its slot is in or against (see BLOCKED_GIVE_UP_TIME).
-	var wedged := status_activity == Activity.MOVING and not _march_active and _blocked_time >= BLOCKED_GIVE_UP_TIME \
-			and _flat_distance(global_position, nav_agent.target_position) <= BLOCKED_ARRIVAL_RADIUS
-	_path_end_timer = _path_end_timer + get_physics_process_delta_time() if path_over and not at_target else 0.0
-	var gave_up := wedged or _path_end_timer >= PATH_END_GIVE_UP
-	if at_target or gave_up:
-		_path_end_timer = 0.0
+	## ever got a chance to run, causing it to circle the enemy instead of
+	## fighting. The sim ends a walk it cannot finish where it stopped, so a
+	## walk being over always counts as arrived.
+	if status_activity == Activity.MOVING and _nav_finished():
 		if status_command == Command.MOVE or status_command == Command.ATTACK_MOVE:
-			## Where it stopped is its place in the formation now — without this
-			## GroupMovement's ranks-closing reads a unit that settled short of
-			## an unreachable slot, or was shoved off its slot by a crowding
-			## neighbour, as lost and re-orders the whole group, over and over.
+			## Where it stopped is its place in the formation now.
 			arrived_group = formation_group
 			if in_formation_fight:
 				formation_fight_place = global_position
@@ -3226,13 +2831,16 @@ func _process_visuals(delta: float) -> void:
 	## raw velocity directly — those are only reliable on the authoritative
 	## peer, while every peer already shows the right walk/idle animation.
 	var in_view := visible and _in_camera_view()
-	## Only where someone can see it: every unit carries its own particle
-	## system, each a GPU dispatch and a draw every frame it runs, and a whole
-	## army starts walking on the same click.
-	if walk_dust:
-		var walking: bool = base_animation(sprite.animation) == "walk" and in_view 				and (not is_instance_valid(_view_camera) 				or _view_camera.global_position.distance_squared_to(global_position) <= WALK_DUST_MAX_DISTANCE * WALK_DUST_MAX_DISTANCE)
-		if walk_dust.emitting != walking:
-			walk_dust.emitting = walking
+	## Only where someone can see it: a whole army starts walking on the same
+	## click. Puffs into the shared pool (DustPool) rather than an emitter of
+	## its own.
+	if DustPool.current != null and base_animation(sprite.animation) == "walk" and in_view \
+			and (not is_instance_valid(_view_camera) \
+			or _view_camera.global_position.distance_squared_to(global_position) <= WALK_DUST_MAX_DISTANCE * WALK_DUST_MAX_DISTANCE):
+		_dust_timer -= delta
+		if _dust_timer <= 0.0:
+			_dust_timer += 1.0 / DustPool.PUFFS_PER_SECOND
+			DustPool.current.puff(global_position + Vector3(0.0, 0.05, 0.0))
 
 	## Hidden by fog or off screen: nobody can see which way it's flipped, and
 	## it's worked out again the frame it shows.
@@ -3263,6 +2871,8 @@ func _build_crew_sprite() -> void:
 	})
 	sprite.add_child(crew_sprite)
 	crew_sprite.play("idle")
+	if Main.sprite_batcher_current != null:
+		Main.sprite_batcher_current.add_sprite(crew_sprite, team_tint)
 
 ## Keeps the crew behind the machine from this peer's own camera (so, like the
 ## flip itself, worked out locally every frame), mirroring its facing, hit
@@ -3369,14 +2979,38 @@ func _head_to_resource() -> void:
 		_end_gather_command()
 		return
 	status_activity = Activity.TO_RESOURCE
-	nav_agent.target_desired_distance = target_resource.gather_range
-	move_to(target_resource.global_position)
+	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
+	move_to(_gather_approach_point(target_resource))
+
+## Just in front of `node` on this unit's side. Sent to the node's centre, the
+## sim moves a destination inside something solid (a trunk) to the nearest open
+## ground — which in a clump of trees can be the far side, or the clump's edge
+## metres away, and the gatherer then works from there.
+func _gather_approach_point(node: Gatherable) -> Vector3:
+	var away := global_position - node.global_position
+	away.y = 0.0
+	if away.length_squared() < 0.0001:
+		return node.global_position
+	return node.global_position + away.normalized() * node.gather_range * GATHER_APPROACH_FRACTION
+
+## Close enough to `target_resource` to work it.
+func _in_gather_reach() -> bool:
+	return _has_live_resource() \
+			and _flat_distance(global_position, target_resource.global_position) <= target_resource.gather_range
 
 func _start_gathering() -> void:
 	## Felled while this unit was still walking to it.
 	if not _has_live_resource():
 		_head_to_resource()
 		return
+	## Stopped short: the node is walled in by others. The nearest one it can
+	## get to instead, rather than working this one from out of reach.
+	if _flat_distance(global_position, target_resource.global_position) > target_resource.gather_range + GATHER_REACH_SLACK \
+			and _gather_approach_tries < GATHER_APPROACH_TRIES and _retarget_resource(global_position, target_resource):
+		_gather_approach_tries += 1
+		_head_to_resource()
+		return
+	_gather_approach_tries = 0
 	status_activity = Activity.GATHERING
 	gather_timer = 0.0
 	status_carried_type = target_resource.resource_type
@@ -3469,14 +3103,15 @@ func _has_live_resource() -> bool:
 ## woodcutter works its way through the same forest instead of drifting toward
 ## whichever tree is nearest its drop-off trip. Returns false (target left
 ## untouched) when the node type doesn't seek, or nothing is in range.
-func _retarget_resource() -> bool:
+func _retarget_resource(from: Variant = null, skip: Gatherable = null) -> bool:
 	if _replacement_resource_type == null:
 		return false
+	var origin: Vector3 = from if from != null else _last_resource_position
 	var best: Gatherable = null
 	var best_distance: float = RESOURCE_RETARGET_RADIUS
 	for node in get_tree().get_nodes_in_group(&"gatherables"):
 		var candidate := node as Gatherable
-		if candidate == null or candidate.is_queued_for_deletion() or candidate.amount_remaining <= 0:
+		if candidate == null or candidate == skip or candidate.is_queued_for_deletion() or candidate.amount_remaining <= 0:
 			continue
 		if not candidate.seek_replacement_when_depleted or candidate.resource_type != _replacement_resource_type:
 			continue
@@ -3484,7 +3119,7 @@ func _retarget_resource() -> bool:
 			continue
 		if not candidate.can_be_gathered() or not candidate.can_accept_gatherer():
 			continue
-		var distance: float = _last_resource_position.distance_to(candidate.global_position)
+		var distance: float = origin.distance_to(candidate.global_position)
 		if distance < best_distance:
 			best_distance = distance
 			best = candidate
@@ -3603,11 +3238,7 @@ func _tick_melee_overflow(delta: float) -> void:
 	var my_distance := _flat_distance(global_position, target_pos)
 	if my_distance <= _effective_attack_range() * ATTACK_LEASH_SLACK:
 		return
-	var ahead := 0
-	for other in UnitGrid.units_near(get_tree(), target_pos, my_distance):
-		if other != self and other.attack_target == attack_target and other._counts_as_melee():
-			ahead += 1
-	if ahead < MELEE_CROWD_LIMIT:
+	if _melee_ahead(my_distance) < MELEE_CROWD_LIMIT:
 		return
 	var best: Unit = null
 	var best_crowd: int = attack_target.melee_attackers - 1
@@ -3622,6 +3253,19 @@ func _tick_melee_overflow(delta: float) -> void:
 	if best != null:
 		attack_target = best
 		_head_to_target()
+
+## Other melee men going for attack_target from nearer than `my_distance`,
+## counted up to MELEE_CROWD_LIMIT — by the sim when it moves units (it knows
+## everyone's target), which spares walking every body between the two.
+func _melee_ahead(my_distance: float) -> int:
+	var target := attack_target as Unit
+	if sim_id >= 0 and target.sim_id >= 0 and ArmyBridge.current != null:
+		return ArmyBridge.current.sim.count_melee_attackers(target.sim_id, my_distance, sim_id, MELEE_CROWD_LIMIT)
+	var ahead := 0
+	for other in UnitGrid.units_near(get_tree(), target.global_position, my_distance):
+		if other != self and other.attack_target == attack_target and other._counts_as_melee():
+			ahead += 1
+	return ahead
 
 ## Cached _melee_reach_blocked(), refreshed on a short timer.
 func _update_reach_blocked(delta: float) -> bool:
@@ -3755,48 +3399,58 @@ func _attacking_step(delta: float) -> void:
 		return
 
 	attack_timer += delta
-	## Research attack-speed buffs shrink the effective cooldown (computed live
-	## each tick, not baked into the exported stat).
-	var effective_cooldown := attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED))
+	var effective_cooldown := _effective_cooldown()
 	if attack_timer >= effective_cooldown:
-		attack_timer = 0.0
-		_last_swing_ms = Time.get_ticks_msec()
-		_play_attack_swing()
-		if projectile_scene != null:
-			## The shot leaves just before the draw/cast animation ends rather
-			## than the instant the swing starts, so an archer's arrow and a
-			## caster's bolt both come off the animation that throws them
-			## (see _shot_release_delay).
-			## Damage then lands later still, when it arrives (see
-			## _tick_pending_projectiles) — the shooter keeps re-nocking on its
-			## own cooldown in the meantime rather than waiting for either.
-			_pending_shots.append({
-				"time_remaining": minf(_shot_release_delay(), effective_cooldown),
-				"target": attack_target,
-			})
-		else:
-			var damage := _effective_attack_damage(attack_target)
-			var charged := _charge_armed() and attack_target is Unit
-			if charged and attack_target.braces_against(self):
-				## Straight onto the spears: no charge, and the charger pays.
-				_spend_charge()
-				attack_target.take_damage(damage, self)
-				_apply_on_hit_effects(attack_target)
-				if _is_target_alive(attack_target):
-					attack_target.counter_charge(self)
-				if status_activity == Activity.DEAD:
-					return
-				charged = false
-			else:
-				if charged:
-					damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER)
-					_spend_charge()
-				attack_target.take_damage(damage, self)
+		_land_swing(effective_cooldown, true)
+
+## Research attack-speed buffs shrink the effective cooldown (computed live
+## each tick, not baked into the exported stat).
+func _effective_cooldown() -> float:
+	return attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED))
+
+## One blow (or shot) at attack_target: charge and brace, damage, on-hit
+## effects. `retarget` looks for the next enemy when this one falls — the old
+## attack loop's way; a man fighting from his block's place gets his next one
+## from the sim instead.
+func _land_swing(effective_cooldown: float, retarget: bool) -> void:
+	attack_timer = 0.0
+	_last_swing_ms = Time.get_ticks_msec()
+	_play_attack_swing()
+	if projectile_scene != null:
+		## The shot leaves just before the draw/cast animation ends rather
+		## than the instant the swing starts, so an archer's arrow and a
+		## caster's bolt both come off the animation that throws them
+		## (see _shot_release_delay).
+		## Damage then lands later still, when it arrives (see
+		## _tick_pending_projectiles) — the shooter keeps re-nocking on its
+		## own cooldown in the meantime rather than waiting for either.
+		_pending_shots.append({
+			"time_remaining": minf(_shot_release_delay(), effective_cooldown),
+			"target": attack_target,
+		})
+	else:
+		var damage := _effective_attack_damage(attack_target)
+		var charged := _charge_armed() and attack_target is Unit
+		if charged and attack_target.braces_against(self):
+			## Straight onto the spears: no charge, and the charger pays.
+			_spend_charge()
+			attack_target.take_damage(damage, self)
 			_apply_on_hit_effects(attack_target)
-			if charged and _is_target_alive(attack_target):
-				attack_target.receive_charge(self)
-			if not _is_target_alive(attack_target):
-				_find_new_target_or_idle()
+			if _is_target_alive(attack_target):
+				attack_target.counter_charge(self)
+			if status_activity == Activity.DEAD:
+				return
+			charged = false
+		else:
+			if charged:
+				damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER)
+				_spend_charge()
+			attack_target.take_damage(damage, self)
+		_apply_on_hit_effects(attack_target)
+		if charged and _is_target_alive(attack_target):
+			attack_target.receive_charge(self)
+		if retarget and not _is_target_alive(attack_target):
+			_find_new_target_or_idle()
 
 func _fire_projectile(target: Node3D) -> void:
 	var dist := global_position.distance_to(target.global_position)
@@ -3853,7 +3507,12 @@ func _is_target_alive(target) -> bool:
 func _can_see(target) -> bool:
 	if not is_instance_valid(target):
 		return false
-	return CombatUtils.is_visible_to(get_tree(), owner_peer_id, target.global_position)
+	## Its own eyes first: a man fighting something nearly always sees it
+	## himself, which spares asking the whole side.
+	var pos: Vector3 = target.global_position
+	if Vector2(pos.x - global_position.x, pos.z - global_position.z).length_squared() <= vision_range * vision_range:
+		return true
+	return CombatUtils.is_visible_to(get_tree(), owner_peer_id, pos)
 
 func _find_new_target_or_idle() -> void:
 	## A holding unit's own fight: switch to anything else already in reach,
@@ -3888,7 +3547,6 @@ func _find_new_target_or_idle() -> void:
 			status_activity = Activity.MOVING
 			## The group this unit marched out with has scattered into its own
 			## fights by now, so this last leg is walked solo at full speed.
-			formation_speed = -1.0
 			_clear_formation_cohesion()
 			nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 			move_to(assault_center)
@@ -4048,8 +3706,14 @@ func _find_nearest_enemy_in_range(search_range: float) -> Unit:
 func _nearest_enemy_scan(search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_score := INF
-	for node in UnitGrid.enemies_near(get_tree(), global_position, search_range, owner_peer_id):
+	var candidates := UnitGrid.enemies_near(get_tree(), global_position, search_range, owner_peer_id)
+	var sorted := UnitGrid.last_sorted
+	for node in candidates:
 		var other: Unit = node
+		## Nearest first: once they are further off than the best score so
+		## far (never less than its distance), nothing later can beat it.
+		if sorted and nearest != null and _flat_distance(global_position, other.global_position) > nearest_score + UnitGrid.SORT_SLACK:
+			break
 		if not _is_target_alive(other):
 			continue
 		## Overkill guard: a target that already has enough arrows in the air to
@@ -4082,6 +3746,9 @@ func _die(attacker: Node3D = null) -> void:
 		return
 	_dying = true
 	status_activity = Activity.DEAD
+	## Out of its block's ranks at once, so the man behind steps up.
+	if sim_id >= 0 and ArmyBridge.current != null:
+		ArmyBridge.current.sim.unit_died(sim_id)
 	status_command = Command.NONE
 	attack_target = null
 	assault_active = false
@@ -4156,7 +3823,7 @@ func _play_death_and_remove(away: Vector3) -> void:
 	queue_free()
 
 ## Runs on the sprite only, like the hit recoil — the body itself stays put, so
-## there's nothing to fight the MultiplayerSynchronizer and every peer can play
+## there's nothing to fight ArmyNet's snapshots and every peer can play
 ## it locally from the direction the RPC handed over.
 func _play_death_knockback(away: Vector3) -> Tween:
 	if _sprite_move_tween and _sprite_move_tween.is_valid():
@@ -4200,17 +3867,6 @@ func _death_squash(target_scale: Vector3, strength: float) -> void:
 	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, DEATH_LAND_SQUASH_DURATION) \
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
-## Ground-following state (see _slide). _grounded: standing at the terrain's
-## height since the last move — cleared when the unit is placed somewhere by
-## hand (teleport). _walk_poly: the navmesh polygon (in _walk_index, the
-## NavWalkability it indexes into) the unit was last standing in, or -1.
-var _grounded: bool = false
-var _walk_poly: int = -1
-var _walk_index: NavWalkability = null
-
-## How far a blocked step is turned, either side, looking for walkable ground
-## to slide along (see _ground_step).
-const EDGE_SLIDE_ANGLES: Array[float] = [PI / 6.0, PI / 3.0, PI * 0.47]
 ## A unit whose step keeps getting stopped or turned hard aside is wedged —
 ## typically a separation shove left the straight line to its next waypoint
 ## cutting through a tree's carved-out corner. After this long it re-paths from
@@ -4218,121 +3874,66 @@ const EDGE_SLIDE_ANGLES: Array[float] = [PI / 6.0, PI / 3.0, PI * 0.47]
 ## again every BLOCKED_REPATH_INTERVAL while still wedged.
 const BLOCKED_REPATH_TIME: float = 0.4
 const BLOCKED_REPATH_INTERVAL: float = 1.5
-## A move order still wedged this long within BLOCKED_ARRIVAL_RADIUS of its
-## target counts as arrived — its slot is in or against something it can't
-## stand in, the same as a path that ends short (see PATH_END_GIVE_UP).
-const BLOCKED_GIVE_UP_TIME: float = 1.5
-const BLOCKED_ARRIVAL_RADIUS: float = 2.5
 ## Still wedged this long and the unit is somewhere no path gets it out of —
 ## a pocket of ground walled in by trees. It is let through unclamped for
 ## BLOCKED_ESCAPE_DURATION, squeezing between the trunks the way a collision
 ## capsule could.
 const BLOCKED_ESCAPE_TIME: float = 3.0
 const BLOCKED_ESCAPE_DURATION: float = 1.0
-## The path waypoint this tick's steering heads for, or INF when the unit isn't
-## following a path this tick (see _ground_step).
-var _path_waypoint: Vector3 = Vector3.INF
-## The navigation server joins navmesh polygons across small gaps (its edge
-## merging), and a path can run straight over one. A path-following unit may
-## cross an unwalkable stretch up to this long on the way to its waypoint.
-const PATH_GAP_MAX: float = 1.0
-const PATH_GAP_SAMPLE: float = 0.25
 var _blocked_time: float = 0.0
 var _next_blocked_repath: float = BLOCKED_REPATH_TIME
 var _unclamped_time: float = 0.0
 
-## Moves the unit by its velocity for this tick. On a TerraBrush map that's a
-## step across the ground: height read straight off the terrain, and kept to
-## the walkable navmesh (which already has buildings, trees, cliffs and deep
-## water carved out around it) instead of sweeping a collision shape — the
-## sweep was the most expensive thing a unit did each tick. Anywhere else it's
-## move_and_slide(). A unit standing still doesn't move at all.
+## Hands this tick's velocity to the sim, which moves the unit (see
+## _sim_slide). One not in the sim yet — the first ticks of a match, before
+## its grid is built — stands where it is.
 func _slide() -> void:
-	var terrain := GroundHeight.terrain(get_tree())
-	var still: bool = absf(velocity.x) < 0.01 and absf(velocity.z) < 0.01
-	if terrain == null:
-		## is_on_floor() is as of the last real slide, which is still true for a
-		## unit that hasn't moved since.
-		if still and is_on_floor():
-			return
-		if not PerfStats.enabled:
-			move_and_slide()
-			return
-		var slide_start := Time.get_ticks_usec()
-		move_and_slide()
-		PerfStats.add_slide(Time.get_ticks_usec() - slide_start)
-		return
-	if still and _grounded:
-		_track_blocked(false, 0.0)
-		return
-	if not PerfStats.enabled:
-		_ground_step(terrain, get_physics_process_delta_time())
-		return
-	var start := Time.get_ticks_usec()
-	_ground_step(terrain, get_physics_process_delta_time())
-	PerfStats.add_slide(Time.get_ticks_usec() - start)
+	if sim_id >= 0 and ArmyBridge.current != null:
+		_sim_slide()
 
-func _ground_step(terrain: TerraBrush, delta: float) -> void:
-	var step := Vector3(velocity.x, 0.0, velocity.z) * delta
-	var next := global_position + step
-	var wedged := false
-	var walkability := NavWalkability.current
+## Whether a unit walking on its own (sim_solo) is on its way somewhere this
+## tick, rather than standing (arrived, working, fighting, or waiting for a
+## gap in the front rank).
+func _solo_walking() -> bool:
+	if solo_arrived:
+		return false
+	if status_activity == Activity.TO_TARGET and _reach_blocked:
+		return false
+	return status_activity == Activity.MOVING or status_activity == Activity.TO_RESOURCE \
+			or status_activity == Activity.TO_DROPOFF or status_activity == Activity.TO_TARGET \
+			or status_activity == Activity.TO_BUILD_SITE or status_activity == Activity.TO_CAST
+
+## _slide for a unit the sim moves: hands over this tick's velocity and what
+## kind of body it is right now. The sim applies it on its next tick.
+func _sim_slide() -> void:
+	var delta := get_physics_process_delta_time()
+	var flags := 0
+	if status_activity == Activity.DEAD:
+		flags |= ArmySim.MOTION_GHOST
+	elif _stun_remaining > 0.0 or status_activity == Activity.GATHERING \
+			or status_activity == Activity.BUILDING or status_activity == Activity.CASTING:
+		flags |= ArmySim.MOTION_PINNED
 	if _unclamped_time > 0.0:
 		_unclamped_time -= delta
-		walkability = null
-		_walk_poly = -1
-	if walkability != null:
-		if walkability != _walk_index:
-			_walk_index = walkability
-			_walk_poly = walkability.polygon_at(global_position)
-		var poly := walkability.polygon_at(next, _walk_poly)
-		## Only a unit already on walkable ground is held to it — one that
-		## isn't (spawned or shoved off the edge) is free to walk back on.
-		## Let through along the path, but still held to the walkable ground
-		## for anything else (a separation shove, steering off the path).
-		if poly < 0 and _walk_poly >= 0 and _path_crosses_gap(walkability, _path_waypoint):
-			poly = _walk_poly
-		if poly < 0 and _walk_poly >= 0:
-			## Turn the step progressively further from straight ahead, either
-			## side, until it lands on walkable ground — shortened to how much
-			## of it still goes the intended way — so a unit slides along an
-			## edge or round a tree's corner instead of stopping dead at it.
-			for angle in EDGE_SLIDE_ANGLES:
-				for side in [1.0, -1.0]:
-					var turned: Vector3 = step.rotated(Vector3.UP, angle * side) * cos(angle)
-					poly = walkability.polygon_at(global_position + turned, _walk_poly)
-					if poly >= 0:
-						next = global_position + turned
-						wedged = angle > PI / 4.0
-						break
-				if poly >= 0:
-					break
-			if poly < 0:
-				next = global_position
-				poly = _walk_poly
-				wedged = true
-		_walk_poly = poly
-	_track_blocked(wedged, delta)
-	next.y = terrain.getHeightAtPosition(next.x, next.z, true)
-	global_position = next
-	_grounded = true
-
-## Whether the unit is at a gap the path itself runs across: heading for
-## `waypoint`, walkable ground resumes within PATH_GAP_MAX (or the waypoint is
-## reached first). Only looks that far ahead — this runs for every blocked step.
-func _path_crosses_gap(walkability: NavWalkability, waypoint: Vector3) -> bool:
-	if not waypoint.is_finite():
-		return false
-	var distance := _flat_distance(global_position, waypoint)
-	if distance < 0.01:
-		return false
-	var reach: float = minf(distance, PATH_GAP_MAX + PATH_GAP_SAMPLE)
-	var steps: int = ceili(reach / PATH_GAP_SAMPLE)
-	for step in range(1, steps + 1):
-		var along: float = reach * step / steps
-		if walkability.polygon_at(global_position.lerp(waypoint, along / distance)) >= 0:
-			return along - PATH_GAP_SAMPLE <= PATH_GAP_MAX
-	return distance <= PATH_GAP_MAX
+		flags |= ArmySim.MOTION_UNCLAMPED
+	var speed := move_speed * _slow_multiplier() * _buff_speed_multiplier()
+	## A charge's knockback carries a man off his place for its moment.
+	var solo_walking := sim_solo and not sim_follow and _solo_walking()
+	if (sim_follow or solo_walking) and flags == 0 and _knockback_remaining <= 0.0:
+		flags |= ArmySim.MOTION_FOLLOW
+		if is_charging():
+			speed *= CHARGE_SPEED_MULTIPLIER
+	if sim_follow and _fights_from_place() and not (flags & ArmySim.MOTION_GHOST):
+		flags |= ArmySim.MOTION_FIGHT
+	var target_id := -1
+	if is_instance_valid(attack_target) and attack_target is Unit:
+		target_id = (attack_target as Unit).sim_id
+	ArmyBridge.current.sim.set_unit_motion(sim_id, Vector2(velocity.x, velocity.z), flags, target_id, speed)
+	## A man holding his place is walked round things by the sim itself; the
+	## old escape (walking straight through after being wedged a while) would
+	## only put him inside a clump of trees.
+	if not sim_follow:
+		_track_blocked(sim_wedged, delta)
 
 func _track_blocked(wedged: bool, delta: float) -> void:
 	if not wedged:

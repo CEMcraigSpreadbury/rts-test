@@ -138,23 +138,6 @@ func _free_rank() -> int:
 		rank += 1
 	return rank
 
-## Turning about renumbers the block for good: the rear rank becomes the front
-## and stays there. Applied when the order is given, not when the places are
-## handed out — a reversal held only for the length of one order would be
-## undone by the next one, which is the whole formation swapping ends again.
-func turn_about() -> void:
-	var ranked: Array[Unit] = []
-	for unit in members:
-		if is_instance_valid(unit):
-			ranked.append(unit)
-	ranked.sort_custom(func(a, b): return a.regiment_rank < b.regiment_rank)
-	var ranks: Array[int] = []
-	for unit in ranked:
-		ranks.append(unit.regiment_rank)
-	ranks.reverse()
-	for i in ranked.size():
-		ranked[i].regiment_rank = ranks[i]
-
 ## What kind of soldier this body is made of. A regiment is always one type
 ## (see Main.largest_same_type), so any member answers for all of them. Empty
 ## for a regiment worn down to nothing but its officer.

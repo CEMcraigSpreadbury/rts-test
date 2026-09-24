@@ -1,7 +1,7 @@
 class_name CombatUtils
 extends RefCounted
 ## Shared by Unit and ProductionBuilding (no common combat base class between
-## a CharacterBody3D and a StaticBody3D), so this lives as a static helper.
+## a Node3D and a StaticBody3D), so this lives as a static helper.
 
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 ## Neighbour-query radius for alert_nearby_allies: must cover the largest
@@ -58,6 +58,11 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 		## whatever reaches it, not a neighbor's fight.
 		if (ally.hold_position or ally.in_formation_fight) and ally.status_command == Unit.Command.NONE:
 			continue
+		## Already in its block's fight: its men fight whatever the sim puts in
+		## their reach. Answering each hit on a neighbour sent the whole block
+		## a fresh attack order per man alerted, onto whoever hit last.
+		if ally.sim_follow and ally.in_formation_fight:
+			continue
 		## Part of an idle block: it answers as the block does, not by running
 		## off on its own.
 		if ally.in_idle_block():
@@ -77,8 +82,12 @@ static func alert_nearby_allies(tree: SceneTree, from_position: Vector3, defende
 static func find_nearest_enemy_unit(tree: SceneTree, from_position: Vector3, owner_peer_id: int, search_range: float) -> Unit:
 	var nearest: Unit = null
 	var nearest_dist := search_range
-	for node in UnitGrid.enemies_near(tree, from_position, search_range, owner_peer_id):
+	var candidates := UnitGrid.enemies_near(tree, from_position, search_range, owner_peer_id)
+	var sorted := UnitGrid.last_sorted
+	for node in candidates:
 		var other: Unit = node
+		if sorted and nearest != null and from_position.distance_to(other.global_position) > nearest_dist + UnitGrid.SORT_SLACK:
+			break
 		if not is_worth_attacking(other):
 			continue
 		## A tower whose attack_range reaches past what its side can see
@@ -120,12 +129,18 @@ static var _building_eyes_time: float = -1.0
 ## necessarily the local player — this is asked on behalf of every player the
 ## host simulates, AI included.
 static func is_visible_to(tree: SceneTree, viewer_peer_id: int, world_pos: Vector3) -> bool:
-	for node in UnitGrid.units_near(tree, world_pos, VISION_QUERY_RADIUS):
-		var unit: Unit = node
-		if not Teams.is_friendly(viewer_peer_id, unit.owner_peer_id):
-			continue
-		if unit.global_position.distance_to(world_pos) <= unit.vision_range:
+	## The sim answers for the units, natively, for any side but the neutral
+	## one (whose peers are all one sim team there, yet not friends here).
+	if ArmyBridge.current != null and Teams.team_of(viewer_peer_id) != Teams.NEUTRAL:
+		if ArmyBridge.current.team_sees(viewer_peer_id, world_pos):
 			return true
+	else:
+		for node in UnitGrid.units_near(tree, world_pos, VISION_QUERY_RADIUS):
+			var unit: Unit = node
+			if not Teams.is_friendly(viewer_peer_id, unit.owner_peer_id):
+				continue
+			if unit.global_position.distance_to(world_pos) <= unit.vision_range:
+				return true
 	for eye in _building_vision_sources(tree):
 		if not Teams.is_friendly(viewer_peer_id, int(eye[3])):
 			continue
@@ -165,7 +180,7 @@ static func _building_vision_sources(tree: SceneTree) -> Array:
 ## stacking onto whoever the first three arrows had already killed.
 ##
 ## `target` is untyped throughout: it may be a Unit or a ProductionBuilding
-## (no common combat base class between a CharacterBody3D and a StaticBody3D),
+## (no common combat base class between a Node3D and a StaticBody3D),
 ## and a statically-typed parameter would make GDScript type-check the
 ## argument before the body runs, throwing on an object freed between a shot
 ## being fired and it landing instead of letting is_instance_valid() catch it.

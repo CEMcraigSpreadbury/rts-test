@@ -405,10 +405,10 @@ tooltip_text = "Line Formation"
 theme_type_variation = &"SquareButton"
 text = "2"
 
-[node name="FormationStaggeredButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=1775017322]
+[node name="FormationLooseButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=1775017322]
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-tooltip_text = "Staggered Formation"
+tooltip_text = "Loose Formation"
 theme_type_variation = &"SquareButton"
 text = "3"
 

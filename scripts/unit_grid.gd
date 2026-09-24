@@ -8,13 +8,28 @@ extends RefCounted
 
 const CELL_SIZE: float = 2.0
 
+## Whether the last query's answer came nearest first (from the sim), so a
+## caller after the nearest can stop early.
+static var last_sorted: bool = false
+## How far out of order a sorted answer can be: its order is by where the sim
+## had each unit at its last tick.
+const SORT_SLACK: float = 0.5
+
 static var _built_frame: int = -1
 static var _cells: Dictionary = {}
 ## The same, split by owner: owner_peer_id -> {cell -> [units]}.
 static var _owner_cells: Dictionary = {}
 
-## Living units whose flat (XZ) distance to `pos` is within `radius`.
+## Living units whose flat (XZ) distance to `pos` is within `radius` — asked
+## of the sim's own spatial hash (nearest first) whenever it moves the units,
+## so this grid is only built when it doesn't.
 static func units_near(tree: SceneTree, pos: Vector3, radius: float) -> Array[Unit]:
+	if ArmyBridge.current != null:
+		var native = ArmyBridge.current.units_near(pos, radius)
+		if native != null:
+			last_sorted = true
+			return native
+	last_sorted = false
 	_ensure_built(tree)
 	var result: Array[Unit] = []
 	_collect(_cells, pos, radius, result)
@@ -25,6 +40,21 @@ static func units_near(tree: SceneTree, pos: Vector3, radius: float) -> Array[Un
 ## guard scans for enemies every quarter second, and its own ranks were
 ## nearly all of what those scans looked at.
 static func enemies_near(tree: SceneTree, pos: Vector3, radius: float, owner_peer_id: int) -> Array[Unit]:
+	if ArmyBridge.current != null:
+		## The neutral side's peers are one team in the sim but enemies of
+		## each other here: those ask for everyone and sort it out.
+		var neutral: bool = Teams.team_of(owner_peer_id) == Teams.NEUTRAL
+		var native = ArmyBridge.current.units_near(pos, radius, -1 if neutral else ArmyBridge.current.sim_team(owner_peer_id))
+		if native != null:
+			last_sorted = true
+			if not neutral:
+				return native
+			var enemies: Array[Unit] = []
+			for unit in native:
+				if Teams.is_enemy(owner_peer_id, unit.owner_peer_id):
+					enemies.append(unit)
+			return enemies
+	last_sorted = false
 	_ensure_built(tree)
 	var result: Array[Unit] = []
 	for owner in _owner_cells:

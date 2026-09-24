@@ -10,16 +10,15 @@ extends RefCounted
 ## (main.gd's current_formation_type), which stays selected across orders
 ## until the player picks a different one.
 
-enum Type { BOX, LINE, STAGGERED }
+enum Type { BOX, LINE, LOOSE }
 
 const DEFAULT_TYPE: Formation.Type = Type.BOX
 
-## Spacing between adjacent slots. Every unit shares the same 0.4 capsule
-## (scenes/units/unit.tscn), so neighbours need ~0.8 between centres, and
-## separation pushes apart anything within Unit.SEPARATION_DISTANCE (0.85) —
-## this leaves room above both, so settled units stand still in their exact
-## slots without the group reading as a sprawling grid.
-const SPACING: float = 1.3
+## Spacing between adjacent slots: Very War's infantry spacing, which its
+## separation radius (World::kFollowSeparationRadius, 1.1 m) presses slightly
+## against, so a block holds together as a body rather than a grid of points.
+## Every unit's capsule is 0.4 (scenes/units/unit.tscn), so 1.0 still fits.
+const SPACING: float = 1.0
 
 ## Box: roughly square grid, front rank arrives exactly at the target. This
 ## is a cap on how wide any single row is allowed to get, not a fixed row
@@ -33,9 +32,11 @@ const BOX_COLUMNS: int = 12
 ## Line: single (or, once a selection is large, a few-rank) wide line —
 ## capped so a huge selection doesn't produce one absurdly wide rank.
 const LINE_MAX_PER_RANK: int = 12
-## Staggered/Column: narrow 2-wide column for threading chokepoints, with
-## alternating rows offset sideways so it marches in a genuine zigzag.
-const STAGGERED_COLUMNS: int = 2
+## Box: tighter than the other shapes, as Very War's Square.
+const BOX_SPACING_SCALE: float = 0.85
+## Loose: a Box with wider spacing and a little fixed roughness per man (see
+## World::rebuild_slots), for skirmishers and to thin out a crowded front.
+const LOOSE_SPACING_SCALE: float = 1.8
 
 var units: Array[Unit] = []
 var type: Formation.Type = DEFAULT_TYPE
@@ -66,8 +67,8 @@ static func type_name(formation_type: Formation.Type) -> String:
 	match formation_type:
 		Type.LINE:
 			return "Line"
-		Type.STAGGERED:
-			return "Staggered"
+		Type.LOOSE:
+			return "Loose"
 		_:
 			return "Box"
 
@@ -84,8 +85,8 @@ func get_slot_positions(target_pos: Vector3, forward: Vector3, right: Vector3) -
 	match type:
 		Type.LINE:
 			return _line_slots(target_pos, forward, right)
-		Type.STAGGERED:
-			return _staggered_slots(target_pos, forward, right)
+		Type.LOOSE:
+			return _loose_slots(target_pos, forward, right)
 		_:
 			return _box_slots(target_pos, forward, right)
 
@@ -114,8 +115,8 @@ func _box_slots(target_pos: Vector3, forward: Vector3, right: Vector3, column_ov
 		## final row still comes out balanced instead of front-loaded.
 		var row_count: int = clampi(ceili(float(remaining) / remaining_rows), 1, columns)
 		for col in row_count:
-			var col_offset: float = (col - (row_count - 1) / 2.0) * SPACING
-			var row_offset: float = row * SPACING
+			var col_offset: float = (col - (row_count - 1) / 2.0) * SPACING * BOX_SPACING_SCALE
+			var row_offset: float = row * SPACING * BOX_SPACING_SCALE
 			slots.append(target_pos + right * col_offset - forward * row_offset)
 			index += 1
 	return slots
@@ -131,16 +132,11 @@ func _line_slots(target_pos: Vector3, forward: Vector3, right: Vector3) -> Array
 		slots.append(target_pos + right * col_offset - forward * rank_offset)
 	return slots
 
-func _staggered_slots(target_pos: Vector3, forward: Vector3, right: Vector3) -> Array[Vector3]:
-	var slots: Array[Vector3] = []
-	for i in units.size():
-		var col: int = i % STAGGERED_COLUMNS
-		var row: int = i / STAGGERED_COLUMNS
-		## Alternates sideways every row (not just offsetting the odd ones) so
-		## the column actually zigzags left-right-left rather than only ever
-		## nudging one direction, which would just be a brick offset.
-		var stagger: float = (SPACING * 0.5) * (1.0 if row % 2 == 1 else -1.0)
-		var col_offset: float = (col - (STAGGERED_COLUMNS - 1) / 2.0) * SPACING + stagger
-		var row_offset: float = row * SPACING
-		slots.append(target_pos + right * col_offset - forward * row_offset)
+## A Box at LOOSE_SPACING_SCALE. The per-man roughness is the sim's; the older
+## formation code (formation attacks) lays Loose out as a plain wide grid.
+func _loose_slots(target_pos: Vector3, forward: Vector3, right: Vector3) -> Array[Vector3]:
+	var slots := _box_slots(target_pos, forward, right)
+	for i in slots.size():
+		var offset := slots[i] - target_pos
+		slots[i] = target_pos + offset * (LOOSE_SPACING_SCALE / BOX_SPACING_SCALE)
 	return slots

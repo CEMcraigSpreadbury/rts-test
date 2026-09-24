@@ -49,6 +49,9 @@ func send_line(peer_id: int, line: String) -> void:
 ##   "cmd speed <multiplier>" runs the whole match faster or slower (single
 ##   player only), e.g. "cmd speed 4"; "cmd speed 1" puts it back.
 ##   "cmd perf" toggles the movement profiling overlay (host only, see PerfStats).
+##   "cmd navgrid" toggles the native sim's movement grid overlay (host only, see ArmyBridge).
+##   "cmd formations" toggles the native sim's formation overlay (host only, see ArmyBridge).
+##   "cmd control" lets you select and command any side's units, to set up fights (single player).
 ##   "cmd rain [on|off]" starts or stops rain for everyone; with no argument it
 ##   toggles. It still clears up / returns on its own afterwards (see Weather).
 ## Commands only run when the host is a debug build or was launched with
@@ -182,6 +185,27 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 				overlay.name = "PerfStats"
 				main.add_child(overlay)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] perf overlay %s" % ("off" if existing else "on"))
+		"navgrid":
+			## The grid lives on the host with the rest of the sim.
+			if sender_id != main.my_peer_id() or main.army_bridge == null or ArmyBridge.current == null:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] navgrid only works on the host")
+				return
+			var shown: bool = main.army_bridge.toggle_overlay()
+			_rpc_display_chat.rpc_id(sender_id, "[debug] navgrid overlay %s" % ("on" if shown else "off"))
+		"control":
+			## Single player only, like "cmd speed": commanding the other side
+			## has no place in a real match.
+			if not Network.is_single_player():
+				_rpc_display_chat.rpc_id(sender_id, "[debug] control only works in single player")
+				return
+			main.debug_control_all = not main.debug_control_all
+			_rpc_display_chat.rpc_id(sender_id, "[debug] control of every unit %s" % ("on" if main.debug_control_all else "off"))
+		"formations":
+			if sender_id != main.my_peer_id() or main.army_bridge == null or ArmyBridge.current == null:
+				_rpc_display_chat.rpc_id(sender_id, "[debug] formations only works on the host")
+				return
+			var drawn: bool = main.army_bridge.toggle_formation_overlay()
+			_rpc_display_chat.rpc_id(sender_id, "[debug] formation overlay %s" % ("on" if drawn else "off"))
 		"rain":
 			var arg: String = parts[1].to_lower() if parts.size() > 1 else ""
 			if arg not in ["", "on", "off"]:
@@ -200,7 +224,7 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 			main.day_night.set_night(night)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] day %s" % ("off" if night else "on"))
 		"help":
-			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf, cmd rain [on|off], cmd day [on|off]")
+			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf, cmd navgrid, cmd formations, cmd control, cmd rain [on|off], cmd day [on|off]")
 		_:
 			_rpc_display_chat.rpc_id(sender_id, "[debug] unknown command '%s'" % parts[0])
 

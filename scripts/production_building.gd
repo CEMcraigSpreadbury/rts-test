@@ -93,7 +93,7 @@ enum Role { OTHER, MILITARY, SHRINE, WALL }
 ## this node's own origin and runs along its local Z; the structure itself sits
 ## to either side on local X. Only wall_gate.tscn sets it (1.4 — its two posts
 ## sit at x=+/-0.85 and are 0.3 wide, so the clear span between their inner
-## faces is 1.7 - 0.3 = 1.4). Read host-side by main.gd's _find_funnel_point.
+## faces is 1.7 - 0.3 = 1.4).
 ## An opening's NavigationObstacle3D footprints must sit on the structure to
 ## either side of it, never in the opening itself: RVO keeps every unit
 ## agent-radius clear of an obstacle centre, so an obstacle parked in a doorway
@@ -715,9 +715,8 @@ func accepts_dropoff(type: ResourceType) -> bool:
 ## node: a structure whose footprint is described by several off-centre
 ## obstacles (wall_gate's two posts at x = +/-0.85, say) is as wide as its
 ## furthest obstacle edge, and reading a single one's radius would report a
-## 2m-wide gate as a 0.2m pebble — which then under-reports it to the corridor
-## scan in main.gd's _find_funnel_point and lets builders and attackers walk far
-## closer to it than the carved navmesh will ever actually let them.
+## 2m-wide gate as a 0.2m pebble — which then lets builders and attackers try to
+## walk far closer to it than the carved navmesh will ever actually let them.
 func get_footprint_radius() -> float:
 	var radius: float = 0.0
 	for child in get_children():

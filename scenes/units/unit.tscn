@@ -42,10 +42,6 @@ script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 30
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
-radius = 0.4
-height = 1.6
-
 [sub_resource type="TorusMesh" id="TorusMesh_1"]
 inner_radius = 0.61
 outer_radius = 0.64
@@ -55,59 +51,7 @@ render_priority = 10
 shader = ExtResource("99_ground_ring")
 shader_parameter/albedo_color = Color(0.2, 1, 0.3, 1)
 
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_walkdust"]
-emission_shape = 1
-emission_sphere_radius = 0.5
-direction = Vector3(0, 1, 0)
-spread = 50.0
-initial_velocity_min = 0.2
-initial_velocity_max = 0.5
-gravity = Vector3(0, 0.15, 0)
-scale_min = 0.4
-scale_max = 0.9
-color = Color(0.75, 0.68, 0.55, 0.45)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_walkdust"]
-transparency = 1
-shading_mode = 0
-albedo_color = Color(0.75, 0.68, 0.55, 0.45)
-vertex_color_use_as_albedo = true
-billboard_mode = 3
-billboard_keep_scale = true
-particles_anim_h_frames = 1
-particles_anim_v_frames = 1
-particles_anim_loop = false
-
-[sub_resource type="QuadMesh" id="QuadMesh_walkdust"]
-material = SubResource("StandardMaterial3D_walkdust")
-size = Vector2(0.12, 0.12)
-
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_1"]
-properties/0/path = NodePath(".:position")
-properties/0/spawn = true
-properties/0/replication_mode = 1
-properties/1/path = NodePath(".:rotation")
-properties/1/spawn = true
-properties/1/replication_mode = 1
-properties/2/path = NodePath(".:status_current_health")
-properties/2/spawn = true
-properties/2/replication_mode = 2
-properties/3/path = NodePath(".:owner_peer_id")
-properties/3/spawn = true
-properties/3/replication_mode = 2
-properties/4/path = NodePath(".:team_tint")
-properties/4/spawn = true
-properties/4/replication_mode = 2
-properties/5/path = NodePath(".:hold_position")
-properties/5/spawn = true
-properties/5/replication_mode = 2
-properties/6/path = NodePath(".:regiment_id")
-properties/6/spawn = true
-properties/6/replication_mode = 2
-
-[node name="Unit" type="CharacterBody3D" unique_id=1622850852 groups=["units"]]
-collision_layer = 4
-collision_mask = 1
+[node name="Unit" type="Node3D" unique_id=1622850852 groups=["units"]]
 script = ExtResource("1_script")
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_villager")])
 walk_row = 3
@@ -126,10 +70,6 @@ attack_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_
 patrol_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_cl_patrol_patrolling"), ExtResource("110_cl_patrol_on_watch"), ExtResource("110_cl_patrol_eyes_open"), ExtResource("110_cl_patrol_hold_line")])
 build_command_lines = Array[ExtResource("109_command_line")]([ExtResource("110_cl_build_building"), ExtResource("110_cl_build_raise_it"), ExtResource("110_cl_build_consider_done"), ExtResource("110_cl_build_good_spot")])
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1669979845]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
-shape = SubResource("CapsuleShape3D_1")
-
 [node name="Sprite" type="AnimatedSprite3D" parent="." unique_id=1813293263]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.628, 0)
 pixel_size = 0.05
@@ -143,26 +83,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
 visible = false
 mesh = SubResource("TorusMesh_1")
 surface_material_override/0 = SubResource("StandardMaterial3D_ring")
-
-[node name="NavigationAgent3D" type="NavigationAgent3D" parent="." unique_id=2051781566]
-radius = 0.45
-neighbor_distance = 6.0
-max_neighbors = 8
-
-[node name="WalkDust" type="GPUParticles3D" parent="." unique_id=1126440812]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
-lifetime = 0.5
-preprocess = 0.2
-process_material = SubResource("ParticleProcessMaterial_walkdust")
-draw_pass_1 = SubResource("QuadMesh_walkdust")
-
-[node name="UnitAudioPlayer" type="AudioStreamPlayer3D" parent="." unique_id=1233211235]
-unit_size = 20.0
-max_distance = 40.0
-bus = &"SFX"
-
-[node name="CommandAudioPlayer" type="AudioStreamPlayer" parent="."]
-bus = &"SFX"
 
 [node name="HealthBar" type="Node3D" parent="." unique_id=1766485738]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
@@ -189,6 +109,3 @@ texture_filter = 0
 texture = ExtResource("2_bar_tex")
 no_depth_test = true
 render_priority = 21
-
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=1451380995]
-replication_config = SubResource("SceneReplicationConfig_1")

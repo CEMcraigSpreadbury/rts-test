@@ -99,6 +99,8 @@ func _ready() -> void:
 	## Main sizes the Conquest Favour target off how many of these there are.
 	add_to_group(&"objectives")
 	progress_disc.visible = false
+	## Only its shape is read (see _units_in_zone): it has nothing to overlap.
+	capture_zone.monitoring = false
 	## Every instance of an objective scene shares the one ShaderMaterial
 	## sub-resource, so without a private copy two points being captured at
 	## once would fight over a single fill/colour.
@@ -162,6 +164,17 @@ static func _counts_for_capture(unit: Unit) -> bool:
 func _capture_speed(unit_count: int) -> float:
 	return minf(1.0 + (unit_count - 1) * capture_speed_per_extra_unit, max_capture_speed)
 
+## Everyone standing in the capture zone: its sphere, flat, asked of the sim
+## (units have no physics body for the Area3D to overlap).
+func _units_in_zone() -> Array[Unit]:
+	if ArmyBridge.current == null:
+		return []
+	var shape := capture_zone.get_child(0) as CollisionShape3D
+	var sphere := shape.shape as SphereShape3D if shape != null else null
+	if sphere == null:
+		return []
+	return ArmyBridge.current.units_in_circle(shape.global_position, sphere.radius)
+
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
@@ -174,7 +187,7 @@ func _physics_process(delta: float) -> void:
 	var counts: Dictionary = {}
 	var team_rep: Dictionary = {}
 	var anyone_present := false
-	for body in capture_zone.get_overlapping_bodies():
+	for body in _units_in_zone():
 		if not (body is Unit) or body.status_activity == Unit.Activity.DEAD or body.owner_peer_id <= 0:
 			continue
 		anyone_present = true

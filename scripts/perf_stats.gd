@@ -20,6 +20,7 @@ const SECTION_MIN_MS: float = 0.05
 ## fixed header these have to stay under a screen's worth.
 const MAX_FRAME_LINES: int = 4
 const MAX_UNIT_LINES: int = 7
+const MAX_SIM_LINES: int = 5
 const MAX_AI_LINES: int = 4
 const MAX_EVENT_LINES: int = 3
 ## Thinks are counted over at least this long: an AI thinks about once a
@@ -31,9 +32,6 @@ static var enabled: bool = false
 ## Accumulated during the current physics frame, rolled into the window at the
 ## start of the next one (this node's physics tick runs before everyone else's).
 static var _frame_unit_usec: int = 0
-static var _frame_slide_usec: int = 0
-static var _frame_slide_count: int = 0
-static var _frame_path_count: int = 0
 
 ## Named per-frame (_process side) costs, section -> usec accumulated since the
 ## last overlay refresh. See add_section.
@@ -50,6 +48,16 @@ static var _last_command_units: int = 0
 ## run from _tick_attacking is counted in both), so they are not meant to add
 ## up to it — each one answers "how much is the army spending here".
 static var _unit_sections: Dictionary = {}
+## This tick's unit sections, and those of the worst tick since measuring
+## began (a spike's own breakdown, which the averages smear away).
+static var _frame_unit_sections: Dictionary = {}
+static var _worst_tick_usec: int = 0
+static var _worst_tick_frame: int = -1
+static var _worst_tick_sections: Dictionary = {}
+
+## The native sim's own per-stage timings (ArmySim.get_profile), zone -> ms
+## accumulated since the last overlay refresh. Shown per physics frame.
+static var _sim_sections: Dictionary = {}
 
 ## AI think profiling. An AI thinks at most a few times a second, so a whole
 ## think's cost lands on one physics frame: averaged over a refresh window it
@@ -70,23 +78,16 @@ static var _event_peak_usec: Dictionary = {}
 
 var _window_frames: int = 0
 var _window_unit_usec: int = 0
-var _window_slide_usec: int = 0
-var _window_slide_count: int = 0
-var _window_path_count: int = 0
 var _window_peak_unit_usec: int = 0
-var _window_peak_path_count: int = 0
 var _refresh_timer: float = 0.0
 
 ## Last window's results, in the units the overlay and monitors show.
 var _unit_ms: float = 0.0
 var _unit_ms_peak: float = 0.0
-var _slide_ms: float = 0.0
-var _slides: float = 0.0
-var _paths: float = 0.0
-var _paths_peak: int = 0
 
 var _label: Label
 var _unit_section_ms: Dictionary = {}
+var _sim_section_ms: Dictionary = {}
 var _frame_section_ms: Dictionary = {}
 var _thinks_per_second: float = 0.0
 var _think_rate_seconds: float = 0.0
@@ -94,24 +95,16 @@ var _think_rate_count: int = 0
 var _window_seconds: float = 0.0
 
 const _MONITORS: Array[String] = [
-	"rts/unit_ms", "rts/unit_ms_peak", "rts/slide_ms", "rts/slides_per_frame",
-	"rts/paths_per_frame", "rts/paths_peak", "rts/command_ms",
+	"rts/unit_ms", "rts/unit_ms_peak", "rts/command_ms",
 	"rts/ai_think_ms", "rts/ai_think_peak_ms",
 ]
 
 static func add_unit_time(usec: int) -> void:
 	_frame_unit_usec += usec
 
-static func add_slide(usec: int) -> void:
-	_frame_slide_usec += usec
-	_frame_slide_count += 1
-
 ## Adds `usec` to a named section of the frame (_process) time, e.g. "march".
 static func add_section(section: StringName, usec: int) -> void:
 	sections[section] = int(sections.get(section, 0)) + usec
-
-static func count_path() -> void:
-	_frame_path_count += 1
 
 static func record_command(msec: float, unit_count: int) -> void:
 	_last_command_msec = msec
@@ -122,6 +115,12 @@ static func record_command(msec: float, unit_count: int) -> void:
 ## every unit that runs it this frame.
 static func add_unit_section(section: StringName, usec: int) -> void:
 	_unit_sections[section] = int(_unit_sections.get(section, 0)) + usec
+	_frame_unit_sections[section] = int(_frame_unit_sections.get(section, 0)) + usec
+
+## Adds one tick of ArmySim.get_profile() (zone -> ms) to the sim group.
+static func add_sim_profile(profile: Dictionary) -> void:
+	for zone in profile:
+		_sim_sections[zone] = float(_sim_sections.get(zone, 0.0)) + float(profile[zone])
 
 ## Adds one phase of the AI think currently being timed. record_ai_think()
 ## closes that think off and rolls its phases into the peaks.
@@ -148,10 +147,14 @@ func _enter_tree() -> void:
 	layer = 100
 	process_physics_priority = -1000
 	_reset_frame()
+	_worst_tick_usec = 0
+	_worst_tick_frame = -1
+	_worst_tick_sections.clear()
 	_peak_command_msec = 0.0
 	_last_command_msec = 0.0
 	_last_command_units = 0
 	_unit_sections.clear()
+	_sim_sections.clear()
 	_ai_phase_usec.clear()
 	_ai_phase_peak_usec.clear()
 	_last_ai_think_msec = 0.0
@@ -159,8 +162,7 @@ func _enter_tree() -> void:
 	_ai_thinks = 0
 	_event_peak_usec.clear()
 	var values: Array[Callable] = [
-		func(): return _unit_ms, func(): return _unit_ms_peak, func(): return _slide_ms,
-		func(): return _slides, func(): return _paths, func(): return _paths_peak,
+		func(): return _unit_ms, func(): return _unit_ms_peak,
 		func(): return _last_command_msec,
 		func(): return _last_ai_think_msec, func(): return _peak_ai_think_msec,
 	]
@@ -192,11 +194,11 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	_window_frames += 1
 	_window_unit_usec += _frame_unit_usec
-	_window_slide_usec += _frame_slide_usec
-	_window_slide_count += _frame_slide_count
-	_window_path_count += _frame_path_count
 	_window_peak_unit_usec = maxi(_window_peak_unit_usec, _frame_unit_usec)
-	_window_peak_path_count = maxi(_window_peak_path_count, _frame_path_count)
+	if _frame_unit_usec > _worst_tick_usec:
+		_worst_tick_usec = _frame_unit_usec
+		_worst_tick_frame = Engine.get_physics_frames()
+		_worst_tick_sections = _frame_unit_sections.duplicate()
 	_reset_frame()
 
 func _process(delta: float) -> void:
@@ -223,19 +225,15 @@ func _process(delta: float) -> void:
 	for section in _unit_sections:
 		_unit_section_ms[section] = float(_unit_sections[section]) / 1000.0 / frames
 	_unit_sections.clear()
+	_sim_section_ms.clear()
+	for zone in _sim_sections:
+		_sim_section_ms[zone] = float(_sim_sections[zone]) / frames
+	_sim_sections.clear()
 	_unit_ms = _window_unit_usec / 1000.0 / frames
 	_unit_ms_peak = _window_peak_unit_usec / 1000.0
-	_slide_ms = _window_slide_usec / 1000.0 / frames
-	_slides = float(_window_slide_count) / frames
-	_paths = float(_window_path_count) / frames
-	_paths_peak = _window_peak_path_count
 	_window_frames = 0
 	_window_unit_usec = 0
-	_window_slide_usec = 0
-	_window_slide_count = 0
-	_window_path_count = 0
 	_window_peak_unit_usec = 0
-	_window_peak_path_count = 0
 	_refresh()
 
 func _refresh() -> void:
@@ -255,8 +253,6 @@ func _refresh() -> void:
 			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0],
 		"units %d   moving %d" % [total, moving],
 		"unit script %.2f ms/frame (peak %.2f)" % [_unit_ms, _unit_ms_peak],
-		"  of which slide %.2f ms, %.0f slides/frame" % [_slide_ms, _slides],
-		"path queries %.1f/frame (peak %d)" % [_paths, _paths_peak],
 		"last order %.1f ms for %d units (peak %.1f)" % [_last_command_msec, _last_command_units, _peak_command_msec],
 		"ai think %.1f ms last (peak %.1f), %.1f/s" % [_last_ai_think_msec, _peak_ai_think_msec, _thinks_per_second],
 		"navmesh polys %d   agents %d" % [
@@ -280,6 +276,8 @@ func _refresh() -> void:
 	sections.clear()
 	_section_frames = 0
 	_append_sections(lines, "frame: ", _frame_section_ms, "", MAX_FRAME_LINES)
+	## The native sim, ms per physics frame; "tick" is the whole of it.
+	_append_sections(lines, "sim: ", _sim_section_ms, "", MAX_SIM_LINES)
 	## The breakdown of the "unit script" line above, as ms per physics frame
 	## summed over every unit.
 	_append_sections(lines, "unit: ", _unit_section_ms, "", MAX_UNIT_LINES)
@@ -304,14 +302,16 @@ func snapshot() -> Dictionary:
 	return {
 		"unit_ms": _unit_ms,
 		"unit_ms_peak": _unit_ms_peak,
-		"slide_ms": _slide_ms,
-		"paths": _paths,
 		"unit_sections": _unit_section_ms.duplicate(),
+		"sim_sections": _sim_section_ms.duplicate(),
 		"frame_sections": _frame_section_ms.duplicate(),
 		"ai_phase_peak_ms": _peaks_in_ms(_ai_phase_peak_usec),
 		"event_peak_ms": _peaks_in_ms(_event_peak_usec),
 		"command_peak_ms": _peak_command_msec,
 		"ai_think_peak_ms": _peak_ai_think_msec,
+		"worst_tick_ms": _worst_tick_usec / 1000.0,
+		"worst_tick_frame": _worst_tick_frame,
+		"worst_tick_sections": _peaks_in_ms(_worst_tick_sections),
 	}
 
 static func _peaks_in_ms(peaks: Dictionary) -> Dictionary:
@@ -337,7 +337,5 @@ func _append_sections(lines: PackedStringArray, prefix: String, values: Dictiona
 		lines.append("%s%d more under %.2f ms" % [prefix, hidden, SECTION_MIN_MS])
 
 static func _reset_frame() -> void:
+	_frame_unit_sections.clear()
 	_frame_unit_usec = 0
-	_frame_slide_usec = 0
-	_frame_slide_count = 0
-	_frame_path_count = 0

@@ -1,7 +1,7 @@
 class_name AudioUtils
 extends RefCounted
 ## Shared by Unit, ProductionBuilding, Gatherable, and main.gd's own command
-## sound effects. No common node base covers all of these (a CharacterBody3D,
+## sound effects. No common node base covers all of these (a Node3D unit,
 ## a StaticBody3D "building"/"resource", and Main's flat UI player), so this
 ## lives as a static helper — same reasoning as CombatUtils.
 

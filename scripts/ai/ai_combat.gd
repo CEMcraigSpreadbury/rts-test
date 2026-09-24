@@ -484,8 +484,8 @@ func _update_wave() -> void:
 		return
 	## A wave that stops getting anywhere without being in a fight has
 	## wedged itself (a group pacing to a stuck member, a jammed chokepoint):
-	## re-order everyone on their own, which drops the group pacing and the
-	## funnel, and lets each unit find its own way.
+	## re-order everyone on their own, which drops the block and lets each unit
+	## find its own way.
 	var fighting := false
 	for unit in wave:
 		if unit.status_activity == Unit.Activity.ATTACKING or unit.status_activity == Unit.Activity.TO_TARGET:

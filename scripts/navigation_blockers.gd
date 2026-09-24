@@ -2,10 +2,10 @@ class_name NavigationBlockers
 extends Node
 
 ## Keeps the NavigationRegion3D's navmesh in sync with everything solid that
-## exists or gets built during a match, so that the A* pathfinder units
-## already run on (NavigationAgent3D -> NavigationServer3D.map_get_path)
-## plans routes AROUND buildings, walls and resource nodes instead of straight
-## through them.
+## exists or gets built during a match, so that NavigationServer3D.map_get_path
+## (which the AI plans with) routes AROUND buildings, walls and resource nodes
+## instead of straight through them. Units themselves are routed by the native
+## sim, over its own grid (ArmyBridge stamps the same blockers onto it).
 ##
 ## Why this is needed: the region's navmesh is baked from terrain alone, and
 ## buildings used to be nothing but a NavigationObstacle3D, i.e. pure runtime
@@ -14,9 +14,7 @@ extends Node
 ## with the goal directly behind it there is nothing for it to do except push
 ## the unit into the wall and hold it there. That is the "units get stuck on
 ## buildings" problem: the *path* was wrong, and no amount of local avoidance
-## can rescue a wrong path. RVO is still enabled and still does its job for
-## the last couple of meters (unit-vs-unit jostling, and shaving the corner
-## off a footprint the navmesh only knows to within a rasterization cell).
+## can rescue a wrong path.
 ##
 ## How it works:
 ##   — At startup the region's authored navmesh (terrain, baked in the editor)
@@ -26,8 +24,8 @@ extends Node
 ##     a little more erosion onto the map with every building placed.
 ##   — Blockers come from PHYSICS, not from NavigationObstacle3D: every
 ##     collision shape on a "buildings"/"gatherables" body sitting on a layer
-##     units actually collide with. That is exactly the set of things a unit's
-##     move_and_slide() can get stuck on. Reading the obstacle radius instead
+##     units actually collide with — the set of things that are solid to a
+##     unit. Reading the obstacle radius instead
 ##     would be wrong in both directions — a Gate's obstacle radius is a
 ##     deliberately tiny 0.3 so RVO lets units squeeze through the arch (using
 ##     it here would carve the middle of the gateway and seal it), while a
@@ -50,15 +48,14 @@ extends Node
 ## is imperceptible in an RTS, and polling cannot miss a path the way a
 ## forgotten call site can.
 
-## Which collision layers count as "solid to a unit" — matches the
-## collision_mask on scenes/units/unit.tscn. Buildings and resource nodes sit
+## Which collision layers count as "solid to a unit". Buildings and resource nodes sit
 ## on layer 1 (the default); a Farm deliberately sits on layer 2 instead,
 ## because villagers walk onto it to work it, and so is skipped here.
 const UNIT_COLLISION_MASK: int = 1
 ## Groups scanned for blockers. Units are NOT in here on purpose: they move,
-## they are already handled by RVO, and rebaking around them would be both
-## ruinously expensive and self-defeating (a unit standing in a doorway would
-## delete the doorway).
+## the sim keeps them apart, and rebaking around them would be both ruinously
+## expensive and self-defeating (a unit standing in a doorway would delete the
+## doorway).
 const BLOCKER_GROUPS: Array[StringName] = [&"buildings", &"gatherables"]
 const POLL_INTERVAL: float = 0.25
 ## Points used to approximate a round shape's outline. 12 is plenty at the
@@ -69,8 +66,8 @@ const CIRCLE_SEGMENTS: int = 12
 ## above the floor span it is supposed to remove. Downwards only — extending a
 ## carve *upwards* is what would wrongly seal a gateway.
 const CARVE_FLOOR_MARGIN: float = 0.5
-## Minimum clearance carved around every footprint — the radius of the unit's
-## physical capsule in scenes/units/unit.tscn. Anything less and the navmesh
+## Minimum clearance carved around every footprint — the radius of a unit's
+## body (as the sim has it, see ArmyBridge.register_unit). Anything less and the navmesh
 ## keeps gaps a unit can't physically fit through (two trunks 0.7m apart in a
 ## generated forest), so paths send units into them and they wedge there.
 const UNIT_BODY_RADIUS: float = 0.4
@@ -100,7 +97,6 @@ func setup(region: NavigationRegion3D) -> void:
 		## rather than replacing it with an empty mesh.
 		set_process(false)
 		return
-	_build_walkability(authored)
 	_clearance = maxf(authored.agent_radius, UNIT_BODY_RADIUS)
 	_bake_template = authored.duplicate()
 	_bake_template.agent_radius = 0.0
@@ -218,48 +214,16 @@ func is_baking() -> bool:
 func _on_bake_finished(mesh: NavigationMesh) -> void:
 	_bake_in_flight = false
 	if is_instance_valid(_region) and mesh.get_polygon_count() > 0:
-		## Both of these land on the main thread, however the bake itself was
-		## produced: handing the region a whole map's navmesh rebuilds it in
-		## the server, and the repath then touches every unit alive.
+		## Lands on the main thread, however the bake itself was produced:
+		## handing the region a whole map's navmesh rebuilds it in the server.
+		## Units don't walk it (the sim routes them); the AI plans on it.
 		var swap_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		_region.navigation_mesh = mesh
 		if PerfStats.enabled:
 			PerfStats.record_event(&"nav mesh swap", Time.get_ticks_usec() - swap_start)
-		var repath_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-		_repath_units()
-		if PerfStats.enabled:
-			PerfStats.record_event(&"nav repath", Time.get_ticks_usec() - repath_start)
-		_build_walkability(mesh)
 	if _rebake_queued:
 		_rebake_queued = false
 		_rebake()
-
-## NavWalkability.current for `mesh`, built on a worker thread — indexing a
-## map's worth of polygons is ~20 ms of GDScript, which on the main thread
-## would hitch every building placement.
-func _build_walkability(mesh: NavigationMesh) -> void:
-	var region_transform := _region.global_transform
-	WorkerThreadPool.add_task(func() -> void:
-		var built := NavWalkability.new(mesh, region_transform)
-		_apply_walkability.call_deferred(built))
-
-func _apply_walkability(built: NavWalkability) -> void:
-	## A slower build for an older bake must not replace a newer one.
-	if is_instance_valid(_region) and _region.navigation_mesh == built.mesh:
-		NavWalkability.current = built
-
-func _exit_tree() -> void:
-	NavWalkability.current = null
-
-## A unit already walking somewhere is holding a path planned against the
-## previous navmesh — through the doorway that just got walled up, or the long
-## way around a building that just got demolished. Re-issuing the target makes
-## NavigationAgent3D run a fresh query against the mesh that just landed.
-func _repath_units() -> void:
-	for node in get_tree().get_nodes_in_group(&"units"):
-		var unit := node as Unit
-		if unit != null and is_instance_valid(unit):
-			unit.repath()
 
 ## --- Footprints ---
 
@@ -320,7 +284,7 @@ func _add_shape_obstruction(geometry: NavigationMeshSourceGeometryData3D, shape:
 ##
 ## ConcavePolygonShape3D (the terrain) is deliberately absent — it is already
 ## the baseline geometry, and it is never on a body in BLOCKER_GROUPS.
-func _shape_points(shape: Shape3D) -> PackedVector3Array:
+static func _shape_points(shape: Shape3D) -> PackedVector3Array:
 	if shape is BoxShape3D:
 		return _box_points(shape.size * 0.5)
 	if shape is CylinderShape3D:
@@ -333,7 +297,7 @@ func _shape_points(shape: Shape3D) -> PackedVector3Array:
 		return shape.points
 	return PackedVector3Array()
 
-func _box_points(half: Vector3) -> PackedVector3Array:
+static func _box_points(half: Vector3) -> PackedVector3Array:
 	var points := PackedVector3Array()
 	for x: float in [-half.x, half.x]:
 		for y: float in [-half.y, half.y]:
@@ -341,7 +305,7 @@ func _box_points(half: Vector3) -> PackedVector3Array:
 				points.append(Vector3(x, y, z))
 	return points
 
-func _ring_points(radius: float, half_height: float) -> PackedVector3Array:
+static func _ring_points(radius: float, half_height: float) -> PackedVector3Array:
 	var points := PackedVector3Array()
 	for i in CIRCLE_SEGMENTS:
 		var angle: float = TAU * float(i) / float(CIRCLE_SEGMENTS)

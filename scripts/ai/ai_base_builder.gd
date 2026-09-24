@@ -305,8 +305,8 @@ func _site_candidates(type: BuildingType) -> Array:
 ## that finds nothing runs SITE_TESTS_PER_SEARCH of them. Doing that in one
 ## think put the lot on a single physics tick, once a second per AI, and it
 ## was the largest hitch left in a big match. So a search is now spread over
-## consecutive thinks, SITE_TESTS_PER_THINK at a time, the same way PathBudget
-## spreads path queries over frames — a site found a second later than it
+## consecutive thinks, SITE_TESTS_PER_THINK at a time, the way the old PathBudget
+## spread path queries over frames — a site found a second later than it
 ## would have been is invisible in play.
 func find_site(type: BuildingType) -> Variant:
 	var search: Dictionary = _searches.get(type, {})

@@ -355,7 +355,8 @@ func _apply_power(peer_id: int, node: ResearchNode, pos: Vector3) -> void:
 	if node.affects_own_buildings or (node.upgraded_affects_own_buildings and _is_upgraded(peer_id, node)):
 		for child in main.buildings_root.get_children():
 			var building := child as ProductionBuilding
-			if building == null or Teams.is_enemy(peer_id, building.owner_peer_id) or building.is_destroyed or building.is_under_construction 					or _flat_distance(building.global_position, pos) > node.radius:
+			if building == null or Teams.is_enemy(peer_id, building.owner_peer_id) or building.is_destroyed or building.is_under_construction \
+					or _flat_distance(building.global_position, pos) > node.radius:
 				continue
 			targets.append(building)
 	for target in targets:

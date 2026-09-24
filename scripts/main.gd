@@ -4,7 +4,8 @@ extends Node3D
 ## The match scene's root. Owns the shared match state — selection, control
 ## groups, factions, win condition — plus input, spawning and the order RPCs.
 ## Everything else lives in child components created in _add_components():
-##   GroupMovement     — formation slots, chokepoint funnelling, reformation
+##   GroupMovement     — group centre and facing, the drag preview's layout
+##   ArmySim/ArmyBridge — the native sim that moves every unit, and its hookup
 ##   WorldFeedback     — popups, projectiles, bursts, alerts, hover/rally visuals
 ##   Hud               — resource bar, info panel, action panel
 ##   BuildingPlacement — placement ghosts, wall drag, gate tool, build RPCs
@@ -41,7 +42,7 @@ const UNIT_REGIMENT_KEY: Key = KEY_N
 ## the AoE-style formation hotkey convention.
 const FORMATION_BOX_KEY: Key = KEY_F1
 const FORMATION_LINE_KEY: Key = KEY_F2
-const FORMATION_STAGGERED_KEY: Key = KEY_F3
+const FORMATION_LOOSE_KEY: Key = KEY_F3
 ## Re-form: re-solves the current selection's formation shape around where the
 ## group is standing right now and walks them into it — the on-demand half of
 ## reformation (the other half, closing ranks when a member dies mid-move, is
@@ -142,9 +143,17 @@ const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 var _options_menu: OptionsMenu
 
 var selected_units: Array[Unit] = []
+## "cmd control" (single player, debug): select and command anyone's units —
+## enemies and neutrals included — to set up fights. Their orders are given as
+## their own side (see issue_command_as), so teams and fighting are untouched.
+var debug_control_all: bool = false
+
+## Whether the local player may select and command `unit`.
+func can_command(unit: Unit) -> bool:
+	return unit.owner_peer_id == my_peer_id() or debug_control_all
 ## Client-local formation shape choice — which Formation.Type the next move/
 ## attack-move order for the current selection will use. Set via
-## _set_formation_type (FORMATION_BOX_KEY/LINE_KEY/STAGGERED_KEY below) and
+## _set_formation_type (FORMATION_BOX_KEY/LINE_KEY/LOOSE_KEY below) and
 ## sent along with each move order's RPC so the host (the only side that
 ## simulates movement) knows which shape to arrange the group's slots into.
 var current_formation_type: Formation.Type = Formation.DEFAULT_TYPE
@@ -196,11 +205,13 @@ const CLICK_DRAG_THRESHOLD: float = 6.0
 ## Wider than CLICK_DRAG_THRESHOLD so a slightly shaky right-click doesn't
 ## turn into a one-unit-wide column.
 const FORMATION_DRAG_THRESHOLD: float = 14.0
-## The drag line is raycast against everything except units (layer 3, value 4
-## — see collision_layer on scenes/units/unit.tscn): the cursor sweeps across
-## the very units being ordered, and hitting their capsules would make the line
+## The ray layer units are picked on (see raycast) — the physics layer they
+## sat on when they had bodies, which the masks below still leave out.
+const UNIT_PICK_LAYER: int = 4
+## The drag line is raycast against everything except units: the cursor sweeps
+## across the very units being ordered, and hitting them would make the line
 ## jump up and sideways every time it crossed one.
-const FORMATION_DRAG_RAY_MASK: int = 0xFFFFFFFF & ~4
+const FORMATION_DRAG_RAY_MASK: int = 0xFFFFFFFF & ~UNIT_PICK_LAYER
 var _formation_drag_pressed: bool = false
 var _formation_drag_active: bool = false
 var _formation_drag_start_screen: Vector2 = Vector2.ZERO
@@ -287,6 +298,18 @@ const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
 ]
 
 var group_movement: GroupMovement
+## The native unit simulation (native/, addons/army_sim/). Stepped by the host
+## once per physics tick from _physics_process.
+var army_sim: ArmySim
+var army_bridge: ArmyBridge
+## Unit movement over the network, in bulk (every peer has one).
+var army_net: ArmyNet
+## Draws every unit sprite, one MultiMesh per sheet (every peer has one).
+var sprite_batcher: SpriteBatcher
+## The match's batcher, for units to register their sprites with; null
+## between matches, or with batching off (for comparison runs).
+static var sprite_batcher_current: SpriteBatcher = null
+static var batch_unit_sprites: bool = true
 var feedback: WorldFeedback
 var hud: Hud
 var placement: BuildingPlacement
@@ -315,6 +338,8 @@ func _enter_tree() -> void:
 ## not follow the player out to the menus or into their next match.
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	if sprite_batcher_current == sprite_batcher:
+		sprite_batcher_current = null
 
 ## The cloud layer both casts the drifting shadows and draws the faint visible
 ## wisps, so hiding it turns off both.
@@ -333,6 +358,8 @@ func _ready() -> void:
 	Population.reset()
 	UnitUpgrades.reset()
 	UnitUnlocks.reset()
+	## Before anything spawns, so every unit can join the sim as it arrives.
+	army_bridge.setup(get_node_or_null(^"NavigationRegion3D") as NavigationRegion3D)
 	## A scenario scene is an ordinary map with a Scenario node added; it
 	## installed itself in MatchRules while entering the tree, so there is no
 	## mode to switch on — this is the whole of "are we in a mission".
@@ -422,7 +449,7 @@ func _ready() -> void:
 	utility_buttons.get_node(^"IdleButton").pressed.connect(_select_all_idle_villagers)
 	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
 	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
-	utility_buttons.get_node(^"FormationStaggeredButton").pressed.connect(_set_formation_type.bind(Formation.Type.STAGGERED))
+	utility_buttons.get_node(^"FormationLooseButton").pressed.connect(_set_formation_type.bind(Formation.Type.LOOSE))
 	UiDebugEditor.register_editable_root(ui_root, "main")
 
 	game_over_panel.visible = false
@@ -462,6 +489,31 @@ func _add_components() -> void:
 	group_movement = GroupMovement.new()
 	group_movement.name = "GroupMovement"
 	add_child(group_movement)
+
+	army_sim = ArmySim.new()
+	army_sim.name = "ArmySim"
+	add_child(army_sim)
+	## Always there: units are picked by their sprites (see raycast), drawn by
+	## it or not.
+	sprite_batcher = SpriteBatcher.new()
+	sprite_batcher.name = "SpriteBatcher"
+	sprite_batcher.set_material_factory(UnitBatchMaterials.build)
+	sprite_batcher.set_drawing(batch_unit_sprites)
+	add_child(sprite_batcher)
+	sprite_batcher_current = sprite_batcher
+	var dust := DustPool.new()
+	dust.name = "DustPool"
+	add_child(dust)
+	var voices := UnitVoices.new()
+	voices.name = "UnitVoices"
+	add_child(voices)
+	army_net = ArmyNet.new()
+	army_net.name = "ArmyNet"
+	add_child(army_net)
+	army_bridge = ArmyBridge.new()
+	army_bridge.name = "ArmyBridge"
+	army_bridge.sim = army_sim
+	add_child(army_bridge)
 
 	feedback = WorldFeedback.new()
 	feedback.main = self
@@ -563,9 +615,9 @@ func my_faction() -> Faction:
 
 ## --- Navigation ---
 
-## Runs on every peer, not just the host: the navmesh is what every local
-## NavigationAgent3D plans against, and buildings replicate to everyone, so
-## each peer keeps its own copy carved. Created in code rather than authored
+## Runs on every peer, not just the host: the navmesh is what the AI plans
+## against and where spawns and markers snap to, and buildings replicate to
+## everyone, so each peer keeps its own copy carved. Created in code rather than authored
 ## into main.tscn — it needs no configuration beyond the region it watches,
 ## and main.tscn is already enormous.
 func _start_navigation_blockers() -> void:
@@ -988,7 +1040,13 @@ func _check_for_game_over() -> void:
 ## previous tick is judged together: two players crossing the line on the
 ## same tick is a draw.
 func _physics_process(delta: float) -> void:
-	if not multiplayer.is_server() or game_over:
+	if not multiplayer.is_server():
+		return
+	army_sim.step()
+	army_bridge.apply_sim_results()
+	if PerfStats.enabled:
+		PerfStats.add_sim_profile(army_sim.get_profile())
+	if game_over:
 		return
 	_tick_regiments(delta)
 	if not conquest_enabled or favour_target <= 0:
@@ -1289,7 +1347,8 @@ func _on_game_over_panel_visibility_changed() -> void:
 	_game_over_tween = create_tween().set_parallel()
 	_game_over_tween.tween_property(_game_over_backdrop, "modulate:a", 1.0, 0.5)
 	_game_over_tween.tween_property(game_over_panel, "modulate:a", 1.0, 0.3).set_delay(0.1)
-	_game_over_tween.tween_property(game_over_panel, "scale", Vector2.ONE, 0.45).set_delay(0.1) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_game_over_tween.tween_property(game_over_panel, "scale", Vector2.ONE, 0.45).set_delay(0.1) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _set_result(text: String, color: Color) -> void:
 	game_over_label.text = text
@@ -1563,12 +1622,6 @@ func _process(delta: float) -> void:
 	feedback.update_path_markers()
 	feedback.update_regiment_banners(delta)
 	_poll_formation_drag()
-	if PerfStats.enabled:
-		var start := Time.get_ticks_usec()
-		group_movement.update_reformation(delta)
-		PerfStats.add_section(&"march", Time.get_ticks_usec() - start)
-	else:
-		group_movement.update_reformation(delta)
 	if not game_over:
 		_match_seconds += delta
 
@@ -1693,8 +1746,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_formation_type(Formation.Type.LINE)
 			get_viewport().set_input_as_handled()
 			return
-		elif event.keycode == FORMATION_STAGGERED_KEY:
-			_set_formation_type(Formation.Type.STAGGERED)
+		elif event.keycode == FORMATION_LOOSE_KEY:
+			_set_formation_type(Formation.Type.LOOSE)
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == FORMATION_REFORM_KEY:
@@ -1806,7 +1859,7 @@ func _refresh_formation_drag_preview() -> void:
 	if _formation_drag_flipped:
 		_formation_drag_facing = -_formation_drag_facing
 	feedback.show_formation_preview(group_movement.drag_preview_slots(
-			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing),
+			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing, current_formation_type),
 			(_formation_drag_start_world + _formation_drag_end_world) * 0.5, _formation_drag_facing,
 			_formation_drag_start_world.distance_to(_formation_drag_end_world),
 			group_movement.drag_preview_officers(selected_units))
@@ -1855,9 +1908,8 @@ func _issue_formation_drag_order(append: bool) -> void:
 	for unit in selected_units:
 		unit_paths.append(unit.get_path())
 	var midpoint := (_formation_drag_start_world + _formation_drag_end_world) * 0.5
-	var front_width := Vector2(_formation_drag_end_world.x - _formation_drag_start_world.x,
-			_formation_drag_end_world.z - _formation_drag_start_world.z).length()
-	_rpc_issue_command.rpc_id(1, unit_paths, NodePath(), midpoint, false, append, current_formation_type, front_width, _formation_drag_facing)
+	## The drag aims the block; its width is the shape's own.
+	_rpc_issue_command.rpc_id(1, unit_paths, NodePath(), midpoint, false, append, current_formation_type, -1.0, _formation_drag_facing)
 	play_command_sound()
 	feedback.play_command_feedback(midpoint, false)
 	feedback.spawn_command_popup("move", midpoint, feedback.command_speaker())
@@ -2006,7 +2058,8 @@ func _select_regiment_of(clicked: Unit) -> bool:
 	var members: Array[Unit] = []
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
-		if unit != null and unit.regiment_id == clicked.regiment_id 				and unit.status_activity != Unit.Activity.DEAD:
+		if unit != null and unit.regiment_id == clicked.regiment_id \
+				and unit.status_activity != Unit.Activity.DEAD:
 			members.append(unit)
 	if members.is_empty():
 		return false
@@ -2150,7 +2203,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 
 	if start_pos.distance_to(end_pos) <= CLICK_DRAG_THRESHOLD:
 		var collider: Object = raycast(end_pos).get("collider")
-		if collider is Unit and collider.owner_peer_id == my_peer_id():
+		if collider is Unit and can_command(collider):
 			select_building(null)
 			select_resource(null)
 			if double_click:
@@ -2197,7 +2250,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 	select_resource(null)
 	clicked_ring_target = null
 	for child in units_root.get_children():
-		if child is Unit and child.owner_peer_id == my_peer_id() and not camera.is_position_behind(child.global_position):
+		if child is Unit and can_command(child) and not camera.is_position_behind(child.global_position):
 			var screen_pos: Vector2 = camera.unproject_position(child.global_position)
 			if rect.has_point(screen_pos):
 				child.selected = true
@@ -2205,12 +2258,24 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 	_play_random_select_sound(selected_units)
 	_report_selection()
 
+## What is under `screen_pos`. Units have no physics body: they are found by
+## their sprites as last drawn (SpriteBatcher.pick), and win over whatever the
+## physics ray meets further off. Masking out UNIT_PICK_LAYER leaves them out.
 func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionary:
 	var space_state := get_world_3d().direct_space_state
 	var from := camera.project_ray_origin(screen_pos)
-	var to := from + camera.project_ray_normal(screen_pos) * 1000.0
-	var query := PhysicsRayQueryParameters3D.create(from, to, collision_mask)
-	return space_state.intersect_ray(query)
+	var dir := camera.project_ray_normal(screen_pos)
+	var query := PhysicsRayQueryParameters3D.create(from, from + dir * 1000.0, collision_mask)
+	var hit := space_state.intersect_ray(query)
+	if collision_mask & UNIT_PICK_LAYER == 0 or sprite_batcher == null:
+		return hit
+	var basis := camera.global_transform.basis
+	var unit_hit: Dictionary = sprite_batcher.pick(from, dir, basis.x, basis.y)
+	if unit_hit.is_empty():
+		return hit
+	if not hit.is_empty() and from.distance_to(hit.position) < float(unit_hit.distance):
+		return hit
+	return unit_hit
 
 ## Gatherable / enemy Unit / enemy-or-under-construction-or-deposit-linked
 ## ProductionBuilding -> its path, else an empty path meaning "plain ground".
@@ -2261,6 +2326,51 @@ func _set_formation_type(type: Formation.Type) -> void:
 	current_formation_type = type
 	formation_label.text = "Formation: %s" % Formation.type_name(type)
 	report_tutorial_input(&"formation", Formation.type_name(type))
+	## The selected blocks change shape there and then, marching or not.
+	prune_selected_units()
+	if not selected_units.is_empty():
+		var unit_paths: Array[NodePath] = []
+		for unit in selected_units:
+			unit_paths.append(unit.get_path())
+		_rpc_set_formation_shape.rpc_id(1, unit_paths, type)
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_set_formation_shape(unit_paths: Array[NodePath], formation_type: Formation.Type) -> void:
+	if not multiplayer.is_server() or army_bridge == null:
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	var units: Array[Unit] = []
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit != null and (unit.owner_peer_id == sender_id or _debug_controls(sender_id)):
+			units.append(unit)
+	army_bridge.set_shape(expand_to_regiments(units), formation_type)
+
+## "cmd control" is on and `sender_id` is the host playing alone.
+func _debug_controls(sender_id: int) -> bool:
+	return debug_control_all and sender_id == my_peer_id() and Network.is_single_player()
+
+## Under "cmd control", an order for other sides' units is given once per
+## owner, as that owner, so each side fights as itself. True if it did that
+## (and the caller should stop).
+func _split_debug_order(sender_id: int, unit_paths: Array[NodePath], issue: Callable) -> bool:
+	if not _debug_controls(sender_id):
+		return false
+	var by_owner: Dictionary = {}
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit == null:
+			continue
+		if not by_owner.has(unit.owner_peer_id):
+			by_owner[unit.owner_peer_id] = [] as Array[NodePath]
+		by_owner[unit.owner_peer_id].append(path)
+	if by_owner.size() == 1 and by_owner.has(sender_id):
+		return false
+	for owner in by_owner:
+		issue.call(owner, by_owner[owner])
+	return true
 
 func _issue_move_order(screen_pos: Vector2, append: bool = false) -> void:
 	prune_selected_units()
@@ -2473,8 +2583,7 @@ func toggle_regiment_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
 func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_officers: Array[Unit]) -> int:
 	var added := 0
 	## The front the block is already holding, handed to everyone who joins it
-	## so a reinforced regiment still reads as one body facing one way — see
-	## GroupMovement._regiment_front for what a man with no front costs.
+	## so a reinforced regiment still reads as one body facing one way.
 	var front := Vector3.ZERO
 	for unit in regiment.all_units():
 		if is_instance_valid(unit) and unit.formation_facing != Vector3.ZERO:
@@ -2496,20 +2605,6 @@ func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_office
 	if added > 0:
 		refresh_regiment_buffs(regiment)
 	return added
-
-## The regiment `units` are, if they are all of one body and it is all of
-## them — the case where the block has a shared front and held places worth
-## keeping. Null for a mixed or partial selection.
-func sole_regiment(units: Array[Unit]) -> Regiment:
-	if units.is_empty():
-		return null
-	var regiment: Regiment = regiment_of(units[0])
-	if regiment == null:
-		return null
-	for unit in units:
-		if unit.regiment_id != regiment.id:
-			return null
-	return regiment
 
 ## An order to any part of a regiment is an order to the whole body. Clicking
 ## a member already selects all of it (see _select_regiment_of), but a control
@@ -2637,6 +2732,9 @@ func _rpc_issue_command(unit_paths: Array[NodePath], target_path: NodePath, worl
 func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: NodePath, world_pos: Vector3, attack_move_fallback: bool, append: bool, formation_type: Formation.Type = Formation.DEFAULT_TYPE, front_width: float = -1.0, facing: Vector3 = Vector3.ZERO) -> void:
 	if not multiplayer.is_server():
 		return
+	if _split_debug_order(sender_id, unit_paths, func(owner: int, paths: Array[NodePath]) -> void:
+			issue_command_as(owner, paths, target_path, world_pos, attack_move_fallback, append, formation_type, front_width, facing)):
+		return
 	var perf_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	## Client-supplied, so flattened and renormalized rather than trusted as-is.
 	facing.y = 0.0
@@ -2654,126 +2752,81 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: resolve units", Time.get_ticks_usec() - resolve_start)
 
-	## A ranged group ordered onto an enemy attacks as a block (see
-	## GroupMovement.formation_attack). A shift-queued attack still queues
-	## per unit below.
+	## A group ordered onto an enemy it can take on as a block does (see
+	## ArmyBridge.attack_blocks). A shift-queued attack still queues per unit
+	## below.
 	if not append and target_node != null and group_movement.can_formation_attack(units, target_node):
-		front_width = group_movement.resolve_dragged_width(units, formation_type, front_width)
 		for unit in units:
 			unit.clear_order_queue()
-		group_movement.formation_attack(units, target_node, formation_type, front_width)
+		army_bridge.attack_blocks(units, target_node, formation_type)
 		for unit in units:
 			feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK)
 		if PerfStats.enabled:
 			PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
 		return
 
-	## A group the player laid out by right-dragging keeps that shape for its
-	## later click orders too, rather than snapping back to the selected type.
-	if target_node == null:
-		front_width = group_movement.resolve_dragged_width(units, formation_type, front_width)
-	## Resolved once here so the slots, the march and ranks closing later all
-	## share one facing (see GroupMovement.order_facing).
-	var formation_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-	## The front the block is holding, read before the order rewrites it.
-	var ordered_regiment: Regiment = sole_regiment(units)
-	var held_front := Vector3.ZERO
-	if ordered_regiment != null:
+	## A click on something to gather, build or attack: each man goes to it
+	## himself. Anyone it means nothing to (a friendly unit, a finished building
+	## of his own) moves there with the rest instead, below.
+	var movers: Array[Unit] = []
+	if target_node != null:
+		var dispatch_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 		for unit in units:
-			if unit.formation_facing != Vector3.ZERO:
-				held_front = unit.formation_facing
-				break
-	facing = group_movement.order_facing(units, world_pos, facing)
-	## Sent somewhere behind its own front: the block turns about, and the
-	## renumbering sticks (see Regiment.turn_about). Without it the men would
-	## march through each other to face the other way.
-	if ordered_regiment != null and held_front != Vector3.ZERO and held_front.dot(facing) < 0.0:
-		ordered_regiment.turn_about()
-	var formation_positions := group_movement.formation_positions(units, world_pos, formation_type, facing, front_width)
-	if PerfStats.enabled:
-		PerfStats.record_event(&"order: formation", Time.get_ticks_usec() - formation_start)
-	## Chokepoints are handled by the march itself (see register_formation
-	## below and GroupMovement's Marching section), which squeezes the block
-	## into a column wherever the route narrows.
-	## Capping the whole group to its slowest member's speed is what actually
-	## keeps a mixed-speed selection's formation shape intact throughout the
-	## move — the nearest-slot assignment above already gets everyone to the
-	## right place, but without this a fast unit reaches its slot early and
-	## drifts/jostles around while slower units are still catching up.
-	var group_speed := group_movement.slowest_move_speed(units)
-	## Group cohesion (see Unit.formation_group/_update_cohesion) piggybacks
-	## on the same "is this an actual multi-unit formation move" signal as
-	## group_speed itself — only wire units together into a shared group when
-	## there's more than one of them, so a single-unit order never carries
-	## cohesion tracking it has no use for.
-	## One shared array reference handed to every unit in the group (cheaper
-	## than a per-unit filtered copy) — it therefore includes the unit itself
-	## alongside its groupmates. Unit._update_cohesion is responsible for
-	## skipping `other == self` when it averages this group's progress, so a
-	## unit's own progress never counts toward its own "group average".
-	var cohesion_group: Array[Unit] = units if group_speed > 0.0 else ([] as Array[Unit])
-	var dispatch_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-	for i in units.size():
-		var unit := units[i]
-		## append only actually queues if the unit is currently mid-order —
-		## an idle unit (nothing to finish first) or one that already has a
-		## queue going dispatches/appends normally either way, but a unit
-		## with nothing in flight has nothing for order_completed to ever
-		## fire from, so queuing here would silently strand the order forever.
-		var unit_is_busy := unit.status_command != Unit.Command.NONE or not unit.order_queue.is_empty()
-		if append and unit_is_busy:
-			unit.queue_order(target_path, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
-		else:
-			unit.clear_order_queue()
-			_dispatch_smart_command(unit, target_node, formation_positions[i], attack_move_fallback, group_speed, cohesion_group)
-	if PerfStats.enabled:
-		PerfStats.record_event(&"order: dispatch", Time.get_ticks_usec() - dispatch_start)
-	## Reformation bookkeeping: remember this group's destination and shape so
-	## the host can close ranks around whoever is still walking it when members
-	## die en route (see update_reformation). Registered from the units'
-	## post-dispatch state rather than blindly from `units` — a shift-queued
-	## member hasn't started this leg yet, and a gather/attack/build target
-	## ignores formation slots entirely, so neither belongs in a record whose
-	## whole job is re-solving move slots.
-	## Whether this order is going to stop and fight where it lands, settled
-	## before the march is planned rather than after. A block sent onto ground
-	## that already has enemies standing on it engages the moment it is given
-	## the order, and the route planned just below — an A* across the map, plus
-	## straightening — would be torn down again a few lines later.
-	var engage_target: Node3D = null
-	if attack_move_fallback and target_node == null and not append:
-		engage_target = _nearest_enemy_at(world_pos, sender_id)
-	var register_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-	group_movement.register_formation(cohesion_group, world_pos, formation_type, attack_move_fallback,
-			facing, front_width, INF, engage_target == null)
-	if PerfStats.enabled:
-		PerfStats.record_event(&"order: register", Time.get_ticks_usec() - register_start)
-	## Leave every man in a regiment holding the same front, whatever
-	## register_formation made of the group — it only stamps the members it
-	## still counts as walking the order, so a man who had already arrived, or
-	## who was pulled out of a fight, keeps an old front or none at all.
-	##
-	## That front is the only thing that tells the NEXT order whether it is a
-	## turn about (see GroupMovement.formation_positions), and one man out of
-	## step is enough to lose it for the whole block — at which point it
-	## marches through itself to face the other way instead of turning.
-	if ordered_regiment != null:
-		ordered_regiment.facing = facing
-		for unit in ordered_regiment.all_units():
-			if is_instance_valid(unit):
-				unit.formation_facing = facing
-	if engage_target != null:
-		var engage_start := Time.get_ticks_usec() if PerfStats.enabled else 0
-		_engage_at_attack_move_destination(units, engage_target)
+			if not _is_targeted_order(unit, target_node):
+				movers.append(unit)
+				continue
+			## append only actually queues if the unit is mid-order: with nothing
+			## in flight, nothing would ever fire order_completed to start it.
+			var unit_is_busy := unit.status_command != Unit.Command.NONE or not unit.order_queue.is_empty()
+			if append and unit_is_busy:
+				unit.queue_order(target_path, world_pos, attack_move_fallback)
+			else:
+				unit.clear_order_queue()
+				_dispatch_smart_command(unit, target_node, world_pos, attack_move_fallback)
 		if PerfStats.enabled:
-			PerfStats.record_event(&"order: engage", Time.get_ticks_usec() - engage_start)
+			PerfStats.record_event(&"order: dispatch", Time.get_ticks_usec() - dispatch_start)
+	else:
+		movers = units
+	if movers.is_empty():
+		if PerfStats.enabled:
+			PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
+		return
+
+	## A ground order: the sim marches it, block by block (ArmyBridge.order_blocks).
+	var blocks_start := Time.get_ticks_usec() if PerfStats.enabled else 0
+	army_bridge.order_blocks(movers, world_pos, attack_move_fallback, append, formation_type, facing)
+	if PerfStats.enabled:
+		PerfStats.record_event(&"order: blocks", Time.get_ticks_usec() - blocks_start)
+	if attack_move_fallback and not append:
+		var enemy := _nearest_enemy_at(world_pos, sender_id)
+		if enemy != null:
+			_engage_at_attack_move_destination(movers, enemy)
+	for unit in movers:
+		feedback.play_unit_order_sound(unit, Unit.OrderSoundKind.ATTACK if attack_move_fallback else Unit.OrderSoundKind.MOVE)
 	if PerfStats.enabled:
 		PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
+
+## Whether `target_node` gives `unit` something to do at it — gather, attack,
+## build — rather than just somewhere to go (see _dispatch_smart_command).
+func _is_targeted_order(unit: Unit, target_node: Node) -> bool:
+	if target_node is Gatherable:
+		return target_node.can_be_gathered() \
+				and (target_node.owner_peer_id == 0 or target_node.owner_peer_id == unit.owner_peer_id)
+	if target_node is ProductionBuilding:
+		if is_instance_valid(target_node.linked_deposit) and not target_node.is_under_construction \
+				and target_node.linked_deposit.can_be_gathered():
+			return true
+		if target_node.is_under_construction:
+			return true
+		return target_node.can_be_attacked() and Teams.is_enemy(unit.owner_peer_id, target_node.owner_peer_id)
+	if target_node is Unit:
+		return Teams.is_enemy(unit.owner_peer_id, target_node.owner_peer_id)
+	return false
 
 ## An attack-move onto ground that already has enemies standing on it is an
 ## order to take *them* on, not to walk to the spot and only then turn round:
 ## the units go for the nearest one straight away, exactly as they would if
-## they had met it on the march (GroupMovement.formation_contact for a group,
+## they had met it on the march (ArmyBridge.order_contact for a group,
 ## a keep_assault attack for a lone unit). The assault survives either way, so
 ## the rest of the area is still cleared once that target is down.
 func _engage_at_attack_move_destination(units: Array[Unit], enemy: Node3D) -> void:
@@ -2796,7 +2849,7 @@ func _engage_at_attack_move_destination(units: Array[Unit], enemy: Node3D) -> vo
 		if _order_tried(tried, order):
 			continue
 		tried.append(order)
-		if group_movement.order_contact(order, enemy):
+		if army_bridge.order_contact(order, enemy):
 			return
 	for unit in marchers:
 		unit.command_attack(enemy, true)
@@ -2854,9 +2907,8 @@ func _issue_reform_order() -> void:
 ## Host-side half of the explicit re-form. Centered on the group's own centroid
 ## and oriented to its own average facing, so the block forms up where it
 ## already is and pointing where it already points instead of marching off to a
-## destination — the player asked for tidier ranks, not a move order. Registered
-## as a formation record like any other formation move, so ranks still close if
-## someone dies while forming up.
+## destination — the player asked for tidier ranks, not a move order. The sim
+## forms it up like any other block order (ArmyBridge.order_blocks).
 @rpc("any_peer", "call_local", "reliable")
 func _rpc_issue_reform(unit_paths: Array[NodePath], formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> void:
 	if not multiplayer.is_server():
@@ -2872,17 +2924,8 @@ func _rpc_issue_reform(unit_paths: Array[NodePath], formation_type: Formation.Ty
 			units.append(unit)
 	if units.size() < 2:
 		return
-	## A group still threading a gap is already deliberately in single file;
-	## re-forming it mid-gap would fight the funnel, so the request is dropped
-	## rather than queued — the player can simply press it again once through.
-	if group_movement.any_funnelling(units):
-		return
-
-	var centroid := group_movement.group_centroid(units)
-	var facing := group_movement.group_facing(units)
-	var front_width: float = group_movement.resolve_dragged_width(units, formation_type, -1.0)
-	group_movement.reform_group(units, centroid, formation_type, false, facing, front_width)
-	group_movement.register_formation(units, centroid, formation_type, false, facing, front_width)
+	var centroid := GroupMovement.group_centroid_of(units)
+	army_bridge.order_blocks(units, centroid, false, false, formation_type, group_movement.group_facing(units))
 
 ## Fires whenever a unit's current command runs its own natural course (a
 ## move arrives, a fight runs out of enemies, a build finishes) — see
@@ -2979,6 +3022,9 @@ func _rpc_issue_stop(unit_paths: Array[NodePath]) -> void:
 
 func issue_stop_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
 	if not multiplayer.is_server():
+		return
+	if _split_debug_order(sender_id, unit_paths, func(owner: int, paths: Array[NodePath]) -> void:
+			issue_stop_as(owner, paths)):
 		return
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit

@@ -729,7 +729,8 @@ func _refresh_building_info() -> void:
 		## whole selection is rebuilt rather than just the info side.
 		show_building(building)
 		return
-	if _info_progress_bar == null 			or _info_built_under_construction != building.is_under_construction:
+	if _info_progress_bar == null \
+			or _info_built_under_construction != building.is_under_construction:
 		_build_building_info(building)
 
 	if building.is_under_construction:
