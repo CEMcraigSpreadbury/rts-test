@@ -1668,12 +1668,10 @@ const FORMATION_PREVIEW_OFFICER_COLOR: Color = Color(1.0, 0.82, 0.25, 0.65)
 var _formation_preview_decals: Array[Decal] = []
 
 ## Cossacks 3-style facing arrow laid on the ground just ahead of the dragged
-## front rank, so which way the block will face is never a guess. Scales with
-## the width of the drag (a wide line gets a bigger arrow) within limits.
+## front rank, so which way the block will face is never a guess. A fixed size,
+## however far the cursor is dragged.
 const FORMATION_ARROW_COLOR: Color = Color(1.0, 1.0, 1.0, 0.4)
-const FORMATION_ARROW_MIN_WIDTH: float = 1.6
-const FORMATION_ARROW_MAX_WIDTH: float = 4.0
-const FORMATION_ARROW_WIDTH_FRACTION: float = 0.4
+const FORMATION_ARROW_WIDTH: float = 2.4
 const FORMATION_ARROW_LENGTH_RATIO: float = 1.4
 ## Clear space between the front rank's line and the arrow's tail.
 const FORMATION_ARROW_GAP: float = 0.9
@@ -1683,8 +1681,8 @@ var _formation_arrow_emission_texture: ImageTexture = null
 
 ## The last `officers` places are drawn in the officer colour — see
 ## GroupMovement.drag_preview_slots, which appends them behind the ranks.
-func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing: Vector3, front_width: float, officers: int = 0) -> void:
-	_show_formation_arrow(front_center, facing, front_width)
+func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing: Vector3, officers: int = 0) -> void:
+	_show_formation_arrow(front_center, facing)
 	while _formation_preview_decals.size() < slots.size():
 		var decal := _make_ability_decal()
 		decal.size = Vector3(FORMATION_PREVIEW_DISC_SIZE, ABILITY_DECAL_HEIGHT, FORMATION_PREVIEW_DISC_SIZE)
@@ -1704,7 +1702,7 @@ func hide_formation_preview() -> void:
 	if _formation_arrow_decal:
 		_formation_arrow_decal.visible = false
 
-func _show_formation_arrow(front_center: Vector3, facing: Vector3, front_width: float) -> void:
+func _show_formation_arrow(front_center: Vector3, facing: Vector3) -> void:
 	facing.y = 0.0
 	if facing.length_squared() < 0.0001:
 		if _formation_arrow_decal:
@@ -1721,9 +1719,8 @@ func _show_formation_arrow(front_center: Vector3, facing: Vector3, front_width: 
 		_formation_arrow_decal.lower_fade = 0.15
 		_formation_arrow_decal.modulate = FORMATION_ARROW_COLOR
 		add_child(_formation_arrow_decal)
-	var width := clampf(front_width * FORMATION_ARROW_WIDTH_FRACTION, FORMATION_ARROW_MIN_WIDTH, FORMATION_ARROW_MAX_WIDTH)
-	var length := width * FORMATION_ARROW_LENGTH_RATIO
-	_formation_arrow_decal.size = Vector3(width, ABILITY_DECAL_HEIGHT, length)
+	var length := FORMATION_ARROW_WIDTH * FORMATION_ARROW_LENGTH_RATIO
+	_formation_arrow_decal.size = Vector3(FORMATION_ARROW_WIDTH, ABILITY_DECAL_HEIGHT, length)
 	_formation_arrow_decal.visible = true
 	## A decal maps its texture's top edge to local -Z, and looking_at points
 	## -Z along the facing, so the arrow (drawn pointing up) points forward.

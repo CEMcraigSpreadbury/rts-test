@@ -1860,8 +1860,7 @@ func _refresh_formation_drag_preview() -> void:
 		_formation_drag_facing = -_formation_drag_facing
 	feedback.show_formation_preview(group_movement.drag_preview_slots(
 			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing, current_formation_type),
-			(_formation_drag_start_world + _formation_drag_end_world) * 0.5, _formation_drag_facing,
-			_formation_drag_start_world.distance_to(_formation_drag_end_world),
+			_formation_drag_start_world, _formation_drag_facing,
 			group_movement.drag_preview_officers(selected_units))
 
 ## Never dragged far enough: exactly the right-click order the press used to
@@ -1907,7 +1906,7 @@ func _issue_formation_drag_order(append: bool) -> void:
 	var unit_paths: Array[NodePath] = []
 	for unit in selected_units:
 		unit_paths.append(unit.get_path())
-	var midpoint := (_formation_drag_start_world + _formation_drag_end_world) * 0.5
+	var midpoint := _formation_drag_start_world
 	## The drag aims the block; its width is the shape's own.
 	_rpc_issue_command.rpc_id(1, unit_paths, NodePath(), midpoint, false, append, current_formation_type, -1.0, _formation_drag_facing)
 	play_command_sound()

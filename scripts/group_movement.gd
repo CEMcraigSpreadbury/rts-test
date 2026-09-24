@@ -47,25 +47,22 @@ func held_facing(units: Array[Unit]) -> Vector3:
 			return Vector3.ZERO
 	return shared
 
-## The facing a dragged formation takes: square to the drag line, on the left
-## of the drag direction as seen from above (Total War / Cossacks: drag left to
-## right and the block faces up the screen), so the player picks which way it
-## faces — including back toward where it stands now — by which end they start
-## from. The front rank lands on the line itself. Client-side (it drives the
-## preview) and sent with the order, so the host builds exactly the shape the
-## player saw instead of re-deriving it from its own unit positions.
+## The facing a dragged formation takes: from the right-click point toward the
+## cursor, so the block stays where the player clicked and the drag only turns
+## it. Client-side (it drives the preview) and sent with the order, so the host
+## builds exactly the shape the player saw instead of re-deriving it from its
+## own unit positions.
 func drag_facing(units: Array[Unit], line_start: Vector3, line_end: Vector3) -> Vector3:
 	var along := line_end - line_start
 	along.y = 0.0
 	if along.length_squared() < 0.0001:
 		return _group_forward(group_centroid(units), line_start)
-	along = along.normalized()
-	return Vector3(along.z, 0.0, -along.x)
+	return along.normalized()
 
 ## Slot layout for a dragged formation, in shape order rather than assigned to
 ## units — only for drawing the preview.
 func drag_preview_slots(units: Array[Unit], line_start: Vector3, line_end: Vector3, facing: Vector3, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> Array[Vector3]:
-	var midpoint := (line_start + line_end) * 0.5
+	var midpoint := line_start
 	var right := Vector3(facing.z, 0.0, -facing.x)
 	## Officers are kept out of the ranks and shown behind the block, so the
 	## preview is the shape the order will actually make. Appended last, which
