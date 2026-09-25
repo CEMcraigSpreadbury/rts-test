@@ -38,10 +38,16 @@ const NOT_IN_REALM_BUILDINGS: Array[String] = ["House", "Pact Hall"]
 static func realm() -> bool:
 	return active().scenario == null and Network.game_mode == Network.GameMode.REALM
 
-## A unit's listed price as a Realm match charges it: a soldier's wood, and any
-## allied-race currency (Meat, Souls, Starlight — there are no Pacts in Realm),
-## is folded into its gold; a worker keeps its wood and adds
-## REALM_VILLAGER_FOOD. Outside Realm, `costs` comes back unchanged.
+## A unit's listed price as a Realm match charges it: any allied-race currency
+## (Meat, Souls, Starlight — there are no Pacts in Realm) is folded into its
+## gold, and so is its wood while REALM_WOOD_INTO_GOLD is on; a worker keeps
+## its wood and adds REALM_VILLAGER_FOOD. Outside Realm, `costs` comes back
+## unchanged.
+##
+## REALM_WOOD_INTO_GOLD is off (balance, 2026-09-25): with soldiers paid in gold
+## alone, AIs ran dry of gold with hundreds of wood piled up, because wood then
+## bought nothing but buildings.
+const REALM_WOOD_INTO_GOLD: bool = false
 static func realm_unit_costs(costs: Array[ResourceCost], is_worker: bool) -> Array[ResourceCost]:
 	if not realm():
 		return costs
@@ -55,7 +61,7 @@ static func realm_unit_costs(costs: Array[ResourceCost], is_worker: bool) -> Arr
 		return out
 	var gold := 0
 	for cost in costs:
-		if cost.resource_type == FOOD:
+		if cost.resource_type == FOOD or (cost.resource_type == WOOD and not REALM_WOOD_INTO_GOLD):
 			out.append(cost)
 		else:
 			gold += cost.amount
