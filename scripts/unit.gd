@@ -657,6 +657,35 @@ func _play_selection_punch() -> void:
 	if not _death_playing:
 		_play_sprite_pop()
 
+## A freshly trained unit bounces out of the building that made it: tiny and
+## stretched it arcs from the building's middle to where it stands, then
+## squashes on landing like a corpse's bounce (see _death_squash). Set in the
+## spawn data (main._spawn_unit_from_data) before _ready; not finite = just be
+## there.
+var pop_out_from: Vector3 = Vector3.INF
+const POP_OUT_HEIGHT: float = 1.8
+const POP_OUT_DURATION: float = 0.5
+const POP_OUT_START_SCALE: float = 0.3
+const POP_OUT_STRETCH: Vector3 = Vector3(0.75, 1.3, 0.75)
+
+func _play_pop_out(from: Vector3) -> void:
+	var start: Vector3 = from - global_position
+	var base := _sprite_base_position
+	_restart_sprite_move_tween()
+	## Worked in world space and brought into the unit's own each frame, so the
+	## arc stays true while the unit turns and walks off toward its rally point.
+	_sprite_move_tween.tween_method(func(p: float) -> void:
+		var world: Vector3 = start * (1.0 - p) + Vector3.UP * POP_OUT_HEIGHT * 4.0 * p * (1.0 - p)
+		sprite.position = base + global_transform.basis.inverse() * world
+	, 0.0, 1.0, POP_OUT_DURATION)
+	_sprite_move_tween.tween_callback(_death_squash.bind(DEATH_LAND_SQUASH_SCALE, 1.0))
+	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
+		_sprite_scale_tween.kill()
+	sprite.scale = _sprite_base_scale * POP_OUT_START_SCALE
+	_sprite_scale_tween = create_tween()
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale * POP_OUT_STRETCH, POP_OUT_DURATION * 0.5) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 ## Captured from the scene's authored (full-health) scale so the fill's
 ## aspect-ratio/sizing lives in the scene file, not duplicated in script.
 var _fill_base_scale_x: float = 1.0
@@ -1503,6 +1532,8 @@ func _ready() -> void:
 		_build_crew_sprite()
 	sprite.animation_finished.connect(_on_attack_animation_finished)
 	_update_team_tint_visual()
+	if pop_out_from.is_finite():
+		_play_pop_out(pop_out_from)
 	nav_agent = NavTarget.new()
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	nav_agent.target_position = global_position

@@ -256,7 +256,27 @@ const SQUASH_COOLDOWN_MSEC: int = 400
 
 var _model_roots: Array[Node3D] = []
 var _model_base_scales: Array[Vector3] = []
+var _model_base_positions: Array[Vector3] = []
+var _model_base_yaws: Array[float] = []
 var _squash_tween: Tween
+
+## Juice for a building arriving: one that turns up finished (a settlement's
+## slot buildings and walls) drops in from above stretched tall, squashes on
+## landing and wobbles back to shape; one finishing construction stretches up
+## off the ground and lands the same way.
+const DROP_HEIGHT: float = 6.0
+const DROP_FALL_TIME: float = 0.34
+const DROP_STRETCH: Vector3 = Vector3(0.7, 1.45, 0.7)
+const DROP_SQUASH: Vector3 = Vector3(1.32, 0.6, 1.32)
+const POP_HEIGHT: float = 0.8
+const POP_STRETCH: Vector3 = Vector3(0.82, 1.3, 0.82)
+const POP_SQUASH: Vector3 = Vector3(1.2, 0.75, 1.2)
+const LAND_SQUASH_TIME: float = 0.07
+const LAND_SETTLE_TIME: float = 0.6
+## Set in the spawn data (see main._spawn_building_from_data) before _ready:
+## seconds to wait before dropping in, or below zero to just be there.
+var drop_in_delay: float = -1.0
+var _drop_tween: Tween
 var _next_squash_msec: int = 0
 var _flash_meshes: Array[MeshInstance3D] = []
 var _flash_material: StandardMaterial3D
@@ -285,6 +305,8 @@ func _ready() -> void:
 	## team_tint is normally assigned at spawn time, before there is a tree to
 	## walk, so the setter's own call is a no-op and this is where it lands.
 	_apply_team_color()
+	if drop_in_delay >= 0.0:
+		play_drop_in(drop_in_delay)
 
 func _collect_visuals() -> void:
 	for child in get_children():
@@ -294,6 +316,8 @@ func _collect_visuals() -> void:
 			if not meshes.is_empty():
 				_model_roots.append(child)
 				_model_base_scales.append((child as Node3D).scale)
+				_model_base_positions.append((child as Node3D).position)
+				_model_base_yaws.append((child as Node3D).rotation.y)
 				_flash_meshes.append_array(meshes)
 	_capture_source_materials()
 
@@ -362,6 +386,8 @@ func _collect_meshes(node: Node, out: Array[MeshInstance3D]) -> void:
 func play_squash() -> void:
 	if is_under_construction or is_destroyed or _model_roots.is_empty():
 		return
+	if _drop_tween and _drop_tween.is_running():
+		return
 	var now: int = Time.get_ticks_msec()
 	if now < _next_squash_msec:
 		return
@@ -375,6 +401,98 @@ func play_squash() -> void:
 		root.scale = _model_base_scales[i] * SQUASH_SCALE
 		_squash_tween.tween_property(root, "scale", _model_base_scales[i], SQUASH_DURATION) \
 				.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+func play_drop_in(delay: float = 0.0) -> void:
+	if _model_roots.is_empty():
+		return
+	var tween := _start_drop_tween()
+	for i in _model_roots.size():
+		var root: Node3D = _model_roots[i]
+		root.position = _model_base_positions[i] + Vector3.UP * DROP_HEIGHT
+		root.scale = _model_base_scales[i] * DROP_STRETCH
+		root.visible = delay <= 0.0
+	if delay > 0.0:
+		tween.tween_interval(delay)
+		for root in _model_roots:
+			tween.chain().tween_callback(root.show)
+	tween.chain()
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "position", _model_base_positions[i], DROP_FALL_TIME) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_tween_landing(tween, DROP_SQUASH, 0.3)
+
+## Construction finishing: the model jumps up stretched and lands.
+func play_finish_pop() -> void:
+	if _model_roots.is_empty():
+		return
+	var tween := _start_drop_tween()
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "position", _model_base_positions[i] + Vector3.UP * POP_HEIGHT, 0.14) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(_model_roots[i], "scale", _model_base_scales[i] * POP_STRETCH, 0.14) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.chain()
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "position", _model_base_positions[i], 0.16) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_tween_landing(tween, POP_SQUASH, 0.0)
+
+## Changing hands (a settlement or objective captured): the model leaps up
+## stretched, spins once in the air and lands the same way.
+func play_capture_hop(delay: float = 0.0) -> void:
+	if _model_roots.is_empty() or is_destroyed:
+		return
+	var tween := _start_drop_tween()
+	if delay > 0.0:
+		tween.tween_interval(delay)
+		tween.chain()
+	for i in _model_roots.size():
+		var root: Node3D = _model_roots[i]
+		root.position = _model_base_positions[i]
+		tween.tween_property(root, "position", _model_base_positions[i] + Vector3.UP * CAPTURE_HOP_HEIGHT, CAPTURE_HOP_TIME) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tween.tween_property(root, "scale", _model_base_scales[i] * POP_STRETCH, CAPTURE_HOP_TIME * 0.6) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(root, "rotation:y", _model_base_yaws[i] + PI, CAPTURE_HOP_TIME) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.chain()
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "position", _model_base_positions[i], CAPTURE_HOP_TIME) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tween.tween_property(_model_roots[i], "rotation:y", _model_base_yaws[i] + TAU, CAPTURE_HOP_TIME) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_tween_landing(tween, DROP_SQUASH, 0.2)
+
+const CAPTURE_HOP_HEIGHT: float = 2.2
+const CAPTURE_HOP_TIME: float = 0.26
+
+func _start_drop_tween() -> Tween:
+	if _squash_tween and _squash_tween.is_valid():
+		_squash_tween.kill()
+	if _drop_tween and _drop_tween.is_valid():
+		_drop_tween.kill()
+	## A capture spin cut short would otherwise leave the model facing askew.
+	for i in _model_roots.size():
+		_model_roots[i].rotation.y = _model_base_yaws[i]
+	_drop_tween = create_tween().set_parallel(true)
+	return _drop_tween
+
+func _tween_landing(tween: Tween, squash: Vector3, shake: float) -> void:
+	tween.chain().tween_callback(_on_drop_landed.bind(shake))
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "scale", _model_base_scales[i] * squash, LAND_SQUASH_TIME) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.chain()
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "scale", _model_base_scales[i], LAND_SETTLE_TIME) \
+				.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+func _on_drop_landed(shake: float) -> void:
+	if placement_particles:
+		placement_particles.restart()
+	var main := get_tree().current_scene
+	if shake > 0.0 and main and "camera_rig" in main and main.camera_rig:
+		main.camera_rig.shake_at(global_position, shake)
 
 ## White flash on taking damage. Applied as a material_overlay so it layers on
 ## top of whatever the surfaces are currently using — the construction ghost
@@ -879,6 +997,8 @@ func _update_construction_visual() -> void:
 		_construction_visual_applied = false
 		if construction_particles:
 			construction_particles.emitting = false
+		if not is_destroyed:
+			play_finish_pop()
 
 const _CONSTRUCTION_ALPHA: float = 0.45
 

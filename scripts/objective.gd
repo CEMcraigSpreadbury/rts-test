@@ -554,10 +554,32 @@ func _set_owner(new_owner: int) -> void:
 		if multiplayer.multiplayer_peer != null:
 			_rpc_houses.rpc(tier)
 		_show_houses()
+	if new_owner > 0:
+		if multiplayer.multiplayer_peer != null:
+			_rpc_capture_hop.rpc()
+		else:
+			_rpc_capture_hop()
 	if new_owner > 0 and "lords" in main and main.lords != null:
 		main.lords.on_capture(global_position, new_owner)
 	if new_owner > 0 and main.has_method("announce_point_captured"):
 		main.announce_point_captured(new_owner, letter)
+
+## Every building of the point leaps and spins as it changes hands, rippling
+## out from the middle. Found by distance rather than from _slot_buildings,
+## which only the host keeps.
+@rpc("authority", "call_local", "reliable")
+func _rpc_capture_hop() -> void:
+	var reach: float = WALL_RADIUS + 2.0
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var building := node as ProductionBuilding
+		if building == null:
+			continue
+		var offset: Vector3 = building.global_position - global_position
+		offset.y = 0.0
+		if building.get_parent() == buildings or offset.length() <= reach:
+			building.play_capture_hop(offset.length() * CAPTURE_RIPPLE_PER_METRE)
+
+const CAPTURE_RIPPLE_PER_METRE: float = 0.03
 
 ## --- Settlement (Realm), continued ---
 
@@ -641,6 +663,13 @@ func _show_houses() -> void:
 	var tint: Color = owner_tint()
 	if _houses.size() == wanted and tint == _house_owner_tint:
 		return
+	## Only a settlement growing drops its new cottages in; a change of owner
+	## just repaints the ones already standing.
+	var already_standing: int = _houses.size() if tint == _house_owner_tint else HOUSE_SLOTS
+	## Taken by a player (not merely lost to neutral): they leap and spin with
+	## the slot buildings (see _rpc_capture_hop).
+	var captured: bool = tint != _house_owner_tint and _house_owner_tint != Color.TRANSPARENT \
+			and tint != NEUTRAL_TINT
 	for house in _houses:
 		house.queue_free()
 	_houses.clear()
@@ -659,6 +688,54 @@ func _show_houses() -> void:
 		house.rotation.y = yaw
 		add_child(house)
 		_houses.append(house)
+		if i >= already_standing:
+			_drop_in_house(house, HOUSE_DROP_STAGGER * float(i - already_standing))
+		if captured:
+			_hop_house(house, radius * CAPTURE_RIPPLE_PER_METRE)
+
+const HOUSE_DROP_STAGGER: float = 0.12
+
+## The same drop, stretch and squash a slot building lands with (see
+## ProductionBuilding.play_drop_in), for a bare cottage.
+func _drop_in_house(house: Node3D, delay: float) -> void:
+	var base_y: float = house.position.y
+	house.position.y = base_y + ProductionBuilding.DROP_HEIGHT
+	house.scale = ProductionBuilding.DROP_STRETCH
+	## The meshes, not the house: fog of war owns the house's own visibility.
+	var tween := house.create_tween()
+	tween.tween_interval(delay)
+	for part in house.get_children():
+		part.visible = false
+		tween.tween_callback(part.show)
+	tween.tween_property(house, "position:y", base_y, ProductionBuilding.DROP_FALL_TIME) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(house, "scale", ProductionBuilding.DROP_SQUASH, ProductionBuilding.LAND_SQUASH_TIME) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(house, "scale", Vector3.ONE, ProductionBuilding.LAND_SETTLE_TIME) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+## ProductionBuilding.play_capture_hop, for a bare cottage.
+func _hop_house(house: Node3D, delay: float) -> void:
+	var base_y: float = house.position.y
+	var yaw: float = house.rotation.y
+	var up_time: float = ProductionBuilding.CAPTURE_HOP_TIME
+	var tween := house.create_tween()
+	tween.tween_interval(delay)
+	tween.tween_property(house, "position:y", base_y + ProductionBuilding.CAPTURE_HOP_HEIGHT, up_time) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(house, "scale", ProductionBuilding.POP_STRETCH, up_time * 0.6) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(house, "rotation:y", yaw + PI, up_time) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tween.tween_property(house, "position:y", base_y, up_time) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.parallel().tween_property(house, "rotation:y", yaw + TAU, up_time) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(house, "scale", ProductionBuilding.DROP_SQUASH, ProductionBuilding.LAND_SQUASH_TIME) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(house, "scale", Vector3.ONE, ProductionBuilding.LAND_SETTLE_TIME) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
 func _make_house(roof_tint: Color) -> Node3D:
 	if _house_mesh_body == null:
 		_house_mesh_body = BoxMesh.new()
@@ -834,6 +911,7 @@ func place_slot(item: ProducibleItem) -> void:
 		"peer_id": owner_peer_id,
 		"position": at,
 		"tint": main.get_team_tint(owner_peer_id),
+		"drop_in_delay": 0.0,
 	})
 	building.settlement = self
 	_slot_buildings.append(building)
@@ -1035,6 +1113,7 @@ func _build_walls() -> void:
 			"position": at,
 			"rotation": Vector3(0.0, -(angle + PI * 0.5), 0.0),
 			"tint": main.get_team_tint(owner_peer_id),
+			"drop_in_delay": WALL_DROP_STAGGER * float(i),
 		})
 		piece.settlement = self
 		_slot_buildings.append(piece)
@@ -1042,6 +1121,9 @@ func _build_walls() -> void:
 			_gates.append(piece)
 	slot_built.append(WALLS)
 	_send_slots()
+
+## Wall pieces drop in one after another round the ring.
+const WALL_DROP_STAGGER: float = 0.04
 
 ## How much room a wall piece needs clear of other solid things.
 const WALL_CLEARANCE: float = 0.6

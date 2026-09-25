@@ -924,6 +924,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.owner_peer_id = data.peer_id
 	unit.team_tint = data.tint
 	unit.position = data.position
+	unit.pop_out_from = data.get("pop_out_from", Vector3.INF)
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
 	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
@@ -991,6 +992,7 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		var building: ProductionBuilding = node
 		building.owner_peer_id = data.peer_id
 		building.team_tint = data.get("tint", Color.WHITE)
+		building.drop_in_delay = data.get("drop_in_delay", -1.0)
 		building.item_completed.connect(_on_building_item_completed.bind(building))
 		building.destroyed.connect(_on_building_destroyed.bind(building))
 		building.damaged.connect(feedback.relay_damage_number.bind(building))
@@ -1533,6 +1535,9 @@ func buildable_types_for(peer_id: int) -> Array[BuildingType]:
 		types.append_array(page["buildings"])
 	return types
 
+## How far above a building's origin its trained units start their bounce.
+const POP_OUT_START_HEIGHT: float = 1.2
+
 func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
 		return
@@ -1583,9 +1588,13 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	## A Star Gate lands its unit on the rally point instead of walking it
 	## there — but only where the owner can actually see, so the gate can't
 	## drop troops into fog on the far side of the map.
+	## Trained units bounce out of the building's middle (Unit._play_pop_out);
+	## one a Star Gate lands on its rally point just appears there.
+	var pop_out_from: Vector3 = building.global_position + Vector3.UP * POP_OUT_START_HEIGHT
 	if building.teleports_produced_units and building.has_rally_point \
 			and pacts.can_see_position(building.owner_peer_id, building.rally_point):
 		spawn_pos = building.rally_point + Vector3(randf_range(-1.2, 1.2), 0.0, randf_range(-1.2, 1.2))
+		pop_out_from = Vector3.INF
 	## population_cost isn't passed here — the spawned scene's own Unit.population_cost
 	## (set right on the unit for balancing, see get_population_cost()) is already authoritative.
 	var unit: Unit = unit_spawner.spawn({
@@ -1593,6 +1602,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"peer_id": building.owner_peer_id,
 		"tint": get_team_tint(building.owner_peer_id),
 		"position": spawn_pos,
+		"pop_out_from": pop_out_from,
 	})
 	building.register_produced_unit(unit)
 	## A litter: one cost, one build time, several bodies (Gnolls). The extras
@@ -1609,6 +1619,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 			"peer_id": building.owner_peer_id,
 			"tint": get_team_tint(building.owner_peer_id),
 			"position": litter_pos,
+			"pop_out_from": pop_out_from,
 		})
 		building.register_produced_unit(mate)
 		litter.append(mate)
