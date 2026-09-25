@@ -6,7 +6,7 @@
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="5_bar_tex"]
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_arrow.tscn" id="6_projectile"]
-[ext_resource type="PackedScene" uid="uid://b6qxrecg5yiap" path="res://assets/art/Models/watchtower/watchtower.glb" id="7_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Watchtower.glb" id="7_model"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Tower_1.wav" id="90_sfx_a"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Tower_2.wav" id="91_sfx_b"]
 

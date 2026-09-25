@@ -7,22 +7,12 @@
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Castle_1.wav" id="90_sfx_a"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Castle_2.wav" id="91_sfx_b"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/WallGate.glb" id="90_model"]
+
 [sub_resource type="Resource" id="ResourceCost_wallgate"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 25
-
-[sub_resource type="BoxMesh" id="BoxMesh_post_a"]
-size = Vector3(0.3, 1.9, 0.35)
-
-[sub_resource type="BoxMesh" id="BoxMesh_post_b"]
-size = Vector3(0.3, 1.9, 0.35)
-
-[sub_resource type="BoxMesh" id="BoxMesh_lintel"]
-size = Vector3(2, 0.3, 0.35)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.5, 0.38, 0.22, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_post_a"]
 size = Vector3(0.3, 1.9, 0.35)
@@ -70,20 +60,7 @@ construction_sink_depth = 1.9
 passage_width = 1.4
 on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 
-[node name="PostA" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 0.95, 0)
-mesh = SubResource("BoxMesh_post_a")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
-
-[node name="PostB" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.85, 0.95, 0)
-mesh = SubResource("BoxMesh_post_b")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
-
-[node name="Lintel" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.75, 0)
-mesh = SubResource("BoxMesh_lintel")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionPostA" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.85, 0.95, 0)

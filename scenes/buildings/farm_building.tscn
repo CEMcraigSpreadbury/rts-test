@@ -6,7 +6,7 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="AudioStream" uid="uid://b0ilrwmk4qfm8" path="res://assets/sfx/Facilities/Farm_1.wav" id="5_xui32"]
 [ext_resource type="AudioStream" uid="uid://c5k6a2557e3gb" path="res://assets/sfx/Facilities/Farm_2.wav" id="6_8i2vn"]
-[ext_resource type="PackedScene" uid="uid://qs5apug62gm2" path="res://assets/art/Models/Field/field.glb" id="7_8i2vn"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Field.glb" id="7_8i2vn"]
 
 [sub_resource type="Resource" id="ResourceCost_farm_building"]
 script = ExtResource("3_cost_script")
@@ -40,4 +40,4 @@ avoidance_enabled = false
 bus = &"SFX"
 
 [node name="field" parent="." unique_id=1627151712 instance=ExtResource("7_8i2vn")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.16392225, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)

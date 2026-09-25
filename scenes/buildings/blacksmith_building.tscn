@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
-[ext_resource type="PackedScene" uid="uid://8ojb4gitkfqf" path="res://assets/art/Models/Blacksmith/blacksmith.glb" id="7_j3cws"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Blacksmith.glb" id="7_j3cws"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="10_gold"]

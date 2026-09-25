@@ -148,13 +148,17 @@ void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, 
 		albedo = emission;
 		ao = 0.0;
 	} else {
-		albedo = recolored * base_albedo.rgb;
+		// Untextured models carry their colour in base_albedo alone (the
+		// sampler falls back to white), so it has to be recolored together
+		// with the texel or their team-blue parts never get tinted.
+		albedo = apply_team_color(texel.rgb * base_albedo.rgb);
 		emission = vec3(0.0);
 		ao = 1.0;
 	}
 }
 
 #include "res://shaders/util/baked_sun_shadow.gdshaderinc"
+#include "res://shaders/util/cloud_shade.gdshaderinc"
 
 void light() {
 	if (texture_drives_emission) {

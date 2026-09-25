@@ -20,7 +20,7 @@
 [ext_resource type="Script" uid="uid://fwe5mgixubk0" path="res://scripts/ambience_player.gd" id="18_1uxtg"]
 [ext_resource type="AudioStream" uid="uid://dl6usc5kn2487" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="19_5lcou"]
 [ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="20_dtl52"]
-[ext_resource type="Shader" uid="uid://bjd8hje8sk71w" path="res://shaders/cloud_shadows.gdshader" id="21_lsodw"]
+[ext_resource type="Script" path="res://scripts/cloud_shadows.gd" id="21_lsodw"]
 [ext_resource type="PackedScene" uid="uid://fjbl5xhrvk7l" path="res://scenes/rts_camera.tscn" id="22_80dis"]
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
 [ext_resource type="Script" uid="uid://ctt0mu5y0ge86" path="res://scripts/minimap.gd" id="26_vqeq8"]
@@ -65,20 +65,6 @@ volumetric_fog_sky_affect = 0.0
 adjustment_enabled = true
 adjustment_brightness = 1.1
 adjustment_saturation = 1.25
-
-[sub_resource type="PlaneMesh" id="PlaneMesh_cloud_shadows"]
-size = Vector2(140, 140)
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_cloud_shadows"]
-render_priority = 0
-shader = ExtResource("21_lsodw")
-shader_parameter/noise_scale = 0.015
-shader_parameter/detail_scale = 0.15
-shader_parameter/detail_strength = 1.0
-shader_parameter/scroll_speed = Vector2(0.06, -0.01)
-shader_parameter/coverage = 0.6000000285
-shader_parameter/cloud_color = Color(0.95686275, 0.92941177, 0.9098039, 1)
-shader_parameter/visible_opacity = 0.1210000057475
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_dust"]
 render_priority = 0
@@ -139,6 +125,7 @@ transform = Transform3D(-0.60680544, -0.6088908, 0.51092005, -4.031998e-09, 0.64
 light_color = Color(1, 0.93, 0.8, 1)
 light_energy = 1.35
 shadow_enabled = true
+directional_shadow_pancake_size = 0.0
 script = ExtResource("20_dtl52")
 camera_yaw_path = NodePath("../CameraRig/Yaw")
 yaw_offset_degrees = 55.0
@@ -151,12 +138,10 @@ light_volumetric_fog_energy = 1.5
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1365774680]
 
-[node name="CloudShadowLayer" type="MeshInstance3D" parent="." unique_id=1401837760]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13986206, 40, 0.079452515)
-cast_shadow = 2
-gi_mode = 0
-mesh = SubResource("PlaneMesh_cloud_shadows")
-surface_material_override/0 = SubResource("ShaderMaterial_cloud_shadows")
+[node name="CloudShadowLayer" type="Decal" parent="." unique_id=1401837760]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 40, 0)
+script = ExtResource("21_lsodw")
+cover_size = 140.0
 
 [node name="CameraRig" parent="." unique_id=1491170098 instance=ExtResource("22_80dis")]
 pitch_degrees = 35.0

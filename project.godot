@@ -63,6 +63,18 @@ rendering_device/driver.windows="d3d12"
 
 [shader_globals]
 
+cloud_shadow_tex={
+"type": "sampler2D",
+"value": ""
+}
+cloud_shadow_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+cloud_shadow_strength={
+"type": "float",
+"value": 0.0
+}
 unit_night_lift={
 "type": "float",
 "value": 0.0

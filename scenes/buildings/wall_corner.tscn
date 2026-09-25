@@ -7,16 +7,12 @@
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Castle_1.wav" id="90_sfx_a"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Castle_2.wav" id="91_sfx_b"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/WallCorner.glb" id="90_model"]
+
 [sub_resource type="Resource" id="ResourceCost_wallcorner"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 4
-
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(0.55, 1.9, 0.55)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.38, 0.27, 0.16, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(0.55, 1.9, 0.55)
@@ -57,10 +53,7 @@ max_health = 90
 construction_sink_depth = 1.9
 on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("91_sfx_b")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)
-mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.95, 0)

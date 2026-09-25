@@ -12,6 +12,8 @@
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/horseman.png" id="icon_horseman"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/cavalier.png" id="icon_cavalier"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Stables.glb" id="90_model"]
+
 [sub_resource type="Resource" id="ResourceCost_stables_building"]
 script = ExtResource("8_cost_script")
 resource_type = ExtResource("9_wood")
@@ -32,12 +34,6 @@ build_time = 8.0
 unit_scene = ExtResource("6_cavalier_scene")
 population_cost = 2
 requires_unlock = &"lances"
-
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(3.5, 2, 3)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.4, 0.32, 0.22, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3.5, 2, 3)
@@ -135,10 +131,7 @@ costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_stables_b
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_horseman"), SubResource("ProducibleItem_cavalier")])
 on_select_sound_effects = Array[AudioStream]([ExtResource("6_mfbxo"), ExtResource("7_0g1is")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=2085560716]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1888016272]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)

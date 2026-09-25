@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="7_cost_script"]
 [ext_resource type="AudioStream" uid="uid://c62kgj7qsdffx" path="res://assets/sfx/Facilities/Archery_1.wav" id="7_lthpd"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="8_wood"]
-[ext_resource type="PackedScene" uid="uid://bfi1dv808ws1t" path="res://assets/art/Models/Towncenter/base_basic_shaded.glb" id="9_t1yyl"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/TownCentre.glb" id="9_t1yyl"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/villager.png" id="icon_villager"]
 
 [sub_resource type="Resource" id="ResourceCost_towncenter"]

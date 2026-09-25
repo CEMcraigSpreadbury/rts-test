@@ -17,7 +17,7 @@ void fragment() {
 	float ao;
 	write_team_colored_surface(texel, albedo, emission, ao);
 	ALBEDO = albedo;
-	EMISSION = emission;
+	EMISSION = emission * cloud_shade((INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
 	AO = ao;
 	METALLIC = metallic_value;
 	ROUGHNESS = roughness_value;

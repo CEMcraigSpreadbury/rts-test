@@ -8,7 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/units/crossbowman_unit.tscn" id="8_crossbowman_scene"]
 [ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_jxfkj"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
-[ext_resource type="PackedScene" uid="uid://bryxvf6cwr7wb" path="res://assets/art/Models/Barracks/barracks.glb" id="11_jxfkj"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/ArcheryRange.glb" id="11_jxfkj"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/archer.png" id="icon_archer"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/crossbowman.png" id="icon_crossbowman"]

@@ -195,9 +195,6 @@ size = Vector2(2048, 2048)
 subdivide_width = 255
 subdivide_depth = 255
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_map_clouds"]
-size = Vector2(400, 400)
-
 [node name="Main" instance=ExtResource("map_base")]
 
 [node name="NavigationRegion3D" parent="."]
@@ -4796,7 +4793,7 @@ map_size = Vector2(320, 320)
 terrain_mesh_path = NodePath("")
 
 [node name="CloudShadowLayer" parent="."]
-mesh = SubResource("PlaneMesh_map_clouds")
+cover_size = 400.0
 
 [node name="Minimap" parent="UI/BottomBar/MinimapFrame"]
 terrain_texture = ExtResource("minimap_terrain")

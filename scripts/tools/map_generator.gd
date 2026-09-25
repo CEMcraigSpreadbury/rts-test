@@ -402,9 +402,8 @@ func _save_inherited_scene(packed: PackedScene, scene_path: String, minimap_path
 		head_end = text.find("[node")
 	text = text.insert(head_end, "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"map_base\"]\n[ext_resource type=\"Texture2D\" path=\"%s\" id=\"minimap_terrain\"]\n" % [MAP_BASE_SCENE, minimap_path])
 	var cloud_size: int = layout.size + 80
-	text = text.insert(text.find("[node"), "[sub_resource type=\"PlaneMesh\" id=\"PlaneMesh_map_clouds\"]\nsize = Vector2(%d, %d)\n\n" % [cloud_size, cloud_size])
 	text += "\n[node name=\"FogOfWar\" parent=\".\"]\nmap_origin = Vector2(%s, %s)\nmap_size = Vector2(%d, %d)\nterrain_mesh_path = NodePath(\"\")\n" % [-layout.half, -layout.half, layout.size, layout.size]
-	text += "\n[node name=\"CloudShadowLayer\" parent=\".\"]\nmesh = SubResource(\"PlaneMesh_map_clouds\")\n"
+	text += "\n[node name=\"CloudShadowLayer\" parent=\".\"]\ncover_size = %d.0\n" % cloud_size
 	text += "\n[node name=\"Minimap\" parent=\"%s\"]\nterrain_texture = ExtResource(\"minimap_terrain\")\n" % MINIMAP_NODE_PATH
 
 	var file := FileAccess.open(scene_path, FileAccess.WRITE)

@@ -13,6 +13,8 @@
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/ballista.png" id="icon_ballista"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/magic_cannon.png" id="icon_magic_cannon"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/SiegeWorkshop.glb" id="90_model"]
+
 [sub_resource type="Resource" id="ResourceCost_ballista_building_wood"]
 script = ExtResource("8_cost_script")
 resource_type = ExtResource("9_wood")
@@ -36,12 +38,6 @@ item_name = "Magic Cannon"
 icon = ExtResource("icon_magic_cannon")
 build_time = 8.0
 unit_scene = ExtResource("11_cannon_scene")
-
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(3.5, 2, 3)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.36, 0.3, 0.26, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3.5, 2, 3)
@@ -139,10 +135,7 @@ costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_ballista_
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_ballista"), SubResource("ProducibleItem_magic_cannon")])
 on_select_sound_effects = Array[AudioStream]([ExtResource("6_mfbxo"), ExtResource("7_0g1is")])
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=487135590]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=370869307]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)

@@ -345,8 +345,8 @@ func _exit_tree() -> void:
 	if sprite_batcher_current == sprite_batcher:
 		sprite_batcher_current = null
 
-## The cloud layer both casts the drifting shadows and draws the faint visible
-## wisps, so hiding it turns off both.
+## Hiding the cloud decal also zeroes the cloud_shadow_strength global, so
+## the emission-baked models stop darkening too (see CloudShadows).
 func _apply_clouds_setting(key: StringName) -> void:
 	if key != &"clouds":
 		return
@@ -384,6 +384,7 @@ func _ready() -> void:
 	if scenery:
 		BakedLightingMaterial.apply_to(scenery)
 		TreeWind.apply_to_trees_in(scenery)
+		TreeBillboard.apply_to_trees_in(scenery)
 	_apply_clouds_setting(&"clouds")
 	Settings.changed.connect(_apply_clouds_setting)
 
@@ -1707,6 +1708,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	if chat.is_input_open():
+		return
+
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TreeBillboard.TOGGLE_KEY:
+		TreeBillboard.toggle()
+		get_viewport().set_input_as_handled()
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:

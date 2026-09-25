@@ -79,6 +79,7 @@ func _ready() -> void:
 			_model_base_scale = _model.scale
 			BakedLightingMaterial.apply_to(_model)
 			TreeWind.apply_to_trees_in(_model)
+			TreeBillboard.apply_to_trees_in(_model)
 			break
 
 func play_select_sound() -> void:

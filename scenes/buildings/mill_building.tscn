@@ -9,36 +9,16 @@
 [ext_resource type="Script" uid="uid://hwhfoh2ijaqq" path="res://scripts/resource_type.gd" id="7_resource_type_script"]
 [ext_resource type="AudioStream" uid="uid://c5k6a2557e3gb" path="res://assets/sfx/Facilities/Farm_2.wav" id="5_ej24r"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Mill.glb" id="90_model"]
+
 [sub_resource type="Resource" id="ResourceCost_mill"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 100
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_body"]
-top_radius = 0.85
-bottom_radius = 1.1
-height = 2.2
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.78, 0.72, 0.6, 1)
-
 [sub_resource type="CylinderShape3D" id="CylinderShape3D_body"]
 height = 2.2
 radius = 1.1
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_roof"]
-top_radius = 0.0
-bottom_radius = 1.0
-height = 0.9
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_roof"]
-albedo_color = Color(0.35, 0.22, 0.14, 1)
-
-[sub_resource type="BoxMesh" id="BoxMesh_sail"]
-size = Vector3(2.6, 0.22, 0.08)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sail"]
-albedo_color = Color(0.88, 0.85, 0.76, 1)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
 emission_shape = 1
@@ -133,28 +113,7 @@ on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResourc
 dropoff_resource_types = Array[ExtResource("7_resource_type_script")]([ExtResource("6_food")])
 max_health = 90
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
-mesh = SubResource("CylinderMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
-
-[node name="Roof" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.65, 0)
-mesh = SubResource("CylinderMesh_roof")
-surface_material_override/0 = SubResource("StandardMaterial3D_roof")
-
-[node name="Sails" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 1.05)
-
-[node name="SailA" type="MeshInstance3D" parent="Sails"]
-transform = Transform3D(0.70710677, 0.70710677, 0, -0.70710677, 0.70710677, 0, 0, 0, 1, 0, 0, 0)
-mesh = SubResource("BoxMesh_sail")
-surface_material_override/0 = SubResource("StandardMaterial3D_sail")
-
-[node name="SailB" type="MeshInstance3D" parent="Sails"]
-transform = Transform3D(0.70710677, -0.70710677, 0, 0.70710677, 0.70710677, 0, 0, 0, 1, 0, 0, 0)
-mesh = SubResource("BoxMesh_sail")
-surface_material_override/0 = SubResource("StandardMaterial3D_sail")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)

@@ -6,16 +6,12 @@
 [ext_resource type="AudioStream" uid="uid://bkivvdcfpepv6" path="res://assets/sfx/Facilities/Blacksmith_1.wav" id="4_hfgmk"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Mine.glb" id="90_model"]
+
 [sub_resource type="Resource" id="ResourceCost_mine"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 80
-
-[sub_resource type="BoxMesh" id="BoxMesh_shed"]
-size = Vector3(1.4, 1.6, 1.4)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_shed"]
-albedo_color = Color(0.35, 0.25, 0.15, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_shed"]
 size = Vector3(1.4, 1.6, 1.4)
@@ -113,13 +109,10 @@ can_rally = false
 on_select_sound_effects = Array[AudioStream]([ExtResource("4_hfgmk")])
 max_health = 80
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1673682854]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.8, 0)
-mesh = SubResource("BoxMesh_shed")
-surface_material_override/0 = SubResource("StandardMaterial3D_shed")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1584076599]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.1, 0.8, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 1.5)
 shape = SubResource("BoxShape3D_shed")
 
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=460344320]

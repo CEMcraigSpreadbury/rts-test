@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
-[ext_resource type="PackedScene" uid="uid://8vu8jhcyc8kb" path="res://assets/art/Models/Shrine/shrine.glb" id="7_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/ArcaneSanctum.glb" id="7_model"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="10_gold"]

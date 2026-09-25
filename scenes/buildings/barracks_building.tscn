@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" path="res://scenes/units/shieldman_unit.tscn" id="9_shieldman_scene"]
 [ext_resource type="PackedScene" path="res://scenes/units/officer_unit.tscn" id="9_officer_scene"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="10_cost_script"]
-[ext_resource type="PackedScene" uid="uid://bk7f0u6jhxr5f" path="res://assets/art/Models/Barracks2/barracks2.glb" id="11_jxfkj"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Barracks.glb" id="11_jxfkj"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="11_wood"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/soldier.png" id="icon_soldier"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/officer.png" id="icon_officer"]
