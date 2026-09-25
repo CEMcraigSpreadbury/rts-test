@@ -999,6 +999,7 @@ func _update_construction_visual() -> void:
 			construction_particles.emitting = false
 		if not is_destroyed:
 			play_finish_pop()
+			GroundStamps.stamp_building(self, get_footprint_radius())
 
 const _CONSTRUCTION_ALPHA: float = 0.45
 

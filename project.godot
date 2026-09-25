@@ -63,6 +63,14 @@ rendering_device/driver.windows="d3d12"
 
 [shader_globals]
 
+ground_stamp_tex={
+"type": "sampler2D",
+"value": ""
+}
+ground_stamp_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
 cloud_shadow_tex={
 "type": "sampler2D",
 "value": ""

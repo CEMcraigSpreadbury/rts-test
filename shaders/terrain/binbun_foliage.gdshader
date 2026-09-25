@@ -52,6 +52,7 @@ uniform int alpha_mode : hint_enum("Dithered", "Cut") = 0;
 group_uniforms FogOfWar;
 #include "res://shaders/terrain/binbun_fog.gdshaderinc"
 group_uniforms;
+#include "res://shaders/terrain/ground_stamp.gdshaderinc"
 
 varying vec3 world_pos;
 varying flat int blade_index;
@@ -96,7 +97,8 @@ void vertex() {
 	vec3 centre = clip_centre(MAIN_CAM_INV_VIEW_MATRIX, MODEL_MATRIX);
 	calculateFoliageVertex(INSTANCE_ID, centre, base, probe_normal, probe_color, grid_position, cell_width);
 	calculateFoliageVertex(INSTANCE_ID, centre, top, probe_normal, probe_color, grid_position, cell_width);
-	bool blade_present = length(top - base) > 0.0001;
+	bool blade_present = length(top - base) > 0.0001
+			&& ground_stamp((MODEL_MATRIX * vec4(base, 1.0)).xz) < 0.4;
 
 	vec3 rnd = hash_noise_range(grid_position) * 0.5 + 0.5;
 	blade_index = int(rnd.y * float(atlas_size * atlas_size));
