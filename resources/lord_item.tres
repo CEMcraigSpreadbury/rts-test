@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ProducibleItem" format=3]
+
+[ext_resource type="Script" path="res://scripts/producible_item.gd" id="1_item"]
+[ext_resource type="PackedScene" path="res://scenes/units/lord_unit.tscn" id="2_lord"]
+
+[resource]
+script = ExtResource("1_item")
+item_name = "Lord"
+build_time = 40.0
+unit_scene = ExtResource("2_lord")

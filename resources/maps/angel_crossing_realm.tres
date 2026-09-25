@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="MapInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/map_info.gd" id="1_2t2b7"]
+
+[resource]
+script = ExtResource("1_2t2b7")
+map_name = "Angel Crossing Realm"
+scene_path = "res://scenes/maps/angel_crossing_realm.tscn"
+max_players = 4
+capture_points = 13

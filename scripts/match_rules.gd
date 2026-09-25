@@ -20,6 +20,52 @@ const DIFFICULTY_SCALE: Array[float] = [0.7, 1.0, 1.4]
 static func enemy_scale() -> float:
 	return DIFFICULTY_SCALE[clampi(Network.campaign_difficulty, 0, DIFFICULTY_SCALE.size() - 1)]
 
+## --- Realm ---
+## The Realm economy (Network.GameMode.REALM): Food comes back, farmed at a
+## Mill, and every soldier eats it; Houses and the population cap go, leaving
+## only a ceiling high enough that nobody meets it in play; soldiers are bought
+## with gold alone, and a villager costs a little food on top of its wood.
+## Missions keep their own authored rules, so a scenario is never Realm.
+const REALM_POPULATION_CEILING: int = 800
+const REALM_VILLAGER_FOOD: int = 8
+const FOOD: ResourceType = preload("res://resources/food_resource_type.tres")
+const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
+const WOOD: ResourceType = preload("res://resources/wood_resource_type.tres")
+## Only built in a Realm match, and never in one.
+const REALM_ONLY_BUILDINGS: Array[String] = ["Mill"]
+const NOT_IN_REALM_BUILDINGS: Array[String] = ["House", "Pact Hall"]
+
+static func realm() -> bool:
+	return active().scenario == null and Network.game_mode == Network.GameMode.REALM
+
+## A unit's listed price as a Realm match charges it: a soldier's wood, and any
+## allied-race currency (Meat, Souls, Starlight — there are no Pacts in Realm),
+## is folded into its gold; a worker keeps its wood and adds
+## REALM_VILLAGER_FOOD. Outside Realm, `costs` comes back unchanged.
+static func realm_unit_costs(costs: Array[ResourceCost], is_worker: bool) -> Array[ResourceCost]:
+	if not realm():
+		return costs
+	var out: Array[ResourceCost] = []
+	if is_worker:
+		out.assign(costs)
+		var food := ResourceCost.new()
+		food.resource_type = FOOD
+		food.amount = REALM_VILLAGER_FOOD
+		out.append(food)
+		return out
+	var gold := 0
+	for cost in costs:
+		if cost.resource_type == FOOD:
+			out.append(cost)
+		else:
+			gold += cost.amount
+	if gold > 0:
+		var entry := ResourceCost.new()
+		entry.resource_type = GOLD
+		entry.amount = gold
+		out.push_front(entry)
+	return out
+
 ## Never null: no scenario means ordinary rules.
 static func active() -> MatchRules:
 	if current == null:
@@ -74,6 +120,8 @@ func scaled_costs(peer_id: int, costs: Array[ResourceCost]) -> Array[ResourceCos
 	return out
 
 func building_allowed(peer_id: int, building_name: String) -> bool:
+	if (REALM_ONLY_BUILDINGS if not realm() else NOT_IN_REALM_BUILDINGS).has(building_name):
+		return false
 	var allowed := modifiers_for(peer_id).allowed_buildings
 	return allowed.is_empty() or allowed.has(building_name)
 
@@ -91,9 +139,13 @@ func research_allowed(peer_id: int, node: ResearchNode) -> bool:
 	var cap := modifiers_for(peer_id).research_tier_cap
 	return cap < 0 or (cap > 0 and node.tier <= cap)
 
-## 0 = the ordinary houses-and-town-centre rules.
+## 0 = the ordinary houses-and-town-centre rules. Realm has no cap to build
+## towards, only a ceiling that keeps a runaway economy playable.
 func population_cap(peer_id: int) -> int:
-	return modifiers_for(peer_id).population_cap
+	var fixed: int = modifiers_for(peer_id).population_cap
+	if fixed == 0 and realm():
+		return REALM_POPULATION_CEILING
+	return fixed
 
 ## Whether a part of the HUD is available to this player — "research", "build",
 ## "formations", "control_groups". A tutorial locks them and unlocks them as it

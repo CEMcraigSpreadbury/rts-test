@@ -482,10 +482,9 @@ func _play_sprite_pop() -> void:
 ## unit scene, like can_gather — an Officer is an ordinary unit that happens
 ## to be allowed to raise a body of men.
 @export var is_officer: bool = false
-## The standard a regiment of these men flies. Set per unit scene so the
-## roster decides what its own banners are; a unit with none contributes no
-## opinion when its regiment picks one (see Regiment.banner_index).
-@export var regiment_banner: Texture2D = null
+## Leads an army in a Realm match (see Lords): everyone of his side near him
+## fights better. Never breaks, never joins a regiment.
+@export var is_lord: bool = false
 
 @export_group("Pact")
 ## Gnolls fight as a pack: damage rises with every packmate fighting beside
@@ -1115,6 +1114,60 @@ var regiment_id: int = -1:
 		regiment_id = value
 		_net_state_changed()
 
+## --- Morale (see Morale) ---
+## How steady this man is, 0-100. Host only; the host's Morale component moves
+## it and decides morale_state from it.
+var morale: float = Morale.MAX_MORALE:
+	set(value):
+		morale = clampf(value, 0.0, Morale.MAX_MORALE)
+		var level: int = roundi(morale / Morale.MAX_MORALE * Morale.LEVELS)
+		if level != morale_level:
+			morale_level = level
+## morale in steps of MAX_MORALE / LEVELS, replicated for the HUD's bars.
+var morale_level: int = Morale.LEVELS:
+	set(value):
+		morale_level = value
+		_net_state_changed()
+## A Morale.State, replicated: routing and shattered men run and can't be
+## ordered, a wavering one fights worse.
+var morale_state: int = Morale.State.STEADY:
+	set(value):
+		morale_state = value
+		_net_state_changed()
+## Times this man has broken this match; a second rout shatters him. Host only.
+var routs: int = 0
+## --- Lords (see Lords) ---
+## This Lord's level (1-5) and how far he is into the next (0-10), replicated
+## for his unit card. lord_xp is host-only.
+var lord_level: int = 1:
+	set(value):
+		if value != lord_level:
+			lord_level = value
+			_net_state_changed()
+var lord_progress: int = 0:
+	set(value):
+		if value != lord_progress:
+			lord_progress = value
+			_net_state_changed()
+var lord_xp: float = 0.0
+## What the nearest Lord's command gives this unit right now. Host only,
+## refreshed by Lords every half second.
+var lord_damage: float = 0.0
+var lord_armor: int = 0
+var lord_morale: float = 0.0
+
+## The sim block (formation) he marches in when it has a few men in it and he
+## is not in a regiment, else -1: a loose block gets a standard too (see
+## WorldFeedback). Set by the host, replicated.
+var block_id: int = -1:
+	set(value):
+		if value != block_id:
+			block_id = value
+			_net_state_changed()
+
+func is_routing() -> bool:
+	return morale_state == Morale.State.ROUTING or morale_state == Morale.State.SHATTERED
+
 ## This unit's share of its regiment's bonuses, or zero while it is loose or
 ## its officer is down. Resolved onto the unit by Main.refresh_regiment_buffs
 ## rather than looked up when a blow lands: damage and armour are the hottest
@@ -1356,6 +1409,8 @@ func _tick_block_fight(delta: float) -> bool:
 ## A blow the sim says is due (World::update_swings): this man, fighting from
 ## his place, strikes `target` — awake or asleep.
 func sim_swing(target: Unit) -> void:
+	if is_routing():
+		return
 	if status_activity == Activity.DEAD or status_activity == Activity.CASTING or not sim_follow \
 			or not _fights_from_place() or _stun_remaining > 0.0 or not _is_target_alive(target):
 		return
@@ -1539,7 +1594,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 ## _find_new_target_or_idle can move on to the next thing in the area once this
 ## target dies instead of the unit stopping there.
 func command_attack(target: Node3D, keep_assault: bool = false) -> void:
-	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
+	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target) or is_routing():
 		return
 	_end_formation_fight()
 	if not keep_assault:
@@ -1562,7 +1617,7 @@ func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 ## order isn't spent by the first engagement: it ends when the area is clear or
 ## another command replaces it.
 func command_attack_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
-	if status_activity == Activity.DEAD or not can_fight:
+	if status_activity == Activity.DEAD or not can_fight or is_routing():
 		return
 	_end_formation_fight()
 	_leave_build_site()
@@ -2271,6 +2326,7 @@ func receive_charge(charger: Unit) -> void:
 	if armor_class != ArmorClass.CAVALRY:
 		_stun_remaining = maxf(_stun_remaining, CHARGE_STUN_SECONDS)
 		status_applied.emit(0.0, 0.0, CHARGE_STUN_SECONDS, CHARGE_STUN_COLOR)
+	Morale.shake(self, Morale.CHARGED)
 
 ## --- Spear brace ---
 
@@ -2366,8 +2422,10 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	## Armour (Blacksmith upgrades + research buffs) cuts a percentage per
 	## point, capped, rather than a flat amount: flat armour against hits of
 	## only 4-7 swamped the counter multipliers above. Never below 1 damage.
+	if is_routing():
+		amount = roundi(amount * Morale.ROUTING_DAMAGE_TAKEN)
 	var armor: int = UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) \
-			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR)) + regiment_armor_bonus
+			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR)) + regiment_armor_bonus + lord_armor
 	if armor > 0:
 		var reduction := minf(armor * ARMOR_REDUCTION_PER_POINT, ARMOR_MAX_REDUCTION)
 		amount = maxi(roundi(amount * (1.0 - reduction)), 1)
@@ -2384,8 +2442,9 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	if status_current_health <= 0:
 		_die(attacker)
 		return
+	Morale.shaken_by_hit(self, amount, flanked)
 
-	if can_fight and attacker != null and is_instance_valid(attacker):
+	if can_fight and attacker != null and is_instance_valid(attacker) and not is_routing():
 		## Patrol deliberately stays Command.PATROL through a fight (see
 		## _physics_process) so it can resume afterward, so status_command
 		## can't be used as the "already engaged" check the way it is for
@@ -3036,7 +3095,10 @@ func _tick_gathering(delta: float) -> void:
 		if is_instance_valid(node):
 			resource_harvested.emit(node)
 
-	if status_carried_amount >= carry_capacity or not is_instance_valid(target_resource):
+	## A field that has just been harvested out goes back to sowing: take what
+	## was gathered home now rather than holding it through a whole season.
+	if status_carried_amount >= carry_capacity or not is_instance_valid(target_resource) \
+			or (status_carried_amount > 0 and not target_resource.is_yielding()):
 		_head_to_dropoff()
 
 func _head_to_dropoff() -> void:
@@ -3159,11 +3221,14 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
 	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
 	extra += regiment_damage_bonus
+	extra += lord_damage
 	var result: int = roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
 	if pack_member and not is_equal_approx(_pack_multiplier, 1.0):
 		result = maxi(roundi(result * _pack_multiplier), 1)
 	if target is ProductionBuilding and building_damage_multiplier != 1.0:
 		result = roundi(result * building_damage_multiplier)
+	if morale_state == Morale.State.WAVERING:
+		result = maxi(roundi(result * Morale.WAVERING_DAMAGE), 1)
 	return result
 
 func _head_to_target() -> void:
@@ -3696,6 +3761,8 @@ func _flat_distance(a: Vector3, b: Vector3) -> float:
 ## this unit's own kind already on it (see _crowd_penalty), so melee and ranged
 ## alike spread across nearby enemies; `search_range` still limits the raw distance.
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
+	if is_routing():
+		return null
 	if not PerfStats.enabled:
 		return _nearest_enemy_scan(search_range)
 	var start := Time.get_ticks_usec()
@@ -3763,6 +3830,12 @@ func _die(attacker: Node3D = null) -> void:
 	## Meat for the hunter, Souls for anyone watching — see Pacts.award_death.
 	if main is Main and main.pacts != null:
 		main.pacts.award_death(self, attacker)
+	if main is Main and main.realm_economy != null:
+		main.realm_economy.award_hunt(self, attacker)
+	if main is Main and main.morale != null:
+		main.morale.on_death(self, attacker)
+	if main is Main and main.lords != null:
+		main.lords.on_death(self, attacker)
 	if main is Main and main.research != null:
 		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
 		main.research.award_kill(self, attacker, credit)

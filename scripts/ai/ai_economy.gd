@@ -2,7 +2,8 @@ class_name AiEconomy
 extends RefCounted
 ## AiPlayer's economy: Houses before the population cap bites, a steady
 ## stream of villagers, and every villager kept on a job — wood, gold (once a
-## Mine is working, see AiProfile.gold_worker_share) or a construction site.
+## Mine is working, see AiProfile.gold_worker_share), food (Realm only: a Mill
+## and Farms sized to what the army eats) or a construction site.
 
 ## How often the list of choppable trees is rebuilt — trees only disappear,
 ## and scanning every one on every think adds up on a big map.
@@ -33,6 +34,152 @@ func think_houses() -> void:
 
 func think_villagers() -> void:
 	_maybe_train_villagers()
+
+## --- Food (Realm only) ---
+
+## The Mill goes up once this many villagers are working.
+const MILL_AT_VILLAGERS: int = 4
+## Farm hands kept whatever the army eats: villagers cost food to train.
+const BASE_FOOD_WORKERS: int = 2
+## Roughly what one farm hand brings in a minute, for sizing the workforce to
+## the army's upkeep. Deliberately cautious: a surplus is better than a
+## starving army.
+const FOOD_PER_WORKER_MINUTE: float = 25.0
+## Plenty in the granary: farm with fewer hands until it runs down.
+const FOOD_COMFORTABLE: int = 500
+## Never more of the villagers than this on the fields.
+const MAX_FOOD_SHARE: float = 0.5
+## A field takes this many; see farm_building.tscn.
+const HANDS_PER_FARM: int = 2
+## More Mills than this and the base is all fields.
+const MAX_MILLS: int = 4
+const MILL_NAME: String = "Mill"
+const FARM_NAME: String = "Farm"
+
+## A Mill lays out its own fields when it finishes (BuildingType.companion_*),
+## so feeding more farmers means another Mill.
+func think_food() -> void:
+	if not MatchRules.realm():
+		return
+	var mill_type := _type_named(MILL_NAME)
+	if mill_type == null:
+		return
+	var mills: int = ai.count_owned(mill_type)
+	if mills == 0:
+		if ai.villagers.size() >= MILL_AT_VILLAGERS:
+			ai.builder.try_construct(mill_type)
+		return
+	if mills >= MAX_MILLS or _mill_going_up(mill_type):
+		return
+	if food_workers_wanted() > _my_farms().size() * HANDS_PER_FARM:
+		ai.builder.try_construct(mill_type)
+
+## How many villagers should be on the fields right now.
+func food_workers_wanted() -> int:
+	if not MatchRules.realm():
+		return 0
+	var upkeep: float = ai.main.realm_economy.food_per_minute(ai.peer_id)
+	var wanted: int = BASE_FOOD_WORKERS + ceili(upkeep / FOOD_PER_WORKER_MINUTE)
+	if ai.stock(RealmEconomy.FOOD) > FOOD_COMFORTABLE:
+		wanted = ceili(wanted * 0.5)
+	return mini(wanted, ceili(ai.villagers.size() * MAX_FOOD_SHARE))
+
+## A Lord to lead the army, whenever one may be raised and gold allows.
+const LORD_ABOVE_GOLD: int = 250
+
+func _maybe_raise_lord() -> void:
+	var centre: ProductionBuilding = ai.town_center
+	if centre == null or not is_instance_valid(centre) or ai.stock(AiPlayer.GOLD) < LORD_ABOVE_GOLD:
+		return
+	for i in centre.producibles.size():
+		var item: ProducibleItem = centre.producibles[i]
+		if item.is_lord() and ai.main.lords.can_hire(ai.peer_id, centre.queue.count(item)) \
+				and ai.can_afford(ai.item_costs(item)):
+			ai.main.enqueue_as(ai.peer_id, centre.get_path(), i)
+			return
+
+## Realm: one building a think for a settlement with a free slot, in the order
+## its hall offers them (its race's own building first), a Granary first when
+## food is short.
+const SLOT_FOOD_SHORT: int = 150
+const SACK_BELOW_GOLD: int = 100
+## Gold it keeps in hand before it spends on raising a settlement.
+const RAISE_ABOVE_GOLD: int = 250
+
+func think_slots() -> void:
+	if not MatchRules.realm():
+		return
+	_maybe_raise_lord()
+	for building in ai.my_buildings:
+		var settlement: Objective = building.settlement
+		if settlement == null or settlement.hall != building:
+			continue
+		## Just taken: sack it when short of gold, otherwise keep it whole.
+		if settlement.choice_peer == ai.peer_id:
+			var wanted: int = Objective.Choice.SACK if ai.stock(AiPlayer.GOLD) < SACK_BELOW_GOLD else Objective.Choice.OCCUPY
+			for i in building.producibles.size():
+				var item: ProducibleItem = building.producibles[i]
+				if item.kind == ProducibleItem.Kind.CHOICE and item.choice == wanted:
+					ai.main.enqueue_as(ai.peer_id, building.get_path(), i)
+			continue
+		var options: Array = []
+		for i in building.producibles.size():
+			var item: ProducibleItem = building.producibles[i]
+			if item.kind == ProducibleItem.Kind.SLOT and settlement.can_build_slot(item, building.queue):
+				options.append(i)
+		if options.is_empty():
+			## Slots full: raise the settlement once there is money to spare.
+			for i in building.producibles.size():
+				var item: ProducibleItem = building.producibles[i]
+				if item.kind == ProducibleItem.Kind.TIER and settlement.can_raise(item, building.queue) 						and ai.stock(AiPlayer.GOLD) >= RAISE_ABOVE_GOLD:
+					if ai.can_afford(item.get_costs()):
+						ai.main.enqueue_as(ai.peer_id, building.get_path(), i)
+						return
+			continue
+		var pick: int = options[0]
+		if ai.stock(RealmEconomy.FOOD) < SLOT_FOOD_SHORT:
+			for i in options:
+				if building.producibles[i].item_name == Objective.GRANARY:
+					pick = i
+		var costs: Array[ResourceCost] = building.producibles[pick].get_costs()
+		if not ai.can_afford(costs):
+			ai.reserve(costs)
+			return
+		ai.main.enqueue_as(ai.peer_id, building.get_path(), pick)
+		return
+
+func _type_named(building_name: String) -> BuildingType:
+	for type in ai.building_roles:
+		if type.building_name == building_name:
+			return type
+	return null
+
+func _mill_going_up(mill_type: BuildingType) -> bool:
+	for building in ai.my_buildings:
+		if building.scene_file_path == mill_type.scene.resource_path and building.is_under_construction:
+			return true
+	return false
+
+## Our fields (a Mill's companions).
+func _my_farms() -> Array:
+	var farms: Array = []
+	for node in ai.get_tree().get_nodes_in_group("gatherables"):
+		var farm := node as Gatherable
+		if farm != null and farm.owner_peer_id == ai.peer_id and farm.display_name == FARM_NAME:
+			farms.append(farm)
+	return farms
+
+func _best_farm(villager: Unit) -> Gatherable:
+	var best: Gatherable = null
+	var best_score := INF
+	for farm in _my_farms():
+		if not farm.can_accept_gatherer() or ai.combat.is_threatened(farm.global_position):
+			continue
+		var score: float = villager.global_position.distance_to(farm.global_position) + farm.gatherers.size() * 4.0
+		if score < best_score:
+			best_score = score
+			best = farm
+	return best
 
 func _maybe_build_house() -> void:
 	var houses: Array[BuildingType] = ai.types_with_role(AiPlayer.BuildingRole.HOUSE)
@@ -94,6 +241,7 @@ func _villager_item_index(building: ProductionBuilding) -> int:
 func think_workers() -> void:
 	_staff_construction_sites()
 	var jobs := _count_jobs()
+	_staff_farms(jobs)
 	var gold_sources := _gold_sources()
 	var gatherers: int = jobs.wood + jobs.gold + jobs.idle.size()
 	var want_gold: int = roundi(gatherers * _gold_share()) if not gold_sources.is_empty() else 0
@@ -148,10 +296,35 @@ func _gold_share() -> float:
 
 const MAX_GOLD_SHARE: float = 0.7
 
-## {wood: int, gold: int, idle: Array[Unit], wood_workers, gold_workers}.
-## Builders and anyone fighting count as neither.
+## Farm hands first, out of the idle and then the wood cutters (never a miner,
+## never someone carrying a load), so the wood/gold split below works on what
+## is left. Anyone sent here leaves `jobs.idle`.
+func _staff_farms(jobs: Dictionary) -> void:
+	var wanted := food_workers_wanted()
+	while jobs.food < wanted:
+		var villager: Unit = null
+		if not jobs.idle.is_empty():
+			villager = jobs.idle[0]
+		elif jobs.food < wanted - REBALANCE_SLACK and not jobs.wood_workers.is_empty():
+			villager = _pick_unloaded(jobs.wood_workers)
+			if villager.status_carried_amount > 0:
+				return
+		if villager == null or not ai.use_order():
+			return
+		var farm := _best_farm(villager)
+		if farm == null:
+			return
+		ai.order_target([villager], farm)
+		jobs.food += 1
+		jobs.idle.erase(villager)
+		if jobs.wood_workers.has(villager):
+			jobs.wood_workers.erase(villager)
+			jobs.wood -= 1
+
+## {wood: int, gold: int, food: int, idle: Array[Unit], wood_workers, gold_workers}.
+## Builders and anyone fighting count as none of them.
 func _count_jobs() -> Dictionary:
-	var jobs := {wood = 0, gold = 0, idle = [] as Array[Unit], wood_workers = [] as Array[Unit], gold_workers = [] as Array[Unit]}
+	var jobs := {wood = 0, gold = 0, food = 0, idle = [] as Array[Unit], wood_workers = [] as Array[Unit], gold_workers = [] as Array[Unit]}
 	for villager in ai.villagers:
 		match villager.status_command:
 			Unit.Command.NONE:
@@ -164,6 +337,8 @@ func _count_jobs() -> Dictionary:
 				if type == AiPlayer.GOLD:
 					jobs.gold += 1
 					jobs.gold_workers.append(villager)
+				elif type == RealmEconomy.FOOD:
+					jobs.food += 1
 				else:
 					jobs.wood += 1
 					jobs.wood_workers.append(villager)

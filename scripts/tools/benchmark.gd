@@ -94,6 +94,10 @@ var _armies: Dictionary = {}
 var _measuring: bool = false
 var _wall_start_usec: int = 0
 
+## The lobby's game mode for the match: "conquest" (default), "annihilation"
+## or "realm". Realm adds food, farms and upkeep to the match report.
+var game_mode: String = "conquest"
+
 func _ready() -> void:
 	_parse_args()
 	## A match wants a longer run and somebody to fight, unless told otherwise.
@@ -114,6 +118,11 @@ func _ready() -> void:
 		return
 	Network.start_offline()
 	Network.map_index = map_index
+	var mode_index: int = Network.GAME_MODE_NAMES.find(game_mode.capitalize())
+	if mode_index < 0:
+		_abort("unknown --game " + game_mode)
+		return
+	Network.set_match_settings(mode_index, 0)
 	for i in ai_count:
 		var id: int = Network.add_ai_player(difficulty)
 		if id != 0:
@@ -123,8 +132,8 @@ func _ready() -> void:
 		return
 	_ai_peer = _ai_peers[0]
 	if mode == "match":
-		print("benchmark: match on %s, %d AI, %d ticks, seed %d" % [
-			info.map_name, _ai_peers.size(), measure_ticks, run_seed])
+		print("benchmark: %s match on %s, %d AI, %d ticks, seed %d" % [
+			game_mode, info.map_name, _ai_peers.size(), measure_ticks, run_seed])
 	else:
 		print("benchmark: %s, %d units/side, %d AI, %d ticks, seed %d" % [
 			info.map_name, units_per_side, _ai_peers.size(), measure_ticks, run_seed])
@@ -143,6 +152,13 @@ func _start_match(scene: PackedScene) -> void:
 	_main = match_scene as Main
 	if _main == null:
 		_abort("map scene root is not a Main")
+		return
+	## Objectives hand their buildings to whatever is current_scene as they
+	## ready, which was still this node; a real match has Main current first.
+	for node in get_tree().get_nodes_in_group(&"objectives"):
+		for building in node.buildings.get_children():
+			if building is ProductionBuilding:
+				_main.register_objective_building(building)
 
 func _physics_process(_delta: float) -> void:
 	if _main == null:
@@ -161,10 +177,32 @@ func _physics_process(_delta: float) -> void:
 	if not _measuring:
 		return
 	var measured: int = _tick - WARMUP_TICKS - SETTLE_TICKS
+	if measured % 600 == 0:
+		_morale_line(measured)
 	if measured >= measure_ticks:
 		_finish()
 	elif measured % reorder_ticks == 0:
 		_push()
+
+## Battle mode, every 20 s: how the two armies' morale is holding.
+func _morale_line(measured: int) -> void:
+	var line := "  %5.0fs" % (measured / 30.0)
+	for peer in [1, _ai_peer]:
+		var alive := 0
+		var total := 0.0
+		var low := Morale.MAX_MORALE
+		var states := [0, 0, 0, 0]
+		for node in get_tree().get_nodes_in_group(&"units"):
+			var unit := node as Unit
+			if unit == null or unit.owner_peer_id != peer or unit.status_activity == Unit.Activity.DEAD or Morale.unbreakable(unit):
+				continue
+			alive += 1
+			total += unit.morale
+			low = minf(low, unit.morale)
+			states[unit.morale_state] += 1
+		line += "   p%d alive %3d avg %3.0f low %3.0f  s/w/r/x %d/%d/%d/%d" % [
+				peer, alive, total / maxf(alive, 1), low, states[0], states[1], states[2], states[3]]
+	print(line)
 
 func _process(delta: float) -> void:
 	if not _measuring or _perf == null:
@@ -230,7 +268,8 @@ func _match_tick() -> void:
 	if _tick == WARMUP_TICKS:
 		_begin_measuring()
 		print("")
-		print("  time    who        villagers army bodies  buildings points reach")
+		print("  time    who        villagers army bodies  buildings points reach%s" % (
+				"   food farms hands upkeep" if MatchRules.realm() else ""))
 		_match_report()
 		return
 	if not _measuring:
@@ -259,9 +298,30 @@ func _match_report() -> void:
 		for unit in ai.army:
 			if is_instance_valid(unit):
 				reach = maxf(reach, ai.home.distance_to(unit.global_position))
-		print("  %4.1fm   ai %-6d %7d %6d %3d (%3d) %7d %6d %6.0f" % [
+		var line := "  %4.1fm   ai %-6d %7d %6d %3d (%3d) %7d %6d %6.0f" % [
 			minutes, peer, ai.villagers.size(), ai.army.size(),
-			bodies, in_bodies, ai.my_buildings.size(), _points_held(peer), reach])
+			bodies, in_bodies, ai.my_buildings.size(), _points_held(peer), reach]
+		line += "   g%5d w%5d" % [ai.stock(AiPlayer.GOLD), ai.stock(AiPlayer.WOOD)]
+		if MatchRules.realm():
+			var hands := 0
+			for villager in ai.villagers:
+				if is_instance_valid(villager.target_resource) and villager.target_resource.resource_type == RealmEconomy.FOOD:
+					hands += 1
+			var farms := 0
+			for node in get_tree().get_nodes_in_group(&"gatherables"):
+				if node is Gatherable and node.owner_peer_id == peer and node.display_name == "Farm":
+					farms += 1
+			line += "   %4d %5d %5d %5.0f%s" % [ai.stock(RealmEconomy.FOOD), farms, hands,
+					_main.realm_economy.food_per_minute(peer),
+					" STARVING" if _main.realm_economy.is_starving(peer) else ""]
+		print(line)
+	if MatchRules.realm():
+		var settlements := ""
+		for node in get_tree().get_nodes_in_group(&"objectives"):
+			var objective := node as Objective
+			if objective != null and objective.is_settlement():
+				settlements += " %s:p%d/t%d/g%d" % [objective.letter, objective.owner_peer_id, objective.tier, objective._garrison.size()]
+		print("   settlements" + settlements)
 
 func _points_held(peer: int) -> int:
 	var held := 0
@@ -339,6 +399,25 @@ func _finish() -> void:
 	print("map %d   seed %d   %d units/side   %d ticks   %.1f s wall" % [
 		map_index, run_seed, units_per_side, measure_ticks, wall_seconds])
 	print("units alive at end %d   samples %d" % [alive, _samples.size()])
+	## Morale (see Morale): how many are steady, shaken or running at the end,
+	## and how many broke at some point.
+	var states := [0, 0, 0, 0]
+	var broke := 0
+	var morale_sum := 0.0
+	var morale_low := Morale.MAX_MORALE
+	var counted := 0
+	for node in get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit != null and unit.status_activity != Unit.Activity.DEAD and unit.owner_peer_id > 0:
+			states[unit.morale_state] += 1
+			if unit.routs > 0:
+				broke += 1
+			if not Morale.unbreakable(unit):
+				counted += 1
+				morale_sum += unit.morale
+				morale_low = minf(morale_low, unit.morale)
+	print("morale at end: steady %d  wavering %d  routing %d  shattered %d   broke at least once %d   avg %.0f  low %.0f" % [
+			states[0], states[1], states[2], states[3], broke, morale_sum / maxf(counted, 1), morale_low])
 	print("")
 	print("unit script      %7.2f ms/tick   peak %7.2f" % [_avg("unit_ms"), _peak("unit_ms_peak")])
 	print("order dispatch   %7.2f ms peak" % _peak("command_peak_ms"))
@@ -445,6 +524,8 @@ func _parse_args() -> void:
 			_ai_set = true
 		elif key == "mode":
 			mode = value
+		elif key == "game":
+			game_mode = value
 
 func _abort(reason: String) -> void:
 	push_error("benchmark: " + reason)

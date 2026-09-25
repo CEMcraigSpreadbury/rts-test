@@ -32,7 +32,13 @@ func reset() -> void:
 	_used.clear()
 	_cap.clear()
 
+## Realm has no Pacts: allied races come from their settlements and share the
+## one army, so every pool is the main one.
+static func _pool(pool: PopulationPool.Kind) -> PopulationPool.Kind:
+	return PopulationPool.Kind.MAIN if MatchRules.realm() else pool
+
 func get_used(peer_id: int, pool: PopulationPool.Kind = PopulationPool.Kind.MAIN) -> int:
+	pool = _pool(pool)
 	return _used.get(_key(peer_id, pool), 0)
 
 ## A scenario can pin a player's cap regardless of what they have built (see
@@ -40,6 +46,7 @@ func get_used(peer_id: int, pool: PopulationPool.Kind = PopulationPool.Kind.MAIN
 ## only ever governs the MAIN pool — a scenario pinning Human population
 ## shouldn't silently hand out pact room as well.
 func get_cap(peer_id: int, pool: PopulationPool.Kind = PopulationPool.Kind.MAIN) -> int:
+	pool = _pool(pool)
 	if pool == PopulationPool.Kind.MAIN:
 		var fixed: int = MatchRules.active().population_cap(peer_id)
 		if fixed > 0:
@@ -53,14 +60,17 @@ func has_room(peer_id: int, amount: int, pool: PopulationPool.Kind = PopulationP
 	return get_used(peer_id, pool) + amount <= get_cap(peer_id, pool)
 
 func reserve(peer_id: int, amount: int, pool: PopulationPool.Kind = PopulationPool.Kind.MAIN) -> void:
+	pool = _pool(pool)
 	_used[_key(peer_id, pool)] = get_used(peer_id, pool) + amount
 	_notify(peer_id, pool)
 
 func release(peer_id: int, amount: int, pool: PopulationPool.Kind = PopulationPool.Kind.MAIN) -> void:
+	pool = _pool(pool)
 	_used[_key(peer_id, pool)] = maxi(get_used(peer_id, pool) - amount, 0)
 	_notify(peer_id, pool)
 
 func add_cap(peer_id: int, amount: int, pool: PopulationPool.Kind = PopulationPool.Kind.MAIN) -> void:
+	pool = _pool(pool)
 	_cap[_key(peer_id, pool)] = get_cap(peer_id, pool) + amount
 	_notify(peer_id, pool)
 

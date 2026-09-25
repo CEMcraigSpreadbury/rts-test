@@ -67,7 +67,7 @@ func get_target() -> int:
 	return target
 
 func _refresh_visibility() -> void:
-	_target_spin.visible = get_mode() == Network.GameMode.CONQUEST and _has_target
+	_target_spin.visible = Network.scores_favour(get_mode()) and _has_target
 
 func _on_changed() -> void:
 	if _applying:

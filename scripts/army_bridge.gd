@@ -32,6 +32,9 @@ var _poll_timer: float = 0.0
 ## Instance id -> true, for everything currently stamped, kept apart so the
 ## hundreds of resource nodes are only walked when one of them changes.
 var _stamped_buildings: Dictionary = {}
+## Solid things that are not buildings but come and go — a settlement gate's
+## door (see Objective), in the "nav_blockers" group while it is shut.
+var _stamped_doors: Dictionary = {}
 var _stamped_gatherables: Dictionary = {}
 var _tree_changes_seen: int = -1
 ## Teams.team_of() result -> sim team index. 0 is neutral, as in Teams.
@@ -160,6 +163,7 @@ func _process(delta: float) -> void:
 ## came or went.
 func _restamp() -> void:
 	_sync_group(&"buildings", _stamped_buildings)
+	_sync_group(&"nav_blockers", _stamped_doors)
 	if Gatherable.tree_changes != _tree_changes_seen:
 		_tree_changes_seen = Gatherable.tree_changes
 		_sync_group(&"gatherables", _stamped_gatherables)

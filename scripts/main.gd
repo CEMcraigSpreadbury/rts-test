@@ -293,6 +293,7 @@ const STARTING_RESOURCES: Dictionary = {
 const DEBUG_RESOURCE_TYPES: Array[ResourceType] = [
 	preload("res://resources/wood_resource_type.tres"),
 	preload("res://resources/gold_resource_type.tres"),
+	preload("res://resources/food_resource_type.tres"),
 	preload("res://resources/favour_resource_type.tres"),
 	preload("res://resources/research_resource_type.tres"),
 ]
@@ -318,6 +319,9 @@ var weather: Weather
 var day_night: DayNight
 var research: Research
 var pacts: Pacts
+var realm_economy: RealmEconomy
+var morale: Morale
+var lords: Lords
 var wildlife: Wildlife
 var quests: QuestRunner
 
@@ -366,7 +370,7 @@ func _ready() -> void:
 	scenario = MatchRules.active().scenario
 	## Before hud.setup(), which draws the resource bar off conquest_enabled.
 	conquest_enabled = scenario.favour_enabled if scenario != null \
-			else Network.game_mode == Network.GameMode.CONQUEST
+			else Network.scores_favour(Network.game_mode)
 	## Objectives join their group in their own _ready, which has already run
 	## by now (children ready before their parent) — so a target of 0 (the map
 	## default) is worked out from the real point count here.
@@ -555,6 +559,21 @@ func _add_components() -> void:
 	pacts.name = "Pacts"
 	add_child(pacts)
 
+	realm_economy = RealmEconomy.new()
+	realm_economy.main = self
+	realm_economy.name = "RealmEconomy"
+	add_child(realm_economy)
+
+	morale = Morale.new()
+	morale.main = self
+	morale.name = "Morale"
+	add_child(morale)
+
+	lords = Lords.new()
+	lords.main = self
+	lords.name = "Lords"
+	add_child(lords)
+
 	wildlife = Wildlife.new()
 	wildlife.main = self
 	wildlife.name = "Wildlife"
@@ -662,6 +681,8 @@ func _spawn_all_players() -> void:
 func _grant_starting_resources(peer_id: int) -> void:
 	for resource_type in STARTING_RESOURCES:
 		ResourceStockpile.add(peer_id, resource_type, STARTING_RESOURCES[resource_type])
+	if MatchRules.realm():
+		ResourceStockpile.add(peer_id, RealmEconomy.FOOD, RealmEconomy.STARTING_FOOD)
 
 ## --- Scenario sides ---
 
@@ -998,7 +1019,21 @@ func _on_building_destroyed(building: ProductionBuilding) -> void:
 		return
 	var peer_id: int = building.owner_peer_id
 	main_base_count_by_peer[peer_id] = maxi(main_base_count_by_peer.get(peer_id, 1) - 1, 0)
-	if main_base_count_by_peer[peer_id] <= 0 and not defeated_peers.has(peer_id):
+	check_out(peer_id)
+
+## Host only. A player is out once they have no main base left and — in Realm,
+## where a capital is only the first of your settlements — no settlement
+## either. Called when a base falls and when a settlement changes hands.
+func check_out(peer_id: int) -> void:
+	if game_over or peer_id <= 0 or defeated_peers.has(peer_id):
+		return
+	if main_base_count_by_peer.get(peer_id, 0) > 0:
+		return
+	if MatchRules.realm():
+		for node in get_tree().get_nodes_in_group(&"objectives"):
+			if node is Objective and node.is_settlement() and node.owner_peer_id == peer_id:
+				return
+	if not defeated_peers.has(peer_id):
 		defeated_peers[peer_id] = true
 		_check_for_game_over()
 		## Knocked out of a match that carries on (FFA): their own Defeat
@@ -1514,6 +1549,18 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		return
 	if item.kind == ProducibleItem.Kind.SACRIFICE:
 		_resolve_sacrifice(item, building)
+		return
+	if item.kind == ProducibleItem.Kind.SLOT:
+		if building.settlement != null:
+			building.settlement.place_slot(item)
+		return
+	if item.kind == ProducibleItem.Kind.CHOICE:
+		if building.settlement != null:
+			building.settlement.resolve_choice(item.choice)
+		return
+	if item.kind == ProducibleItem.Kind.TIER:
+		if building.settlement != null:
+			building.settlement.raise_tier(item.tier_to)
 		return
 	if item.kind == ProducibleItem.Kind.UPGRADE:
 		building._purchased_upgrades.append(item)
@@ -2748,6 +2795,8 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
 	units = expand_to_regiments(units)
+	## Broken men run whatever they are told; see Morale.
+	units = units.filter(func(unit: Unit) -> bool: return not unit.is_routing())
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: resolve units", Time.get_ticks_usec() - resolve_start)
 
@@ -3027,7 +3076,7 @@ func issue_stop_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
 		return
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
-		if unit == null or unit.owner_peer_id != sender_id:
+		if unit == null or unit.owner_peer_id != sender_id or unit.is_routing():
 			continue
 		unit.clear_order_queue()
 		unit.command_stop()
@@ -3124,6 +3173,28 @@ func select_building(building: ProductionBuilding) -> void:
 ## Clicking one portrait in a multi-unit selection narrows the selection down
 ## to just that unit — Hud.update notices selected_units changed and rebuilds
 ## the panel into its single-unit form on the next frame.
+## A unit card was clicked (see UiUnitCardStrip): select that body, or add it
+## to the selection with Shift.
+func select_units_from_hud(units: Array[Unit], add: bool) -> void:
+	if units.is_empty():
+		return
+	if not add:
+		for u in selected_units:
+			u.selected = false
+		selected_units.clear()
+		select_building(null)
+		select_resource(null)
+	_active_group_number = -1
+	for unit in units:
+		if is_instance_valid(unit) and not selected_units.has(unit):
+			unit.selected = true
+			selected_units.append(unit)
+	_play_random_select_sound(units)
+	_report_selection()
+
+func center_camera_on(members: Array) -> void:
+	_center_camera_on(members)
+
 func select_only_unit(unit: Unit) -> void:
 	if not is_instance_valid(unit):
 		return

@@ -49,6 +49,29 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export_range(4.0, 12.0, 0.5) var objective_clear_radius: float = 7.0
 @export_range(10.0, 80.0, 1.0) var objective_min_base_distance: float = 30.0
 
+@export_group("Settlements (Realm)")
+## Above 0 this is a Realm map: each player gets this many settlements in place
+## of Objectives Per Player, laid out on flat clearings (never plateaus) with
+## room to grow, and joined to their base by roads.
+@export_range(0, 8) var settlements_per_player: int = 0
+## One per race. Every player draws them in the same shuffled order, so each
+## has the same mix of races within reach.
+@export var settlement_scenes: Array[PackedScene] = [
+	preload("res://scenes/objective.tscn"),
+	preload("res://scenes/beastmen_objective.tscn"),
+	preload("res://scenes/settlements/gnoll_settlement.tscn"),
+	preload("res://scenes/settlements/dark_elf_settlement.tscn"),
+	preload("res://scenes/settlements/star_wanderer_settlement.tscn"),
+]
+@export_range(8.0, 24.0, 0.5) var settlement_clear_radius: float = 12.0
+@export_range(15.0, 120.0, 1.0) var settlement_min_base_distance: float = 35.0
+## Dirt roads from each base through its settlements to the centre.
+@export var settlement_roads: bool = true
+@export_range(2.0, 8.0, 0.5) var road_width: float = 3.5
+
+func is_settlement_map() -> bool:
+	return settlements_per_player > 0 and not settlement_scenes.is_empty()
+
 @export_group("Terrain")
 @export_range(0.0, 6.0, 0.1) var hill_height: float = 1.5
 @export_range(0.005, 0.08, 0.001) var hill_frequency: float = 0.02

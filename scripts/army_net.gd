@@ -153,14 +153,16 @@ func _rpc_snapshot(bytes: PackedByteArray) -> void:
 		_easing[unit] = [unit.global_position, pos, unit.rotation.y, rot, 0.0]
 
 ## Host: every marked unit's state, one reliable call for the lot. Each entry
-## is [net_id, health, owner, tint, hold, regiment], with the unit's path added
-## the first time.
+## is [net_id, health, owner, tint, hold, regiment, morale state, morale level, block,
+## lord level, lord progress],
+## with the unit's path added the first time.
 func _send_states() -> void:
 	var states: Array = []
 	for unit in _dirty:
 		if not is_instance_valid(unit) or not unit.is_inside_tree() or unit.net_id < 0:
 			continue
-		var state: Array = [unit.net_id, unit.status_current_health, unit.owner_peer_id, unit.team_tint, unit.hold_position, unit.regiment_id]
+		var state: Array = [unit.net_id, unit.status_current_health, unit.owner_peer_id, unit.team_tint, unit.hold_position, unit.regiment_id,
+				unit.morale_state, unit.morale_level, unit.block_id, unit.lord_level, unit.lord_progress]
 		if not _named.has(unit.net_id):
 			_named[unit.net_id] = true
 			state.append(unit.get_path())
@@ -178,8 +180,8 @@ func _rpc_states(states: Array) -> void:
 ## False while the unit it names is not here yet.
 func _apply_state(state: Array) -> bool:
 	var unit: Unit = units_by_net_id.get(int(state[0]))
-	if (unit == null or not is_instance_valid(unit)) and state.size() > 6:
-		unit = get_node_or_null(state[6] as NodePath) as Unit
+	if (unit == null or not is_instance_valid(unit)) and state.size() > PATH_INDEX:
+		unit = get_node_or_null(state[PATH_INDEX] as NodePath) as Unit
 		if unit == null:
 			return false
 		unit.net_id = int(state[0])
@@ -192,7 +194,15 @@ func _apply_state(state: Array) -> bool:
 	unit.team_tint = state[3]
 	unit.hold_position = bool(state[4])
 	unit.regiment_id = int(state[5])
+	unit.morale_state = int(state[6])
+	unit.morale_level = int(state[7])
+	unit.block_id = int(state[8])
+	unit.lord_level = int(state[9])
+	unit.lord_progress = int(state[10])
 	return true
+
+## Where a state entry carries the unit's path, the first time it is sent.
+const PATH_INDEX: int = 11
 
 func _retry_pending(delta: float) -> void:
 	if _pending.is_empty():

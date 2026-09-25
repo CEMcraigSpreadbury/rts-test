@@ -12,6 +12,11 @@ extends Node
 ##              scene to get the quest tracker, dialogue box and briefing)
 ##   --present=K  ask the quest UI to show "dialogue" or "briefing"
 ##   --plate    hide the UI layer, giving the bare 3D frame
+##   --army     field a few bodies of soldiers (one a regiment) and select one,
+##              for the unit cards
+##   --look     point the camera at the capture point nearest the base
+##   --realm    play the match as Realm (settlements, food, no houses)
+##   --walls    with --look --realm: wall the settlement in, gates shut
 ##   --build    select a builder and open its build menu (shows the race tabs)
 ##   --pact=N   grant Pact race N first, so its tab is unlocked
 ##   --seed=N   RNG seed, default 12345; fixed so two runs frame the same view
@@ -30,6 +35,10 @@ func _ready() -> void:
 	var single: bool = false
 	var queue: bool = false
 	var switch: bool = false
+	var army: bool = false
+	var look: bool = false
+	var realm: bool = false
+	var walls: bool = false
 	var chat: bool = false
 	var show_node: String = ""
 	var ai_count: int = -1
@@ -59,6 +68,14 @@ func _ready() -> void:
 			switch = true
 		elif arg == "--chat":
 			chat = true
+		elif arg == "--army":
+			army = true
+		elif arg == "--look":
+			look = true
+		elif arg == "--realm":
+			realm = true
+		elif arg == "--walls":
+			walls = true
 		elif arg.begins_with("--show="):
 			show_node = arg.trim_prefix("--show=")
 		elif arg.begins_with("--skirmish="):
@@ -80,6 +97,8 @@ func _ready() -> void:
 	seed(rng_seed)
 	if scene.is_empty():
 		Network.start_offline()
+		if realm:
+			Network.set_match_settings(Network.GameMode.REALM, 0)
 		Network.add_ai_player()
 		Network.resolve_random_rulers()
 
@@ -88,6 +107,9 @@ func _ready() -> void:
 	director.set_script(load(DIRECTOR_SCRIPT))
 	director.out_path = out
 	director.plate = plate
+	director.army = army
+	director.look = look
+	director.walls = walls
 	director.settle = wait
 	director.menu_only = not scene.is_empty()
 	director.build_menu = build_menu

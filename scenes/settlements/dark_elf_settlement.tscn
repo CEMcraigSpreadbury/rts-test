@@ -1,0 +1,76 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" uid="uid://box8qqveqjewu" path="res://scripts/objective.gd" id="1_objective_script"]
+[ext_resource type="PackedScene" path="res://scenes/units/dark_elves/dark_elf_warrior_unit.tscn" id="2_warrior"]
+[ext_resource type="PackedScene" path="res://scenes/units/dark_elves/dark_elf_archer_unit.tscn" id="3_raider"]
+[ext_resource type="PackedScene" path="res://scenes/units/dark_elves/dark_elf_guard_unit.tscn" id="4_druid"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/dark_elf_spire_building.tscn" id="5_beastmen_barracks"]
+[ext_resource type="Shader" path="res://shaders/capture_progress.gdshader" id="6_capture_shader"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_zone"]
+radius = 5.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_disc"]
+size = Vector2(10, 10)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_disc"]
+shader = ExtResource("6_capture_shader")
+shader_parameter/fill = 0.0
+shader_parameter/fill_color = Color(0.3, 0.85, 0.35, 0.85)
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_objective"]
+properties/0/path = NodePath(".:owner_peer_id")
+properties/0/spawn = true
+properties/0/replication_mode = 2
+properties/1/path = NodePath(".:flag_control")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:flag_peer_id")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+properties/3/path = NodePath(".:contested")
+properties/3/spawn = true
+properties/3/replication_mode = 2
+
+[node name="DarkElfSettlement" type="Node3D"]
+script = ExtResource("1_objective_script")
+race_name = "Dark Elves"
+wander_radius = 5.0
+
+[node name="Guards" type="Node3D" parent="."]
+
+[node name="Guard1" parent="Guards" instance=ExtResource("2_warrior")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, 1)
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
+
+[node name="Guard2" parent="Guards" instance=ExtResource("3_raider")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, 1)
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
+
+[node name="Guard3" parent="Guards" instance=ExtResource("4_druid")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -3)
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
+
+[node name="Buildings" type="Node3D" parent="."]
+
+[node name="DarkElfSpire" parent="Buildings" instance=ExtResource("5_beastmen_barracks")]
+owner_peer_id = 0
+team_tint = Color(0.5, 0.5, 0.5, 1)
+
+[node name="CaptureZone" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CaptureZone"]
+shape = SubResource("SphereShape3D_zone")
+
+[node name="ProgressDisc" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("PlaneMesh_disc")
+surface_material_override/0 = SubResource("ShaderMaterial_disc")
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_objective")

@@ -56,6 +56,14 @@ extends Resource
 ## Matched by scene_file_path, same convention as requires_deposit/deposit_scene.
 @export var gate_target_scenes: Array[PackedScene] = []
 
+## Laid out with the building when it finishes, one at each offset from its
+## centre (a Mill's three fields to the west, east and south). The building can
+## only be placed where every one of them fits too; the ghost shows them.
+@export var companion_scene: PackedScene
+@export var companion_offsets: PackedVector3Array = PackedVector3Array()
+## Footprint of one companion, for the same flat-and-clear test as the building.
+@export var companion_radius: float = 1.4
+
 ## Peeks at scene's exported "costs" (ProductionBuilding or Gatherable both
 ## have one) without adding it to the tree, so its _ready()/_process() never
 ## run — just a duck-typed property read, then immediately freed. Untyped

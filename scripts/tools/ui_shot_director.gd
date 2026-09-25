@@ -18,6 +18,9 @@ var single: bool = false
 var queue: bool = false
 var switch: bool = false
 var chat: bool = false
+var army: bool = false
+var look: bool = false
+var walls: bool = false
 var show_node: String = ""
 ## -1 leaves the skirmish screen alone; 0 or more opens it with that many AI.
 var ai_count: int = -1
@@ -102,6 +105,26 @@ func _run_match() -> void:
 	if town_centre != null and town_centre is Node3D:
 		main.focus_camera_on(town_centre.global_position)
 
+	if army and town_centre != null:
+		await _field_army(main, town_centre)
+	if look and town_centre != null:
+		var nearest: Node3D = null
+		for node in main.get_tree().get_nodes_in_group(&"objectives"):
+			if nearest == null or node.global_position.distance_to(town_centre.global_position) 					< nearest.global_position.distance_to(town_centre.global_position):
+				nearest = node
+		if nearest != null:
+			main.focus_camera_on(nearest.global_position)
+			## The point's cottages and guards are hidden until explored.
+			main.fog_of_war.reveal_all = true
+			if walls and nearest is Objective:
+				nearest._build_walls()
+				await _wait(0.5)
+				var paths: Array[NodePath] = []
+				for gate in nearest._gates:
+					paths.append(gate.get_path())
+				nearest._apply_doors(paths, true)
+			await _wait(1.0)
+
 	if plate:
 		var ui: CanvasLayer = main.get_node_or_null("UI")
 		if ui != null:
@@ -115,7 +138,7 @@ func _run_match() -> void:
 		await _wait(0.4)
 		if not main.selected_units.is_empty():
 			main.select_only_unit(main.selected_units[0])
-	elif town_centre != null:
+	elif town_centre != null and not army:
 		main.select_building(town_centre)
 		if queue:
 			await _wait(0.3)
@@ -204,6 +227,52 @@ func _await_map() -> Node:
 			return scene
 		await _wait(0.05)
 	return null
+
+## Spearmen formed into a regiment under an officer, loose archers and cavalry,
+## a few of them hurt and one body shaken, so every state of a card shows.
+func _field_army(main: Node, town_centre: Node3D) -> void:
+	var chat: Node = main.get("chat")
+	var me: int = main.my_peer_id()
+	var at: Vector3 = town_centre.global_position + Vector3(0, 0, 12)
+	for spec in [["spearman", 18], ["officer", 1], ["archer", 12], ["cavalier", 6], ["soldier", 9], ["lord", 1]]:
+		chat.call("_execute_debug_command", me, "spawn %s %d" % spec, at, true, at + Vector3(0, 20, 20))
+		at += Vector3(6, 0, 0)
+	await _wait(0.5)
+	var spearmen: Array[Unit] = []
+	var officer: Unit = null
+	for node in main.get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit == null or unit.owner_peer_id != me:
+			continue
+		if unit.is_officer:
+			officer = unit
+		elif unit.display_name == "Spearman":
+			spearmen.append(unit)
+		elif unit.display_name == "Archer":
+			unit.status_current_health = int(unit.max_health * 0.6)
+		elif unit.display_name == "Soldier":
+			unit.morale = 30.0
+			unit.morale_state = Morale.State.WAVERING
+	if officer != null:
+		spearmen.append(officer)
+	main.form_regiment(me, spearmen)
+	## Ordered forward as bodies, the way a player moves them, so each loose
+	## kind marches as a block of its own.
+	var kinds: Dictionary = {}
+	for node in main.get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit != null and unit.owner_peer_id == me and not unit.can_gather:
+			if not kinds.has(unit.display_name):
+				kinds[unit.display_name] = [] as Array[NodePath]
+			kinds[unit.display_name].append(unit.get_path())
+	for kind in kinds:
+		var paths: Array[NodePath] = kinds[kind]
+		var first: Node3D = main.get_node(paths[0])
+		main.issue_command_as(me, paths, NodePath(), first.global_position + Vector3(0, 0, 4), false, false)
+	main.focus_camera_on(town_centre.global_position + Vector3(12, 0, 16))
+	await _wait(3.0)
+	main.select_units_from_hud(spearmen, false)
+	await _wait(0.6)
 
 ## --- shared ---
 

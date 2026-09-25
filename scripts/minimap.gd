@@ -145,6 +145,7 @@ func _draw_minimap() -> void:
 		draw_rect(Rect2(Vector2.ZERO, size), TERRAIN_COLOR)
 
 	var my_peer := _my_peer_id()
+	_draw_territory()
 
 	for node in get_tree().get_nodes_in_group("buildings"):
 		var building := node as ProductionBuilding
@@ -203,6 +204,63 @@ func _draw_minimap() -> void:
 ## Every capture point's letter in its owner's colour, regardless of fog —
 ## like Battlefield's map, where every flag is always marked. The Conquest
 ## bar already tells everyone who holds what; this is just where.
+## --- Territory (Realm) ---
+## Each settlement's and Town Centre's land (Objective.territory_owner) washed
+## in its owner's colour. Worked out on a coarse grid, and only again when a
+## site changes hands.
+const TERRITORY_GRID: int = 64
+const TERRITORY_ALPHA: float = 0.2
+var _territory_texture: ImageTexture = null
+var _territory_signature: String = ""
+
+func _draw_territory() -> void:
+	if not MatchRules.realm():
+		return
+	var signature := ""
+	var sites: Array = []
+	for node in get_tree().get_nodes_in_group(&"objectives"):
+		if node is Objective and not (node is ShrineObjective):
+			sites.append(node)
+			signature += "%d," % node.owner_peer_id
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		if node is ProductionBuilding and node.is_main_base and not node.is_destroyed:
+			sites.append(node)
+			signature += "t%d," % node.owner_peer_id
+	if signature != _territory_signature or _territory_texture == null:
+		_territory_signature = signature
+		_territory_texture = ImageTexture.create_from_image(_territory_image(sites))
+	draw_texture_rect(_territory_texture, Rect2(Vector2.ZERO, size), false)
+
+## The same rule as Objective.territory_owner, over the sites already gathered.
+func _territory_image(sites: Array) -> Image:
+	var image := Image.create_empty(TERRITORY_GRID, TERRITORY_GRID, false, Image.FORMAT_RGBA8)
+	var tints: Dictionary = {}
+	var points: Array[Vector2] = []
+	var owners: Array[int] = []
+	for site in sites:
+		points.append(Vector2(site.global_position.x, site.global_position.z))
+		owners.append(site.owner_peer_id)
+	var reach_squared: float = Objective.TERRITORY_REACH * Objective.TERRITORY_REACH
+	for y in TERRITORY_GRID:
+		for x in TERRITORY_GRID:
+			var local := Vector2((x + 0.5) / TERRITORY_GRID, (y + 0.5) / TERRITORY_GRID) * size
+			var world := _local_to_world(local)
+			var at := Vector2(world.x, world.z)
+			var owner: int = 0
+			var best: float = reach_squared
+			for i in points.size():
+				var d: float = at.distance_squared_to(points[i])
+				if d < best:
+					best = d
+					owner = owners[i]
+			if owner <= 0:
+				continue
+			if not tints.has(owner):
+				var main := get_tree().current_scene
+				tints[owner] = main.get_team_tint(owner) if main.has_method("get_team_tint") else Color.WHITE
+			image.set_pixel(x, y, Color(tints[owner], TERRITORY_ALPHA))
+	return image
+
 func _draw_objective_letters() -> void:
 	var font := get_theme_default_font()
 	for node in get_tree().get_nodes_in_group(&"objectives"):

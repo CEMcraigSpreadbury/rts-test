@@ -31,6 +31,8 @@ const ACCENT := Color(0.8510, 0.6745, 0.3294)             # D9AC54
 const ACCENT_INK := Color(0.1412, 0.1020, 0.0627)         # 241A10
 const GOOD := Color(0.5608, 0.7490, 0.3843)               # 8FBF62
 const BAD := Color(0.8118, 0.3804, 0.2667)                # CF6144
+## Wavering morale (a routing one uses BAD).
+const WAVER := Color(0.8902, 0.5255, 0.2275)              # E3863A
 ## Tooltips are the one OPAQUE surface: they must stay readable over whatever
 ## they cover, and a translucent one let the text behind bleed through.
 const TOOLTIP_BG := Color(0.1725, 0.1333, 0.0980, 1.0)    # 2C2219

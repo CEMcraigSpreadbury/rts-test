@@ -24,15 +24,22 @@ extends Node
 ## Payout is scaled between 1.0 in full daylight and this at full night.
 @export var night_multiplier: float = 1.0
 
+## In a Realm match only these are paid: an allied race's own currency has no
+## use there (MatchRules.realm_unit_costs prices its units in gold).
+const REALM_RESOURCES: Array[String] = ["Food", "Gold", "Wood"]
+
 var _timer: float = 0.0
 var _building: ProductionBuilding
+## Show each payout over the building (see WorldFeedback.show_income_popup).
+@export var show_payouts: bool = true
 ## Fractions carry over rather than rounding away, so a slow generator still
 ## pays exactly its configured rate over time.
 var _carry: float = 0.0
 
 func _ready() -> void:
 	_building = get_parent() as ProductionBuilding
-	set_physics_process(multiplayer.is_server() and _building != null and resource_type != null)
+	set_physics_process(multiplayer.is_server() and _building != null and resource_type != null \
+			and not (MatchRules.realm() and not REALM_RESOURCES.has(resource_type.display_name)))
 
 func _physics_process(delta: float) -> void:
 	if _building.is_destroyed or _building.is_under_construction or _building.owner_peer_id <= 0:
@@ -54,6 +61,9 @@ func _physics_process(delta: float) -> void:
 		return
 	_carry -= float(whole)
 	ResourceStockpile.add(_building.owner_peer_id, resource_type, whole)
+	var main := get_tree().current_scene
+	if show_payouts and main is Main:
+		main.feedback.show_income_popup(_building, _building.owner_peer_id, [[whole, resource_type.display_color]])
 
 ## 1.0 by day, `night_multiplier` at the dead of night, sliding through the
 ## dusk/dawn fade so income never jumps.

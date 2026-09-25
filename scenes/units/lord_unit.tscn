@@ -1,0 +1,32 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MinifolksHumans/Outline/MiniKingMan.png" id="2_king"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="4_gold"]
+
+[sub_resource type="Resource" id="ResourceCost_lord_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_gold")
+amount = 150
+
+[node name="Lord" instance=ExtResource("1_unit")]
+display_name = "Lord"
+move_speed = 3.0
+costs = Array[Resource]([SubResource("ResourceCost_lord_gold")])
+population_cost = 2
+team_tint = Color(0.35, 0.6, 1, 1)
+sprite_sheet = ExtResource("2_king")
+attack_frame_count = 5
+death_frame_count = 6
+can_gather = false
+can_build = false
+max_health = 260
+attack_damage = 12
+attack_range = 1.4
+attack_cooldown = 1.2
+aggro_range = 7.0
+armor_class = 1
+damage_type = 5
+unit_category = 1
+is_lord = true

@@ -751,6 +751,31 @@ func _spawn_deposit_popup(unit: Unit, amount: int, color: Color) -> void:
 ## and is earning from it" beacon through unexplored fog. Owning it counts as
 ## seeing it (same rule as fog_of_war.gd's own node visibility), though in
 ## practice a held objective's buildings already grant vision over themselves.
+## Income a settlement or one of its buildings has paid out lately: a small
+## stack of "+N", one line per resource in its colour, over the place that
+## paid it. Only its owner sees it (the rest of the economy is private too).
+## `lines` is [[amount, Color], ...].
+const INCOME_POPUP_HEIGHT: float = 3.5
+const INCOME_LINE_SPACING: float = 0.9
+
+func show_income_popup(node: Node3D, owner_peer: int, lines: Array) -> void:
+	if owner_peer == multiplayer.get_unique_id():
+		_spawn_income_popup(node, lines)
+	elif Network.can_rpc_to(owner_peer):
+		_rpc_income_popup.rpc_id(owner_peer, node.get_path(), lines)
+
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_income_popup(node_path: NodePath, lines: Array) -> void:
+	var node := get_node_or_null(node_path) as Node3D
+	if node != null:
+		_spawn_income_popup(node, lines)
+
+func _spawn_income_popup(node: Node3D, lines: Array) -> void:
+	for i in lines.size():
+		var line: Array = lines[i]
+		_spawn_pinned_popup(node.global_position + Vector3(0.0, INCOME_POPUP_HEIGHT + i * INCOME_LINE_SPACING, 0.0),
+				"+%d" % int(line[0]), line[1], true)
+
 func show_favour_popup(objective: Objective, amount: int) -> void:
 	_spawn_favour_popup(objective, amount)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
@@ -876,28 +901,45 @@ func update_rally_marker() -> void:
 ## over any one man — a regiment is the thing being marked, and a flag pinned
 ## to the officer reads as his rather than theirs.
 ##
-## Worked out locally on every peer: Unit.regiment_id is replicated and
-## Unit.regiment_banner is authored into the unit scene, so nobody needs the
-## host's regiment records to draw the right flag in the right place.
+## A standard is a small card, the same as the regiment's unit card in the HUD:
+## the owner's team colour as a gradient with the block's unit sprite in front.
+## Worked out locally on every peer from replicated state (regiment_id,
+## team_tint, the unit scene's sprite sheet), so nobody needs the host's
+## regiment records to draw the right standard in the right place.
 const REGIMENT_BANNER_HEIGHT: float = 2.6
-const REGIMENT_BANNER_PIXEL_SIZE: float = 0.0028
+const REGIMENT_BANNER_PIXEL_SIZE: float = 0.03
 const REGIMENT_BANNER_ALPHA: float = 0.95
 ## Draw order against the other see-through things on the same ground. Two
 ## transparent surfaces sort by distance to the camera unless one is given
 ## priority, which put a unit's selection ring in front of a standard flying
-## well above it. Above the rings (10, see unit.tscn) and deliberately below
-## the health bars (20/21), which should stay readable over anything.
-const REGIMENT_BANNER_PRIORITY: int = 15
+## well above it. Above the rings (10, see unit.tscn) and the health bars
+## (20/21), and drawn without a depth test like the bars, so a standard is
+## never hidden behind its own men's bars.
+const REGIMENT_BANNER_PRIORITY: int = 22
+## A loose block needs at least this many men to fly a standard of its own.
+const BLOCK_BANNER_MIN_MEN: int = 4
 ## How often the blocks are re-surveyed. The sprites ease toward the answer
 ## every frame, so this only has to keep up with a marching block, not be
 ## smooth in itself — and the survey walks every unit on the map.
 const REGIMENT_BANNER_RESURVEY: float = 0.2
 ## How quickly a standard catches up with its block.
 const REGIMENT_BANNER_FOLLOW: float = 6.0
+## The sprite is drawn at 2x from a box this many source pixels square round
+## the figure, like the HUD's portraits; a figure too big for it stays at 1x.
+const REGIMENT_BANNER_FIGURE: int = 16
+## Gradient ends, relative to the team colour: lit at the top, deep at the foot.
+const REGIMENT_BANNER_TOP_LIGHTEN: float = 0.15
+const REGIMENT_BANNER_FOOT_DARKEN: float = 0.6
+## A standard over a block that is mostly wavering, or mostly running.
+const REGIMENT_BANNER_WAVER_TINT: Color = Color(1.0, 0.62, 0.3)
+const REGIMENT_BANNER_ROUT_TINT: Color = Color(1.0, 0.36, 0.3)
 
 var _regiment_banners: Dictionary = {}
 var _regiment_targets: Dictionary = {}
 var _regiment_resurvey_timer: float = 0.0
+## Built standards, keyed by sprite sheet + team colour, so a new regiment of a
+## type already on the field costs nothing.
+var _banner_textures: Dictionary = {}
 
 func update_regiment_banners(delta: float) -> void:
 	_regiment_resurvey_timer -= delta
@@ -909,21 +951,66 @@ func update_regiment_banners(delta: float) -> void:
 		var sprite: Sprite3D = _regiment_banners[id]
 		sprite.global_position = sprite.global_position.lerp(_regiment_targets[id], weight)
 
-func _resurvey_regiments() -> void:
-	var sums: Dictionary = {}
-	var counts: Dictionary = {}
-	var tallies: Dictionary = {}
+## Host: which loose units march in a block big enough for a standard.
+func _assign_blocks() -> void:
+	if not multiplayer.is_server() or ArmyBridge.current == null:
+		return
+	var sim = ArmyBridge.current.sim
+	var sizes: Dictionary = {}
 	for node in get_tree().get_nodes_in_group(&"units"):
 		var unit := node as Unit
-		if unit == null or unit.regiment_id < 0 or unit.status_activity == Unit.Activity.DEAD:
+		if unit == null or unit.sim_id < 0 or unit.status_activity == Unit.Activity.DEAD:
 			continue
-		var id: int = unit.regiment_id
+		if unit.regiment_id >= 0 or unit.can_gather:
+			unit.block_id = -1
+			continue
+		var formation: int = sim.get_unit_formation(unit.sim_id)
+		if formation < 0:
+			unit.block_id = -1
+			continue
+		if not sizes.has(formation):
+			sizes[formation] = sim.get_formation_members(formation).size()
+		unit.block_id = formation if sizes[formation] >= BLOCK_BANNER_MIN_MEN else -1
+
+## A standard's key: a regiment by its id, a loose block by its sim formation
+## (offset so the two never collide), or null for a man with neither.
+static func _banner_key(unit: Unit) -> Variant:
+	if unit.regiment_id >= 0:
+		return unit.regiment_id
+	if unit.block_id >= 0:
+		return -1 - unit.block_id
+	return null
+
+func _resurvey_regiments() -> void:
+	_assign_blocks()
+	var sums: Dictionary = {}
+	var counts: Dictionary = {}
+	## regiment id -> {sprite sheet: [count, a man of that kind]}
+	var tallies: Dictionary = {}
+	## regiment id -> [wavering, running]
+	var shaken: Dictionary = {}
+	for node in get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit == null or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		var key = _banner_key(unit)
+		if key == null:
+			continue
+		var id: int = key
 		sums[id] = (sums.get(id, Vector3.ZERO) as Vector3) + unit.global_position
 		counts[id] = int(counts.get(id, 0)) + 1
-		if unit.regiment_banner != null:
-			var tally: Dictionary = tallies.get(id, {})
-			tally[unit.regiment_banner] = int(tally.get(unit.regiment_banner, 0)) + 1
-			tallies[id] = tally
+		if unit.morale_state != Morale.State.STEADY:
+			var tally_state: Array = shaken.get(id, [0, 0])
+			tally_state[1 if unit.is_routing() else 0] += 1
+			shaken[id] = tally_state
+		## The officer leads the block but the standard shows his men.
+		if unit.is_officer or unit.sprite_sheet == null:
+			continue
+		var tally: Dictionary = tallies.get(id, {})
+		var entry: Array = tally.get(unit.sprite_sheet, [0, unit])
+		entry[0] += 1
+		tally[unit.sprite_sheet] = entry
+		tallies[id] = tally
 	## Retire standards whose block no longer has anybody standing.
 	for id in _regiment_banners.keys():
 		if not counts.has(id):
@@ -939,8 +1026,16 @@ func _resurvey_regiments() -> void:
 			sprite = _make_regiment_banner()
 			_regiment_banners[id] = sprite
 			sprite.global_position = centre
-		sprite.texture = _majority_banner(tallies.get(id, {}))
+		var bearer: Unit = _majority_bearer(tallies.get(id, {}))
+		sprite.texture = _banner_texture(bearer) if bearer != null else null
 		sprite.visible = sprite.texture != null
+		var state: Array = shaken.get(id, [0, 0])
+		var tint := Color.WHITE
+		if state[1] * 2 > counts[id]:
+			tint = REGIMENT_BANNER_ROUT_TINT
+		elif (state[0] + state[1]) * 2 > counts[id]:
+			tint = REGIMENT_BANNER_WAVER_TINT
+		sprite.modulate = Color(tint, REGIMENT_BANNER_ALPHA)
 
 func _make_regiment_banner() -> Sprite3D:
 	var sprite := Sprite3D.new()
@@ -949,21 +1044,68 @@ func _make_regiment_banner() -> Sprite3D:
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	sprite.pixel_size = REGIMENT_BANNER_PIXEL_SIZE
 	sprite.render_priority = REGIMENT_BANNER_PRIORITY
+	sprite.no_depth_test = true
 	## Blended rather than alpha-scissored: the standard is deliberately a
 	## little see-through so it never hides the block underneath it.
 	sprite.modulate = Color(1.0, 1.0, 1.0, REGIMENT_BANNER_ALPHA)
 	add_child(sprite)
 	return sprite
 
-## The flag most of a block is carrying; null for a block whose men carry none.
-func _majority_banner(tally: Dictionary) -> Texture2D:
-	var best: Texture2D = null
+## A man of the kind most of a block is made of; null for a block of officers.
+func _majority_bearer(tally: Dictionary) -> Unit:
+	var best: Unit = null
 	var best_count := 0
-	for texture in tally:
-		if tally[texture] > best_count:
-			best = texture
-			best_count = tally[texture]
+	for sheet in tally:
+		var entry: Array = tally[sheet]
+		if entry[0] > best_count:
+			best_count = entry[0]
+			best = entry[1]
 	return best
+
+func _banner_texture(bearer: Unit) -> Texture2D:
+	var key := "%s|%s" % [bearer.sprite_sheet.get_rid().get_id(), bearer.team_tint.to_html()]
+	var cached: Texture2D = _banner_textures.get(key)
+	if cached != null:
+		return cached
+	var figure := _banner_figure(bearer)
+	## One pixel of border and one of air round the figure.
+	var size := figure.get_size() + Vector2i(4, 4)
+	var image := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
+	var top: Color = bearer.team_tint.lightened(REGIMENT_BANNER_TOP_LIGHTEN)
+	var foot: Color = bearer.team_tint.darkened(REGIMENT_BANNER_FOOT_DARKEN)
+	for y in size.y:
+		var row: Color = top.lerp(foot, float(y) / float(size.y - 1))
+		row.a = 1.0
+		image.fill_rect(Rect2i(0, y, size.x, 1), row)
+	var border := UiStyle.LINE_STRONG
+	border.a = 1.0
+	image.fill_rect(Rect2i(0, 0, size.x, 1), border)
+	image.fill_rect(Rect2i(0, size.y - 1, size.x, 1), border)
+	image.fill_rect(Rect2i(0, 0, 1, size.y), border)
+	image.fill_rect(Rect2i(size.x - 1, 0, 1, size.y), border)
+	image.blend_rect(figure, Rect2i(Vector2i.ZERO, figure.get_size()), Vector2i(2, 2))
+	var texture := ImageTexture.create_from_image(image)
+	_banner_textures[key] = texture
+	return texture
+
+## The first idle frame of the bearer's sheet, cropped round the figure and
+## doubled when it fits, so it reads at the same scale as the HUD portraits.
+func _banner_figure(bearer: Unit) -> Image:
+	var sheet := bearer.sprite_sheet.get_image()
+	if sheet.is_compressed():
+		sheet.decompress()
+	sheet.convert(Image.FORMAT_RGBA8)
+	var cell := bearer.sprite_cell_size
+	var frame := sheet.get_region(Rect2i(Vector2i(0, bearer.idle_row * cell.y), cell))
+	var used := frame.get_used_rect()
+	var box := REGIMENT_BANNER_FIGURE
+	if used.size.x > box or used.size.y > box or used.size == Vector2i.ZERO:
+		return frame
+	var centre := used.get_center()
+	var origin := Vector2i(clampi(centre.x - box / 2, 0, cell.x - box), clampi(centre.y - box / 2, 0, cell.y - box))
+	var figure := frame.get_region(Rect2i(origin, Vector2i(box, box)))
+	figure.resize(box * 2, box * 2, Image.INTERPOLATE_NEAREST)
+	return figure
 
 func _ensure_rally_marker() -> void:
 	if rally_marker:

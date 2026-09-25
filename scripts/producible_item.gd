@@ -5,7 +5,7 @@ extends Resource
 ## Create new ones by duplicating a .tres of this (or embedding one in a
 ## building's scene) and editing the fields in the inspector.
 
-enum Kind { UNIT, UPGRADE, PACT, SACRIFICE }
+enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER }
 
 @export var item_name: String = "Villager"
 ## Shown on its command-card button; left null until real icon art exists,
@@ -26,6 +26,18 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE }
 ## that hall's menu for good, and a race already allied with can't be taken
 ## again at a second hall — both enforced in ProductionBuilding.enqueue().
 @export var pact_race: PactRace
+
+## Used when kind == SLOT (Realm): the building a settlement puts up in its
+## next free slot when this finishes (see Objective.place_slot). Offered on a
+## settlement's own hall, never built by villagers.
+@export var slot_scene: PackedScene
+## Used when kind == CHOICE (Realm): what the player who has just taken a
+## settlement does with it — an Objective.Choice value (see
+## Objective.resolve_choice). Offered on its hall, once, right after capture.
+@export var choice: int = 0
+## Used when kind == TIER (Realm): the settlement tier this raises its hall's
+## settlement to (an Objective.Tier value).
+@export var tier_to: int = 0
 
 ## How many units one completed item spawns. Gnolls are trained in litters:
 ## one cost, one build time, three or four bodies. 1 for everything else.
@@ -61,28 +73,39 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE }
 ## Peeks at unit_scene's exported defaults without adding it to the tree (so
 ## _ready() — sprite sheet building, etc. — never runs) for UNIT items;
 ## falls back to this resource's own costs for UPGRADE items, which have no unit.
+## A Realm match reprices units (see MatchRules.realm_unit_costs).
 func get_costs() -> Array[ResourceCost]:
 	if kind == Kind.UNIT and unit_scene != null:
-		var temp: Unit = unit_scene.instantiate()
-		var result: Array[ResourceCost] = temp.costs
-		temp.free()
-		return result
+		var probe := _probe()
+		return MatchRules.realm_unit_costs(probe.costs, probe.is_worker)
 	return costs
 
 ## Which population pool this item spends. Read off the unit itself, like its
 ## cost, so a Gnoll scene is the one place its pool is set.
 func get_population_pool() -> PopulationPool.Kind:
 	if kind == Kind.UNIT and unit_scene != null:
-		var temp: Unit = unit_scene.instantiate()
-		var result: PopulationPool.Kind = temp.population_pool
-		temp.free()
-		return result
+		return _probe().pool
 	return PopulationPool.Kind.MAIN
+
+## A Lord (see Lords), which only a Realm Town Centre offers.
+func is_lord() -> bool:
+	return kind == Kind.UNIT and unit_scene != null and _probe().is_lord
 
 func get_population_cost() -> int:
 	if kind == Kind.UNIT and unit_scene != null:
-		var temp: Unit = unit_scene.instantiate()
-		var result := temp.population_cost
-		temp.free()
-		return result
+		return _probe().population_cost
 	return population_cost
+
+## Scene path -> what the unit's exported defaults say. A unit scene's defaults
+## never change while the game runs, so each is instanced once rather than on
+## every price lookup (the HUD asks for every button, every refresh).
+static var _probes: Dictionary = {}
+
+func _probe() -> Dictionary:
+	var path: String = unit_scene.resource_path
+	if not _probes.has(path):
+		var temp: Unit = unit_scene.instantiate()
+		_probes[path] = {costs = temp.costs, is_worker = temp.can_gather, is_lord = temp.is_lord,
+				pool = temp.population_pool, population_cost = temp.population_cost}
+		temp.free()
+	return _probes[path]

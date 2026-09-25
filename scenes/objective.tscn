@@ -32,6 +32,7 @@ properties/3/replication_mode = 2
 
 [node name="Objective" type="Node3D"]
 script = ExtResource("1_objective_script")
+race_name = "Human"
 
 [node name="Guards" type="Node3D" parent="."]
 

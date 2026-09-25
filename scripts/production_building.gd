@@ -269,8 +269,16 @@ var _flash_tween: Tween
 ## MeshInstance3D -> Array[Material], as the model shipped. See _capture_source_materials().
 var _source_materials: Dictionary = {}
 
+## Offered by every Town Centre in a Realm match (see Lords).
+const LORD_ITEM: ProducibleItem = preload("res://resources/lord_item.tres")
+
 func _ready() -> void:
 	current_health = max_health
+	## A copy: the scene's list is shared by every Town Centre.
+	if is_main_base and MatchRules.realm() and not producibles.has(LORD_ITEM):
+		var offered: Array[ProducibleItem] = producibles.duplicate()
+		offered.append(LORD_ITEM)
+		producibles = offered
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_collect_visuals()
@@ -477,9 +485,23 @@ func _production_speed() -> float:
 			speed += Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_TRAIN_SPEED)
 	return speed
 
+## The settlement this building belongs to (Realm), or null. Its production
+## stops while the settlement is contested, and its hall offers the slots.
+var settlement: Objective = null
+
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null:
 		return false
+	if item.kind == ProducibleItem.Kind.SLOT and (settlement == null or not settlement.can_build_slot(item, queue)):
+		return false
+	if item.kind == ProducibleItem.Kind.CHOICE and (settlement == null or not settlement.can_choose(owner_peer_id, queue)):
+		return false
+	if item.kind == ProducibleItem.Kind.TIER and (settlement == null or not settlement.can_raise(item, queue)):
+		return false
+	if item.is_lord():
+		var main := get_tree().current_scene
+		if not (main is Main) or main.lords == null or not main.lords.can_hire(owner_peer_id, queue.count(item)):
+			return false
 	## A scenario can take things off the menu mid-mission, so this is checked
 	## here rather than trusted to the HUD having hidden the button.
 	if not MatchRules.active().item_allowed(owner_peer_id, item.item_name):
@@ -790,6 +812,9 @@ func _process(delta: float) -> void:
 
 	if queue.is_empty():
 		build_timer = 0.0
+	elif settlement != null and settlement.contested:
+		## A settlement being fought over builds and trains nothing.
+		pass
 	else:
 		build_timer += delta * _production_speed()
 		if build_timer >= queue[0].build_time:

@@ -6,7 +6,6 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
 
-[ext_resource type="Texture2D" path="res://assets/art/Banners/spearmen.png" id="banner_tex"]
 
 [sub_resource type="Resource" id="ResourceCost_spearman_wood"]
 script = ExtResource("3_cost_script")
@@ -37,4 +36,3 @@ damage_type = 1
 armor_class = 2
 unit_category = 1
 can_brace = true
-regiment_banner = ExtResource("banner_tex")

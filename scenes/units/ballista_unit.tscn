@@ -8,7 +8,6 @@
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="6_gold"]
 [ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="7_crew"]
 
-[ext_resource type="Texture2D" path="res://assets/art/Banners/siege.png" id="banner_tex"]
 
 [sub_resource type="Resource" id="ResourceCost_ballista_wood"]
 script = ExtResource("4_cost_script")
@@ -57,4 +56,3 @@ projectile_scene = ExtResource("3_projectile")
 projectile_speed = 24.0
 damage_type = 3
 armor_class = 5
-regiment_banner = ExtResource("banner_tex")

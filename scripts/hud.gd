@@ -105,6 +105,10 @@ var _population_cap: int = 0
 ## the player has actually built something that grants pact room.
 var _pact_population_used: int = 0
 var _pact_population_cap: int = 0
+## Realm only: what this player's army eats a minute (see RealmEconomy).
+var _food_upkeep: int = 0
+## The army's cards along the bottom of the screen.
+var unit_cards: UiUnitCardStrip
 
 ## resource_name -> true while it's one of the ones flashing red because the
 ## last attempted purchase couldn't afford it — see flash_missing_resources.
@@ -119,11 +123,15 @@ const RESOURCE_FLASH_INTERVAL: float = 0.15
 func setup() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	Population.changed.connect(_on_population_changed)
+	main.realm_economy.upkeep_changed.connect(_on_upkeep_changed)
 	## An unlock is granted at one building and opens buttons on another, so
 	## the selected building's own item_completed never fires for it.
 	UnitUnlocks.unlocks_changed.connect(_on_unlocks_changed)
 	portrait_frame.add_theme_stylebox_override("panel",
 			UiStyle.slot_box(UiStyle.LINE_STRONG))
+	unit_cards = UiUnitCardStrip.new()
+	unit_cards.setup(main)
+	main.get_node(^"UI").add_child(unit_cards)
 	_build_race_tabs()
 	_populate_construction_buttons()
 
@@ -261,12 +269,24 @@ func _on_population_changed(used: int, cap: int, pool: int) -> void:
 		_population_cap = cap
 	_update_resource_label()
 
+func _on_upkeep_changed(food_per_minute: int, _gold_per_minute: int, _starving: bool) -> void:
+	_food_upkeep = food_per_minute
+	_update_resource_label()
+
 func _update_resource_label() -> void:
 	var entries: Array = []
+	var realm := MatchRules.realm()
 	for resource_type in Main.DEBUG_RESOURCE_TYPES:
 		## Favour is the Conquest score and nothing else: it's shown on the
 		## ConquestHud's score bars, never spent, so it has no place here.
 		if resource_type == Main.FAVOUR_RESOURCE:
+			continue
+		## Food only exists in a Realm match, where it carries the army's upkeep.
+		if resource_type == RealmEconomy.FOOD:
+			if realm:
+				var food := _stockpile_entry(resource_type.display_name, false)
+				food["rate"] = -_food_upkeep
+				entries.append(food)
 			continue
 		entries.append(_stockpile_entry(resource_type.display_name, false))
 	## An allied race's currency joins the bar only once its Pact is made --
@@ -276,8 +296,10 @@ func _update_resource_label() -> void:
 		if currency == null:
 			continue
 		entries.append(_stockpile_entry(currency.display_name, true))
-	entries.append({"name": "Population", "amount": _population_used,
-			"cap": _population_cap, "flash": false, "accent": false})
+	## Realm has no population cap to show (only a ceiling nobody meets).
+	if not realm:
+		entries.append({"name": "Population", "amount": _population_used,
+				"cap": _population_cap, "flash": false, "accent": false})
 	if _pact_population_cap > 0:
 		entries.append({"name": "Pact", "amount": _pact_population_used,
 				"cap": _pact_population_cap, "flash": false, "accent": true})
@@ -434,6 +456,14 @@ func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) 
 		if not building.synced_pact_name.is_empty():
 			return false
 		return item.pact_race != null and not Pacts.has_pact(building.owner_peer_id, item.pact_race.race_name)
+	if item.kind == ProducibleItem.Kind.SLOT:
+		return building.settlement != null and building.settlement.slot_open(item) \
+				and building.settlement.choice_peer != building.owner_peer_id
+	if item.kind == ProducibleItem.Kind.CHOICE:
+		return building.settlement != null and building.settlement.choice_peer == building.owner_peer_id
+	if item.kind == ProducibleItem.Kind.TIER:
+		return building.settlement != null and building.settlement.tier == item.tier_to - 1 \
+				and building.settlement.choice_peer != building.owner_peer_id
 	if item.kind != ProducibleItem.Kind.UPGRADE:
 		return true
 	if building._purchased_upgrades.has(item):
@@ -482,7 +512,7 @@ func refresh_command_panel() -> void:
 
 func _refresh_resource_info() -> void:
 	if _info_resource_label and is_instance_valid(main.selected_resource):
-		_info_resource_label.text = "%d remaining" % main.selected_resource.amount_remaining
+		_info_resource_label.text = "%d remaining" % main.selected_resource.display_remaining()
 
 func _populate_construction_buttons() -> void:
 	var building_types: Array[BuildingType] = current_construction_types()

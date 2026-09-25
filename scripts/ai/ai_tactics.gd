@@ -177,8 +177,9 @@ func _update_cavalry() -> void:
 			if _flat(centre, _cav_point) <= FLANK_ARRIVE_RADIUS or elapsed >= WHEEL_TIMEOUT:
 				_approach(_cav_target)
 
-## Nearest by distance, weighted toward what cavalry is for (archers, siege)
-## and away from what it isn't (spearmen, other cavalry).
+## Nearest by distance, weighted toward what cavalry is for (archers, siege,
+## men already running) and away from what it isn't (spearmen, other cavalry).
+const ROUTER_PREFERENCE: float = -12.0
 func _pick_cavalry_target(enemies: Array[Unit]) -> Unit:
 	var from := ai.group_centroid(_cavalry)
 	var best: Unit = null
@@ -194,6 +195,9 @@ func _pick_cavalry_target(enemies: Array[Unit]) -> Unit:
 				score += CAVALRY_AVOIDANCE
 		if enemy.can_brace:
 			score += SPEAR_AVOIDANCE
+		## Running men take extra damage and can't turn to fight: ride them down.
+		if enemy.is_routing():
+			score += ROUTER_PREFERENCE
 		if score < best_score:
 			best = enemy
 			best_score = score

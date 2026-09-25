@@ -103,6 +103,15 @@ func play_harvest_squash() -> void:
 func can_be_gathered() -> bool:
 	return not requires_building_on_top or has_required_building
 
+## Whether working this node gives anything right now. A farm field is worked
+## through its whole cycle but only yields when ripe (see FarmField).
+func is_yielding() -> bool:
+	return true
+
+## What the info panel shows as left in this node.
+func display_remaining() -> int:
+	return amount_remaining
+
 func can_accept_gatherer() -> bool:
 	return max_gatherers < 0 or gatherers.size() < max_gatherers
 

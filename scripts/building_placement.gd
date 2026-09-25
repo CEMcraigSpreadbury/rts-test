@@ -175,6 +175,14 @@ func _start_placement(building_type: BuildingType) -> void:
 		## single mouse-following ghost — see _update_wall_drag/_update_gate_ghost.
 		return
 	placement_ghost = _build_ghost(building_type.scene)
+	if building_type.companion_scene != null:
+		for offset in building_type.companion_offsets:
+			var companion: Node3D = building_type.companion_scene.instantiate()
+			companion.set_script(null)
+			_strip_ghost_children(companion)
+			_collect_ghost_surfaces(companion)
+			companion.position = offset
+			placement_ghost.add_child(companion)
 	add_child(placement_ghost)
 
 ## Builds a translucent, script-less, collision-less copy of a building's
@@ -260,7 +268,8 @@ func _update_placement_ghost() -> void:
 	var on_flat_ground: bool = _footprint_is_flat(ghost_position, placing_type.footprint_radius)
 	placement_valid = on_flat_ground \
 			and _is_placement_valid(ghost_position, placing_type.footprint_radius) \
-			and _has_nearby_host(ghost_position, placing_type, main.my_peer_id())
+			and _has_nearby_host(ghost_position, placing_type, main.my_peer_id()) \
+			and _companions_fit(ghost_position, placing_type)
 	_set_ghost_valid(placement_valid)
 
 ## Samples the footprint's center plus FOOTPRINT_SAMPLE_COUNT points around
@@ -515,6 +524,9 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 					func(): Population.add_cap(sender_id, -building.population_capacity, building.population_pool), CONNECT_ONE_SHOT
 				)
 			, CONNECT_ONE_SHOT)
+		if building_type.companion_scene != null:
+			building.construction_finished.connect(
+					_spawn_companions.bind(building, building_type, sender_id), CONNECT_ONE_SHOT)
 		if deposit:
 			building.construction_finished.connect(func():
 				deposit.has_required_building = true
@@ -532,7 +544,40 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 func can_place_at(pos: Vector3, building_type: BuildingType, peer_id: int) -> bool:
 	return _footprint_is_flat(pos, building_type.footprint_radius) \
 			and _is_placement_valid(pos, building_type.footprint_radius) \
-			and _has_nearby_host(pos, building_type, peer_id)
+			and _has_nearby_host(pos, building_type, peer_id) \
+			and _companions_fit(pos, building_type)
+
+## Every companion (a Mill's fields) has flat, clear ground of its own.
+func _companions_fit(pos: Vector3, building_type: BuildingType) -> bool:
+	if building_type.companion_scene == null:
+		return true
+	for offset in building_type.companion_offsets:
+		var at: Vector3 = pos + offset
+		if not _footprint_is_flat(at, building_type.companion_radius) \
+				or not _is_placement_valid(at, building_type.companion_radius):
+			return false
+	return true
+
+## Host only, when a building with companions finishes: lays them out, and
+## takes them away again with the building. A spot that has been built on
+## since the building was placed is simply left empty.
+func _spawn_companions(building: ProductionBuilding, building_type: BuildingType, peer_id: int) -> void:
+	var spawned: Array[Node] = []
+	for offset in building_type.companion_offsets:
+		var at: Vector3 = grounded_position(building.global_position + offset, building_type.companion_radius)
+		if not _is_placement_valid(at, building_type.companion_radius):
+			continue
+		spawned.append(main.building_spawner.spawn({
+			"scene_path": building_type.companion_scene.resource_path,
+			"peer_id": peer_id,
+			"position": at,
+			"tint": main.get_team_tint(peer_id),
+		}))
+	building.destroyed.connect(func():
+		for node in spawned:
+			if is_instance_valid(node):
+				node.queue_free()
+	, CONNECT_ONE_SHOT)
 
 func is_matching_deposit(node: Node, building_type: BuildingType) -> bool:
 	return _matches_scene(node, building_type.deposit_scene)

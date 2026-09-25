@@ -31,6 +31,9 @@ func _init(p_ai: AiPlayer) -> void:
 	ai = p_ai
 
 func think() -> void:
+	## No Pacts in Realm: races come from their settlements.
+	if MatchRules.realm():
+		return
 	if race == null:
 		var races := Pacts.list_all()
 		if races.is_empty():

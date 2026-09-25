@@ -201,6 +201,7 @@ func generate() -> bool:
 		spawn_positions[i].y = surface_height(Vector2(spawn_positions[i].x, spawn_positions[i].z))
 	_place_objectives()
 	_plan_paths()
+	_plan_roads()
 	_place_base_resources()
 	_place_neutral_resources()
 	_plan_decals()
@@ -534,13 +535,51 @@ func _tier_ring() -> float:
 	return ramp_length + 3.0
 
 func _objective_plateau_half() -> float:
-	return _gen.objective_clear_radius + ramp_length * 0.5 + 2.5 + (_gen.objective_plateau_tiers - 1) * _tier_ring()
+	return _site_clear() + ramp_length * 0.5 + 2.5 + (_gen.objective_plateau_tiers - 1) * _tier_ring()
+
+## --- Settlements (Realm maps, see MapGenerator.settlements_per_player) ---
+## A settlement is placed as an objective with a bigger clearing, never on a
+## plateau, and further from bases; everything below reads these instead of the
+## objective settings so both kinds of map share the one placement path.
+
+func _site_clear() -> float:
+	return _gen.settlement_clear_radius if _gen.is_settlement_map() else _gen.objective_clear_radius
+
+func _on_plateaus() -> bool:
+	return _gen.objectives_on_plateaus and not _gen.is_settlement_map()
+
+func _site_min_base_distance() -> float:
+	return _gen.settlement_min_base_distance if _gen.is_settlement_map() else _gen.objective_min_base_distance
+
+## Where the centre site stands, in the template frame; null without one.
+var _centre_site: Variant = null
+
+## Roads: each base to its nearest settlement, on to the next nearest, and the
+## last to the centre site. Straight dirt shapes like the centre paths, so trees
+## and gold keep off them (_near_path) and the decal pass paints them.
+func _plan_roads() -> void:
+	if not _gen.is_settlement_map() or not _gen.settlement_roads:
+		return
+	for slot in _placement_slots():
+		var copies: Array = slot.copies
+		var at: Vector2 = rot(base_centres[slot.base], -copies[0])
+		var left: Array = _objective_sites.filter(func(site): return site.get("slot_base", -1) == slot.base)
+		while not left.is_empty():
+			var nearest: Dictionary = left[0]
+			for site in left:
+				if (site.pos as Vector2).distance_to(at) < (nearest.pos as Vector2).distance_to(at):
+					nearest = site
+			left.erase(nearest)
+			_paths.append({a = at, b = nearest.pos, width = _gen.road_width, copies = copies})
+			at = nearest.pos
+		if _centre_site is Vector2:
+			_paths.append({a = at, b = _centre_site, width = _gen.road_width, copies = copies})
 
 func _plan_objectives() -> void:
 	var scenes: Array[PackedScene] = []
 	scenes.assign(_gen.objective_scenes.filter(func(s): return s != null))
-	var on_plateau: bool = _gen.objectives_on_plateaus and not imported
-	var footprint: float = _objective_plateau_half() * 1.3 if on_plateau else _gen.objective_clear_radius
+	var on_plateau: bool = _on_plateaus() and not imported
+	var footprint: float = _objective_plateau_half() * 1.3 if on_plateau else _site_clear()
 	var centre_scene: PackedScene = null
 	match _gen.centre_site:
 		MapGenerator.CentreSite.OBJECTIVE:
@@ -557,7 +596,7 @@ func _plan_objectives() -> void:
 			var count: int = 1 if r == 0.0 else maxi(8, int(TAU * r / 3.0))
 			for i in count:
 				var q: Vector2 = Vector2.from_angle(TAU * i / count) * r
-				if _footprint_ok(q, _gen.objective_clear_radius, 1.5, 1):
+				if _footprint_ok(q, _site_clear(), 1.5, 1):
 					found = q
 					break
 			r += 3.0
@@ -567,8 +606,21 @@ func _plan_objectives() -> void:
 			centre = found
 	if centre_scene != null:
 		_objective_sites.append({pos = centre, scene = centre_scene, symmetric = true, footprint = footprint, props = {favour_per_second = _gen.centre_favour_per_second}, copies = [0]})
+		_centre_site = centre
 	var requests: Array[Dictionary] = []
-	if not scenes.is_empty():
+	if _gen.is_settlement_map():
+		## One shuffled race order for everyone: fair, but not the same map
+		## every seed.
+		var order: Array[PackedScene] = []
+		order.assign(_gen.settlement_scenes.filter(func(s): return s != null))
+		for i in range(order.size() - 1, 0, -1):
+			var j: int = _rng.randi_range(0, i)
+			var swap: PackedScene = order[i]
+			order[i] = order[j]
+			order[j] = swap
+		for j in _gen.settlements_per_player:
+			requests.append({scene = order[j % order.size()], props = {}})
+	elif not scenes.is_empty():
 		for j in _gen.objectives_per_player:
 			requests.append({scene = scenes[_rng.randi() % scenes.size()], props = {}})
 	if _gen.shrine_scene != null:
@@ -586,7 +638,7 @@ func _plan_objectives() -> void:
 				var p: Vector2 = _rand_in_sector(0.25, 0.9, slot.base)
 				if edge_distance(rot(p, copies[0])) < footprint + 4.0:
 					continue
-				if not _clear_of_bases(p, _gen.objective_min_base_distance, copies):
+				if not _clear_of_bases(p, _site_min_base_distance(), copies):
 					continue
 				if not _clear_of_sites(p, footprint + 6.0, copies):
 					continue
@@ -594,12 +646,12 @@ func _plan_objectives() -> void:
 					continue
 				## Imported terrain already exists at this point: only take ground
 				## flat enough for the objective's small levelled pad to finish.
-				if imported and not _footprint_ok(p, _gen.objective_clear_radius, 1.2, 2):
+				if imported and not _footprint_ok(p, _site_clear(), 1.2, 2):
 					continue
 				var distance: float = rot(p, copies[0]).distance_to(base_centres[slot.base])
 				if first_distance >= 0.0 and absf(distance - first_distance) > first_distance * OBJECTIVE_DISTANCE_TOLERANCE:
 					continue
-				var site := {pos = p, scene = request.scene, symmetric = false, footprint = footprint, props = request.props, copies = copies}
+				var site := {pos = p, scene = request.scene, symmetric = false, footprint = footprint, props = request.props, copies = copies, slot_base = slot.base}
 				_objective_sites.append(site)
 				added.append(site)
 				if first_distance < 0.0:
@@ -650,7 +702,7 @@ func _roll_steps(tiers: int, allow_valley: bool) -> Array[float]:
 func _plan_features() -> void:
 	if imported:
 		return
-	if _gen.objectives_on_plateaus:
+	if _on_plateaus():
 		var h: float = _objective_plateau_half()
 		for site in _objective_sites:
 			var feature := {centre = site.pos, half = Vector2(h, h), radius = 3.0, angle = _rng.randf() * TAU, symmetric = site.symmetric, steps = _roll_steps(_gen.objective_plateau_tiers, false), copies = site.copies}
@@ -955,7 +1007,7 @@ func _clear_of_objective_pads(p: Vector2, reach: float, copies: Array) -> bool:
 		var q: Vector2 = rot(p, k)
 		for site in _objective_sites:
 			for sk in site.copies:
-				if q.distance_to(rot(site.pos, sk)) < _gen.objective_clear_radius + reach:
+				if q.distance_to(rot(site.pos, sk)) < _site_clear() + reach:
 					return false
 	return true
 
@@ -1184,7 +1236,7 @@ func _flatten_building_ground() -> void:
 func _flatten_objectives() -> void:
 	for site in _objective_sites:
 		for k in site.copies:
-			_flatten(rot(site.pos, k), _gen.objective_clear_radius + 0.5, 2.0)
+			_flatten(rot(site.pos, k), _site_clear() + 0.5, 2.0)
 
 ## Pulls corners within `radius` to the height at `centre`, easing back into
 ## the surrounding terrain over `falloff` metres.
@@ -1269,7 +1321,7 @@ func _flat_pads() -> Array[Vector3]:
 	for site in _objective_sites:
 		for k in site.copies:
 			var p: Vector2 = rot(site.pos, k)
-			pads.append(Vector3(p.x, p.y, _gen.objective_clear_radius + 2.5))
+			pads.append(Vector3(p.x, p.y, _site_clear() + 2.5))
 	return pads
 
 ## 1 inside a pad, easing to 0 over a few metres past its edge.
@@ -1444,13 +1496,13 @@ func _place_objectives() -> void:
 	for site in _objective_sites:
 		var ok: bool = true
 		for k in site.copies:
-			if not _footprint_ok(rot(site.pos, k), _gen.objective_clear_radius, RISE_OBJECTIVE, 0):
+			if not _footprint_ok(rot(site.pos, k), _site_clear(), RISE_OBJECTIVE, 0):
 				ok = false
 		if not ok:
 			push_warning("MapGenerator: an objective lost its flat ground and was skipped.")
 			continue
 		for k in site.copies:
-			_add_body(rot(site.pos, k), _gen.objective_clear_radius, 0.0, _new_group(), false)
+			_add_body(rot(site.pos, k), _site_clear(), 0.0, _new_group(), false)
 		_emit(&"objective", site.scene, site.pos, 0.0, 1.0, site.copies, site.props)
 
 ## Template point around player 0's base (stamping rotates it to the others),
@@ -1760,9 +1812,9 @@ func _plan_decals() -> void:
 	for ramp in _ramps:
 		if ramp.tier == 0:
 			_dirt_shapes.append({a = ramp.entrance, b = ramp.entrance, width = _gen.ramp_width + 2.0, copies = [0]})
-	if not _gen.objectives_on_plateaus:
+	if not _on_plateaus():
 		for site in _objective_sites:
-			_dirt_shapes.append({a = site.pos, b = site.pos, width = _gen.objective_clear_radius * 1.3, copies = site.copies})
+			_dirt_shapes.append({a = site.pos, b = site.pos, width = _site_clear() * 1.3, copies = site.copies})
 	for slot in _placement_slots():
 		var copies: Array = slot.copies
 		for n in _gen.dirt_patches_per_player:

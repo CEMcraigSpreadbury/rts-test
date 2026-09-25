@@ -167,6 +167,8 @@ func _think() -> void:
 	## was reached. Villagers and soldiers take turns being first by how the
 	## army is keeping up (AiProfile.army_per_villager), for the same reason.
 	phase(&"houses", economy.think_houses)
+	phase(&"food", economy.think_food)
+	phase(&"slots", economy.think_slots)
 	phase(&"build order", builder.think)
 	## Early on the economy comes first whatever the army ratio says — soldiers
 	## bought with the wood for villagers 6-10 cost the whole game.
@@ -421,7 +423,7 @@ func _unit_info_for(scene: PackedScene) -> Dictionary:
 	var path: String = scene.resource_path
 	if not _unit_info.has(path):
 		var temp: Unit = scene.instantiate()
-		var costs: Array[ResourceCost] = temp.costs
+		var costs: Array[ResourceCost] = MatchRules.realm_unit_costs(temp.costs, temp.can_gather)
 		_unit_info[path] = {costs = costs, population_cost = temp.population_cost, role = unit_role(temp),
 				strength = float(temp.max_health) * float(temp.attack_damage) / maxf(temp.attack_cooldown, 0.2)}
 		temp.free()

@@ -74,10 +74,12 @@ const FIRST_AI_PEER_ID: int = 2
 ## Index into the lobby's available_maps. Host-owned, like color assignment.
 var map_index: int = 0
 
-enum GameMode { CONQUEST, ANNIHILATION }
-const GAME_MODE_NAMES: Array[String] = ["Conquest", "Annihilation"]
+enum GameMode { CONQUEST, ANNIHILATION, REALM }
+const GAME_MODE_NAMES: Array[String] = ["Conquest", "Annihilation", "Realm"]
 ## Host-owned, like map_index. Conquest: first to favour_target Favour wins
 ## (destroying every enemy base still wins too). Annihilation: bases only.
+## Realm: Conquest's victory rules with the Realm economy (MatchRules.realm) —
+## food, farms and upkeep instead of houses and a population cap.
 var game_mode: GameMode = GameMode.CONQUEST
 ## 0 = the chosen map's default (see MapInfo.default_favour_target). Reset to
 ## 0 whenever the map changes, so a target picked for one map never silently
@@ -672,6 +674,10 @@ func _rpc_map_changed(index: int) -> void:
 ## --- Game mode + Favour target (lobby only) ---
 ##
 ## Same host-owned, clients-mirror shape as map selection above.
+
+## Whether `mode` (a GameMode value) is won by racing to a Favour target.
+static func scores_favour(mode: int) -> bool:
+	return mode == GameMode.CONQUEST or mode == GameMode.REALM
 
 ## `mode` is a GameMode value — typed int so other scripts can pass one (an
 ## autoload's enum isn't usable as a type outside it).
