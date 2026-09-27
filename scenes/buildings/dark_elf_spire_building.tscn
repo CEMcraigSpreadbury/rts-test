@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://5axkpkuuhrpw" path="res://scripts/production_building.gd" id="1_building_script"]
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
-[ext_resource type="PackedScene" uid="uid://bxk813pfiexl4" path="res://assets/art/Models/Tower Model/Town Center.gltf" id="7_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Races/DarkElves/Spire.glb" id="7_model"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="10_gold"]
@@ -46,7 +46,7 @@ build_time = 10.0
 unit_scene = ExtResource("20_2")
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
-size = Vector3(2.8, 2, 3.0)
+size = Vector3(3.4, 2, 3.0)
 
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_placement"]
 emission_shape = 1
@@ -152,7 +152,7 @@ shape = SubResource("BoxShape3D_body")
 [node name="NavigationObstacle3D" type="NavigationObstacle3D" parent="." unique_id=1180000503]
 avoidance_enabled = false
 radius = 2.0
-vertices = PackedVector3Array(-1.4, 0, 1.5, 1.4, 0, 1.5, 1.4, 0, -1.5, -1.4, 0, -1.5)
+vertices = PackedVector3Array(-1.7, 0, 1.5, 1.7, 0, 1.5, 1.7, 0, -1.5, -1.7, 0, -1.5)
 
 [node name="SelectAudioPlayer" type="AudioStreamPlayer" parent="." unique_id=1180000504]
 bus = &"SFX"

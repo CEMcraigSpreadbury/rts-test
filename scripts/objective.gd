@@ -775,6 +775,15 @@ func _hop_house(house: Node3D, delay: float) -> void:
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 func _make_house(roof_tint: Color) -> Node3D:
+	var model := RaceModels.cottage(race_name)
+	if model != null:
+		for mesh in model.find_children("*", "MeshInstance3D", true, false):
+			var mi := mesh as MeshInstance3D
+			for i in mi.mesh.get_surface_count():
+				mi.set_surface_override_material(i, TeamColorMaterial.build(mi.get_active_material(i), roof_tint, TeamColorMaterial.TEAM_SHADER))
+		## Hidden until explored, like the point's own buildings.
+		model.add_to_group(&"fog_static_props")
+		return model
 	if _house_mesh_body == null:
 		_house_mesh_body = BoxMesh.new()
 		_house_mesh_body.size = Vector3(1.6, 1.1, 1.3)
@@ -1107,6 +1116,10 @@ func resolve_choice(choice: int) -> void:
 	match choice:
 		Choice.RAZE:
 			ResourceStockpile.add(chooser, GOLD_RESOURCE, RAZE_GOLD[_tier_before_capture])
+			var main := get_tree().current_scene
+			if "feedback" in main:
+				main.feedback.relay_sfx(&"torch", global_position + Vector3(0.0, 1.0, 0.0))
+				main.feedback.relay_sfx(&"chest", global_position + Vector3(0.0, 1.0, 0.0))
 			for building in _slot_buildings:
 				if is_instance_valid(building) and not building.is_destroyed:
 					building.take_damage(building.max_health * 10, null)
@@ -1266,6 +1279,8 @@ func _build_walls() -> void:
 			"rotation": Vector3(0.0, -(angle + PI * 0.5), 0.0),
 			"tint": main.get_team_tint(owner_peer_id),
 			"drop_in_delay": WALL_DROP_STAGGER * float(i),
+			"model_race": race_name,
+			"model_name": RaceModels.WALL_GATE if is_gate else RaceModels.WALL_SEGMENT,
 		})
 		piece.settlement = self
 		piece.set_meta(&"wall_piece", true)
@@ -1309,6 +1324,9 @@ func _rpc_doors(paths: Array[NodePath], shut: bool) -> void:
 ## A door is a plank wall between a gate's posts: seen and solid while shut,
 ## gone while open. Built the first time it is needed, on every peer.
 func _apply_doors(paths: Array[NodePath], shut: bool) -> void:
+	if not paths.is_empty():
+		var first := get_node_or_null(paths[0]) as Node3D
+		Sfx.play_at(&"gate_close" if shut else &"gate_open", first.global_position if first != null else global_position)
 	for path in paths:
 		var gate := get_node_or_null(path) as Node3D
 		if gate == null:

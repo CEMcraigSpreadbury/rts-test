@@ -8,17 +8,14 @@
 [ext_resource type="Script" path="res://scripts/pact_generator.gd" id="7_generator"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="8_income"]
 [ext_resource type="AudioStream" uid="uid://b2b2qsrp7ikag" path="res://assets/sfx/Facilities/Market_2.wav" id="5_ej24r"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Fantasy SFX/SFX/Chopping and Mining/chop 1.wav" id="fsfx_0"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Fantasy SFX/SFX/Chopping and Mining/chop 3.wav" id="fsfx_1"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Lumberyard.glb" id="90_model"]
 
 [sub_resource type="Resource" id="ResourceCost_storehouse"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 50
-
-[sub_resource type="BoxMesh" id="BoxMesh_body"]
-size = Vector3(2.4, 1.3, 2.4)
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_body"]
-albedo_color = Color(0.42, 0.52, 0.3, 1)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(2.4, 1.3, 2.4)
@@ -112,13 +109,10 @@ script = ExtResource("1_building_script")
 building_name = "Lumberyard"
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_storehouse")])
 can_rally = false
-on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResource("5_ej24r")])
+on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResource("5_ej24r"), ExtResource("fsfx_0"), ExtResource("fsfx_1")])
 max_health = 80
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
-mesh = SubResource("BoxMesh_body")
-surface_material_override/0 = SubResource("StandardMaterial3D_body")
+[node name="Model" parent="." instance=ExtResource("90_model")]
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.65, 0)
@@ -153,7 +147,7 @@ process_material = SubResource("ParticleProcessMaterial_construction")
 draw_pass_1 = SubResource("QuadMesh_dust")
 
 [node name="HealthBar" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
 visible = false
 
 [node name="Background" type="Sprite3D" parent="HealthBar"]
