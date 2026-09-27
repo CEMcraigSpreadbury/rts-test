@@ -4,8 +4,8 @@ extends Node3D
 ## of heavy nodes.
 ##
 ## A tree used to be a StaticBody3D with a collision cylinder, a navigation
-## obstacle, a sound player and a model holding a billboard sprite — about six
-## nodes, a physics body and a sprite each. On a 1 km map that was 8,000 trees
+## obstacle, a sound player and a model — about six
+## nodes and a physics body each. On a 1 km map that was 8,000 trees
 ## and 50,000 nodes, and every one of them was rescanned whenever anything on
 ## the map changed. Now a tree keeps only its Gatherable node (units, the AI
 ## and multiplayer still refer to it by path), and this node does the rest:
@@ -37,12 +37,6 @@ const FOG_CHECKS_PER_UPDATE: int = 2000
 ## The harvest squash (see Gatherable.play_harvest_squash).
 const SQUASH_SCALE: Vector3 = Vector3(1.07, 0.88, 1.07)
 const SQUASH_SECONDS: float = 0.4
-const BILLBOARD_SHADER: Shader = preload("res://shaders/forest_billboard.gdshader")
-## Billboards blend their soft edges, so each chunk draws far to near: sorted
-## along the camera's flat facing, which panning never changes — only turning
-## the camera by more than this re-sorts, a few chunks a frame.
-const SORT_ANGLE: float = deg_to_rad(4.0)
-const SORTS_PER_FRAME: int = 6
 
 ## The forest of the map being played. Set by attach().
 static var active: Forest = null
@@ -53,8 +47,6 @@ class Entry:
 	## Where the model stood (the tree's model child, or the scenery node).
 	var xform: Transform3D
 	var position: Vector3
-	## Sheet region in UVs, w negative when flipped (see forest_billboard).
-	var region: Color
 	var model_path: String = ""
 	var chunk: Vector2i
 	var index: int = -1
@@ -64,7 +56,6 @@ class Entry:
 
 class Chunk:
 	var entries: Array[Entry] = []
-	var billboards: MultiMeshInstance3D = null
 	## model scene path -> Array[MultiMeshInstance3D], one per mesh in it.
 	var models: Dictionary = {}
 	var dirty: bool = true
@@ -76,15 +67,9 @@ var _fog_pending: Array[Entry] = []
 var _fog_started: bool = false
 var _fog_cursor: int = 0
 var _squashing: Array[Entry] = []
-var _billboards_on: bool = true
-var _billboard_mesh: ArrayMesh = null
-var _billboard_material: ShaderMaterial = null
 ## model scene path -> Array of [mesh with its materials set, local transform].
 var _model_parts: Dictionary = {}
 var _select_player: AudioStreamPlayer = null
-## The flat camera facing chunks are sorted for, and the chunks still to do.
-var _sort_facing: Vector2 = Vector2.ZERO
-var _sort_queue: Array[Vector2i] = []
 
 ## The forest that trees under `node`'s map register with. One per map root,
 ## made on first use: trees ready before Main does, and attach() then puts it
@@ -116,15 +101,6 @@ static func attach(root: Node) -> Forest:
 		root.add_child(forest)
 	active = forest
 	return forest
-
-func _init() -> void:
-	_billboards_on = TreeBillboard.enabled
-	_billboard_mesh = _make_quad()
-	_billboard_material = ShaderMaterial.new()
-	_billboard_material.shader = BILLBOARD_SHADER
-	_billboard_material.set_shader_parameter(&"sheet", TreeBillboard.SHEET)
-	_billboard_material.set_shader_parameter(&"pixel_size", TreeBillboard.PIXEL_SIZE)
-	_billboard_material.set_shader_parameter(&"sink", TreeBillboard.SINK)
 
 func _ready() -> void:
 	_select_player = AudioStreamPlayer.new()
@@ -160,15 +136,6 @@ func add_decoration(model: Node3D) -> void:
 
 func _add(entry: Entry) -> void:
 	entry.position = entry.xform.origin
-	## Same seeded pick TreeBillboard made per sprite, so every tree keeps the
-	## picture it had (and every peer agrees).
-	var rng := RandomNumberGenerator.new()
-	rng.seed = hash(Vector2i(roundi(entry.position.x * 10.0), roundi(entry.position.z * 10.0)))
-	var region: Rect2 = TreeBillboard.REGIONS[rng.randi() % TreeBillboard.REGIONS.size()]
-	var flip: bool = rng.randi() % 2 == 0
-	var sheet := Vector2(TreeBillboard.SHEET.get_size())
-	entry.region = Color(region.position.x / sheet.x, region.position.y / sheet.y,
-			(region.size.x / sheet.x) * (-1.0 if flip else 1.0), region.size.y / sheet.y)
 	entry.chunk = Vector2i(floori(entry.position.x / CHUNK_SIZE), floori(entry.position.z / CHUNK_SIZE))
 	if not _chunks.has(entry.chunk):
 		_chunks[entry.chunk] = Chunk.new()
@@ -337,14 +304,7 @@ func update_fog(fog: FogOfWar) -> void:
 
 ## --- Drawing ---
 
-## Billboards or 3D models (TreeBillboard's F10 test toggle).
-func set_billboards(on: bool) -> void:
-	_billboards_on = on
-	for chunk: Chunk in _chunks.values():
-		chunk.dirty = true
-
 func _process(delta: float) -> void:
-	_sort_for_camera()
 	for key in _chunks:
 		var chunk: Chunk = _chunks[key]
 		if chunk.dirty:
@@ -359,65 +319,29 @@ func _process(delta: float) -> void:
 		_refresh_instance(entry)
 		i -= 1
 
-func _sort_for_camera() -> void:
-	var camera := get_viewport().get_camera_3d()
-	if camera == null:
-		return
-	var forward := Vector2(-camera.global_basis.z.x, -camera.global_basis.z.z)
-	if forward.length_squared() < 0.0001:
-		return
-	forward = forward.normalized()
-	if _sort_facing == Vector2.ZERO or absf(_sort_facing.angle_to(forward)) > SORT_ANGLE:
-		_sort_facing = forward
-		_sort_queue.assign(_chunks.keys())
-	for n in mini(SORTS_PER_FRAME, _sort_queue.size()):
-		var chunk: Chunk = _chunks.get(_sort_queue.pop_back())
-		if chunk != null:
-			_sort_chunk(chunk)
-
-## Far first, so nearer trees blend over them.
-func _sort_chunk(chunk: Chunk) -> void:
-	var facing := _sort_facing
-	chunk.entries.sort_custom(func(a: Entry, b: Entry) -> bool:
-		return a.position.x * facing.x + a.position.z * facing.y > b.position.x * facing.x + b.position.z * facing.y)
-	for i in chunk.entries.size():
-		chunk.entries[i].index = i
-	chunk.dirty = true
-
 func _build_chunk(key: Vector2i, chunk: Chunk) -> void:
 	chunk.dirty = false
 	var aabb := _chunk_aabb(key, chunk)
-	if _billboards_on:
-		if chunk.billboards == null:
-			chunk.billboards = _make_instance(_billboard_mesh, chunk.entries.size(), true, aabb)
-			chunk.billboards.material_override = _billboard_material
-		_fit(chunk.billboards, chunk.entries.size(), aabb)
-		chunk.billboards.visible = true
-	elif chunk.billboards != null:
-		chunk.billboards.visible = false
 	for path in chunk.models:
 		for mmi: MultiMeshInstance3D in chunk.models[path]:
 			_fit(mmi, chunk.entries.size(), aabb)
-			mmi.visible = not _billboards_on
-	if not _billboards_on:
-		var paths: Dictionary = {}
-		for entry in chunk.entries:
-			if not entry.model_path.is_empty():
-				paths[entry.model_path] = true
-		for path in paths:
-			if chunk.models.has(path):
-				continue
-			var list: Array = []
-			for part in _parts_for(path):
-				list.append(_make_instance(part[0], chunk.entries.size(), false, aabb))
-			chunk.models[path] = list
+	var paths: Dictionary = {}
+	for entry in chunk.entries:
+		if not entry.model_path.is_empty():
+			paths[entry.model_path] = true
+	for path in paths:
+		if chunk.models.has(path):
+			continue
+		var list: Array = []
+		for part in _parts_for(path):
+			list.append(_make_instance(part[0], chunk.entries.size(), aabb))
+		chunk.models[path] = list
 	for entry in chunk.entries:
 		_refresh_instance(entry)
 
-func _make_instance(mesh: Mesh, count: int, custom: bool, aabb: AABB) -> MultiMeshInstance3D:
+func _make_instance(mesh: Mesh, count: int, aabb: AABB) -> MultiMeshInstance3D:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_custom_data = custom
 	multimesh.mesh = mesh
 	multimesh.instance_count = count
 	var mmi := MultiMeshInstance3D.new()
@@ -433,7 +357,7 @@ static func _fit(mmi: MultiMeshInstance3D, count: int, aabb: AABB) -> void:
 		mmi.custom_aabb = aabb
 
 ## Writes `entry`'s instance in every multimesh of its chunk: its place (or a
-## zero basis when felled or fogged), squashed if mid-squash, and its region.
+## zero basis when felled or fogged), squashed if mid-squash.
 func _refresh_instance(entry: Entry) -> void:
 	var chunk: Chunk = _chunks[entry.chunk]
 	var xform: Transform3D = entry.xform
@@ -445,9 +369,6 @@ func _refresh_instance(entry: Entry) -> void:
 		xform.basis = xform.basis * Basis.from_scale(scale)
 	if chunk.dirty:
 		return
-	if chunk.billboards != null:
-		chunk.billboards.multimesh.set_instance_transform(entry.index, xform)
-		chunk.billboards.multimesh.set_instance_custom_data(entry.index, entry.region)
 	for path in chunk.models:
 		var parts: Array = _parts_for(path)
 		var list: Array = chunk.models[path]
@@ -455,8 +376,8 @@ func _refresh_instance(entry: Entry) -> void:
 			var part_xform: Transform3D = xform * parts[p][1] if path == entry.model_path else Transform3D(Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO), xform.origin)
 			(list[p] as MultiMeshInstance3D).multimesh.set_instance_transform(entry.index, part_xform)
 
-## Bounds that hold every billboard in the chunk whichever way the camera
-## looks: MultiMesh would size them off the unit quad otherwise.
+## Bounds that hold every tree in the chunk: MultiMesh would size them off a
+## single mesh otherwise.
 func _chunk_aabb(key: Vector2i, chunk: Chunk) -> AABB:
 	var low: float = INF
 	var high: float = -INF
@@ -495,15 +416,3 @@ func _collect_parts(node: Node, to_root: Transform3D, parts: Array, is_root: boo
 		parts.append([mesh, here])
 	for child in node.get_children():
 		_collect_parts(child, here, parts, false)
-
-static func _make_quad() -> ArrayMesh:
-	var arrays: Array = []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([
-		Vector3(-0.5, 0.0, 0.0), Vector3(0.5, 0.0, 0.0), Vector3(0.5, 1.0, 0.0), Vector3(-0.5, 1.0, 0.0)])
-	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK])
-	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)])
-	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 2, 1, 0, 3, 2])
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
