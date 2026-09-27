@@ -326,6 +326,7 @@ var realm_economy: RealmEconomy
 var morale: Morale
 var lords: Lords
 var wildlife: Wildlife
+var race_traits: RaceTraits
 var quests: QuestRunner
 
 ## Components are created here rather than in _ready(): Objectives are
@@ -637,6 +638,11 @@ func _add_components() -> void:
 	wildlife.main = self
 	wildlife.name = "Wildlife"
 	add_child(wildlife)
+
+	race_traits = RaceTraits.new()
+	race_traits.main = self
+	race_traits.name = "RaceTraits"
+	add_child(race_traits)
 
 	quests = QuestRunner.new()
 	quests.main = self
@@ -1001,6 +1007,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
 	## After Unit._ready has set its health, so research raises it from there.
 	unit.ready.connect(research.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
+	unit.ready.connect(race_traits.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
 	return unit
 
 ## Hand-placed buildings (currently just Objective guards' buildings) never
@@ -1693,7 +1700,16 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	## below, not just the first — a pack that walked off one body at a time
 	## was the whole point of training them as a litter.
 	var litter: Array[Unit] = [unit]
-	for i in range(1, maxi(item.spawn_count, 1)):
+	var bodies: int = maxi(item.spawn_count, 1)
+	## Bigger Litters: the extra gnolls were never reserved at enqueue, so each
+	## comes only if the pool still has room for it.
+	for _extra in RaceTraits.extra_bodies(building.owner_peer_id, item):
+		var pool := item.get_population_pool()
+		if not Population.has_room(building.owner_peer_id, item.get_population_cost(), pool):
+			break
+		Population.reserve(building.owner_peer_id, item.get_population_cost(), pool)
+		bodies += 1
+	for i in range(1, bodies):
 		var litter_pos := spawn_pos + Vector3(randf_range(-1.6, 1.6), 0.0, randf_range(-1.6, 1.6))
 		var mate: Unit = unit_spawner.spawn({
 			"scene_path": item.unit_scene.resource_path,

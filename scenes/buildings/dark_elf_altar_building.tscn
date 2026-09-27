@@ -23,6 +23,7 @@ amount = 100
 [sub_resource type="Resource" id="ProducibleItem_sacrifice"]
 script = ExtResource("3_item_script")
 item_name = "Sacrifice"
+description = "Kills your cheapest unit standing at the Altar for 12 souls."
 kind = 3
 build_time = 5.0
 sacrifice_payout = 12

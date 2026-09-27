@@ -276,6 +276,15 @@ func units_in_circle(centre: Vector3, radius: float) -> Array[Unit]:
 			found.append(_units_by_id[id])
 	return found
 
+## After an upgrade changes a registered unit's reach, sight or attack speed.
+func refresh_unit_stats(unit: Unit) -> void:
+	if unit.sim_id < 0:
+		return
+	if unit.can_fight:
+		sim.set_unit_combat(unit.sim_id, unit.attack_range, unit.aggro_range, unit.projectile_scene != null)
+	sim.set_unit_vision(unit.sim_id, unit.vision_range)
+	sim.set_unit_cooldown(unit.sim_id, unit.attack_cooldown)
+
 ## Registers `unit` with the sim; -1 on a client or before the grid exists.
 func register_unit(unit: Unit) -> int:
 	if not _ready_for_units:

@@ -34,6 +34,7 @@ amount = 60
 [sub_resource type="Resource" id="ProducibleItem_pact_gnolls"]
 script = ExtResource("3_item_script")
 item_name = "Pact: Gnolls"
+description = "Allies with the Gnolls: cheap litters that grow braver in numbers, paid in meat."
 kind = 2
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_pact_gold"), SubResource("ResourceCost_pact_wood")])
@@ -42,6 +43,7 @@ pact_race = ExtResource("20_gnolls")
 [sub_resource type="Resource" id="ProducibleItem_pact_dark_elves"]
 script = ExtResource("3_item_script")
 item_name = "Pact: Dark Elves"
+description = "Allies with the Dark Elves: poison and killing magic, paid in souls."
 kind = 2
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_pact_gold"), SubResource("ResourceCost_pact_wood")])
@@ -50,6 +52,7 @@ pact_race = ExtResource("21_dark_elves")
 [sub_resource type="Resource" id="ProducibleItem_pact_star_wanderers"]
 script = ExtResource("3_item_script")
 item_name = "Pact: Star Wanderers"
+description = "Allies with the Star Wanderers: few, tough and self-healing, paid in starlight."
 kind = 2
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_pact_gold"), SubResource("ResourceCost_pact_wood")])

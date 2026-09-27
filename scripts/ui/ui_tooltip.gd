@@ -1,14 +1,16 @@
 class_name UiTooltip
 extends VBoxContainer
-## Contents of a Forged Brass tooltip: a name, and the costs if the thing has
-## any. No descriptive copy -- a tooltip states what something is and what it
-## takes, never what to do with it.
+## Contents of a Forged Brass tooltip: a name, a one-sentence description for
+## buildings and upgrades, and the costs if the thing has any.
 ##
 ## It draws no background of its own. Godot wraps a custom tooltip in a
 ## PopupPanel, and the theme's TooltipPanel style supplies the opaque brass
 ## surface, so the popup and the panel can never drift apart.
 
-static func build(display_name: String, costs: Array = [], hotkey: String = "") -> UiTooltip:
+## How wide a description may run before it wraps.
+const DESCRIPTION_WIDTH: float = 280.0
+
+static func build(display_name: String, costs: Array = [], hotkey: String = "", description: String = "") -> UiTooltip:
 	var tip := UiTooltip.new()
 	tip.add_theme_constant_override("separation", UiStyle.SPACE_S)
 
@@ -18,6 +20,16 @@ static func build(display_name: String, costs: Array = [], hotkey: String = "") 
 	title.add_theme_font_size_override("font_size", UiStyle.SIZE_TOOLTIP_NAME)
 	title.add_theme_color_override("font_color", UiStyle.INK)
 	tip.add_child(title)
+
+	if not description.is_empty():
+		var text := Label.new()
+		text.text = description
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.custom_minimum_size = Vector2(DESCRIPTION_WIDTH, 0.0)
+		text.add_theme_font_override("font", UiStyle.font_prose())
+		text.add_theme_font_size_override("font_size", UiStyle.SIZE_LABEL)
+		text.add_theme_color_override("font_color", UiStyle.DIM)
+		tip.add_child(text)
 
 	if not costs.is_empty() or not hotkey.is_empty():
 		tip.add_child(SectionRule.new())

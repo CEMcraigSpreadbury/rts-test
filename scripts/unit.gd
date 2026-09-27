@@ -1194,6 +1194,42 @@ var army_lord: int = -1:
 ## refreshed by Lords every half second.
 var lord_damage: float = 0.0
 var lord_armor: int = 0
+
+## --- People (see RaceTraits) ---
+## Set on every peer as the unit spawns, then raised by its owner's upgrades.
+## Only the host reads the combat ones.
+var race_name: String = ""
+## RealmRoster.Kind, or -1.
+var race_kind: int = -1
+var race_armor: int = 0
+## Starlit: this much armour at full night, scaled by how dark it is -- or all
+## of it, all day, with race_night_always.
+var race_night_armor: int = 0
+var race_night_always: bool = false
+## Less damage taken while standing in a block (Drilled), and more again from
+## arrows and bolts (Shield Wall).
+var race_block_guard: float = 0.0
+var race_pierce_guard: float = 0.0
+## Cruelty: more damage against a target below RaceTraits.WOUNDED_FRACTION.
+var race_wounded_bonus: float = 0.0
+var race_lifesteal: float = 0.0
+## Bloodrage: attack speed gained in proportion to health lost, up to this.
+var race_bloodrage: float = 0.0
+## Blood Frenzy: attack speed while below RaceTraits.WOUNDED_FRACTION.
+var race_frenzy: float = 0.0
+## Health per enemy death nearby (RaceTraits.on_death).
+var race_carrion_heal: int = 0
+## Health a second out of combat (RaceTraits._tick_regeneration).
+var race_regen: float = 0.0
+var race_on_hit: Ability = null
+## Of a shot's damage, dealt again to enemies around what it hits.
+var race_splash: float = 0.0
+var race_charge_bonus: float = 0.0
+var race_charge_heal: int = 0
+var race_fast_brace: bool = false
+## Pack Courage's reach (a multiplier) and peak (added to the cap).
+var race_pack_radius: float = 1.0
+var race_pack_max: float = 0.0
 var lord_morale: float = 0.0
 
 ## The sim block (formation) he marches in when it has a few men in it and he
@@ -2393,7 +2429,7 @@ func _update_brace(delta: float) -> void:
 ## (the same test as flank damage — idle, holding, or fighting from its place),
 ## and not reeling from a stun.
 func is_braced() -> bool:
-	return can_brace and _still_time >= BRACE_TIME and _stun_remaining <= 0.0 \
+	return can_brace and _still_time >= BRACE_TIME * (0.5 if race_fast_brace else 1.0) and _stun_remaining <= 0.0 \
 			and _stands_in_block()
 
 ## Whether `charger` runs onto this unit's braced spears: braced, and the
@@ -2411,7 +2447,8 @@ func counter_charge(charger: Unit) -> void:
 	charger.wake()
 	charger._stun_remaining = maxf(charger._stun_remaining, BRACE_STOP_SECONDS)
 	charger.status_applied.emit(0.0, 0.0, BRACE_STOP_SECONDS, CHARGE_STUN_COLOR)
-	charger.take_damage(roundi(_effective_attack_damage(charger) * BRACE_COUNTER_MULTIPLIER), self)
+	var counter: float = BRACE_COUNTER_MULTIPLIER + (1.0 if race_fast_brace else 0.0)
+	charger.take_damage(roundi(_effective_attack_damage(charger) * counter), self)
 
 ## Standing, marching or fighting as part of a block, rather than off on its
 ## own attack order (see _flank_multiplier).
@@ -2445,6 +2482,21 @@ func _warded(amount: int) -> int:
 func _slow_multiplier() -> float:
 	return 1.0 - _slow_fraction if _slow_remaining > 0.0 else 1.0
 
+func _starlit_armor() -> int:
+	if race_night_armor <= 0:
+		return 0
+	return race_night_armor if race_night_always else roundi(race_night_armor * RaceTraits.night)
+
+## Bloodrage and Blood Frenzy: faster the more this unit is hurt.
+func _rage_attack_speed() -> float:
+	if (race_bloodrage <= 0.0 and race_frenzy <= 0.0) or max_health <= 0:
+		return 0.0
+	var health := float(status_current_health) / float(max_health)
+	var speed := race_bloodrage * clampf(1.0 - health, 0.0, 1.0)
+	if health < RaceTraits.WOUNDED_FRACTION:
+		speed += race_frenzy
+	return speed
+
 ## `directional` false for ability blasts and damage over time, which have no
 ## meaningful side they came from — only real attacks get flank/rear bonuses.
 func take_damage(amount: int, attacker: Node3D = null, directional: bool = true) -> void:
@@ -2473,10 +2525,16 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	## Armour (Blacksmith upgrades + research buffs) cuts a percentage per
 	## point, capped, rather than a flat amount: flat armour against hits of
 	## only 4-7 swamped the counter multipliers above. Never below 1 damage.
+	if directional and (race_block_guard > 0.0 or race_pierce_guard > 0.0) and _stands_in_block():
+		var guard := race_block_guard
+		if attacker is Unit and attacker.damage_type == DamageType.PIERCE:
+			guard += race_pierce_guard
+		amount = maxi(roundi(amount * (1.0 - guard)), 1)
 	if is_routing():
 		amount = roundi(amount * Morale.ROUTING_DAMAGE_TAKEN)
 	var armor: int = UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) \
-			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR)) + regiment_armor_bonus + lord_armor
+			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR)) + regiment_armor_bonus + lord_armor \
+			+ race_armor + _starlit_armor()
 	if armor > 0:
 		var reduction := minf(armor * ARMOR_REDUCTION_PER_POINT, ARMOR_MAX_REDUCTION)
 		amount = maxi(roundi(amount * (1.0 - reduction)), 1)
@@ -2493,6 +2551,8 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	damaged.emit(amount, attacker_path, fatal, flanked)
 	Sfx.ability_hit = false
 	status_current_health = maxi(status_current_health - amount, 0)
+	if attacker is Unit and attacker.race_lifesteal > 0.0:
+		attacker.heal(roundi(amount * attacker.race_lifesteal))
 	if status_current_health <= 0:
 		_die(attacker)
 		return
@@ -3276,6 +3336,9 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 	if status_current_health < max_health * Research.LOW_HEALTH_FRACTION:
 		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
 	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
+	if race_wounded_bonus > 0.0 and target is Unit \
+			and target.status_current_health < target.max_health * RaceTraits.WOUNDED_FRACTION:
+		extra += race_wounded_bonus
 	extra += regiment_damage_bonus
 	extra += lord_damage
 	var result: int = roundi(damage * (1.0 + extra)) if extra > 0.0 else damage
@@ -3527,7 +3590,7 @@ func _attacking_step(delta: float) -> void:
 ## Research attack-speed buffs shrink the effective cooldown (computed live
 ## each tick, not baked into the exported stat).
 func _effective_cooldown() -> float:
-	return attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED))
+	return attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED) + _rage_attack_speed())
 
 ## One blow (or shot) at attack_target: charge and brace, damage, on-hit
 ## effects. `retarget` looks for the next enemy when this one falls — the old
@@ -3564,8 +3627,10 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 			charged = false
 		else:
 			if charged:
-				damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER)
+				damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER * (1.0 + race_charge_bonus))
 				_spend_charge()
+				if race_charge_heal > 0:
+					heal(race_charge_heal)
 			attack_target.take_damage(damage, self)
 		_apply_on_hit_effects(attack_target)
 		if charged and _is_target_alive(attack_target):
@@ -3604,10 +3669,23 @@ func _tick_pending_projectiles(delta: float) -> void:
 		CombatUtils.reserve_damage(target, -int(hit["damage"]))
 		if not _is_target_alive(target):
 			continue
+		var splash_at: Vector3 = target.global_position
 		target.take_damage(hit["damage"], self)
 		_apply_on_hit_effects(target)
+		if race_splash > 0.0:
+			_splash(splash_at, target, roundi(hit["damage"] * race_splash))
 		if attack_target == target and not _is_target_alive(target):
 			_find_new_target_or_idle()
+
+## Comet Arrows: the rest of what stood around the target when the shot hit.
+func _splash(at: Vector3, struck, damage: int) -> void:
+	if damage <= 0:
+		return
+	for other in UnitGrid.enemies_near(get_tree(), at, RaceTraits.SPLASH_RADIUS, owner_peer_id):
+		if other == struck or not _is_target_alive(other):
+			continue
+		if _flat_distance(at, other.global_position) <= RaceTraits.SPLASH_RADIUS:
+			other.take_damage(damage, self, false)
 
 ## Untyped parameter is deliberate: a statically-typed Node3D parameter makes
 ## GDScript type-check the argument before the function body even runs, and
@@ -3892,6 +3970,8 @@ func _die(attacker: Node3D = null) -> void:
 		main.morale.on_death(self, attacker)
 	if main is Main and main.lords != null:
 		main.lords.on_death(self, attacker)
+	if main is Main and main.race_traits != null:
+		main.race_traits.on_death(self)
 	if main is Main and main.research != null:
 		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
 		main.research.award_kill(self, attacker, credit)
@@ -4100,8 +4180,9 @@ func _tick_pack_courage(delta: float) -> void:
 	_pack_timer = PACK_RECHECK_INTERVAL
 	var mates: int = 0
 	var has_leader: bool = pack_leader
-	var radius_squared: float = PACK_COURAGE_RADIUS * PACK_COURAGE_RADIUS
-	for other in UnitGrid.units_near(get_tree(), global_position, PACK_COURAGE_RADIUS):
+	var radius: float = PACK_COURAGE_RADIUS * race_pack_radius
+	var radius_squared: float = radius * radius
+	for other in UnitGrid.units_near(get_tree(), global_position, radius):
 		if other == self or not is_instance_valid(other) or other.status_activity == Activity.DEAD:
 			continue
 		if other.owner_peer_id != owner_peer_id or not other.pack_member:
@@ -4111,7 +4192,7 @@ func _tick_pack_courage(delta: float) -> void:
 		mates += 1
 		if other.pack_leader:
 			has_leader = true
-	var bonus: float = minf(float(mates) * PACK_COURAGE_PER_MATE, PACK_COURAGE_MAX_BONUS)
+	var bonus: float = minf(float(mates) * PACK_COURAGE_PER_MATE, PACK_COURAGE_MAX_BONUS + race_pack_max)
 	_pack_multiplier = 1.0 + bonus - (0.0 if has_leader else PACK_LEADERLESS_PENALTY)
 
 ## Host-side. A Priestess keeps her own side standing without any order.
@@ -4140,6 +4221,8 @@ func _apply_on_hit_effects(target) -> void:
 		return
 	if on_hit_ability != null and target is Unit:
 		target.apply_ability_hit(on_hit_ability, self)
+	if race_on_hit != null and target is Unit and _is_target_alive(target):
+		target.apply_ability_hit(race_on_hit, self)
 	if strips_buffs and "buffs" in target and target.buffs != null:
 		target.buffs.clear()
 

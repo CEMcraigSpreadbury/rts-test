@@ -10,6 +10,7 @@
 [sub_resource type="Resource" id="BuildingType_b0"]
 script = ExtResource("2_building_type_script")
 building_name = "Dark Elf Altar"
+description = "Gathers souls over time and sacrifices your own units for more."
 scene = ExtResource("4_b0")
 footprint_radius = 2.4
 construction_time = 8.0
@@ -17,6 +18,7 @@ construction_time = 8.0
 [sub_resource type="Resource" id="BuildingType_b1"]
 script = ExtResource("2_building_type_script")
 building_name = "Dark Spire"
+description = "Trains Dark Elf Warriors, Guards and Archers."
 scene = ExtResource("4_b1")
 footprint_radius = 2.4
 construction_time = 9.0
@@ -24,6 +26,7 @@ construction_time = 9.0
 [sub_resource type="Resource" id="BuildingType_b2"]
 script = ExtResource("2_building_type_script")
 building_name = "Coven"
+description = "Trains Assassins, Sorceresses and Spellstealers."
 scene = ExtResource("4_b2")
 footprint_radius = 2.4
 construction_time = 9.0

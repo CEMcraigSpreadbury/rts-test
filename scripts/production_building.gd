@@ -299,6 +299,8 @@ func _ready() -> void:
 		var offered: Array[ProducibleItem] = producibles.duplicate()
 		offered.append(LORD_ITEM)
 		producibles = offered
+	## Its people's upgrades for what it trains (see RaceTraits).
+	RaceTraits.offer_upgrades(self)
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_collect_visuals()
@@ -677,8 +679,12 @@ func apply_slot_level(level: int, cap: int) -> void:
 		for item in producibles:
 			if item.kind != ProducibleItem.Kind.LEVEL:
 				offered.append(item)
-	offered.append_array(RealmRoster.level_items())
+	## A Watchtower or Walls gains nothing from a level, so it is not offered one.
+	var pays := get_children().any(func(child): return child is PactGenerator)
+	if slot_kind >= 0 or pays:
+		offered.append_array(RealmRoster.level_items(slot_kind >= 0))
 	producibles = offered
+	RaceTraits.offer_upgrades(self)
 	for child in get_children():
 		if child is PactGenerator:
 			if _slot_base_income < 0:

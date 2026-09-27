@@ -43,8 +43,22 @@ func _research_unlocks() -> void:
 				continue
 			if UnitUnlocks.has(ai.peer_id, item.grants_unlock) or not _is_available(item):
 				continue
-			if ai.can_afford(ai.item_costs(item)) and ai.main.enqueue_as(ai.peer_id, building.get_path(), i):
+			## A people's upgrade (RaceTraits) makes troops better rather than
+			## possible, so it waits until the purse could pay for it twice.
+			var costs: Array[ResourceCost] = ai.item_costs(item)
+			if RaceTraits.is_upgrade(item.grants_unlock) and not ai.can_afford(_doubled(costs)):
+				continue
+			if ai.can_afford(costs) and ai.main.enqueue_as(ai.peer_id, building.get_path(), i):
 				break
+
+static func _doubled(costs: Array[ResourceCost]) -> Array[ResourceCost]:
+	var out: Array[ResourceCost] = []
+	for cost in costs:
+		var twice := ResourceCost.new()
+		twice.resource_type = cost.resource_type
+		twice.amount = cost.amount * 2
+		out.append(twice)
+	return out
 
 ## Soldiers we want before saving up for a monster rather than just buying
 ## one whenever the money happens to be there.

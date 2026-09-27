@@ -7,6 +7,8 @@ extends Resource
 ## Shown on its command-card button; left null until real icon art exists,
 ## in which case the button falls back to showing just its hotkey letter.
 @export var icon: Texture2D
+## One short sentence under the name in its build button's tooltip.
+@export_multiline var description: String = ""
 @export var scene: PackedScene
 ## Only used as a fallback if scene is somehow unset — the real cost lives on
 ## the building scene itself (ProductionBuilding.costs / Gatherable.costs for

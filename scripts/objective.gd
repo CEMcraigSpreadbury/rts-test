@@ -61,6 +61,11 @@ const TIER_UPGRADE_WOOD: Array[int] = [0, 200, 400]
 const TIER_UPGRADE_GOLD: Array[int] = [0, 150, 300]
 const TIER_UPGRADE_SECONDS: Array[float] = [0.0, 45.0, 60.0]
 const TIER_NAMES: Array[String] = ["Village", "Town", "City"]
+const TIER_DESCRIPTIONS: Array[String] = [
+	"",
+	"Grows into a Town: 3 building slots, and buildings can reach level 2.",
+	"Grows into a City: 4 building slots, and buildings can reach level 3.",
+]
 ## How often a settlement shows its owner what it has paid them.
 const INCOME_POPUP_SECONDS: float = 5.0
 ## How much Favour (and research) a settlement pays at each tier. Its gold,
@@ -870,12 +875,18 @@ func _slot_options() -> Array[ProducibleItem]:
 	## they field, and the only way to recruit them here.
 	for kind in RealmRoster.kinds_for(race_name):
 		var cost: Array = RealmRoster.KIND_COSTS[kind]
-		items.append(_slot_item(RealmRoster.KIND_NAMES[kind], RealmRoster.scene_for(race_name, kind), cost[0], cost[1]))
-	items.append(_slot_item(GRANARY, "res://scenes/settlements/granary_building.tscn", 80, 0))
-	items.append(_slot_item(MARKET, "res://scenes/settlements/market_building.tscn", 60, 40))
-	items.append(_slot_item(LUMBERYARD, "res://scenes/settlements/lumberyard_building.tscn", 40, 40))
-	items.append(_slot_item(WATCHTOWER, "res://scenes/buildings/watchtower_building.tscn", 100, 20))
-	items.append(_slot_item(WALLS, "res://scenes/buildings/wall_gate.tscn", 300, 100))
+		items.append(_slot_item(RealmRoster.KIND_NAMES[kind], RealmRoster.scene_for(race_name, kind), cost[0], cost[1],
+				RealmRoster.describe_kind(race_name, kind)))
+	items.append(_slot_item(GRANARY, "res://scenes/settlements/granary_building.tscn", 80, 0,
+			"Produces 4 food every 5 seconds; more at higher levels."))
+	items.append(_slot_item(MARKET, "res://scenes/settlements/market_building.tscn", 60, 40,
+			"Produces 4 gold every 5 seconds; more at higher levels."))
+	items.append(_slot_item(LUMBERYARD, "res://scenes/settlements/lumberyard_building.tscn", 40, 40,
+			"Produces 4 wood every 5 seconds; more at higher levels."))
+	items.append(_slot_item(WATCHTOWER, "res://scenes/buildings/watchtower_building.tscn", 100, 20,
+			"A tower that shoots enemies coming near the settlement."))
+	items.append(_slot_item(WALLS, "res://scenes/buildings/wall_gate.tscn", 300, 100,
+			"Rings the settlement with walls and gates."))
 	return items
 
 ## The build-menu icon of whichever building type (the faction's own, or an
@@ -896,9 +907,10 @@ const FACTION_PATH: String = "res://resources/factions/faction_one.tres"
 
 ## The same items on every peer and in the same order: the hall's menu is
 ## indexed by position (Main.enqueue_as).
-static func _slot_item(item_name: String, scene_path: String, wood: int, gold: int) -> ProducibleItem:
+static func _slot_item(item_name: String, scene_path: String, wood: int, gold: int, description: String = "") -> ProducibleItem:
 	var item := ProducibleItem.new()
 	item.item_name = item_name
+	item.description = description
 	item.kind = ProducibleItem.Kind.SLOT
 	item.build_time = SLOT_BUILD_SECONDS
 	item.slot_scene = load(scene_path)
@@ -923,6 +935,7 @@ func _offer_slots() -> void:
 	for next in [Tier.TOWN, Tier.CITY]:
 		var raise := ProducibleItem.new()
 		raise.item_name = "Upgrade to " + TIER_NAMES[next]
+		raise.description = TIER_DESCRIPTIONS[next]
 		raise.kind = ProducibleItem.Kind.TIER
 		raise.tier_to = next
 		raise.build_time = TIER_UPGRADE_SECONDS[next]
@@ -937,6 +950,7 @@ func _offer_slots() -> void:
 	for choice in [Choice.OCCUPY, Choice.RAZE]:
 		var item := ProducibleItem.new()
 		item.item_name = CHOICE_NAMES[choice]
+		item.description = CHOICE_DESCRIPTIONS[choice]
 		item.kind = ProducibleItem.Kind.CHOICE
 		item.choice = choice
 		item.build_time = 0.0
@@ -1069,6 +1083,10 @@ func _night_bonus() -> float:
 ## is gone: taking a settlement off a player already costs it a tier.)
 enum Choice { OCCUPY, RAZE }
 const CHOICE_NAMES: Array[String] = ["Occupy", "Raze"]
+const CHOICE_DESCRIPTIONS: Array[String] = [
+	"Keep the settlement and everything still standing in it.",
+	"Burn the settlement down for gold; it lies in ruins for two minutes.",
+]
 const CHOICE_SECONDS: float = 30.0
 ## Raze pays by what the settlement was before it was taken.
 const RAZE_GOLD: Array[int] = [50, 100, 150]

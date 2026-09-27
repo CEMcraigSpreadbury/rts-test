@@ -20,6 +20,8 @@ var _badge: Label
 var _tip_name: String = ""
 var _tip_costs: Array = []
 var _tip_hotkey: String = ""
+## Under the name in the tooltip (buildings and upgrades).
+var tip_description: String = ""
 
 func _init() -> void:
 	custom_minimum_size = Vector2(UiStyle.SLOT_CMD, UiStyle.SLOT_CMD)
@@ -115,4 +117,4 @@ func _restyle() -> void:
 func _make_custom_tooltip(_for_text: String) -> Object:
 	if _tip_name.is_empty():
 		return null
-	return UiTooltip.build(_tip_name, _tip_costs, _tip_hotkey)
+	return UiTooltip.build(_tip_name, _tip_costs, _tip_hotkey, tip_description)

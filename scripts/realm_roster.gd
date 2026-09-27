@@ -132,11 +132,16 @@ static func train_speed(race: String, kind: int, level: int) -> float:
 
 ## "Upgrade to Level 2" and "Level 3", offered on every slot building (the
 ## HUD and ProductionBuilding.can_raise_level decide which is open).
-static func level_items() -> Array[ProducibleItem]:
+## `military`: it trains units rather than paying resources.
+static func level_items(military: bool = false) -> Array[ProducibleItem]:
 	var out: Array[ProducibleItem] = []
 	for level in range(2, MAX_LEVEL + 1):
 		var item := ProducibleItem.new()
 		item.item_name = "Upgrade to Level %d" % level
+		if military:
+			item.description = "Unlocks a stronger unit here, or faster training once the line is complete."
+		else:
+			item.description = "Raises this building's income to %d%% of its base rate." % roundi(LEVEL_INCOME[level - 1] * 100.0)
 		item.kind = ProducibleItem.Kind.LEVEL
 		item.level_to = level
 		item.build_time = LEVEL_SECONDS[level - 1]
@@ -149,6 +154,30 @@ static func level_items() -> Array[ProducibleItem]:
 		item.costs = costs
 		out.append(item)
 	return out
+
+## A slot building's one-line description: who it trains, level by level.
+static func describe_kind(race: String, kind: int) -> String:
+	var names: Array[String] = []
+	for entry in RACES[race].units[kind] if RACES.has(race) else []:
+		names.append(_display_name(entry[0]))
+	if names.is_empty():
+		return ""
+	if names.size() == 1:
+		return "Trains %s, and its elite at higher levels." % names[0]
+	var listed := ", ".join(names.slice(0, names.size() - 1)) + " and " + names[names.size() - 1]
+	return "Trains %s, one more with each level." % listed
+
+static var _names: Dictionary = {}
+
+static func _display_name(scene_path: String) -> String:
+	if not _names.has(scene_path):
+		var scene := load(scene_path) as PackedScene
+		var probe := scene.instantiate() if scene != null else null
+		_names[scene_path] = probe.get(&"display_name") if probe != null and probe.get(&"display_name") != null \
+				else scene_path.get_file().get_basename()
+		if probe != null:
+			probe.free()
+	return _names[scene_path]
 
 ## The building menu for a roster().
 static func items(entries: Array) -> Array[ProducibleItem]:

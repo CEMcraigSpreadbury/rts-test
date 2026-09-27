@@ -9,6 +9,7 @@
 [sub_resource type="Resource" id="BuildingType_b0"]
 script = ExtResource("2_building_type_script")
 building_name = "Gnoll Den"
+description = "Renders wood into meat and trains Gnoll Warriors, Archers and Hyenas in litters."
 scene = ExtResource("4_b0")
 footprint_radius = 2.4
 construction_time = 8.0
@@ -16,6 +17,7 @@ construction_time = 8.0
 [sub_resource type="Resource" id="BuildingType_b1"]
 script = ExtResource("2_building_type_script")
 building_name = "Gnoll Totem"
+description = "Trains Gnoll Leaders, Shamans and Berserks."
 scene = ExtResource("4_b1")
 footprint_radius = 2.4
 construction_time = 8.0

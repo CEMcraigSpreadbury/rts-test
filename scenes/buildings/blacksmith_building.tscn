@@ -23,6 +23,7 @@ amount = 100
 [sub_resource type="Resource" id="ProducibleItem_infantry_weapon_1"]
 script = ExtResource("3_item_script")
 item_name = "Infantry Weapons I"
+description = "Infantry deal 1 more damage."
 kind = 1
 build_time = 20.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon1")])
@@ -37,6 +38,7 @@ amount = 200
 [sub_resource type="Resource" id="ProducibleItem_infantry_weapon_2"]
 script = ExtResource("3_item_script")
 item_name = "Infantry Weapons II"
+description = "Infantry deal 2 more damage."
 kind = 1
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon2")])
@@ -52,6 +54,7 @@ amount = 300
 [sub_resource type="Resource" id="ProducibleItem_infantry_weapon_3"]
 script = ExtResource("3_item_script")
 item_name = "Infantry Weapons III"
+description = "Infantry deal 2 more damage."
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon3")])
@@ -67,6 +70,7 @@ amount = 100
 [sub_resource type="Resource" id="ProducibleItem_infantry_armor_1"]
 script = ExtResource("3_item_script")
 item_name = "Infantry Armor I"
+description = "Infantry gain 1 armour."
 kind = 1
 build_time = 20.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor1")])
@@ -82,6 +86,7 @@ amount = 200
 [sub_resource type="Resource" id="ProducibleItem_infantry_armor_2"]
 script = ExtResource("3_item_script")
 item_name = "Infantry Armor II"
+description = "Infantry gain another 1 armour."
 kind = 1
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor2")])
@@ -98,6 +103,7 @@ amount = 300
 [sub_resource type="Resource" id="ProducibleItem_infantry_armor_3"]
 script = ExtResource("3_item_script")
 item_name = "Infantry Armor III"
+description = "Infantry gain another 1 armour."
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor3")])
@@ -114,6 +120,7 @@ amount = 150
 [sub_resource type="Resource" id="ProducibleItem_lances"]
 script = ExtResource("3_item_script")
 item_name = "Lances"
+description = "Lets every Stables train Cavaliers."
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_lances")])
@@ -127,6 +134,7 @@ amount = 150
 [sub_resource type="Resource" id="ProducibleItem_shields"]
 script = ExtResource("3_item_script")
 item_name = "Shields"
+description = "Lets every Barracks train Shieldmen."
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_shields")])
@@ -140,6 +148,7 @@ amount = 150
 [sub_resource type="Resource" id="ProducibleItem_crossbows"]
 script = ExtResource("3_item_script")
 item_name = "Crossbows"
+description = "Lets every Archery Range train Crossbowmen."
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_crossbows")])
@@ -153,6 +162,7 @@ amount = 150
 [sub_resource type="Resource" id="ProducibleItem_halberds"]
 script = ExtResource("3_item_script")
 item_name = "Halberds"
+description = "Lets every Barracks train Halberdiers."
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_halberds")])

@@ -10,6 +10,7 @@
 [sub_resource type="Resource" id="BuildingType_b0"]
 script = ExtResource("2_building_type_script")
 building_name = "Observatory"
+description = "Gathers starlight, three times as fast at night."
 scene = ExtResource("4_b0")
 footprint_radius = 2.4
 construction_time = 8.0
@@ -17,6 +18,7 @@ construction_time = 8.0
 [sub_resource type="Resource" id="BuildingType_b1"]
 script = ExtResource("2_building_type_script")
 building_name = "Star Gate"
+description = "Trains Star Warriors, Spearmen and Hunters, landing them at the rally point."
 scene = ExtResource("4_b1")
 footprint_radius = 2.4
 construction_time = 10.0
@@ -24,6 +26,7 @@ construction_time = 10.0
 [sub_resource type="Resource" id="BuildingType_b2"]
 script = ExtResource("2_building_type_script")
 building_name = "Sanctum"
+description = "Trains Star Knights, Paladins and Priestesses."
 scene = ExtResource("4_b2")
 footprint_radius = 2.4
 construction_time = 10.0

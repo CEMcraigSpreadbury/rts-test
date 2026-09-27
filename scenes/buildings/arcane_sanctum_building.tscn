@@ -37,6 +37,7 @@ amount = 200
 [sub_resource type="Resource" id="ProducibleItem_ancient_texts"]
 script = ExtResource("3_item_script")
 item_name = "Ancient Texts"
+description = "Lets every Arcane Sanctum train Arch Mages."
 kind = 1
 build_time = 40.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_ancient_texts")])

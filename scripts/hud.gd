@@ -432,12 +432,16 @@ func show_building(building: ProductionBuilding) -> void:
 		## tells them apart where a position letter (or "?") could not.
 		if item.icon == null and item.kind in [ProducibleItem.Kind.SLOT, ProducibleItem.Kind.TIER, ProducibleItem.Kind.LEVEL]:
 			hotkey = item.item_name.left(1).to_upper()
+		## Past the last hotkey an upgrade goes by its initial too.
+		elif item.icon == null and hotkey == "?" and item.kind == ProducibleItem.Kind.UPGRADE:
+			hotkey = item.item_name.left(1).to_upper()
 		elif item.icon != null and hotkey == "?":
 			hotkey = ""
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item, building)]
 		var button := _make_command_button(hotkey, item.item_name,
 				_tooltip_costs(building.costs_for(item)), item.icon,
 				main.on_producible_button_pressed.bind(building, i))
+		(button as CommandSlot).tip_description = item.description
 		_info_producible_badges[item.item_name] = _add_queue_count_badge(button)
 		if item.kind == ProducibleItem.Kind.UNIT:
 			_info_unit_buttons.append(button)
@@ -539,9 +543,11 @@ func _populate_construction_buttons() -> void:
 			continue
 		var hotkey: String = OS.get_keycode_string(Main.BUILDING_HOTKEYS[i]) if i < Main.BUILDING_HOTKEYS.size() else "?"
 		var costs: Array[ResourceCost] = rules.scaled_costs(me, building_type.get_costs())
-		buttons.append(_make_letter_slot(hotkey, building_type.building_name,
+		var slot := _make_letter_slot(hotkey, building_type.building_name,
 				_tooltip_costs(costs), can_afford_locally(costs),
-				main.placement.on_construction_button_pressed.bind(building_type)))
+				main.placement.on_construction_button_pressed.bind(building_type))
+		(slot as CommandSlot).tip_description = building_type.description
+		buttons.append(slot)
 	## Allied races are reached by the tab strip above the panel rather than by a
 	## category button that would spend a command slot and hide the roster.
 	_refresh_race_tabs()

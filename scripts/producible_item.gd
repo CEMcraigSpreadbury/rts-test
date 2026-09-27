@@ -11,6 +11,8 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER, LEVEL }
 ## Shown on its command-card button; left null until real icon art exists,
 ## in which case the button falls back to showing just its hotkey letter.
 @export var icon: Texture2D
+## One short sentence under the name in its button's tooltip.
+@export_multiline var description: String = ""
 @export var kind: Kind = Kind.UNIT
 @export var build_time: float = 5.0
 ## Only used for UPGRADE items — a UNIT's real cost lives on unit_scene's own

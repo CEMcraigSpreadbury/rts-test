@@ -11,6 +11,8 @@ extends Node
 
 ## The local player's own unlocks changed.
 signal unlocks_changed
+## Every peer: `peer_id` has just been granted `tag` (see RaceTraits).
+signal granted(peer_id: int, tag: StringName)
 
 ## peer_id -> Array[StringName] of tags granted.
 var _granted: Dictionary = {}
@@ -37,11 +39,12 @@ func grant(peer_id: int, tag: StringName) -> bool:
 	_granted[peer_id] = tags
 	var typed: Array[StringName] = []
 	typed.assign(tags)
-	_rpc_granted.rpc(peer_id, typed)
+	_rpc_granted.rpc(peer_id, typed, tag)
 	return true
 
 @rpc("authority", "call_local", "reliable")
-func _rpc_granted(peer_id: int, tags: Array[StringName]) -> void:
+func _rpc_granted(peer_id: int, tags: Array[StringName], tag: StringName) -> void:
 	_granted[peer_id] = tags
+	granted.emit(peer_id, tag)
 	if peer_id == multiplayer.get_unique_id():
 		unlocks_changed.emit()
