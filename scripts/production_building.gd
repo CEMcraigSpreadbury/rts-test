@@ -624,7 +624,46 @@ var _slot_base_income: int = -1
 func setup_slot(race: String, kind: int, level: int, cap: int) -> void:
 	slot_race = race
 	slot_kind = kind
+	RaceModels.apply(self, race, building_name)
 	apply_slot_level(level, cap)
+	_show_beast_on_display()
+
+@onready var _beast_display: Sprite3D = get_node_or_null(^"BeastDisplay") as Sprite3D
+
+## Room inside a Bestiary's cage for its beast, and the cage floor's height.
+const BEAST_CAGE_WIDTH: float = 1.8
+const BEAST_CAGE_FLOOR: float = 0.36
+
+## A Bestiary shows off the first beast its people train there, standing in
+## its cage and shrunk to fit it.
+func _show_beast_on_display() -> void:
+	var display := get_node_or_null(^"BeastDisplay") as Sprite3D
+	var entries: Array = RealmRoster.roster(slot_race, slot_kind, 1)
+	if display == null or entries.is_empty():
+		return
+	var beast := (load(entries[0][0]) as PackedScene).instantiate() as Unit
+	if beast == null:
+		return
+	var cell := Vector2(beast.sprite_cell_size)
+	display.texture = beast.sprite_sheet
+	display.region_rect = Rect2(Vector2.ZERO, cell)
+	## A race's own Bestiary model marks its cage with a BeastSpot (floor
+	## centre, scaled to the cage's width); the Human one is the default.
+	var floor_at := Vector3(display.position.x, BEAST_CAGE_FLOOR, display.position.z)
+	var width: float = BEAST_CAGE_WIDTH
+	var spot := find_child("BeastSpot", true, false) as Node3D
+	if spot != null:
+		var t := Transform3D.IDENTITY
+		var node: Node = spot
+		while node != self and node != null:
+			t = (node as Node3D).transform * t
+			node = node.get_parent()
+		floor_at = t.origin
+		width = t.basis.x.length() * 0.9
+	var fit: float = minf(1.0, width / (cell.x * display.pixel_size))
+	display.scale = Vector3.ONE * fit
+	display.position = floor_at + Vector3(0.0, cell.y * display.pixel_size * fit * 0.5, 0.0)
+	beast.free()
 
 ## Every peer: the menu (a military building's units, and the level-ups) and,
 ## on a resource building, its pay.
@@ -1021,6 +1060,9 @@ func _update_health_bar_visual() -> void:
 	health_bar_fill.scale.x = _fill_base_scale_x * maxf(fraction, 0.001)
 
 func _update_construction_visual() -> void:
+	## A Bestiary's beast only moves in once the cage is finished.
+	if _beast_display != null:
+		_beast_display.visible = not is_under_construction and not is_destroyed
 	if is_under_construction:
 		if not _construction_visual_applied:
 			_apply_construction_transparency()

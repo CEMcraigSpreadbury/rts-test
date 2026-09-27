@@ -2,24 +2,25 @@ class_name RealmRoster
 extends RefCounted
 ## Which units each people trains in a Realm settlement's military buildings,
 ## and what raising a slot building's level does.
-## A settlement offers a Barracks, Range, Stables and Sanctum only where its
+## A settlement offers a Barracks, Range, Stables, Sanctum and Bestiary only where its
 ## people have units of that kind; the hall itself trains nobody. Each list is
 ## in level order: the first unit comes with the building, the next with each
 ## level. A line with no next unit gets its elite instead (tougher, harder
 ## hitting, drawn a size up), and a level past that trains faster.
 
-enum Kind { BARRACKS, RANGE, STABLES, SANCTUM }
-const KIND_NAMES: Array[String] = ["Barracks", "Range", "Stables", "Sanctum"]
+enum Kind { BARRACKS, RANGE, STABLES, SANCTUM, BESTIARY }
+const KIND_NAMES: Array[String] = ["Barracks", "Range", "Stables", "Sanctum", "Bestiary"]
 ## [wood, gold] to build one.
-const KIND_COSTS: Array = [[120, 40], [120, 60], [150, 80], [140, 100]]
+const KIND_COSTS: Array = [[120, 40], [120, 60], [150, 80], [140, 100], [180, 150]]
 ## Seconds to train one of each kind (a litter counts as one).
-const KIND_TRAIN_SECONDS: Array[float] = [20.0, 22.0, 26.0, 30.0]
+const KIND_TRAIN_SECONDS: Array[float] = [20.0, 22.0, 26.0, 30.0, 40.0]
 ## The building put up when a people has none of its own for that kind.
 const GENERIC_SCENES: Array[String] = [
 	"res://scenes/buildings/barracks_building.tscn",
 	"res://scenes/buildings/archery_range_building.tscn",
 	"res://scenes/buildings/stables_building.tscn",
 	"res://scenes/buildings/arcane_sanctum_building.tscn",
+	"res://scenes/buildings/bestiary_building.tscn",
 ]
 
 ## A slot building's levels (1-3, capped by its settlement's tier: Village
@@ -40,48 +41,53 @@ const ELITE_SCALE: float = 1.15
 ## Kind, [scene path, bodies per training] in level order}.
 const RACES: Dictionary = {
 	"Human": {
-		"scenes": ["", "", "", ""],
+		"scenes": ["", "", "", "", ""],
 		"units": [
 			[["res://scenes/units/soldier_unit.tscn", 1], ["res://scenes/units/spearman_unit.tscn", 1], ["res://scenes/units/halberdier_unit.tscn", 1]],
 			[["res://scenes/units/archer_unit.tscn", 1], ["res://scenes/units/crossbowman_unit.tscn", 1]],
 			[["res://scenes/units/horseman_unit.tscn", 1], ["res://scenes/units/cavalier_unit.tscn", 1]],
 			[["res://scenes/units/wizard_unit.tscn", 1], ["res://scenes/units/arch_mage_unit.tscn", 1]],
+			[["res://scenes/units/beasts/griffin_unit.tscn", 1], ["res://scenes/units/beasts/manticore_unit.tscn", 1]],
 		],
 	},
 	"Gnolls": {
-		"scenes": ["res://scenes/buildings/gnoll_den_building.tscn", "", "", "res://scenes/buildings/gnoll_totem_building.tscn"],
+		"scenes": ["res://scenes/buildings/gnoll_den_building.tscn", "", "", "res://scenes/buildings/gnoll_totem_building.tscn", ""],
 		"units": [
 			[["res://scenes/units/gnolls/gnoll_warrior_unit.tscn", 3], ["res://scenes/units/gnolls/gnoll_berserk_unit.tscn", 2], ["res://scenes/units/gnolls/gnoll_leader_unit.tscn", 1]],
 			[["res://scenes/units/gnolls/gnoll_archer_unit.tscn", 2]],
 			[["res://scenes/units/gnolls/hyena_unit.tscn", 2]],
 			[["res://scenes/units/gnolls/gnoll_shaman_unit.tscn", 1]],
+			[["res://scenes/units/beasts/sand_worm_unit.tscn", 1], ["res://scenes/units/beasts/skeleton_dragon_unit.tscn", 1]],
 		],
 	},
 	"Dark Elves": {
-		"scenes": ["res://scenes/buildings/dark_elf_spire_building.tscn", "", "", "res://scenes/buildings/dark_elf_coven_building.tscn"],
+		"scenes": ["res://scenes/buildings/dark_elf_spire_building.tscn", "", "", "res://scenes/buildings/dark_elf_coven_building.tscn", ""],
 		"units": [
 			[["res://scenes/units/dark_elves/dark_elf_warrior_unit.tscn", 1], ["res://scenes/units/dark_elves/dark_elf_guard_unit.tscn", 1], ["res://scenes/units/dark_elves/dark_elf_assassin_unit.tscn", 1]],
 			[["res://scenes/units/dark_elves/dark_elf_archer_unit.tscn", 1]],
 			[["res://scenes/units/dark_elves/dark_elf_rider_unit.tscn", 1]],
 			[["res://scenes/units/dark_elves/dark_elf_sorceress_unit.tscn", 1], ["res://scenes/units/dark_elves/dark_elf_spellstealer_unit.tscn", 1]],
+			[["res://scenes/units/beasts/kitsune_unit.tscn", 1], ["res://scenes/units/beasts/wind_tiger_unit.tscn", 1]],
 		],
 	},
 	"Star Wanderers": {
-		"scenes": ["res://scenes/buildings/star_gate_building.tscn", "", "", "res://scenes/buildings/star_sanctum_building.tscn"],
+		"scenes": ["res://scenes/buildings/star_gate_building.tscn", "", "", "res://scenes/buildings/star_sanctum_building.tscn", ""],
 		"units": [
 			[["res://scenes/units/star_wanderers/sw_warrior_unit.tscn", 1], ["res://scenes/units/star_wanderers/sw_spearman_unit.tscn", 1], ["res://scenes/units/star_wanderers/sw_paladin_unit.tscn", 1]],
 			[["res://scenes/units/star_wanderers/sw_hunter_unit.tscn", 1]],
 			[["res://scenes/units/star_wanderers/sw_rider_unit.tscn", 1], ["res://scenes/units/star_wanderers/sw_knight_unit.tscn", 1]],
 			[["res://scenes/units/star_wanderers/sw_priestess_unit.tscn", 1]],
+			[["res://scenes/units/beasts/dragon_unit.tscn", 1], ["res://scenes/units/beasts/lightning_dragon_unit.tscn", 1]],
 		],
 	},
 	"Beastmen": {
-		"scenes": ["res://scenes/buildings/beastmen_barracks_building.tscn", "", "", ""],
+		"scenes": ["res://scenes/buildings/beastmen_barracks_building.tscn", "", "", "", ""],
 		"units": [
 			[["res://scenes/units/beastman_warrior_unit.tscn", 1], ["res://scenes/units/beastman_panda_warrior_unit.tscn", 1]],
 			[["res://scenes/units/beastman_wolf_pathfinder_unit.tscn", 1]],
 			[["res://scenes/units/beastman_raider_unit.tscn", 1]],
 			[["res://scenes/units/beastman_druid_unit.tscn", 1]],
+			[],
 		],
 	},
 }
