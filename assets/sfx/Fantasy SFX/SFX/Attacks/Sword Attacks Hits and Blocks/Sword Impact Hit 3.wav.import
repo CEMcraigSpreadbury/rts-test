@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dbagirtbhivt4"
+path="res://.godot/imported/Sword Impact Hit 3.wav-91c48e926017b35d85ee9cf7732feadc.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/SFX/Attacks/Sword Attacks Hits and Blocks/Sword Impact Hit 3.wav"
+dest_files=["res://.godot/imported/Sword Impact Hit 3.wav-91c48e926017b35d85ee9cf7732feadc.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

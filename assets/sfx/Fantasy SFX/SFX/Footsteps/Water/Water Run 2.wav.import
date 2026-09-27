@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://b8xt4edr1e3ym"
+path="res://.godot/imported/Water Run 2.wav-fb9589442088113c49d1e5d5b8cf8139.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/SFX/Footsteps/Water/Water Run 2.wav"
+dest_files=["res://.godot/imported/Water Run 2.wav-fb9589442088113c49d1e5d5b8cf8139.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

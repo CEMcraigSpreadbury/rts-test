@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://d32p13tcm3ywj"
+path="res://.godot/imported/Inside Night Rain.wav-b52ba3a6407060c053630379942e5b2e.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/BGS Loops/Interior Night/Inside Night Rain.wav"
+dest_files=["res://.godot/imported/Inside Night Rain.wav-b52ba3a6407060c053630379942e5b2e.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

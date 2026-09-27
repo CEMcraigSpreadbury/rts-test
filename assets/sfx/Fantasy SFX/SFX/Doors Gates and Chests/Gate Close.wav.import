@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bobqb3fyfbo05"
+path="res://.godot/imported/Gate Close.wav-fb4d5e3d400dcc5940e67bf431d9678a.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/SFX/Doors Gates and Chests/Gate Close.wav"
+dest_files=["res://.godot/imported/Gate Close.wav-fb4d5e3d400dcc5940e67bf431d9678a.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

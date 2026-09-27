@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://8egxl718gbk3"
+path="res://.godot/imported/Dirt Walk 5.wav-3502a653d38316ac928daeb766fd5d19.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/SFX/Footsteps/Dirt/Dirt Walk 5.wav"
+dest_files=["res://.godot/imported/Dirt Walk 5.wav-3502a653d38316ac928daeb766fd5d19.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

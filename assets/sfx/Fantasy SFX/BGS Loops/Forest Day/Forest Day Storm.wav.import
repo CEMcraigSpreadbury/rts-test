@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bjabry7rg3quq"
+path="res://.godot/imported/Forest Day Storm.wav-de2fa493b7a3f07f3997961e3240ae9e.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/BGS Loops/Forest Day/Forest Day Storm.wav"
+dest_files=["res://.godot/imported/Forest Day Storm.wav-de2fa493b7a3f07f3997961e3240ae9e.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://d312piok2igge"
+path="res://.godot/imported/Sword Parry 3.wav-5a6ca11fa04e5f5eb7a52875dd12565f.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/SFX/Attacks/Sword Attacks Hits and Blocks/Sword Parry 3.wav"
+dest_files=["res://.godot/imported/Sword Parry 3.wav-5a6ca11fa04e5f5eb7a52875dd12565f.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

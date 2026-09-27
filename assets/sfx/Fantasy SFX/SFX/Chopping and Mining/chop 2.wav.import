@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bl5d66s5fn1kw"
+path="res://.godot/imported/chop 2.wav-25c369f49a03c0df71f9077351f3954b.sample"
+
+[deps]
+
+source_file="res://assets/sfx/Fantasy SFX/SFX/Chopping and Mining/chop 2.wav"
+dest_files=["res://.godot/imported/chop 2.wav-25c369f49a03c0df71f9077351f3954b.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2
