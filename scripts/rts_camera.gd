@@ -102,9 +102,19 @@ func _unhandled_input(event: InputEvent) -> void:
 var _last_frame_usec: int = 0
 
 ## Seconds since the last frame, unscaled, capped so a hitch can't fling it.
-func _real_delta() -> float:
+## Un-scales the engine's delta rather than timing frames itself: that delta
+## is measured at the start of the frame and snapped to the refresh rate under
+## VSync, so every frame moves the camera by an even step. Reading the clock
+## here lands wherever _process happens to run in a frame, and the uneven
+## steps show as judder. Only a full pause (time_scale 0) has no delta to
+## un-scale, so it falls back to the wall clock.
+func _real_delta(scaled_delta: float) -> float:
 	var now := Time.get_ticks_usec()
-	var seconds: float = 0.0 if _last_frame_usec == 0 else (now - _last_frame_usec) / 1000000.0
+	var seconds: float
+	if Engine.time_scale > 0.0:
+		seconds = scaled_delta / Engine.time_scale
+	else:
+		seconds = 0.0 if _last_frame_usec == 0 else (now - _last_frame_usec) / 1000000.0
 	_last_frame_usec = now
 	return clampf(seconds, 0.0, 0.1)
 
@@ -142,10 +152,10 @@ func _update_shake(delta: float) -> void:
 	camera.position.x = randf_range(-strength, strength)
 	camera.position.y = randf_range(-strength, strength)
 
-func _process(_scaled_delta: float) -> void:
-	## The camera runs on the wall clock: it has to keep moving while the game
+func _process(scaled_delta: float) -> void:
+	## The camera runs on real time: it has to keep moving while the game
 	## is paused or slowed (see Main.GAME_SPEEDS), and not rush when sped up.
-	var delta := _real_delta()
+	var delta := _real_delta(scaled_delta)
 	_update_shake(delta)
 	_update_zoom_smoothing(delta)
 

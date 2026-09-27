@@ -182,7 +182,10 @@ void SpriteBatcher::_process(double delta) {
 		const float px = sprite->get_pixel_size();
 		const float sx = xf.basis.get_column(0).length() * region.size.x * px;
 		const float sy = xf.basis.get_column(1).length() * region.size.y * px;
-		const Vector3 o = xf.origin;
+		// Where the engine draws it between physics ticks: the unit moves on
+		// ticks and is interpolated, the sprite rides it as it is right now.
+		// Only the position is taken; the scale stays the live one above.
+		const Vector3 o = sprite->get_global_transform_interpolated().origin;
 		// Corpses lose their overlay (no silhouette, no night lift), and can't
 		// be picked.
 		const bool corpse = sprite->get_material_overlay().is_null();
