@@ -7,4 +7,4 @@ script = ExtResource("1_5msnx")
 map_name = "Aldmere Vale Realm"
 scene_path = "res://scenes/maps/aldmere_vale_realm.tscn"
 max_players = 2
-capture_points = 7
+capture_points = 13

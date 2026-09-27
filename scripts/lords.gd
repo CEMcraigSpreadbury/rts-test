@@ -142,6 +142,16 @@ func _lords_near(peer_id: int, pos: Vector3) -> Array[Unit]:
 			out.append(lord)
 	return out
 
+## The living Lord with this net_id, or null. Any peer.
+static func by_net_id(tree: SceneTree, id: int) -> Unit:
+	if id < 0:
+		return null
+	for node in tree.get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit != null and unit.is_lord and unit.net_id == id and unit.status_activity != Unit.Activity.DEAD:
+			return unit
+	return null
+
 ## Host only, from Unit._die.
 func on_death(victim: Unit, attacker) -> void:
 	if not MatchRules.realm() or not multiplayer.is_server():
@@ -151,6 +161,11 @@ func on_death(victim: Unit, attacker) -> void:
 		if victim.lord_xp >= float(best[1]):
 			_fallen[victim.owner_peer_id] = [victim.lord_level, victim.lord_xp]
 		_rehire[victim.owner_peer_id] = REHIRE_SECONDS
+		## His army has nobody to follow now.
+		for node in get_tree().get_nodes_in_group(&"units"):
+			var follower := node as Unit
+			if follower != null and follower.army_lord == victim.net_id:
+				follower.army_lord = -1
 		for unit in UnitGrid.units_near(get_tree(), victim.global_position, COMMAND_RADIUS):
 			if unit.owner_peer_id == victim.owner_peer_id:
 				Morale.shake(unit, DEATH_SHOCK)

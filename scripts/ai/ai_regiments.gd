@@ -1,7 +1,7 @@
 class_name AiRegiments
 extends RefCounted
 ## AiPlayer's regiments: raises them from the loose soldiers it has trained,
-## keeps them up to strength, and buys the officers to lead them.
+## keeps them up to strength, and puts them in a Lord's army to be led.
 ##
 ## Nothing here issues an order. An order to any part of a regiment already
 ## applies to the whole body (Main.expand_to_regiments), so AiCombat's waves
@@ -19,7 +19,7 @@ func think() -> void:
 		return
 	_reinforce()
 	_raise()
-	_train_officer()
+	_join_lords()
 
 ## This player's army, minus anyone already spoken for.
 func _loose() -> Array[Unit]:
@@ -55,7 +55,7 @@ func _reinforce() -> void:
 		return
 	for regiment in _mine():
 		regiment.prune()
-		if not regiment.is_under_strength() and regiment.has_officer():
+		if not regiment.is_under_strength():
 			continue
 		if ai.main.reinforce_regiment(regiment, men, officers) > 0:
 			return
@@ -67,38 +67,33 @@ func _raise() -> void:
 	var men: Array[Unit] = []
 	var officers: Array[Unit] = []
 	_split(_loose(), men, officers)
-	if officers.is_empty():
-		return
 	## One kind of soldier to a body, same rule the player forms under.
 	var pick: Array[Unit] = Main.largest_same_type(men)
 	if pick.size() < ai.profile.regiment_size:
 		return
-	var body: Array[Unit] = [officers[0]] as Array[Unit]
+	var body: Array[Unit] = []
 	for i in mini(pick.size(), ai.profile.regiment_size):
 		body.append(pick[i])
 	ai.main.form_regiment(ai.peer_id, body)
 
-## Buys an officer once there are enough loose men of one kind to be worth
-## leading and nobody spare to lead them. One at a time, and never ahead of the
-## men: an officer with no body is a soldier who cost twice as much.
-func _train_officer() -> void:
-	var men: Array[Unit] = []
-	var officers: Array[Unit] = []
-	_split(_loose(), men, officers)
-	if not officers.is_empty():
+## Every regiment not yet in an army joins the nearest of this player's Lords,
+## one per think — a regiment is only led (and only replenished) in one.
+func _join_lords() -> void:
+	var lords: Array[Unit] = []
+	for unit in ai.army:
+		if is_instance_valid(unit) and unit.is_lord and unit.status_activity != Unit.Activity.DEAD:
+			lords.append(unit)
+	if lords.is_empty():
 		return
-	if Main.largest_same_type(men).size() < ai.profile.regiment_size:
-		return
-	for building in ai.my_buildings:
-		for queued in building.queue:
-			if ai.trains_officer(queued):
-				return
-	for building in ai.my_buildings:
-		if building.is_under_construction or building.queue.size() >= ai.profile.military_queue:
+	for regiment in _mine():
+		regiment.prune()
+		if regiment.members.is_empty() or regiment.lord(ai.get_tree()) != null:
 			continue
-		for i in building.producibles.size():
-			var item: ProducibleItem = building.producibles[i]
-			if not ai.trains_officer(item):
-				continue
-			if ai.can_afford(ai.item_costs(item)) and ai.main.enqueue_as(ai.peer_id, building.get_path(), i):
-				return
+		var at: Vector3 = regiment.members[0].global_position
+		var nearest: Unit = lords[0]
+		for lord in lords:
+			if lord.global_position.distance_to(at) < nearest.global_position.distance_to(at):
+				nearest = lord
+		var paths: Array[NodePath] = [nearest.get_path(), regiment.members[0].get_path()]
+		ai.main.toggle_army_as(ai.peer_id, paths)
+		return

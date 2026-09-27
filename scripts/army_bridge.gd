@@ -37,6 +37,8 @@ var _stamped_buildings: Dictionary = {}
 var _stamped_doors: Dictionary = {}
 var _stamped_gatherables: Dictionary = {}
 var _tree_changes_seen: int = -1
+## The forest whose trees are stamped (see _stamp_forest).
+var _forest: Forest = null
 ## Teams.team_of() result -> sim team index. 0 is neutral, as in Teams.
 var _team_index: Dictionary = {Teams.NEUTRAL: 0}
 var _overlay: Decal = null
@@ -139,6 +141,7 @@ func _load_heightmap(region: NavigationRegion3D) -> void:
 ## --- Blockers ---
 
 func _process(delta: float) -> void:
+	_update_road_speeds(delta)
 	if _formation_overlay != null:
 		_draw_formations()
 	if _overlay != null:
@@ -167,6 +170,26 @@ func _restamp() -> void:
 	if Gatherable.tree_changes != _tree_changes_seen:
 		_tree_changes_seen = Gatherable.tree_changes
 		_sync_group(&"gatherables", _stamped_gatherables)
+	_stamp_forest()
+
+## Trees (see Forest) are stamped all at once the first time round, as a trunk
+## circle each, and unstamped one by one as they fall — never rescanned.
+func _stamp_forest() -> void:
+	if _forest == Forest.active or Forest.active == null:
+		return
+	_forest = Forest.active
+	_forest.tree_removed.connect(func(id: int, _at: Vector3): sim.clear_blocker(id))
+	for tree in _forest.all_trees():
+		sim.set_blocker(tree.get_instance_id(), trunk_footprint(tree))
+
+## A trunk's ground footprint, grown by a unit's body radius, as footprint()
+## would give for the collision cylinder trees used to have.
+static func trunk_footprint(tree: Gatherable) -> Array:
+	var ring := PackedVector2Array()
+	for i in NavigationBlockers.CIRCLE_SEGMENTS:
+		var angle: float = TAU * float(i) / float(NavigationBlockers.CIRCLE_SEGMENTS)
+		ring.append(Vector2(tree.global_position.x + cos(angle) * tree.trunk_radius, tree.global_position.z + sin(angle) * tree.trunk_radius))
+	return Geometry2D.offset_polygon(ring, NavigationBlockers.UNIT_BODY_RADIUS, Geometry2D.JOIN_MITER)
 
 ## Brings the stamps for one group in line with what in it is solid now.
 func _sync_group(group: StringName, stamped: Dictionary) -> void:
@@ -280,6 +303,42 @@ func unregister_unit(sim_id: int) -> void:
 ## After each sim tick: every unit the sim moved is put where it now stands,
 ## and every unit that could not go where it wanted is told so (see
 ## Unit._track_blocked). Idle units are not touched at all.
+## --- Roads (see RoadNet) ---
+## Formation -> the pace it was ordered at, which the road speed scales.
+var _block_speed: Dictionary = {}
+var _road_timer: float = 0.0
+const ROAD_CHECK_SECONDS: float = 0.25
+
+func _set_block_speed(formation: int, speed: float) -> void:
+	_block_speed[formation] = speed
+	sim.set_speed(formation, speed * RoadNet.speed_at(_formation_point(formation)))
+
+## A marching block quickens on a road and slows off it, by where it stands
+## now. A few times a second is plenty for something the size of a road.
+func _update_road_speeds(delta: float) -> void:
+	if not RoadNet.has_roads():
+		return
+	_road_timer -= delta
+	if _road_timer > 0.0:
+		return
+	_road_timer = ROAD_CHECK_SECONDS
+	var states: PackedFloat32Array = sim.get_formation_states(1)
+	var live: Dictionary = {}
+	for i in range(0, states.size(), 8):
+		var formation: int = int(states[i])
+		live[formation] = true
+		if states[i + 6] < 0.5 or not _block_speed.has(formation):
+			continue
+		sim.set_speed(formation, _block_speed[formation] * RoadNet.speed_at(Vector3(states[i + 1], 0.0, states[i + 2])))
+	for formation in _block_speed.keys():
+		if not live.has(formation):
+			_block_speed.erase(formation)
+
+func _formation_point(formation: int) -> Vector3:
+	var info: Dictionary = sim.get_formation_info(formation)
+	var at = info.get("position", Vector2.ZERO)
+	return Vector3(at.x, 0.0, at.y) if at is Vector2 else Vector3.ZERO
+
 func apply_sim_results() -> void:
 	var moved: PackedFloat32Array = sim.get_moved_units()
 	for unit in _moving:
@@ -418,7 +477,7 @@ func solo_move(unit: Unit, target: Vector3) -> void:
 		formation = sim.release(unit.sim_id, here)
 	if formation < 0:
 		return
-	sim.set_speed(formation, unit.move_speed * unit._slow_multiplier() * unit._buff_speed_multiplier())
+	_set_block_speed(formation, unit.move_speed * unit._slow_multiplier() * unit._buff_speed_multiplier())
 	sim.order_move(formation, Vector2(target.x, target.z), false, 0.0)
 
 ## A group attack on `target`: every block goes in (Very War's attack order),
@@ -445,7 +504,7 @@ func attack_blocks(units: Array[Unit], target: Node3D, formation_type: Formation
 		if target is ProductionBuilding:
 			reach += (target as ProductionBuilding).get_footprint_radius()
 			_building_targets[formation] = target
-		sim.set_speed(formation, speed)
+		_set_block_speed(formation, speed)
 		## The front rank stops a little inside its reach of the enemy
 		## (GroupMovement.ENGAGE_RANGE_FRACTION): in contact for melee, at
 		## shooting distance for ranged. Never on top of it, where the block's
@@ -534,7 +593,7 @@ func _order_block(block: Array[Unit], dest: Vector3, forward: Vector3, attack_mo
 		speed = minf(speed, unit.move_speed)
 	## The block leads at its men's own pace; they run a little over it to
 	## catch their places up (Very War's feel).
-	sim.set_speed(formation, speed)
+	_set_block_speed(formation, speed)
 	var point := Vector2(dest.x, dest.z)
 	if append:
 		sim.queue_move(formation, point, true, facing_angle)

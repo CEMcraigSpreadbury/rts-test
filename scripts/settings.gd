@@ -45,6 +45,9 @@ const DEFAULT_KEYS := {
 	&"idle_villager": KEY_PERIOD,
 	&"select_military": KEY_COMMA,
 	&"last_attack": KEY_BACKSPACE,
+	&"pause_game": KEY_PAUSE,
+	&"speed_up": KEY_EQUAL,
+	&"slow_down": KEY_MINUS,
 }
 
 var volumes: Dictionary = {"Master": 1.0, "Music": 1.0, "Ambience": 1.0, "SFX": 1.0}

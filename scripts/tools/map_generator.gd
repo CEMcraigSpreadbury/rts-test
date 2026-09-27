@@ -20,7 +20,7 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export var map_seed: int = 1
 @export_range(2, 8) var player_count: int = 2
 @export var symmetric: bool = true
-@export_range(128, 480, 16) var map_size: int = 240
+@export_range(128, 2048, 16) var map_size: int = 240
 @export_range(0, 24) var border_width: int = 6
 @export_range(0.3, 0.95, 0.01) var spawn_distance: float = 0.78
 @export_range(0.0, 360.0, 1.0) var layout_rotation_degrees: float = 135.0
@@ -155,7 +155,7 @@ func is_settlement_map() -> bool:
 		_apply_colours_to_preview()
 
 @export_group("Forests")
-@export_range(0, 30) var forest_clusters_per_player: int = 3
+@export_range(0, 80) var forest_clusters_per_player: int = 3
 @export var forest_cluster_radius: Vector2 = Vector2(4.0, 9.0)
 @export_range(0.0, 14.0, 0.5) var edge_forest_depth: float = 8.0
 @export_range(1.2, 4.0, 0.1) var tree_spacing: float = 1.4
@@ -359,6 +359,20 @@ func _assemble_map(root: Node3D, terrain: TerraBrush, nav_mesh: NavigationMesh) 
 	var scenery := Node3D.new()
 	scenery.name = "Scenery"
 	_add_owned(root, scenery, root)
+	## Where the roads run, for the road speed (see RoadNet).
+	var segments: Array = layout.road_segments()
+	if not segments.is_empty():
+		var roads := Node3D.new()
+		roads.name = RoadNet.NODE_NAME
+		var ends := PackedVector2Array()
+		var widths := PackedFloat32Array()
+		for segment in segments:
+			ends.append(segment[0])
+			ends.append(segment[1])
+			widths.append(segment[2])
+		roads.set_meta(&"segments", ends)
+		roads.set_meta(&"widths", widths)
+		_add_owned(root, roads, root)
 	var counts: Dictionary = {}
 	for entry in layout.objects:
 		var node: Node3D = _instantiate_object(entry, PackedScene.GEN_EDIT_STATE_INSTANCE)

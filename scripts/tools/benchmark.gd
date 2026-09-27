@@ -93,13 +93,30 @@ var _sample_timer: float = 0.0
 var _armies: Dictionary = {}
 var _measuring: bool = false
 var _wall_start_usec: int = 0
+## Whole frames, not just script: with a window this includes the renderer,
+## which the sections below cannot see. Headless it is script + physics only.
+var _boot_usec: int = 0
+var _frames: int = 0
+var _frame_sum: float = 0.0
+var _frame_worst: float = 0.0
+var _render_cpu_sum: float = 0.0
+var _render_gpu_sum: float = 0.0
+var _process_sum: float = 0.0
+var _physics_sum: float = 0.0
+var _nav_sum: float = 0.0
+## What the engine reported on the worst frame (process, physics, navigation ms).
+var _worst_frame_parts: Vector3 = Vector3.ZERO
 
 ## The lobby's game mode for the match: "conquest" (default), "annihilation"
 ## or "realm". Realm adds food, farms and upkeep to the match report.
 var game_mode: String = "conquest"
 
 func _ready() -> void:
+	_boot_usec = Time.get_ticks_usec()
 	_parse_args()
+	if DisplayServer.get_name() != "headless":
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	## A match wants a longer run and somebody to fight, unless told otherwise.
 	if mode == "match":
 		if not _ticks_set:
@@ -149,6 +166,7 @@ func _start_match(scene: PackedScene) -> void:
 	var match_scene: Node = scene.instantiate()
 	get_tree().root.add_child(match_scene)
 	get_tree().current_scene = match_scene
+	print("benchmark: map loaded in %.1f s" % ((Time.get_ticks_usec() - _boot_usec) / 1000000.0))
 	_main = match_scene as Main
 	if _main == null:
 		_abort("map scene root is not a Main")
@@ -207,6 +225,19 @@ func _morale_line(measured: int) -> void:
 func _process(delta: float) -> void:
 	if not _measuring or _perf == null:
 		return
+	_frames += 1
+	_frame_sum += delta
+	if delta > _frame_worst:
+		_worst_frame_parts = Vector3(Performance.get_monitor(Performance.TIME_PROCESS),
+				Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS),
+				Performance.get_monitor(Performance.TIME_NAVIGATION_PROCESS)) * 1000.0
+	_frame_worst = maxf(_frame_worst, delta)
+	var rid: RID = get_viewport().get_viewport_rid()
+	_render_cpu_sum += RenderingServer.viewport_get_measured_render_time_cpu(rid)
+	_render_gpu_sum += RenderingServer.viewport_get_measured_render_time_gpu(rid)
+	_process_sum += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	_physics_sum += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	_nav_sum += Performance.get_monitor(Performance.TIME_NAVIGATION_PROCESS) * 1000.0
 	_sample_timer -= delta
 	if _sample_timer > 0.0:
 		return
@@ -399,6 +430,19 @@ func _finish() -> void:
 	print("map %d   seed %d   %d units/side   %d ticks   %.1f s wall" % [
 		map_index, run_seed, units_per_side, measure_ticks, wall_seconds])
 	print("units alive at end %d   samples %d" % [alive, _samples.size()])
+	var frames: int = maxi(_frames, 1)
+	print("whole frame      %7.2f ms avg   worst %7.2f   (%.0f fps)   render cpu %.2f gpu %.2f ms" % [
+		_frame_sum / frames * 1000.0, _frame_worst * 1000.0, frames / maxf(_frame_sum, 0.001),
+		_render_cpu_sum / frames, _render_gpu_sum / frames])
+	print("worst frame was  process %.1f  physics %.1f  navigation %.1f ms" % [
+		_worst_frame_parts.x, _worst_frame_parts.y, _worst_frame_parts.z])
+	print("engine process  %.2f ms   physics %.2f ms   navigation %.2f ms   (avg per frame)" % [
+		_process_sum / frames, _physics_sum / frames, _nav_sum / frames])
+	print("memory static %.0f MB   nodes %d   draw calls %d   objects drawn %d" % [
+		Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0,
+		int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
 	## Morale (see Morale): how many are steady, shaken or running at the end,
 	## and how many broke at some point.
 	var states := [0, 0, 0, 0]
@@ -531,3 +575,4 @@ func _abort(reason: String) -> void:
 	push_error("benchmark: " + reason)
 	print("benchmark: FAILED - " + reason)
 	get_tree().quit(1)
+

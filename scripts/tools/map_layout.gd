@@ -570,10 +570,10 @@ func _plan_roads() -> void:
 				if (site.pos as Vector2).distance_to(at) < (nearest.pos as Vector2).distance_to(at):
 					nearest = site
 			left.erase(nearest)
-			_paths.append({a = at, b = nearest.pos, width = _gen.road_width, copies = copies})
+			_paths.append({a = at, b = nearest.pos, width = _gen.road_width, copies = copies, road = true})
 			at = nearest.pos
 		if _centre_site is Vector2:
-			_paths.append({a = at, b = _centre_site, width = _gen.road_width, copies = copies})
+			_paths.append({a = at, b = _centre_site, width = _gen.road_width, copies = copies, road = true})
 
 func _plan_objectives() -> void:
 	var scenes: Array[PackedScene] = []
@@ -586,6 +586,13 @@ func _plan_objectives() -> void:
 			centre_scene = scenes[_rng.randi() % scenes.size()] if not scenes.is_empty() else null
 		MapGenerator.CentreSite.SHRINE:
 			centre_scene = _gen.shrine_scene
+	var centre_props := {favour_per_second = _gen.centre_favour_per_second}
+	## A settlement map's middle is its City: the prize every side can reach.
+	if _gen.is_settlement_map() and _gen.centre_site != MapGenerator.CentreSite.NONE:
+		var settlements: Array = _gen.settlement_scenes.filter(func(s): return s != null)
+		if not settlements.is_empty():
+			centre_scene = settlements[_rng.randi() % settlements.size()]
+			centre_props = {start_tier = Objective.Tier.CITY}
 	var centre: Vector2 = Vector2.ZERO
 	if imported and centre_scene != null:
 		## The middle of an imported map may be water or cliff: use the nearest
@@ -605,7 +612,7 @@ func _plan_objectives() -> void:
 		else:
 			centre = found
 	if centre_scene != null:
-		_objective_sites.append({pos = centre, scene = centre_scene, symmetric = true, footprint = footprint, props = {favour_per_second = _gen.centre_favour_per_second}, copies = [0]})
+		_objective_sites.append({pos = centre, scene = centre_scene, symmetric = true, footprint = footprint, props = centre_props, copies = [0]})
 		_centre_site = centre
 	var requests: Array[Dictionary] = []
 	if _gen.is_settlement_map():
@@ -663,6 +670,27 @@ func _plan_objectives() -> void:
 					_objective_sites.erase(site)
 				push_warning("MapGenerator: no room for every objective/shrine — lower the per-player counts or Objective Min Base Distance, or use a bigger map.")
 				break
+	_assign_settlement_tiers()
+
+## Each player's settlements by distance from their base: the nearer half are
+## Villages, the rest Towns (the City is the centre site).
+func _assign_settlement_tiers() -> void:
+	if not _gen.is_settlement_map():
+		return
+	var by_base: Dictionary = {}
+	for site in _objective_sites:
+		if site.has("slot_base") and site.scene != _gen.shrine_scene:
+			if not by_base.has(site.slot_base):
+				by_base[site.slot_base] = []
+			by_base[site.slot_base].append(site)
+	for base in by_base:
+		var sites: Array = by_base[base]
+		var home: Vector2 = base_centres[base]
+		sites.sort_custom(func(a, b): return rot(a.pos, a.copies[0]).distance_to(home) < rot(b.pos, b.copies[0]).distance_to(home))
+		for i in sites.size():
+			var props: Dictionary = sites[i].props.duplicate()
+			props.start_tier = Objective.Tier.VILLAGE if i < ceili(sites.size() / 2.0) else Objective.Tier.TOWN
+			sites[i].props = props
 
 func _clear_of_bases(p: Vector2, min_distance: float, copies: Array) -> bool:
 	for k in copies:
@@ -1427,6 +1455,18 @@ func _footprint_ok(p: Vector2, radius: float, max_rise: float, cliff_clearance: 
 			low = minf(low, h)
 			high = maxf(high, h)
 	return high - low <= max_rise
+
+## The settlement roads (not the plain centre paths) in world XZ, one
+## [a, b, width] per segment and per player's copy: saved on the map for
+## RoadNet.
+func road_segments() -> Array:
+	var out: Array = []
+	for path in _paths:
+		if not path.get("road", false):
+			continue
+		for k in path.copies:
+			out.append([rot(path.a, k), rot(path.b, k), path.width])
+	return out
 
 func _near_path(p: Vector2, clearance: float) -> bool:
 	for path in _paths:

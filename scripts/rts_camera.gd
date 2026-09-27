@@ -1,6 +1,9 @@
+class_name RtsCamera
 extends Node3D
 ## RTS camera rig: WASD/edge pan, Q/E or middle-mouse-drag rotate, scroll-wheel zoom.
 
+## At the default zoom (DEFAULT_ZOOM); panning scales with zoom distance so
+## the ground slides past the screen at the same rate at any zoom.
 @export var pan_speed: float = 24.0
 @export var edge_pan_margin: int = 14
 ## Off by default: with two windows open side-by-side for multiplayer testing,
@@ -19,6 +22,11 @@ extends Node3D
 @export var min_zoom: float = 8.0
 @export var max_zoom: float = 22.0
 @export var pitch_degrees: float = 30.0
+## Past max_zoom the wheel keeps pulling out to overview_zoom for a look over
+## a big map, tilting down towards overview_pitch_degrees as it goes — at the
+## normal pitch that far out the view is mostly horizon.
+@export var overview_zoom: float = 110.0
+@export var overview_pitch_degrees: float = 62.0
 @export var field_of_view: float = 45.0
 ## Depth-of-field focus band in screen space, as fractions of the screen height
 ## measured from the top edge (0 = top, 1 = bottom). Ground between these two
@@ -48,7 +56,10 @@ const GROUND_RAY_MASK: int = 0xFFFFFFFF & ~4
 const SHAKE_DURATION: float = 0.15
 const SHAKE_MAX_OFFSET: float = 0.22
 
-var zoom_distance: float = 18.0
+const DEFAULT_ZOOM: float = 18.0
+## Close in, panning never drops below this share of pan_speed.
+const MIN_PAN_SCALE: float = 0.6
+var zoom_distance: float = DEFAULT_ZOOM
 var _zoom_target: float = 18.0
 var rotating: bool = false
 var _pan_velocity: Vector3 = Vector3.ZERO
@@ -76,17 +87,42 @@ func _apply_settings(_key: StringName) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_zoom_target = clamp(_zoom_target - zoom_speed, min_zoom, max_zoom)
+			_zoom_target = clamp(_zoom_target - _zoom_step(), min_zoom, _zoom_limit())
 			_report_zoom()
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_zoom_target = clamp(_zoom_target + zoom_speed, min_zoom, max_zoom)
+			_zoom_target = clamp(_zoom_target + _zoom_step(), min_zoom, _zoom_limit())
 			_report_zoom()
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
 			rotating = event.pressed
 	elif event is InputEventMouseMotion and rotating:
-		## Horizontal drag only — pitch stays fixed because the DOF band is
-		## fitted to pitch_degrees.
+		## Horizontal drag only — pitch follows zoom (see _pitch_now), and the
+		## DOF band is fitted to it.
 		yaw.rotation.y -= event.relative.x * mouse_rotate_sensitivity
+
+var _last_frame_usec: int = 0
+
+## Seconds since the last frame, unscaled, capped so a hitch can't fling it.
+func _real_delta() -> float:
+	var now := Time.get_ticks_usec()
+	var seconds: float = 0.0 if _last_frame_usec == 0 else (now - _last_frame_usec) / 1000000.0
+	_last_frame_usec = now
+	return clampf(seconds, 0.0, 0.1)
+
+## One wheel notch: zoom_speed close in, growing with distance so the pull out
+## to overview doesn't take dozens of notches.
+func _zoom_step() -> float:
+	return zoom_speed * maxf(1.0, _zoom_target / max_zoom * 2.0)
+
+func _zoom_limit() -> float:
+	return maxf(overview_zoom, max_zoom)
+
+## The pitch for the current zoom: pitch_degrees up to max_zoom, easing to
+## overview_pitch_degrees at overview_zoom.
+func _pitch_now() -> float:
+	if zoom_distance <= max_zoom or overview_zoom <= max_zoom:
+		return pitch_degrees
+	var t: float = clampf((zoom_distance - max_zoom) / (overview_zoom - max_zoom), 0.0, 1.0)
+	return lerpf(pitch_degrees, overview_pitch_degrees, smoothstep(0.0, 1.0, t))
 
 ## Jolts the camera for something happening at world_pos — ignored outright if
 ## that point isn't in frame, so a base collapsing across the map never shakes
@@ -106,7 +142,10 @@ func _update_shake(delta: float) -> void:
 	camera.position.x = randf_range(-strength, strength)
 	camera.position.y = randf_range(-strength, strength)
 
-func _process(delta: float) -> void:
+func _process(_scaled_delta: float) -> void:
+	## The camera runs on the wall clock: it has to keep moving while the game
+	## is paused or slowed (see Main.GAME_SPEEDS), and not rush when sped up.
+	var delta := _real_delta()
 	_update_shake(delta)
 	_update_zoom_smoothing(delta)
 
@@ -164,7 +203,7 @@ func _update_pan(input_dir: Vector2, delta: float) -> void:
 		right.y = 0.0
 		forward = forward.normalized()
 		right = right.normalized()
-		desired = (right * input_dir.x + forward * -input_dir.y) * pan_speed
+		desired = (right * input_dir.x + forward * -input_dir.y) * pan_speed * maxf(zoom_distance / DEFAULT_ZOOM, MIN_PAN_SCALE)
 
 	var weight := 1.0 - exp(-pan_smoothing * delta)
 	_pan_velocity = _pan_velocity.lerp(desired, weight)
@@ -232,7 +271,7 @@ func _report_camera_use(moved: float) -> void:
 ## screen row (0 = top edge, 1 = bottom edge). Rows that look at or above the
 ## horizon never hit the ground, so they're clamped to the camera's far plane.
 func _ground_depth_at(screen_y: float) -> float:
-	var pitch_rad := deg_to_rad(pitch_degrees)
+	var pitch_rad := deg_to_rad(_pitch_now())
 	var height := zoom_distance * sin(pitch_rad)
 	var ray_offset := atan((screen_y * 2.0 - 1.0) * tan(deg_to_rad(field_of_view) * 0.5))
 	var ray_dip := pitch_rad + ray_offset
@@ -255,6 +294,7 @@ func _update_zoom_smoothing(delta: float) -> void:
 
 func _update_zoom() -> void:
 	camera.position.z = zoom_distance
+	pitch.rotation_degrees.x = -_pitch_now()
 	## Re-fits the depth-of-field band to the screen-space focus lines as the
 	## player zooms, for a tilt-shift/diorama look at any zoom level. Godot's
 	## blur starts at each distance and reaches full strength one transition

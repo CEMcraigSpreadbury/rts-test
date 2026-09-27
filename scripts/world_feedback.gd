@@ -908,6 +908,11 @@ func update_rally_marker() -> void:
 ## regiment records to draw the right standard in the right place.
 const REGIMENT_BANNER_HEIGHT: float = 2.6
 const REGIMENT_BANNER_PIXEL_SIZE: float = 0.03
+## Zoomed out past the default a standard grows (and rides higher) so it
+## stays readable over a big map: by the zoom ratio to this power, which keeps
+## it a little smaller on screen the further out you are, never less than
+## full size.
+const REGIMENT_BANNER_ZOOM_EXPONENT: float = 0.8
 const REGIMENT_BANNER_ALPHA: float = 0.95
 ## Draw order against the other see-through things on the same ground. Two
 ## transparent surfaces sort by distance to the camera unless one is given
@@ -936,6 +941,8 @@ const REGIMENT_BANNER_ROUT_TINT: Color = Color(1.0, 0.36, 0.3)
 
 var _regiment_banners: Dictionary = {}
 var _regiment_targets: Dictionary = {}
+## Standard id -> the men under it as of the last survey (see banner_units_at).
+var _regiment_members: Dictionary = {}
 var _regiment_resurvey_timer: float = 0.0
 ## Built standards, keyed by sprite sheet + team colour, so a new regiment of a
 ## type already on the field costs nothing.
@@ -947,9 +954,16 @@ func update_regiment_banners(delta: float) -> void:
 		_regiment_resurvey_timer = REGIMENT_BANNER_RESURVEY
 		_resurvey_regiments()
 	var weight: float = minf(1.0, REGIMENT_BANNER_FOLLOW * delta)
+	var scale: float = _banner_zoom_scale()
+	var lift := Vector3(0.0, REGIMENT_BANNER_HEIGHT * scale, 0.0)
 	for id in _regiment_banners:
 		var sprite: Sprite3D = _regiment_banners[id]
-		sprite.global_position = sprite.global_position.lerp(_regiment_targets[id], weight)
+		sprite.pixel_size = REGIMENT_BANNER_PIXEL_SIZE * scale
+		sprite.global_position = sprite.global_position.lerp(_regiment_targets[id] + lift, weight)
+
+func _banner_zoom_scale() -> float:
+	var zoom: float = main.camera_rig.zoom_distance if main != null and main.camera_rig != null else RtsCamera.DEFAULT_ZOOM
+	return pow(maxf(zoom / RtsCamera.DEFAULT_ZOOM, 1.0), REGIMENT_BANNER_ZOOM_EXPONENT)
 
 ## Host: which loose units march in a block big enough for a standard.
 func _assign_blocks() -> void:
@@ -989,6 +1003,7 @@ func _resurvey_regiments() -> void:
 	var tallies: Dictionary = {}
 	## regiment id -> [wavering, running]
 	var shaken: Dictionary = {}
+	_regiment_members.clear()
 	for node in get_tree().get_nodes_in_group(&"units"):
 		var unit := node as Unit
 		if unit == null or unit.status_activity == Unit.Activity.DEAD:
@@ -999,6 +1014,9 @@ func _resurvey_regiments() -> void:
 		var id: int = key
 		sums[id] = (sums.get(id, Vector3.ZERO) as Vector3) + unit.global_position
 		counts[id] = int(counts.get(id, 0)) + 1
+		if not _regiment_members.has(id):
+			_regiment_members[id] = []
+		_regiment_members[id].append(unit)
 		if unit.morale_state != Morale.State.STEADY:
 			var tally_state: Array = shaken.get(id, [0, 0])
 			tally_state[1 if unit.is_routing() else 0] += 1
@@ -1018,14 +1036,15 @@ func _resurvey_regiments() -> void:
 			_regiment_banners.erase(id)
 			_regiment_targets.erase(id)
 	for id in counts:
+		## The block's middle on the ground; the standard's height over it
+		## depends on the zoom (see update_regiment_banners).
 		var centre: Vector3 = (sums[id] as Vector3) / float(counts[id])
-		centre.y += REGIMENT_BANNER_HEIGHT
 		_regiment_targets[id] = centre
 		var sprite: Sprite3D = _regiment_banners.get(id)
 		if sprite == null:
 			sprite = _make_regiment_banner()
 			_regiment_banners[id] = sprite
-			sprite.global_position = centre
+			sprite.global_position = centre + Vector3(0.0, REGIMENT_BANNER_HEIGHT * _banner_zoom_scale(), 0.0)
 		var bearer: Unit = _majority_bearer(tallies.get(id, {}))
 		sprite.texture = _banner_texture(bearer) if bearer != null else null
 		sprite.visible = sprite.texture != null
@@ -1036,6 +1055,35 @@ func _resurvey_regiments() -> void:
 		elif (state[0] + state[1]) * 2 > counts[id]:
 			tint = REGIMENT_BANNER_WAVER_TINT
 		sprite.modulate = Color(tint, REGIMENT_BANNER_ALPHA)
+
+## The men under the standard drawn at `screen_pos` (the nearest one, if
+## standards overlap), or empty. A standard is picked by its drawn square, so
+## the same click works at any zoom (see _banner_zoom_scale).
+func banner_units_at(screen_pos: Vector2) -> Array[Unit]:
+	var found: Array[Unit] = []
+	var camera: Camera3D = main.camera
+	var up: Vector3 = camera.global_basis.y
+	var best_id: Variant = null
+	var best_distance: float = INF
+	for id in _regiment_banners:
+		var sprite: Sprite3D = _regiment_banners[id]
+		if not sprite.visible or sprite.texture == null or camera.is_position_behind(sprite.global_position):
+			continue
+		var centre: Vector2 = camera.unproject_position(sprite.global_position)
+		var half_height: float = sprite.texture.get_height() * sprite.pixel_size * 0.5
+		var half_px: float = centre.distance_to(camera.unproject_position(sprite.global_position + up * half_height))
+		if absf(screen_pos.x - centre.x) > half_px or absf(screen_pos.y - centre.y) > half_px:
+			continue
+		var distance: float = camera.global_position.distance_to(sprite.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_id = id
+	if best_id == null:
+		return found
+	for unit in _regiment_members.get(best_id, []):
+		if is_instance_valid(unit) and unit.status_activity != Unit.Activity.DEAD:
+			found.append(unit)
+	return found
 
 func _make_regiment_banner() -> Sprite3D:
 	var sprite := Sprite3D.new()
@@ -1221,6 +1269,8 @@ func _hover_ring_radius(node: Node) -> float:
 		return HOVER_RING_UNIT_RADIUS
 	var obstacle: NavigationObstacle3D = node.get_node_or_null("NavigationObstacle3D")
 	var obstacle_radius: float = obstacle.radius + 0.2 if obstacle else 1.0
+	if node is Gatherable and node.is_tree():
+		obstacle_radius = node.trunk_radius + 0.2
 	## Gatherables deliberately keep using the obstacle radius: a tree's
 	## canopy reaches well past its trunk, and a ring out at the leaves would
 	## cover its neighbours rather than marking the one under the cursor.

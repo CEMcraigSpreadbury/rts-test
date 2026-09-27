@@ -63,13 +63,20 @@ const TIER_UPGRADE_SECONDS: Array[float] = [0.0, 45.0, 60.0]
 const TIER_NAMES: Array[String] = ["Village", "Town", "City"]
 ## How often a settlement shows its owner what it has paid them.
 const INCOME_POPUP_SECONDS: float = 5.0
+## How much Favour (and research) a settlement pays at each tier. Its gold,
+## wood and food come from the buildings in its slots instead.
 const TIER_INCOME: Array[float] = [1.0, 1.5, 2.0]
-const TIER_FOOD_PER_SECOND: Array[float] = [0.5, 0.8, 1.2]
 const TIER_HOUSES: Array[int] = [3, 6, 10]
 ## The owner's garrison at each tier; a neutral settlement starts with
-## NEUTRAL_GARRISON guards (the scene's own plus copies of them).
+## NEUTRAL_GARRISON guards for its tier (the scene's own plus copies of them).
 const TIER_GARRISON: Array[int] = [3, 6, 9]
-const NEUTRAL_GARRISON: int = 6
+const NEUTRAL_GARRISON: Array[int] = [6, 9, 12]
+## A settlement is taken by standing anywhere in it, cottages and slot
+## buildings included, not on a small plate in the middle: its capture circle
+## (and the progress disc drawn over it) is this wide, inside the walls.
+const SETTLEMENT_CAPTURE_RADIUS: float = 12.0
+## Its garrison spreads over the settlement to match.
+const SETTLEMENT_WANDER_RADIUS: float = 7.0
 const GARRISON_REGEN_SECONDS: float = 20.0
 ## Cottages stand in a ring outside the capture zone and inside the clearing
 ## the map generator levels for a settlement.
@@ -81,6 +88,9 @@ const FOOD_RESOURCE: ResourceType = preload("res://resources/food_resource_type.
 ## Centre first (see territory_owner).
 const TERRITORY_REACH: float = 70.0
 
+## What a settlement starts as (the map generator sets it by where it stands:
+## Villages near the bases, Towns further out, a City in the middle).
+@export var start_tier: Tier = Tier.VILLAGE
 var tier: int = Tier.VILLAGE
 ## Host only: income paid since the last popup, by resource.
 var _income_shown: Dictionary = {}
@@ -175,8 +185,12 @@ func _ready() -> void:
 			if hall == null:
 				hall = building
 	if is_settlement():
+		tier = start_tier
+		wander_radius = SETTLEMENT_WANDER_RADIUS
+		_widen_capture_zone()
 		_show_houses()
 		_offer_slots()
+		_name_hall()
 	if not multiplayer.is_server():
 		return
 	for guard in guards.get_children():
@@ -187,6 +201,23 @@ func _ready() -> void:
 		building.owner_peer_id = 0
 	if is_settlement():
 		_grow_neutral_garrison.call_deferred()
+
+## How far from its centre a unit counts as standing on this point.
+func capture_radius() -> float:
+	var shape := capture_zone.get_child(0) as CollisionShape3D
+	return (shape.shape as SphereShape3D).radius if shape != null and shape.shape is SphereShape3D else 5.0
+
+## Every objective scene shares the one capture sphere and disc mesh, so a
+## settlement takes private copies before resizing them.
+func _widen_capture_zone() -> void:
+	var shape := capture_zone.get_child(0) as CollisionShape3D
+	if shape == null or not (shape.shape is SphereShape3D):
+		return
+	var sphere := shape.shape.duplicate() as SphereShape3D
+	var scale_by: float = SETTLEMENT_CAPTURE_RADIUS / sphere.radius
+	sphere.radius = SETTLEMENT_CAPTURE_RADIUS
+	shape.shape = sphere
+	progress_disc.scale = Vector3(scale_by, 1.0, scale_by)
 
 ## Idempotent, because a ShrineObjective's guard does not exist at a fixed
 ## point in the lifecycle: the host adds it before _ready (so the loop above
@@ -456,12 +487,12 @@ func _tick_favour(delta: float) -> void:
 ## Host-only remainders of gold/wood earned but not yet whole enough to bank.
 var _gold_fraction: float = 0.0
 var _wood_fraction: float = 0.0
-var _food_fraction: float = 0.0
 
 ## Same terms as Favour (see _tick_favour) apart from the game mode. Pays
-## wood alongside gold; the POINT_GOLD research bonus scales both.
+## wood alongside gold; the POINT_GOLD research bonus scales both. A Realm
+## settlement pays none of this itself: what it earns is what is built in it.
 func _tick_gold(delta: float) -> void:
-	if (gold_per_second <= 0.0 and wood_per_second <= 0.0) or owner_peer_id <= 0 or not _paying:
+	if (gold_per_second <= 0.0 and wood_per_second <= 0.0) or owner_peer_id <= 0 or not _paying or is_settlement():
 		return
 	var main := get_tree().current_scene
 	if main.has_method("is_peer_active") and not main.is_peer_active(owner_peer_id):
@@ -469,13 +500,6 @@ func _tick_gold(delta: float) -> void:
 	var mult := (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.POINT_GOLD)) * _tier_income() * _night_bonus() * delta
 	_gold_fraction += gold_per_second * mult
 	_wood_fraction += wood_per_second * mult
-	if is_settlement():
-		_food_fraction += TIER_FOOD_PER_SECOND[tier] * _night_bonus() * delta
-		var whole_food := int(_food_fraction)
-		if whole_food > 0:
-			_food_fraction -= float(whole_food)
-			ResourceStockpile.add(owner_peer_id, FOOD_RESOURCE, whole_food)
-			_count_income(FOOD_RESOURCE, whole_food)
 	var whole_gold := int(_gold_fraction)
 	if whole_gold > 0:
 		_gold_fraction -= float(whole_gold)
@@ -534,7 +558,6 @@ func _set_owner(new_owner: int) -> void:
 	_favour_fraction = 0.0
 	_gold_fraction = 0.0
 	_wood_fraction = 0.0
-	_food_fraction = 0.0
 	_income_shown.clear()
 	_income_timer = 0.0
 	_garrison.clear()
@@ -550,10 +573,16 @@ func _set_owner(new_owner: int) -> void:
 		building.team_tint = tint
 	if is_settlement():
 		razed = false
+		_tier_before_capture = tier
+		## Taken off another player, not won from its own people: the fight
+		## costs the settlement a tier (see _drop_tier_on_capture).
+		if previous_owner > 0 and new_owner > 0 and previous_owner != new_owner:
+			_drop_tier_on_capture()
 		_set_choice(new_owner)
 		if multiplayer.multiplayer_peer != null:
 			_rpc_houses.rpc(tier)
 		_show_houses()
+		_name_hall()
 	if new_owner > 0:
 		if multiplayer.multiplayer_peer != null:
 			_rpc_capture_hop.rpc()
@@ -637,9 +666,10 @@ func _grow_neutral_garrison() -> void:
 	if not ("unit_spawner" in main) or _guard_roster.is_empty():
 		return
 	var start: int = _guard_roster.size()
-	for i in range(start, NEUTRAL_GARRISON):
+	var count: int = NEUTRAL_GARRISON[tier]
+	for i in range(start, count):
 		var template: Dictionary = _guard_roster[i % start]
-		var angle: float = TAU * float(i) / float(NEUTRAL_GARRISON)
+		var angle: float = TAU * float(i) / float(count)
 		var local := Vector3(cos(angle), 0.0, sin(angle)) * (wander_radius * 0.6)
 		_guard_roster.append({scene_path = template.scene_path, position = local})
 		var unit: Unit = main.unit_spawner.spawn({
@@ -654,6 +684,14 @@ func _grow_neutral_garrison() -> void:
 func _rpc_houses(new_tier: int) -> void:
 	tier = new_tier
 	_show_houses()
+	_name_hall()
+
+## A settlement's hall goes by what the settlement is (Village, Town, City),
+## not by the building its scene happens to use — a Human one is a Barracks,
+## which is also the name of a slot building now.
+func _name_hall() -> void:
+	if hall != null:
+		hall.building_name = TIER_NAMES[tier]
 
 ## Cottages for the current tier, roofed in the owner's colour. Every peer lays
 ## them out from the settlement's own position, so they agree without being
@@ -794,22 +832,19 @@ static func _flat_distance_squared(a: Vector3, b: Vector3) -> float:
 
 ## --- Slots (Realm) ---
 ## A settlement's hall (its central building) offers buildings for its slots
-## as items in its own queue: one slot as a Village, two as a Town, three as a
-## City. Each option can be built once; the building goes up finished when the
-## item completes, in the next free place around the square.
-const TIER_SLOTS: Array[int] = [1, 2, 3]
+## as items in its own queue: two slots as a Village, three as a Town, four as
+## a City. The resource buildings can be built more than once, everything
+## else once; the building goes up finished when the item completes, in the
+## first free place around the square.
+const TIER_SLOTS: Array[int] = [2, 3, 4]
 const SLOT_RADIUS: float = 6.0
 const GRANARY: String = "Granary"
 const MARKET: String = "Market"
+const LUMBERYARD: String = "Lumberyard"
 const WATCHTOWER: String = "Watchtower"
+## Food, gold and wood: a settlement can stack these.
+const REPEATABLE_SLOTS: Array[String] = [GRANARY, MARKET, LUMBERYARD]
 const SLOT_BUILD_SECONDS: float = 30.0
-## Race name -> [item name, building scene, wood, gold]: each people's own
-## second building, which trains the rest of their roster.
-const RACE_SLOTS: Dictionary = {
-	"Gnolls": ["Gnoll Totem", "res://scenes/buildings/gnoll_totem_building.tscn", 120, 60],
-	"Dark Elves": ["Dark Elf Coven", "res://scenes/buildings/dark_elf_coven_building.tscn", 120, 60],
-	"Star Wanderers": ["Star Sanctum", "res://scenes/buildings/star_sanctum_building.tscn", 120, 60],
-}
 const WOOD_COST: ResourceType = preload("res://resources/wood_resource_type.tres")
 const GOLD_COST: ResourceType = preload("res://resources/gold_resource_type.tres")
 
@@ -822,15 +857,33 @@ var _slot_buildings: Array = []
 
 func _slot_options() -> Array[ProducibleItem]:
 	var items: Array[ProducibleItem] = []
-	if RACE_SLOTS.has(race_name):
-		var entry: Array = RACE_SLOTS[race_name]
-		items.append(_slot_item(entry[0], entry[1], entry[2], entry[3]))
+	## The people's military buildings (see RealmRoster): one per kind of unit
+	## they field, and the only way to recruit them here.
+	for kind in RealmRoster.kinds_for(race_name):
+		var cost: Array = RealmRoster.KIND_COSTS[kind]
+		items.append(_slot_item(RealmRoster.KIND_NAMES[kind], RealmRoster.scene_for(race_name, kind), cost[0], cost[1]))
 	items.append(_slot_item(GRANARY, "res://scenes/settlements/granary_building.tscn", 80, 0))
-	if race_name == "Human":
-		items.append(_slot_item(MARKET, "res://scenes/settlements/market_building.tscn", 60, 40))
+	items.append(_slot_item(MARKET, "res://scenes/settlements/market_building.tscn", 60, 40))
+	items.append(_slot_item(LUMBERYARD, "res://scenes/settlements/lumberyard_building.tscn", 40, 40))
 	items.append(_slot_item(WATCHTOWER, "res://scenes/buildings/watchtower_building.tscn", 100, 20))
 	items.append(_slot_item(WALLS, "res://scenes/buildings/wall_gate.tscn", 300, 100))
 	return items
+
+## The build-menu icon of whichever building type (the faction's own, or an
+## allied race's) puts up `scene_path`; null for the settlement-only ones.
+static func _building_icon_for(scene_path: String) -> Texture2D:
+	var types: Array = []
+	var faction := load(FACTION_PATH) as Faction
+	if faction != null:
+		types.append_array(faction.building_types)
+	for race in Pacts.list_all():
+		types.append_array(race.building_types)
+	for type in types:
+		if type != null and type.scene != null and type.scene.resource_path == scene_path:
+			return type.icon
+	return null
+
+const FACTION_PATH: String = "res://resources/factions/faction_one.tres"
 
 ## The same items on every peer and in the same order: the hall's menu is
 ## indexed by position (Main.enqueue_as).
@@ -840,6 +893,7 @@ static func _slot_item(item_name: String, scene_path: String, wood: int, gold: i
 	item.kind = ProducibleItem.Kind.SLOT
 	item.build_time = SLOT_BUILD_SECONDS
 	item.slot_scene = load(scene_path)
+	item.icon = _building_icon_for(scene_path)
 	var costs: Array[ResourceCost] = []
 	for pair in [[WOOD_COST, wood], [GOLD_COST, gold]]:
 		if int(pair[1]) > 0:
@@ -853,8 +907,9 @@ static func _slot_item(item_name: String, scene_path: String, wood: int, gold: i
 func _offer_slots() -> void:
 	if hall == null:
 		return
-	## A copy: the scene's list is shared by every building of that kind.
-	var offered: Array[ProducibleItem] = hall.producibles.duplicate()
+	## A copy: the scene's list is shared by every building of that kind. The
+	## hall trains nobody in Realm — its people come from military buildings.
+	var offered: Array[ProducibleItem] = hall.producibles.filter(func(i): return i.kind != ProducibleItem.Kind.UNIT)
 	offered.append_array(_slot_options())
 	for next in [Tier.TOWN, Tier.CITY]:
 		var raise := ProducibleItem.new()
@@ -870,7 +925,7 @@ func _offer_slots() -> void:
 			raise_costs.append(cost)
 		raise.costs = raise_costs
 		offered.append(raise)
-	for choice in [Choice.OCCUPY, Choice.SACK, Choice.RAZE]:
+	for choice in [Choice.OCCUPY, Choice.RAZE]:
 		var item := ProducibleItem.new()
 		item.item_name = CHOICE_NAMES[choice]
 		item.kind = ProducibleItem.Kind.CHOICE
@@ -881,19 +936,23 @@ func _offer_slots() -> void:
 
 ## Whether `item` can go into the queue of this settlement's hall now.
 func can_build_slot(item: ProducibleItem, queue: Array) -> bool:
-	if not is_settlement() or slot_built.has(item.item_name):
+	if not is_settlement() or _built_once(item.item_name):
 		return false
 	var queued := 0
 	for entry in queue:
 		if entry.kind == ProducibleItem.Kind.SLOT:
-			if entry.item_name == item.item_name:
+			if entry.item_name == item.item_name and not REPEATABLE_SLOTS.has(item.item_name):
 				return false
 			queued += 1
 	return slot_built.size() + queued < TIER_SLOTS[tier]
 
-## For the HUD, on any peer: still to build, with a slot free for it.
+## For the HUD, on any peer: allowed again, with a slot free for it.
 func slot_open(item: ProducibleItem) -> bool:
-	return is_settlement() and not slot_built.has(item.item_name) and slot_built.size() < TIER_SLOTS[tier]
+	return is_settlement() and not _built_once(item.item_name) and slot_built.size() < TIER_SLOTS[tier]
+
+## Already standing here, and only one allowed.
+func _built_once(item_name: String) -> bool:
+	return slot_built.has(item_name) and not REPEATABLE_SLOTS.has(item_name)
 
 ## Host only, when a SLOT item finishes in the hall.
 func place_slot(item: ProducibleItem) -> void:
@@ -903,17 +962,36 @@ func place_slot(item: ProducibleItem) -> void:
 	if item.item_name == WALLS:
 		_build_walls()
 		return
-	var index: int = slot_built.size()
+	## The first place not taken: a building lost in a fight frees its place,
+	## so counting what stands would put the next one on top of another.
+	var taken: Array = []
+	for standing in _slot_buildings:
+		if is_instance_valid(standing):
+			taken.append(standing.get_meta(&"slot_index", -1))
+	var index: int = 0
+	while taken.has(index):
+		index += 1
 	var angle: float = PI * 0.5 + TAU * float(index) / float(TIER_SLOTS.back())
 	var at: Vector3 = global_position + Vector3(cos(angle), 0.0, sin(angle)) * SLOT_RADIUS
-	var building: ProductionBuilding = main.building_spawner.spawn({
+	var data := {
 		"scene_path": item.slot_scene.resource_path,
 		"peer_id": owner_peer_id,
 		"position": at,
 		"tint": main.get_team_tint(owner_peer_id),
 		"drop_in_delay": 0.0,
-	})
+		"building_name": item.item_name,
+		## A military building trains this people's units of its kind,
+		## whatever the building scene itself was made to train, and every
+		## slot building starts at level 1 (see ProductionBuilding.setup_slot).
+		"slot_race": race_name,
+		"slot_kind": RealmRoster.kind_named(item.item_name),
+		"slot_level": 1,
+		"slot_level_cap": _level_cap(),
+	}
+	var building: ProductionBuilding = main.building_spawner.spawn(data)
 	building.settlement = self
+	building.set_meta(&"slot_index", index)
+	building.set_meta(&"slot_name", item.item_name)
 	_slot_buildings.append(building)
 	slot_built.append(item.item_name)
 	var built_name: String = item.item_name
@@ -924,6 +1002,35 @@ func place_slot(item: ProducibleItem) -> void:
 			_send_slots()
 	, CONNECT_ONE_SHOT)
 	_send_slots()
+
+## How far a slot building here can be raised: Village 1, Town 2, City 3.
+func _level_cap() -> int:
+	return mini(tier + 1, RealmRoster.MAX_LEVEL)
+
+## Host only, when a LEVEL item finishes in one of this settlement's slot buildings.
+func raise_building_level(building: ProductionBuilding, level: int) -> void:
+	if not is_instance_valid(building) or level != building.slot_level + 1 or level > _level_cap():
+		return
+	_set_building_level(building, level)
+
+## Host: applies and sends one building's level and cap.
+func _set_building_level(building: ProductionBuilding, level: int) -> void:
+	building.apply_slot_level(level, _level_cap())
+	if multiplayer.multiplayer_peer != null:
+		_rpc_building_level.rpc(get_path_to(building), level, _level_cap())
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_building_level(path: NodePath, level: int, cap: int) -> void:
+	var building := get_node_or_null(path) as ProductionBuilding
+	if building != null:
+		building.apply_slot_level(level, cap)
+
+## Host: every slot building's cap follows the tier (up after an upgrade, and
+## levels clamped down with it after a capture).
+func _refresh_building_levels() -> void:
+	for building in _slot_buildings:
+		if is_instance_valid(building) and building.slot_level > 0:
+			_set_building_level(building, mini(building.slot_level, _level_cap()))
 
 func _send_slots() -> void:
 	if multiplayer.multiplayer_peer != null:
@@ -949,11 +1056,15 @@ func _night_bonus() -> float:
 ## is, strip it for gold at the cost of a tier, or burn it to the ground for a
 ## little gold and leave nobody's ruins behind. The three sit on its hall's
 ## menu until chosen; left alone, it is occupied.
-enum Choice { OCCUPY, SACK, RAZE }
-const CHOICE_NAMES: Array[String] = ["Occupy", "Sack", "Raze"]
+## Keep it, or burn it down for gold and leave nobody the use of it. (Sacking
+## is gone: taking a settlement off a player already costs it a tier.)
+enum Choice { OCCUPY, RAZE }
+const CHOICE_NAMES: Array[String] = ["Occupy", "Raze"]
 const CHOICE_SECONDS: float = 30.0
-const SACK_GOLD: Array[int] = [100, 200, 350]
-const RAZE_GOLD: int = 50
+## Raze pays by what the settlement was before it was taken.
+const RAZE_GOLD: Array[int] = [50, 100, 150]
+## Host only: its tier the moment before its latest capture.
+var _tier_before_capture: int = Tier.VILLAGE
 
 ## The player whose decision is pending, 0 when none. Replicated for the menu.
 var choice_peer: int = 0
@@ -994,14 +1105,8 @@ func resolve_choice(choice: int) -> void:
 	var chooser: int = choice_peer
 	_set_choice(0)
 	match choice:
-		Choice.SACK:
-			ResourceStockpile.add(chooser, GOLD_RESOURCE, SACK_GOLD[tier])
-			tier = maxi(tier - 1, Tier.VILLAGE)
-			if multiplayer.multiplayer_peer != null:
-				_rpc_houses.rpc(tier)
-			_show_houses()
 		Choice.RAZE:
-			ResourceStockpile.add(chooser, GOLD_RESOURCE, RAZE_GOLD)
+			ResourceStockpile.add(chooser, GOLD_RESOURCE, RAZE_GOLD[_tier_before_capture])
 			for building in _slot_buildings:
 				if is_instance_valid(building) and not building.is_destroyed:
 					building.take_damage(building.max_health * 10, null)
@@ -1020,6 +1125,51 @@ func resolve_choice(choice: int) -> void:
 			if multiplayer.multiplayer_peer != null:
 				_rpc_houses.rpc(tier)
 			_show_houses()
+			_name_hall()
+
+## Host only. One tier down (a Village stays a Village); the newest buildings
+## past the new slot count are lost — the whole ring if that was the Walls —
+## and the rest keep their level up to the new cap.
+func _drop_tier_on_capture() -> void:
+	if tier == Tier.VILLAGE:
+		return
+	tier -= 1
+	var excess: int = slot_built.size() - TIER_SLOTS[tier]
+	var doomed: Array = []
+	var take_walls := false
+	for n in maxi(excess, 0):
+		var slot_name: String = slot_built[slot_built.size() - 1 - n]
+		if slot_name == WALLS:
+			take_walls = true
+			continue
+		## The newest standing building of that name not already chosen.
+		for i in range(_slot_buildings.size() - 1, -1, -1):
+			var building = _slot_buildings[i]
+			if is_instance_valid(building) and not building.is_destroyed and not doomed.has(building) \
+					and building.get_meta(&"slot_name", "") == slot_name:
+				doomed.append(building)
+				break
+	for building in doomed:
+		_slot_buildings.erase(building)
+		## Its destroyed handler (place_slot) frees its slot entry.
+		building.take_damage(building.max_health * 10, null)
+	if take_walls:
+		_tear_down_walls()
+	_refresh_building_levels()
+
+## Host only: the wall ring and its gates, and the Walls slot they took.
+func _tear_down_walls() -> void:
+	for building in _slot_buildings.duplicate():
+		if is_instance_valid(building) and building.get_meta(&"wall_piece", false):
+			_slot_buildings.erase(building)
+			if not building.is_destroyed:
+				building.take_damage(building.max_health * 10, null)
+	_gates.clear()
+	_doors_shut = false
+	var i := slot_built.find(WALLS)
+	if i >= 0:
+		slot_built.remove_at(i)
+	_send_slots()
 
 ## --- Raising a settlement (Realm) ---
 
@@ -1041,6 +1191,8 @@ func raise_tier(to: int) -> void:
 	if multiplayer.multiplayer_peer != null:
 		_rpc_houses.rpc(tier)
 	_show_houses()
+	_name_hall()
+	_refresh_building_levels()
 
 ## --- Income feedback (Realm) ---
 
@@ -1116,6 +1268,7 @@ func _build_walls() -> void:
 			"drop_in_delay": WALL_DROP_STAGGER * float(i),
 		})
 		piece.settlement = self
+		piece.set_meta(&"wall_piece", true)
 		_slot_buildings.append(piece)
 		if is_gate:
 			_gates.append(piece)

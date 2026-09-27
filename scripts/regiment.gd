@@ -1,7 +1,8 @@
 class_name Regiment
 extends RefCounted
-## A persistent body of men under one Officer — the thing the player actually
-## commands, Cossacks-style. The men are still individual Units, trained one
+## A persistent body of men of one kind — the thing the player actually
+## commands, Cossacks-style. Raised from the men alone; in Realm it is led by
+## the Lord whose army it has joined (see is_led), elsewhere it always is. The men are still individual Units, trained one
 ## at a time, each with its own body and its own health; a regiment is the
 ## identity that survives *between* orders.
 ##
@@ -26,9 +27,8 @@ const MAX_SIZE: int = 120
 
 ## What being led is worth: a proportion added to damage, and armour points on
 ## top of whatever the Blacksmith has given. Bigger bodies are worth more,
-## because holding one together under a single officer is the harder thing —
-## SIZE_BANDS is the size each step up asks for. Applied while the officer
-## lives and dropped the moment he falls.
+## because holding one together is the harder thing — SIZE_BANDS is the size
+## each step up asks for. Applied while it is led (see is_led).
 const SIZE_BANDS: Array[int] = [0, 72, 120]
 const DAMAGE_BONUS: Array[float] = [0.10, 0.15, 0.20]
 const ARMOR_BONUS: Array[int] = [1, 2, 3]
@@ -90,9 +90,23 @@ func strength() -> int:
 func is_under_strength() -> bool:
 	return members.size() < capacity()
 
-## Whether the buffs apply. A regiment whose officer is dead keeps its shape,
-## keeps its selection and keeps taking orders — it just stops being better
-## at fighting until a new officer is assigned.
+## Whether the buffs apply. Outside Realm always. In Realm, while it is in a
+## living Lord's army (Unit.army_lord); a regiment without one keeps its
+## shape, its selection and its orders, it just fights no better than loose
+## men. An officer from an old map or scenario still leads, as he used to.
+func is_led(tree: SceneTree) -> bool:
+	if has_officer() or not MatchRules.realm():
+		return true
+	return lord(tree) != null
+
+## The Lord whose army this regiment is in, or null.
+func lord(tree: SceneTree) -> Unit:
+	for unit in members:
+		if is_instance_valid(unit) and unit.army_lord >= 0:
+			return Lords.by_net_id(tree, unit.army_lord)
+	return null
+
+## Officers are no longer trained, but one standing on an old map still leads.
 func has_officer() -> bool:
 	return is_instance_valid(officer) and officer.status_activity != Unit.Activity.DEAD
 

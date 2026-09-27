@@ -76,11 +76,15 @@ var map_index: int = 0
 
 enum GameMode { CONQUEST, ANNIHILATION, REALM }
 const GAME_MODE_NAMES: Array[String] = ["Conquest", "Annihilation", "Realm"]
-## Host-owned, like map_index. Conquest: first to favour_target Favour wins
-## (destroying every enemy base still wins too). Annihilation: bases only.
-## Realm: Conquest's victory rules with the Realm economy (MatchRules.realm) —
-## food, farms and upkeep instead of houses and a population cap.
-var game_mode: GameMode = GameMode.CONQUEST
+## The modes a lobby or skirmish offers, first the default. Conquest is folded
+## into Realm and no longer offered; its value stays so a scenario, the
+## benchmark or an old setting naming it still means something.
+const LOBBY_MODES: Array[int] = [GameMode.REALM, GameMode.ANNIHILATION]
+## Host-owned, like map_index. Realm: first to favour_target Favour wins, or
+## last standing, with settlements, food and upkeep (MatchRules.realm).
+## Annihilation: bases only. Conquest: Realm's victory rules without the Realm
+## economy.
+var game_mode: GameMode = GameMode.REALM
 ## 0 = the chosen map's default (see MapInfo.default_favour_target). Reset to
 ## 0 whenever the map changes, so a target picked for one map never silently
 ## carries over to another.
@@ -306,7 +310,7 @@ func start_offline() -> void:
 	players[1] = {"name": "You", "color": TEAM_COLORS[0], "ruler_index": 0, "ready": true}
 	## Single player has no lobby to pick these in — always the defaults
 	## rather than whatever a previous lobby left behind.
-	game_mode = GameMode.CONQUEST
+	game_mode = GameMode.REALM
 	favour_target = 0
 
 func is_host() -> bool:

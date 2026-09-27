@@ -98,11 +98,9 @@ func _maybe_raise_lord() -> void:
 			ai.main.enqueue_as(ai.peer_id, centre.get_path(), i)
 			return
 
-## Realm: one building a think for a settlement with a free slot, in the order
-## its hall offers them (its race's own building first), a Granary first when
-## food is short.
+## Realm: one building a think for a settlement with a free slot (see
+## _pick_slot), a Granary first when food is short.
 const SLOT_FOOD_SHORT: int = 150
-const SACK_BELOW_GOLD: int = 100
 ## Gold it keeps in hand before it spends on raising a settlement.
 const RAISE_ABOVE_GOLD: int = 250
 
@@ -114,9 +112,9 @@ func think_slots() -> void:
 		var settlement: Objective = building.settlement
 		if settlement == null or settlement.hall != building:
 			continue
-		## Just taken: sack it when short of gold, otherwise keep it whole.
+		## Just taken: always kept (the AI never razes).
 		if settlement.choice_peer == ai.peer_id:
-			var wanted: int = Objective.Choice.SACK if ai.stock(AiPlayer.GOLD) < SACK_BELOW_GOLD else Objective.Choice.OCCUPY
+			var wanted: int = Objective.Choice.OCCUPY
 			for i in building.producibles.size():
 				var item: ProducibleItem = building.producibles[i]
 				if item.kind == ProducibleItem.Kind.CHOICE and item.choice == wanted:
@@ -135,18 +133,61 @@ func think_slots() -> void:
 					if ai.can_afford(item.get_costs()):
 						ai.main.enqueue_as(ai.peer_id, building.get_path(), i)
 						return
+			if _raise_a_building(settlement):
+				return
 			continue
-		var pick: int = options[0]
-		if ai.stock(RealmEconomy.FOOD) < SLOT_FOOD_SHORT:
-			for i in options:
-				if building.producibles[i].item_name == Objective.GRANARY:
-					pick = i
+		var pick: int = _pick_slot(building, options)
 		var costs: Array[ResourceCost] = building.producibles[pick].get_costs()
 		if not ai.can_afford(costs):
 			ai.reserve(costs)
 			return
 		ai.main.enqueue_as(ai.peer_id, building.get_path(), pick)
 		return
+
+## With gold to spare, one level on one of the settlement's slot buildings:
+## military ones first (better troops), then whatever pays.
+func _raise_a_building(settlement: Objective) -> bool:
+	if ai.stock(AiPlayer.GOLD) < RAISE_ABOVE_GOLD:
+		return false
+	var standing: Array = settlement._slot_buildings.filter(func(b): return is_instance_valid(b) and b.slot_level > 0)
+	standing.sort_custom(func(a, b): return a.slot_kind >= 0 and b.slot_kind < 0)
+	for slot_building in standing:
+		for i in slot_building.producibles.size():
+			var item: ProducibleItem = slot_building.producibles[i]
+			if item.kind == ProducibleItem.Kind.LEVEL and slot_building.can_raise_level(item, slot_building.queue) 					and ai.can_afford(item.get_costs()):
+				ai.main.enqueue_as(ai.peer_id, slot_building.get_path(), i)
+				return true
+	return false
+
+## A military building first (its people are why it was worth taking), then
+## whichever of food, gold and wood we are shortest of — food first when it
+## runs low, as upkeep never stops.
+func _pick_slot(building: ProductionBuilding, options: Array) -> int:
+	var by_name: Dictionary = {}
+	for i in options:
+		by_name[building.producibles[i].item_name] = i
+	var settlement: Objective = building.settlement
+	## Built or still going up: a Barracks in the queue is the military one.
+	var has_military := false
+	for built in settlement.slot_built:
+		if RealmRoster.kind_named(built) >= 0:
+			has_military = true
+	for entry in building.queue:
+		if entry.kind == ProducibleItem.Kind.SLOT and RealmRoster.kind_named(entry.item_name) >= 0:
+			has_military = true
+	if not has_military:
+		for kind_name in RealmRoster.KIND_NAMES:
+			if by_name.has(kind_name):
+				return by_name[kind_name]
+	if ai.stock(RealmEconomy.FOOD) < SLOT_FOOD_SHORT and by_name.has(Objective.GRANARY):
+		return by_name[Objective.GRANARY]
+	var best: int = options[0]
+	var lowest: int = 1 << 30
+	for pair in [[Objective.MARKET, AiPlayer.GOLD], [Objective.LUMBERYARD, AiPlayer.WOOD], [Objective.GRANARY, RealmEconomy.FOOD]]:
+		if by_name.has(pair[0]) and ai.stock(pair[1]) < lowest:
+			lowest = ai.stock(pair[1])
+			best = by_name[pair[0]]
+	return best
 
 func _type_named(building_name: String) -> BuildingType:
 	for type in ai.building_roles:
@@ -402,30 +443,47 @@ func _best_tree(villager: Unit) -> Gatherable:
 				best = node
 		if best == null:
 			return null
-		## No settled navmesh to judge by (none yet, or mid re-bake): take it,
-		## and judge it next time.
+		## No settled navmesh to judge by (none yet, or mid re-bake), or this
+		## frame's checks spent: take it, and judge it next time.
 		if not ai.nav_settled():
 			return best
 		var id: int = best.get_instance_id()
-		if _tree_reachable.get(id) != true:
+		if not _tree_reachable.has(id):
+			var frame: int = Engine.get_physics_frames()
+			if frame != _reach_check_frame:
+				_reach_check_frame = frame
+				_reach_checks_left = TREE_REACH_CHECKS_PER_FRAME
+			if _reach_checks_left <= 0:
+				return best
+			_reach_checks_left -= 1
+		## The verdict is true or a game_time, and Godot will not compare a float
+		## with a bool, so it is told apart by type.
+		if not _tree_reachable.get(id) is bool:
 			if ai.is_reachable(best.global_position, best.gather_range + TREE_REACH_SLACK):
 				_tree_reachable[id] = true
 			else:
 				_tree_reachable[id] = ai.game_time
-		if _tree_reachable[id] == true:
+		if _tree_reachable[id] is bool:
 			return best
 	return null
 
 ## Whether this tree was found unreachable recently enough to still trust.
 func _judged_unreachable(id: int) -> bool:
 	var verdict = _tree_reachable.get(id)
-	return verdict != null and verdict != true and ai.game_time - float(verdict) < TREE_UNREACHABLE_RECHECK_SECONDS
+	return verdict is float and ai.game_time - verdict < TREE_UNREACHABLE_RECHECK_SECONDS
 
 ## Trees tried per pick before giving up for this think. Generous: some
 ## corners have a dozen or two unreachable trees nearest home that would
 ## otherwise make every pick fail (and send the villager to gold instead)
 ## until they'd all been tried.
 const TREE_REACH_ATTEMPTS: int = 40
+## Fresh reachability checks (a navmesh path each) per physics frame, across
+## every pick. The first sweep through a big carved forest otherwise costs
+## tens of milliseconds in one think; verdicts are remembered, so this only
+## spreads that first sweep out.
+const TREE_REACH_CHECKS_PER_FRAME: int = 8
+var _reach_check_frame: int = -1
+var _reach_checks_left: int = 0
 const TREE_REACH_SLACK: float = 1.5
 ## Tree instance id -> true once a path from home is known to reach it (kept
 ## for good — trees don't move), or the game_time it was last found
@@ -441,9 +499,10 @@ func _refresh_wood_cache() -> void:
 		return
 	_wood_cache_age = ai.game_time
 	_wood_nodes.clear()
-	for node in ai.get_tree().get_nodes_in_group("gatherables"):
-		var gatherable := node as Gatherable
-		if gatherable == null or gatherable.resource_type != AiPlayer.WOOD or not gatherable.can_be_gathered():
+	if Forest.active == null:
+		return
+	for gatherable in Forest.active.trees_in_circle(ai.home, MAX_WOOD_DISTANCE):
+		if gatherable.resource_type != AiPlayer.WOOD or not gatherable.can_be_gathered():
 			continue
 		if gatherable.owner_peer_id != 0 and gatherable.owner_peer_id != ai.peer_id:
 			continue

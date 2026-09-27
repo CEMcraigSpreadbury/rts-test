@@ -388,7 +388,7 @@ func play_squash() -> void:
 		return
 	if _drop_tween and _drop_tween.is_running():
 		return
-	var now: int = Time.get_ticks_msec()
+	var now: int = GameClock.msec()
 	if now < _next_squash_msec:
 		return
 	_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
@@ -512,7 +512,7 @@ func play_hit_flash() -> void:
 
 ## Hands the overlay back to a buff tint that's still running, if any.
 func _clear_hit_flash() -> void:
-	var overlay: Material = _buff_material if _buff_tint_until_ms > Time.get_ticks_msec() else null
+	var overlay: Material = _buff_material if _buff_tint_until_ms > GameClock.msec() else null
 	for mesh in _flash_meshes:
 		if is_instance_valid(mesh):
 			mesh.material_overlay = overlay
@@ -526,14 +526,14 @@ func show_buff_tint(color: Color, seconds: float) -> void:
 		_buff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_buff_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_buff_material.albedo_color = Color(color, BUFF_TINT_ALPHA)
-	_buff_tint_until_ms = maxi(_buff_tint_until_ms, Time.get_ticks_msec() + int(seconds * 1000.0))
+	_buff_tint_until_ms = maxi(_buff_tint_until_ms, GameClock.msec() + int(seconds * 1000.0))
 	if not (_flash_tween and _flash_tween.is_valid() and _flash_tween.is_running()):
 		_clear_hit_flash()
 	get_tree().create_timer(seconds).timeout.connect(_on_buff_tint_timeout)
 
 ## Several casts can overlap; only the last one to run out clears it.
 func _on_buff_tint_timeout() -> void:
-	if not is_instance_valid(self) or _buff_tint_until_ms > Time.get_ticks_msec():
+	if not is_instance_valid(self) or _buff_tint_until_ms > GameClock.msec():
 		return
 	_buff_tint_until_ms = 0
 	if not (_flash_tween and _flash_tween.is_valid() and _flash_tween.is_running()):
@@ -595,7 +595,7 @@ func heal(amount: int) -> void:
 
 ## Research (Drill Sergeants, Arcane Tutelage) plus any Industrious Age on it.
 func _production_speed() -> float:
-	var speed := 1.0 + buffs.amount(ResearchNode.Buff.PRODUCTION_SPEED)
+	var speed := (1.0 + buffs.amount(ResearchNode.Buff.PRODUCTION_SPEED)) * RealmRoster.train_speed(slot_race, slot_kind, slot_level)
 	match role:
 		Role.MILITARY:
 			speed += Research.bonus(owner_peer_id, ResearchNode.Stat.MILITARY_TRAIN_SPEED)
@@ -607,6 +607,53 @@ func _production_speed() -> float:
 ## stops while the settlement is contested, and its hall offers the slots.
 var settlement: Objective = null
 
+## --- Realm slot buildings ---
+## A building standing in a settlement's slot has a level (1-3, 0 for any
+## other building), capped by that settlement's tier. Set on every peer from
+## its spawn data and kept in step through the settlement (Objective
+## raise_building_level), so the menu is the same everywhere.
+var slot_level: int = 0
+var slot_level_cap: int = 0
+## Whose people and which kind of military building (RealmRoster.Kind), or
+## -1 for a resource/defence building.
+var slot_race: String = ""
+var slot_kind: int = -1
+## A resource building's pay at level 1 (its PactGenerator's amount).
+var _slot_base_income: int = -1
+
+func setup_slot(race: String, kind: int, level: int, cap: int) -> void:
+	slot_race = race
+	slot_kind = kind
+	apply_slot_level(level, cap)
+
+## Every peer: the menu (a military building's units, and the level-ups) and,
+## on a resource building, its pay.
+func apply_slot_level(level: int, cap: int) -> void:
+	slot_level = level
+	slot_level_cap = cap
+	var offered: Array[ProducibleItem] = []
+	if slot_kind >= 0:
+		offered = RealmRoster.items(RealmRoster.roster(slot_race, slot_kind, level))
+	else:
+		for item in producibles:
+			if item.kind != ProducibleItem.Kind.LEVEL:
+				offered.append(item)
+	offered.append_array(RealmRoster.level_items())
+	producibles = offered
+	for child in get_children():
+		if child is PactGenerator:
+			if _slot_base_income < 0:
+				_slot_base_income = child.amount
+			child.amount = roundi(_slot_base_income * RealmRoster.LEVEL_INCOME[level - 1])
+
+func can_raise_level(item: ProducibleItem, queue_now: Array) -> bool:
+	if slot_level <= 0 or item.level_to != slot_level + 1 or item.level_to > slot_level_cap:
+		return false
+	for entry in queue_now:
+		if entry.kind == ProducibleItem.Kind.LEVEL:
+			return false
+	return true
+
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null:
 		return false
@@ -615,6 +662,8 @@ func enqueue(item: ProducibleItem) -> bool:
 	if item.kind == ProducibleItem.Kind.CHOICE and (settlement == null or not settlement.can_choose(owner_peer_id, queue)):
 		return false
 	if item.kind == ProducibleItem.Kind.TIER and (settlement == null or not settlement.can_raise(item, queue)):
+		return false
+	if item.kind == ProducibleItem.Kind.LEVEL and not can_raise_level(item, queue):
 		return false
 	if item.is_lord():
 		var main := get_tree().current_scene

@@ -91,7 +91,7 @@ func reset() -> void:
 func _reface(key: StringName, group: Array[Unit]) -> void:
 	if ai.profile.reface_reaction_seconds < 0.0 or group.size() < 2:
 		return
-	var now := Time.get_ticks_msec()
+	var now := GameClock.msec()
 	var flanked: Array[Unit] = []
 	var flanker: Unit = null
 	var flanker_dist := INF

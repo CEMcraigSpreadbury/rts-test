@@ -1,6 +1,6 @@
 class_name MatchSettingsRow
 extends HBoxContainer
-## Game mode + Conquest Favour target picker, shared by the lobby (host-
+## Game mode + Favour target picker, shared by the lobby (host-
 ## editable, mirrored to clients through Network) and the single player map
 ## select (local until Start).
 
@@ -20,8 +20,8 @@ var _applying: bool = false
 func _init() -> void:
 	name = "MatchSettingsRow"
 	_mode_option = OptionButton.new()
-	for mode_name in Network.GAME_MODE_NAMES:
-		_mode_option.add_item(mode_name)
+	for mode in Network.LOBBY_MODES:
+		_mode_option.add_item(Network.GAME_MODE_NAMES[mode], mode)
 	_mode_option.item_selected.connect(_on_changed.unbind(1))
 	add_child(_mode_option)
 	_target_spin = SpinBox.new()
@@ -38,7 +38,9 @@ func _init() -> void:
 func show_values(mode: int, target: int, map: MapInfo, editable: bool) -> void:
 	_map = map
 	_applying = true
-	_mode_option.select(mode)
+	## A mode no longer offered (Conquest) shows as the default.
+	var index := _mode_option.get_item_index(mode)
+	_mode_option.select(index if index >= 0 else 0)
 	_mode_option.disabled = not editable
 	var shown := target if target > 0 else (map.default_favour_target() if map != null else 0)
 	## A map with no known point count leaves the match to work it out on
@@ -54,8 +56,9 @@ func set_editable(editable: bool) -> void:
 	_mode_option.disabled = not editable
 	_target_spin.editable = editable
 
+## A GameMode value (the item's id, not its position in the list).
 func get_mode() -> int:
-	return _mode_option.selected
+	return _mode_option.get_selected_id()
 
 ## 0 while left at the map's default, so it keeps following the map.
 func get_target() -> int:

@@ -35,8 +35,8 @@ const STARTING_FOOD: int = 200
 var main: Main
 
 ## --- Replenishment ---
-## A regiment with its officer, standing on its own side's land and out of the
-## fight, takes on a new man every REPLENISH_SECONDS until it is back to
+## A regiment in a Lord's army, standing on its own side's land and out of
+## the fight, takes on a new man every REPLENISH_SECONDS until it is back to
 ## strength, paying the usual price for him.
 const REPLENISH_SECONDS: float = 15.0
 const REPLENISH_SAFE_RADIUS: float = 20.0
@@ -163,13 +163,17 @@ func _replenish() -> void:
 	for id in main.regiments.keys():
 		var regiment: Regiment = main.regiments[id]
 		regiment.prune()
-		if not regiment.has_officer() or not regiment.is_under_strength() or regiment.members.is_empty():
+		if not regiment.is_under_strength() or regiment.members.is_empty() or not regiment.is_led(get_tree()):
 			continue
-		var officer: Unit = regiment.officer
+		## Where the block stands: the middle of its men.
+		var centre := Vector3.ZERO
+		for man in regiment.members:
+			centre += man.global_position
+		centre /= float(regiment.members.size())
 		var peer: int = regiment.owner_peer_id
-		if Objective.territory_owner(get_tree(), officer.global_position) != peer:
+		if Objective.territory_owner(get_tree(), centre) != peer:
 			continue
-		if not UnitGrid.enemies_near(get_tree(), officer.global_position, REPLENISH_SAFE_RADIUS, peer).is_empty():
+		if not UnitGrid.enemies_near(get_tree(), centre, REPLENISH_SAFE_RADIUS, peer).is_empty():
 			continue
 		var template: Unit = regiment.members[0]
 		var costs: Array[ResourceCost] = MatchRules.realm_unit_costs(template.costs, false)
@@ -177,7 +181,7 @@ func _replenish() -> void:
 			continue
 		ResourceStockpile.spend(peer, costs)
 		Population.reserve(peer, template.population_cost)
-		var behind: Vector3 = officer.global_position - template.formation_facing * 2.0
+		var behind: Vector3 = centre - template.formation_facing * 4.0
 		var recruit: Unit = main.unit_spawner.spawn({
 			"scene_path": template.scene_file_path,
 			"peer_id": peer,

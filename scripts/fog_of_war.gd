@@ -97,7 +97,7 @@ func add_reveal(world_pos: Vector3, radius: float, seconds: float = 0.0) -> void
 	_reveals.append({
 		position = Vector2(world_pos.x, world_pos.z),
 		radius = radius,
-		until = (Time.get_ticks_msec() / 1000.0 + seconds) if seconds > 0.0 else 0.0,
+		until = (GameClock.seconds() + seconds) if seconds > 0.0 else 0.0,
 	})
 
 var reveal_all: bool = false:
@@ -364,7 +364,7 @@ func _update_vision_sources() -> void:
 
 	## Places a quest has revealed (see add_reveal) see for themselves, for as
 	## long as they last.
-	var now: float = Time.get_ticks_msec() / 1000.0
+	var now: float = GameClock.seconds()
 	for i in range(_reveals.size() - 1, -1, -1):
 		var entry: Dictionary = _reveals[i]
 		if entry.until > 0.0 and now >= entry.until:
@@ -552,6 +552,8 @@ func _update_node_visibility() -> void:
 	## explored it stays visible, since it's static and being wrong about its
 	## remembered appearance never matters the way a stale unit position would.
 	## That's also why each is dropped from the check the moment it shows.
+	if Forest.active != null:
+		Forest.active.update_fog(self)
 	if not _static_tracking:
 		_start_static_tracking()
 	var i := _static_pending.size() - 1

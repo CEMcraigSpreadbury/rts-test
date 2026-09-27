@@ -324,7 +324,34 @@ func nav_settled() -> bool:
 func nearest_navmesh_point(pos: Vector3) -> Vector3:
 	if not nav_ready():
 		return pos
+	var blockers := _nav_blockers()
+	var local: Variant = blockers.closest_point(pos) if blockers != null else null
+	if local != null:
+		return local
 	return NavigationServer3D.map_get_closest_point(main.get_world_3d().navigation_map, pos)
+
+func _nav_blockers() -> NavigationBlockers:
+	return main.get_node_or_null(^"NavigationBlockers") as NavigationBlockers
+
+## A navmesh path from `from` to `to`. map_get_path gives up after 4096
+## polygons and hands back a path to wherever it had got closest — about 250 m
+## on these maps, so anything further looked unreachable, or walled off by
+## whatever building stood near where the search stopped. This searches as
+## far as it takes, but only over the navmesh tiles around the two ends (see
+## NavigationBlockers.regions_between), which is also what keeps finding the
+## start and end polygons cheap.
+func nav_path(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var query := NavigationPathQueryParameters3D.new()
+	query.map = main.get_world_3d().navigation_map
+	query.start_position = from
+	query.target_position = to
+	query.path_search_max_polygons = 0
+	var blockers := _nav_blockers()
+	if blockers != null:
+		query.included_regions = blockers.regions_between(from, to)
+	var result := NavigationPathQueryResult3D.new()
+	NavigationServer3D.query_path(query, result)
+	return result.path
 
 ## Whether a unit at `origin` (home by default) could actually walk to
 ## within `tolerance` of `pos` — on the navmesh isn't enough, it could be a
@@ -332,9 +359,8 @@ func nearest_navmesh_point(pos: Vector3) -> Vector3:
 func is_reachable(pos: Vector3, tolerance: float, origin: Variant = null) -> bool:
 	if not nav_ready():
 		return false
-	var nav_map: RID = main.get_world_3d().navigation_map
 	var from: Vector3 = origin if origin != null else _reach_origin()
-	var path: PackedVector3Array = NavigationServer3D.map_get_path(nav_map, nearest_navmesh_point(from), pos, true)
+	var path: PackedVector3Array = nav_path(nearest_navmesh_point(from), pos)
 	if path.is_empty():
 		return false
 	var end: Vector3 = path[path.size() - 1]

@@ -5,7 +5,7 @@ extends Resource
 ## Create new ones by duplicating a .tres of this (or embedding one in a
 ## building's scene) and editing the fields in the inspector.
 
-enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER }
+enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER, LEVEL }
 
 @export var item_name: String = "Villager"
 ## Shown on its command-card button; left null until real icon art exists,
@@ -38,6 +38,12 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER }
 ## Used when kind == TIER (Realm): the settlement tier this raises its hall's
 ## settlement to (an Objective.Tier value).
 @export var tier_to: int = 0
+## Used when kind == LEVEL (Realm): the level (2 or 3) this raises a
+## settlement's slot building to (see ProductionBuilding.apply_slot_level).
+@export var level_to: int = 0
+## A UNIT trained as its elite (Realm, see RealmRoster): tougher, harder
+## hitting and drawn a size up.
+@export var elite: bool = false
 
 ## How many units one completed item spawns. Gnolls are trained in litters:
 ## one cost, one build time, three or four bodies. 1 for everything else.

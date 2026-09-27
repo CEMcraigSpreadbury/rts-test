@@ -44,7 +44,7 @@ func _ready() -> void:
 		_show_map_default(_settings_row.get_mode())
 		_trim_ai_to_map()
 		_refresh_players())
-	_show_map_default(Network.GameMode.CONQUEST)
+	_show_map_default(Network.GameMode.REALM)
 	Network.player_updated.connect(_refresh_players.unbind(1))
 	Network.player_disconnected.connect(_refresh_players.unbind(2))
 	_build_campaign_buttons()

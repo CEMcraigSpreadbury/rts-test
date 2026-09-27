@@ -132,6 +132,9 @@ func setup() -> void:
 	unit_cards = UiUnitCardStrip.new()
 	unit_cards.setup(main)
 	main.get_node(^"UI").add_child(unit_cards)
+	var speed_controls := UiSpeedControls.new()
+	speed_controls.setup(main)
+	main.get_node(^"UI").add_child(speed_controls)
 	_build_race_tabs()
 	_populate_construction_buttons()
 
@@ -370,7 +373,7 @@ func flash_missing_resources(costs: Array[ResourceCost]) -> void:
 func show_building(building: ProductionBuilding) -> void:
 	_show_info_header()
 	info_panel_name_label.text = building.building_name
-	_update_portrait(building.team_tint, "", _building_icon(building.building_name))
+	_update_portrait(building.team_tint, "", _building_icon_of(building))
 	_clear_command_column()
 	_build_building_info(building)
 
@@ -425,6 +428,12 @@ func show_building(building: ProductionBuilding) -> void:
 		## whatever hotkey their hidden neighbors happened to occupy.
 		var slot: int = buttons.size()
 		var hotkey: String = OS.get_keycode_string(Main.PRODUCIBLE_HOTKEYS[slot]) if slot < Main.PRODUCIBLE_HOTKEYS.size() else "?"
+		## A settlement's buildings and upgrades have no art: their initial
+		## tells them apart where a position letter (or "?") could not.
+		if item.icon == null and item.kind in [ProducibleItem.Kind.SLOT, ProducibleItem.Kind.TIER, ProducibleItem.Kind.LEVEL]:
+			hotkey = item.item_name.left(1).to_upper()
+		elif item.icon != null and hotkey == "?":
+			hotkey = ""
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item, building)]
 		var button := _make_command_button(hotkey, item.item_name,
 				_tooltip_costs(building.costs_for(item)), item.icon,
@@ -464,6 +473,9 @@ func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) 
 	if item.kind == ProducibleItem.Kind.TIER:
 		return building.settlement != null and building.settlement.tier == item.tier_to - 1 \
 				and building.settlement.choice_peer != building.owner_peer_id
+	if item.kind == ProducibleItem.Kind.LEVEL:
+		return building.slot_level > 0 and item.level_to == building.slot_level + 1 \
+				and item.level_to <= building.slot_level_cap
 	if item.kind != ProducibleItem.Kind.UPGRADE:
 		return true
 	if building._purchased_upgrades.has(item):
@@ -551,9 +563,10 @@ func _fill_action_panel_grid(buttons: Array[Control]) -> void:
 
 ## The command area is a fixed height, and a selected building spends its top row
 ## on the production queue -- so a building pads to one row of slots and
-## everything else to the full two.
+## everything else to the full two. A settlement's hall has no queue row (see
+## _build_building_info): its buildings and upgrade need both rows.
 func _grid_slot_count(used: int) -> int:
-	if main.selected_building == null:
+	if main.selected_building == null or _is_settlement_hall(main.selected_building):
 		return ACTION_PANEL_SLOT_COUNT
 	var rows: int = maxi(1, ceili(float(used) / float(UiStyle.CMD_COLUMNS)))
 	return rows * UiStyle.CMD_COLUMNS
@@ -570,6 +583,9 @@ func _producible_icon(building: ProductionBuilding, item_name: String) -> Textur
 		if item.item_name == item_name:
 			return item.icon
 	return null
+
+static func _is_settlement_hall(building: ProductionBuilding) -> bool:
+	return building != null and building.settlement != null and building.settlement.hall == building
 
 func _clear_command_column() -> void:
 	for child in action_panel_grid.get_children():
@@ -642,6 +658,16 @@ func _update_portrait(tint: Color, health_text: String, head: Texture2D = null) 
 ## A placed building knows its name but not its BuildingType, and the icon lives
 ## on the type. Searched across the player's own roster and every Pact race so an
 ## allied building gets its portrait too.
+## By the scene it was built from, then by name. A settlement's hall and slot
+## buildings are named for their role (Town, Barracks), not their building
+## type, so for them the name would find the wrong picture (a Gnoll Den
+## showing the human Barracks) — they go without rather than that.
+func _building_icon_of(building: ProductionBuilding) -> Texture2D:
+	var icon := Objective._building_icon_for(building.scene_file_path)
+	if icon != null or building.settlement != null:
+		return icon
+	return _building_icon(building.building_name)
+
 func _building_icon(building_name: String) -> Texture2D:
 	for building_type in main.my_faction().building_types:
 		if building_type.building_name == building_name:
@@ -720,6 +746,11 @@ func _build_building_info(building: ProductionBuilding) -> void:
 			main.cancel_production(building, 0)
 	)
 
+	## A settlement's hall offers up to nine buildings plus its upgrade, so
+	## it gives the queue row over to them; the count badges and the progress
+	## bar still show what it is working on.
+	if _is_settlement_hall(building):
+		return
 	_info_slot_row = HBoxContainer.new()
 	_info_slot_row.add_theme_constant_override("separation", 6)
 	## Fixed height, always present, always the same number of slots -- nothing
@@ -1007,6 +1038,10 @@ func _populate_unit_command_buttons() -> void:
 			label = "Reinforce"
 		buttons.append(_make_command_button(
 			OS.get_keycode_string(Main.UNIT_REGIMENT_KEY), label, [], null, main.toggle_regiment))
+	var army_action: Main.ArmyAction = main.selection_army_action()
+	if army_action != Main.ArmyAction.NONE:
+		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_ARMY_KEY),
+				"Join Army" if army_action == Main.ArmyAction.JOIN else "Leave Army", [], null, main.toggle_army))
 
 	## Promotion and abilities only make sense for a single selected unit — a
 	## group promote/activate has no sensible target.

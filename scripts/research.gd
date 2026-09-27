@@ -49,7 +49,7 @@ var my_owned: Array[int] = []
 var earned: Dictionary = {}
 
 ## Match clock for powers (see now()): paused with the tree in single player,
-## unlike Time.get_ticks_msec().
+## unlike the wall clock (Time.get_ticks_msec()).
 var _time: float = 0.0
 ## Host-only: peer_id -> { node index: now() it's ready again }.
 var _power_ready_at: Dictionary = {}
@@ -130,7 +130,7 @@ func _tick_periodic_income(peer_id: int, delta: float) -> void:
 	_income_timer[peer_id] = timer
 
 func _tick_regeneration() -> void:
-	var now := Time.get_ticks_msec()
+	var now := GameClock.msec()
 	for node in main.units_root.get_children():
 		var unit := node as Unit
 		if unit == null or unit.status_activity == Unit.Activity.DEAD or unit.status_current_health >= unit.max_health:

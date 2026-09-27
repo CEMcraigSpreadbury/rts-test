@@ -22,6 +22,10 @@ const ATTACK_PING_DURATION: float = 4.0
 const ATTACK_PING_PULSES: int = 3
 const OBJECTIVE_MARKER_RADIUS: float = 11.7
 const OBJECTIVE_FONT_SIZE: int = 18
+## A Realm settlement's badge grows with its tier (Village, Town, City), and a
+## held one is filled with its owner's colour, so the prizes and who has them
+## read at a glance on a big map.
+const SETTLEMENT_MARKER_SCALE: Array[float] = [0.8, 1.0, 1.35]
 
 ## Right-click-to-ping (when there's no own selection to move — see
 ## _gui_input): main.gd relays this out to every player (see
@@ -271,10 +275,16 @@ func _draw_objective_letters() -> void:
 		## An unheld point reads as dim brass rather than white, so the letters
 		## sit with the rest of the UI instead of shouting over the fog.
 		var tint: Color = objective.owner_tint().lightened(0.3) if objective.owner_peer_id > 0 else UiStyle.DIM
-		draw_circle(p, OBJECTIVE_MARKER_RADIUS, UiStyle.SLOT)
-		draw_arc(p, OBJECTIVE_MARKER_RADIUS, 0.0, TAU, 16, tint, 1.5)
-		var baseline := p + Vector2(-OBJECTIVE_MARKER_RADIUS, OBJECTIVE_FONT_SIZE * 0.35)
-		draw_string(font, baseline, objective.letter, HORIZONTAL_ALIGNMENT_CENTER, OBJECTIVE_MARKER_RADIUS * 2.0, OBJECTIVE_FONT_SIZE, tint)
+		var radius: float = OBJECTIVE_MARKER_RADIUS
+		var fill: Color = UiStyle.SLOT
+		if objective.is_settlement():
+			radius *= SETTLEMENT_MARKER_SCALE[objective.tier]
+			if objective.owner_peer_id > 0:
+				fill = objective.owner_tint().darkened(0.55)
+		draw_circle(p, radius, fill)
+		draw_arc(p, radius, 0.0, TAU, 20, tint, 1.5)
+		var baseline := p + Vector2(-radius, OBJECTIVE_FONT_SIZE * 0.35)
+		draw_string(font, baseline, objective.letter, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, OBJECTIVE_FONT_SIZE, tint)
 
 ## Approximates what the main camera currently frames by ray-casting its four
 ## viewport corners onto the ground plane — gives a properly perspective-skewed

@@ -36,6 +36,9 @@ const UNIT_BUILD_KEY: Key = KEY_B
 ## — one key for both, since a selection can only ever be in a position to do
 ## one of them (see selection_regiment_action).
 const UNIT_REGIMENT_KEY: Key = KEY_N
+## Joins the selection to the one Lord selected with it, or takes it out of its
+## Lord's army (see selection_army_action).
+const UNIT_ARMY_KEY: Key = KEY_J
 ## Formation-shape hotkeys — cycles the active selection's move-order shape
 ## (see Formation.Type / current_formation_type / _set_formation_type). F1-F3
 ## are unused elsewhere (camera only reads W/A/S/D/Q/E, see above), matching
@@ -338,6 +341,43 @@ func _enter_tree() -> void:
 	## after both. An ordinary match leaves this null and gets the defaults.
 	MatchRules.current = null
 
+## --- Game speed (single player) ---
+## Pause (the game stands still but the camera, selection and orders still
+## work, and orders carry out once it runs again) and a few speeds, through
+## Engine.time_scale. Single player only: in multiplayer the host would leave
+## everyone else behind.
+const GAME_SPEEDS: Array[float] = [0.5, 1.0, 2.0, 3.0]
+const NORMAL_SPEED_INDEX: int = 1
+## See _physics_process: one sim step's worth of game time, and how many the
+## sim may take in one physics tick at the highest speed.
+const SIM_STEP: float = 1.0 / 30.0
+const MAX_SIM_STEPS: int = 4
+var game_paused: bool = false
+var game_speed_index: int = NORMAL_SPEED_INDEX
+var _sim_time: float = 0.0
+
+func can_change_speed() -> bool:
+	return Network.is_single_player() and not game_over
+
+func toggle_game_pause() -> void:
+	if not can_change_speed():
+		return
+	game_paused = not game_paused
+	_apply_game_speed()
+
+func step_game_speed(direction: int) -> void:
+	if not can_change_speed():
+		return
+	game_speed_index = clampi(game_speed_index + direction, 0, GAME_SPEEDS.size() - 1)
+	game_paused = false
+	_apply_game_speed()
+
+func current_game_speed() -> float:
+	return 0.0 if game_paused else GAME_SPEEDS[game_speed_index]
+
+func _apply_game_speed() -> void:
+	Engine.time_scale = current_game_speed()
+
 ## "cmd speed" (see ChatConsole) changes the engine-wide time scale; it must
 ## not follow the player out to the menus or into their next match.
 func _exit_tree() -> void:
@@ -355,6 +395,8 @@ func _apply_clouds_setting(key: StringName) -> void:
 		clouds.visible = Settings.get_value(&"clouds")
 
 func _ready() -> void:
+	GameClock.reset()
+	RoadNet.build(self)
 	## Both are autoloads and outlive a match, so a second one in the same
 	## session — the next campaign mission, or another skirmish — would open
 	## holding the last one's gold, population and research points.
@@ -378,10 +420,18 @@ func _ready() -> void:
 	favour_target = wanted_target if wanted_target > 0 \
 			else MapInfo.FAVOUR_TARGET_PER_POINT * get_tree().get_nodes_in_group(&"objectives").size()
 	_assign_objective_letters()
-	## Map dressing like the border trees uses the same baked-lighting GLBs as
-	## gatherables, which convert themselves in Gatherable._ready().
+	## The trees registered with it as they readied; the border trees (plain
+	## scenery models) join it here and their nodes go.
+	var forest := Forest.attach(self)
+	## Map dressing uses the same baked-lighting GLBs as gatherables, which
+	## convert themselves in Gatherable._ready().
 	var scenery: Node = get_node_or_null(^"Scenery")
 	if scenery:
+		for child in scenery.get_children():
+			if child is Node3D and child.scene_file_path.get_file().to_lower().begins_with("tree"):
+				forest.add_decoration(child)
+				scenery.remove_child(child)
+				child.free()
 		BakedLightingMaterial.apply_to(scenery)
 		TreeWind.apply_to_trees_in(scenery)
 		TreeBillboard.apply_to_trees_in(scenery)
@@ -926,6 +976,11 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.team_tint = data.tint
 	unit.position = data.position
 	unit.pop_out_from = data.get("pop_out_from", Vector3.INF)
+	## A Realm elite (see RealmRoster): before _ready sets its health from these.
+	if data.get("elite", false):
+		unit.max_health = roundi(unit.max_health * RealmRoster.ELITE_HEALTH)
+		unit.attack_damage = roundi(unit.attack_damage * RealmRoster.ELITE_DAMAGE)
+		unit.ready.connect(func(): unit.sprite.scale *= RealmRoster.ELITE_SCALE, CONNECT_ONE_SHOT)
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
 	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
@@ -994,6 +1049,12 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.owner_peer_id = data.peer_id
 		building.team_tint = data.get("tint", Color.WHITE)
 		building.drop_in_delay = data.get("drop_in_delay", -1.0)
+		## A Realm settlement's slot building: named for its slot, and a
+		## military one trains its settlement's people (see RealmRoster).
+		if data.has("building_name"):
+			building.building_name = data.building_name
+		if data.has("slot_level"):
+			building.setup_slot(data.slot_race, data.slot_kind, data.slot_level, data.slot_level_cap)
 		building.item_completed.connect(_on_building_item_completed.bind(building))
 		building.destroyed.connect(_on_building_destroyed.bind(building))
 		building.damaged.connect(feedback.relay_damage_number.bind(building))
@@ -1024,18 +1085,14 @@ func _on_building_destroyed(building: ProductionBuilding) -> void:
 	main_base_count_by_peer[peer_id] = maxi(main_base_count_by_peer.get(peer_id, 1) - 1, 0)
 	check_out(peer_id)
 
-## Host only. A player is out once they have no main base left and — in Realm,
-## where a capital is only the first of your settlements — no settlement
-## either. Called when a base falls and when a settlement changes hands.
+## Host only. A player is out once they have no main base left — in Realm too:
+## settlements feed an HQ, they don't stand in for one. Called when a base
+## falls and when a settlement changes hands.
 func check_out(peer_id: int) -> void:
 	if game_over or peer_id <= 0 or defeated_peers.has(peer_id):
 		return
 	if main_base_count_by_peer.get(peer_id, 0) > 0:
 		return
-	if MatchRules.realm():
-		for node in get_tree().get_nodes_in_group(&"objectives"):
-			if node is Objective and node.is_settlement() and node.owner_peer_id == peer_id:
-				return
 	if not defeated_peers.has(peer_id):
 		defeated_peers[peer_id] = true
 		_check_for_game_over()
@@ -1080,8 +1137,16 @@ func _check_for_game_over() -> void:
 func _physics_process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
-	army_sim.step()
-	army_bridge.apply_sim_results()
+	## The sim steps at a fixed rate of its own, so it is stepped by game time:
+	## as often as physics at normal speed, twice a tick at double speed, not
+	## at all while paused (physics keeps ticking, with a zero delta).
+	_sim_time += delta
+	var steps := 0
+	while _sim_time >= SIM_STEP * 0.999 and steps < MAX_SIM_STEPS:
+		_sim_time -= SIM_STEP
+		steps += 1
+		army_sim.step()
+		army_bridge.apply_sim_results()
 	if PerfStats.enabled:
 		PerfStats.add_sim_profile(army_sim.get_profile())
 	if game_over:
@@ -1568,6 +1633,10 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		if building.settlement != null:
 			building.settlement.raise_tier(item.tier_to)
 		return
+	if item.kind == ProducibleItem.Kind.LEVEL:
+		if building.settlement != null:
+			building.settlement.raise_building_level(building, item.level_to)
+		return
 	if item.kind == ProducibleItem.Kind.UPGRADE:
 		building._purchased_upgrades.append(item)
 		## Extension point: a future upgrade effect is another optional flag
@@ -1604,6 +1673,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"tint": get_team_tint(building.owner_peer_id),
 		"position": spawn_pos,
 		"pop_out_from": pop_out_from,
+		"elite": item.elite,
 	})
 	building.register_produced_unit(unit)
 	## A litter: one cost, one build time, several bodies (Gnolls). The extras
@@ -1621,6 +1691,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 			"tint": get_team_tint(building.owner_peer_id),
 			"position": litter_pos,
 			"pop_out_from": pop_out_from,
+			"elite": item.elite,
 		})
 		building.register_produced_unit(mate)
 		litter.append(mate)
@@ -1669,6 +1740,7 @@ func _get_dropoff_for(peer_id: int) -> Node3D:
 ## per-frame order stays explicit: HUD first, then placement ghosts, then the
 ## world visuals that read placement state, then the host's reformation poll.
 func _process(delta: float) -> void:
+	GameClock.advance(delta)
 	if PerfStats.enabled:
 		var hud_start := Time.get_ticks_usec()
 		hud.update(delta)
@@ -1712,6 +1784,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TreeBillboard.TOGGLE_KEY:
 		TreeBillboard.toggle()
+		if Forest.active != null:
+			Forest.active.set_billboards(TreeBillboard.enabled)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1764,6 +1838,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if Settings.is_action_key_event(event, &"last_attack"):
 		feedback.jump_to_last_attack()
+		get_viewport().set_input_as_handled()
+		return
+
+	if Settings.is_action_key_event(event, &"pause_game"):
+		toggle_game_pause()
+		get_viewport().set_input_as_handled()
+		return
+	if Settings.is_action_key_event(event, &"speed_up"):
+		step_game_speed(1)
+		get_viewport().set_input_as_handled()
+		return
+	if Settings.is_action_key_event(event, &"slow_down"):
+		step_game_speed(-1)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1840,6 +1927,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		elif event.keycode == UNIT_REGIMENT_KEY and selection_regiment_action() != RegimentAction.NONE:
 			toggle_regiment()
+			get_viewport().set_input_as_handled()
+			return
+		elif event.keycode == UNIT_ARMY_KEY and selection_army_action() != ArmyAction.NONE:
+			toggle_army()
 			get_viewport().set_input_as_handled()
 			return
 		elif event.keycode == UNIT_BUILD_KEY and any_selected_can_build():
@@ -2265,6 +2356,21 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 	selected_units.clear()
 
 	if start_pos.distance_to(end_pos) <= CLICK_DRAG_THRESHOLD:
+		## A standard stands for its whole block: clicking one of ours
+		## selects every man under it, ahead of whatever is behind it.
+		var banner_units: Array[Unit] = []
+		for unit in feedback.banner_units_at(end_pos):
+			if can_command(unit):
+				banner_units.append(unit)
+		if not banner_units.is_empty():
+			select_building(null)
+			select_resource(null)
+			for unit in banner_units:
+				unit.selected = true
+				selected_units.append(unit)
+			banner_units[0].play_select_sound()
+			clicked_ring_target = null
+			return
 		var collider: Object = raycast(end_pos).get("collider")
 		if collider is Unit and can_command(collider):
 			select_building(null)
@@ -2330,6 +2436,13 @@ func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionar
 	var dir := camera.project_ray_normal(screen_pos)
 	var query := PhysicsRayQueryParameters3D.create(from, from + dir * 1000.0, collision_mask)
 	var hit := space_state.intersect_ray(query)
+	## Trees have no body (see Forest): they are picked the way units are, and
+	## sat on the layer every building and resource node did.
+	if collision_mask & 1 and Forest.active != null:
+		var reach: float = from.distance_to(hit.position) if not hit.is_empty() else 1000.0
+		var tree_hit: Dictionary = Forest.active.pick(from, dir, reach)
+		if not tree_hit.is_empty():
+			hit = tree_hit
 	if collision_mask & UNIT_PICK_LAYER == 0 or sprite_batcher == null:
 		return hit
 	var basis := camera.global_transform.basis
@@ -2540,6 +2653,79 @@ func _rpc_set_hold_position(unit_paths: Array[NodePath], enabled: bool) -> void:
 
 ## What UNIT_REGIMENT_KEY would do with what is selected right now. NONE hides
 ## the command entirely rather than offering something that would fail.
+enum ArmyAction { NONE, JOIN, LEAVE }
+
+## Works off replicated state only, like selection_regiment_action. One Lord
+## selected with men not yet his: they join him. No Lord selected, and some of
+## the men are in an army: they leave it.
+func selection_army_action() -> ArmyAction:
+	var lords: Array[Unit] = []
+	var in_army := false
+	for unit in selected_units:
+		if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD or not can_command(unit):
+			continue
+		if unit.is_lord:
+			lords.append(unit)
+		elif unit.can_fight and not unit.can_gather:
+			in_army = in_army or unit.army_lord >= 0
+	if lords.size() == 1:
+		for unit in selected_units:
+			if is_instance_valid(unit) and not unit.is_lord and unit.can_fight and not unit.can_gather \
+					and unit.army_lord != lords[0].net_id:
+				return ArmyAction.JOIN
+		return ArmyAction.NONE
+	if lords.is_empty() and in_army:
+		return ArmyAction.LEAVE
+	return ArmyAction.NONE
+
+func toggle_army() -> void:
+	prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+	_rpc_toggle_army.rpc_id(1, unit_paths)
+	play_command_sound()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_toggle_army(unit_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	toggle_army_as(sender_id, unit_paths)
+
+## Host: the Join/Leave Army command for `sender_id`'s units. A regiment
+## always moves as one: touching any man of it takes all of it.
+func toggle_army_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
+	if not multiplayer.is_server():
+		return
+	var lord: Unit = null
+	var men: Array[Unit] = []
+	var regiment_ids: Dictionary = {}
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit == null or unit.owner_peer_id != sender_id or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if unit.is_lord:
+			if lord != null:
+				return
+			lord = unit
+		elif unit.can_fight and not unit.can_gather:
+			men.append(unit)
+			if unit.regiment_id >= 0:
+				regiment_ids[unit.regiment_id] = true
+	for node in get_tree().get_nodes_in_group(&"units"):
+		var mate := node as Unit
+		if mate != null and regiment_ids.has(mate.regiment_id) and not men.has(mate) \
+				and mate.status_activity != Unit.Activity.DEAD:
+			men.append(mate)
+	var to: int = lord.net_id if lord != null else -1
+	for unit in men:
+		unit.army_lord = to
+
 enum RegimentAction { NONE, FORM, DISBAND, REINFORCE }
 
 ## Works entirely off the units themselves — regiment_id is replicated and
@@ -2567,7 +2753,7 @@ func selection_regiment_action() -> RegimentAction:
 		if loose_officers.is_empty() and loose_men.is_empty():
 			return RegimentAction.DISBAND
 		return RegimentAction.REINFORCE
-	if not loose_officers.is_empty() and Regiment.size_for(largest_same_type(loose_men).size()) >= 0:
+	if Regiment.size_for(largest_same_type(loose_men).size()) >= 0:
 		return RegimentAction.FORM
 	return RegimentAction.NONE
 
@@ -2658,12 +2844,14 @@ func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_office
 			added += 1
 	var wanted: String = regiment.unit_type()
 	var joining: Array[Unit] = loose_men if wanted != "" else largest_same_type(loose_men)
+	var army: int = _army_of_regiment(regiment)
 	for unit in joining:
 		if regiment.room() == 0:
 			break
 		if wanted == "" or unit.display_name == wanted:
 			if regiment.add(unit):
 				unit.formation_facing = front
+				unit.army_lord = army
 				added += 1
 	if added > 0:
 		refresh_regiment_buffs(regiment)
@@ -2697,10 +2885,10 @@ func expand_to_regiments(units: Array[Unit]) -> Array[Unit]:
 				out.append(unit)
 	return out
 
-## Raises a regiment from the officer and the loose men in `units`. Takes the
-## largest tier they can fill and leaves the remainder loose rather than
-## forming an under-strength body. Returns null if there is no officer, or not
-## enough men for the smallest tier.
+## Raises a regiment from the loose men in `units`. Takes the largest tier they
+## can fill and leaves the remainder loose rather than forming an
+## under-strength body. Returns null if there are not enough men of one kind
+## for the smallest tier. An officer among them (an old map's) still leads it.
 func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 	var officer: Unit = null
 	var men: Array[Unit] = []
@@ -2712,8 +2900,6 @@ func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 				officer = unit
 		elif unit.can_fight:
 			men.append(unit)
-	if officer == null:
-		return null
 	men = largest_same_type(men)
 	## Raised at whole ranks, taking as many as they fill and leaving any
 	## remainder loose — a regiment is never raised part of a rank strong.
@@ -2721,18 +2907,30 @@ func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 	if established < 0:
 		return null
 	var regiment := Regiment.create(peer_id, established)
-	regiment.set_officer(officer)
+	if officer != null:
+		regiment.set_officer(officer)
 	for man in men:
 		if not regiment.add(man):
 			break
+	## A body is in one army or none: whichever its first man had joined.
+	var army: int = _army_of_regiment(regiment)
+	for man in regiment.members:
+		man.army_lord = army
 	regiments[regiment.id] = regiment
 	refresh_regiment_buffs(regiment)
 	return regiment
 
-## A regiment loses its bonuses the moment its officer falls and gets them
-## back when another takes over, so this is polled rather than set once at
-## forming — there is no death signal to hang it off, and a body that stops
-## being led should notice within a moment either way.
+## The Lord's army a regiment is in (his net_id), or -1.
+func _army_of_regiment(regiment: Regiment) -> int:
+	for man in regiment.members:
+		if is_instance_valid(man) and man.army_lord >= 0:
+			return man.army_lord
+	return -1
+
+## A regiment loses its bonuses the moment it stops being led (its Lord falls,
+## or it leaves his army) and gets them back when it joins one, so this is
+## polled rather than set once at forming — a body that stops being led
+## should notice within a moment either way.
 const REGIMENT_UPKEEP_INTERVAL: float = 0.5
 var _regiment_upkeep_timer: float = 0.0
 
@@ -2751,7 +2949,7 @@ func _tick_regiments(delta: float) -> void:
 func refresh_regiment_buffs(regiment: Regiment) -> void:
 	var damage: float = 0.0
 	var armor: int = 0
-	if regiment.has_officer():
+	if regiment.is_led(get_tree()):
 		var band: int = regiment.bonus_band()
 		damage = Regiment.DAMAGE_BONUS[band]
 		armor = Regiment.ARMOR_BONUS[band]

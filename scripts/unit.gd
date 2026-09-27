@@ -254,9 +254,9 @@ func _resting_modulate() -> Color:
 	var base := Color.WHITE
 	if owner_peer_id != multiplayer.get_unique_id():
 		base = Color.WHITE.lerp(team_tint, _ENEMY_TINT_STRENGTH)
-	if _status_tint_until_ms > Time.get_ticks_msec():
+	if _status_tint_until_ms > GameClock.msec():
 		base *= Color.WHITE.lerp(_status_tint, _STATUS_TINT_STRENGTH)
-	if _buff_tint_until_ms > Time.get_ticks_msec():
+	if _buff_tint_until_ms > GameClock.msec():
 		base *= Color.WHITE.lerp(_buff_tint, _BUFF_TINT_STRENGTH)
 	return base
 
@@ -869,7 +869,7 @@ static var _stun_star_mesh: QuadMesh = null
 func show_status_effects(dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color) -> void:
 	if _death_playing:
 		return
-	var now := Time.get_ticks_msec()
+	var now := GameClock.msec()
 	if slow_seconds > 0.0:
 		_status_tint = color
 		_status_tint_until_ms = maxi(_status_tint_until_ms, now + int(slow_seconds * 1000.0))
@@ -889,14 +889,14 @@ func show_buff_tint(color: Color, seconds: float) -> void:
 	if _death_playing:
 		return
 	_buff_tint = color
-	_buff_tint_until_ms = maxi(_buff_tint_until_ms, Time.get_ticks_msec() + int(seconds * 1000.0))
+	_buff_tint_until_ms = maxi(_buff_tint_until_ms, GameClock.msec() + int(seconds * 1000.0))
 	_update_team_tint_visual()
 
 ## Called every frame from _process; cheap when nothing is active.
 func _update_status_visuals(delta: float) -> void:
 	if _buff_tint_until_ms == 0 and _status_tint_until_ms == 0 and _dot_particles == null and _stun_stars == null:
 		return
-	var now := Time.get_ticks_msec()
+	var now := GameClock.msec()
 	if _buff_tint_until_ms != 0 and now >= _buff_tint_until_ms:
 		_buff_tint_until_ms = 0
 		_update_team_tint_visual()
@@ -1044,7 +1044,7 @@ var ranged_attackers: int = 0
 var _overflow_scan_timer: float = 0.0
 var _reach_check_timer: float = randf() * MELEE_BLOCK_CHECK_INTERVAL
 var _reach_blocked: bool = false
-## Earliest Time.get_ticks_msec() this unit may call allies in again (see take_damage).
+## Earliest GameClock.msec() this unit may call allies in again (see take_damage).
 var _next_alert_ms: int = 0
 var attack_timer: float = 0.0
 var build_target: ProductionBuilding = null
@@ -1179,6 +1179,14 @@ var lord_progress: int = 0:
 			lord_progress = value
 			_net_state_changed()
 var lord_xp: float = 0.0
+## The net_id of the Lord whose army this unit has joined, or -1 (see
+## Main.toggle_army_as). It stays in his army wherever it goes, until it
+## leaves or he falls. Set by the host, replicated.
+var army_lord: int = -1:
+	set(value):
+		if value != army_lord:
+			army_lord = value
+			_net_state_changed()
 ## What the nearest Lord's command gives this unit right now. Host only,
 ## refreshed by Lords every half second.
 var lord_damage: float = 0.0
@@ -1251,7 +1259,7 @@ var incoming_damage: int = 0
 ## order — only Stop or another command calls it off.
 var assault_center: Vector3 = Vector3.ZERO
 var assault_active: bool = false
-## Host-only: ability index (within get_abilities()) -> Time.get_ticks_msec()
+## Host-only: ability index (within get_abilities()) -> GameClock.msec()
 ## when it's usable again. Not synced — only the host ever enforces cooldowns.
 var _ability_ready_at_ms: Dictionary = {}
 ## The owner's local copy of the same thing, on the owner's own clock — set
@@ -2013,22 +2021,22 @@ func get_ability(index: int) -> Ability:
 
 ## Host-side authority.
 func is_ability_ready(index: int) -> bool:
-	return Time.get_ticks_msec() >= int(_ability_ready_at_ms.get(index, 0))
+	return GameClock.msec() >= int(_ability_ready_at_ms.get(index, 0))
 
 ## Owner-side estimate, for the HUD only.
 func is_ability_ready_locally(index: int) -> bool:
-	return Time.get_ticks_msec() >= int(local_ability_ready_at_ms.get(index, 0))
+	return GameClock.msec() >= int(local_ability_ready_at_ms.get(index, 0))
 
 func start_local_cooldown(index: int, cooldown: float) -> void:
 	_local_ability_cooldown_ms[index] = int(cooldown * 1000.0)
-	local_ability_ready_at_ms[index] = Time.get_ticks_msec() + _local_ability_cooldown_ms[index]
+	local_ability_ready_at_ms[index] = GameClock.msec() + _local_ability_cooldown_ms[index]
 
 ## 1.0 the moment the ability is cast, falling to 0.0 as it comes back.
 func local_cooldown_remaining_fraction(index: int) -> float:
 	var duration: int = _local_ability_cooldown_ms.get(index, 0)
 	if duration <= 0:
 		return 0.0
-	var left: int = int(local_ability_ready_at_ms.get(index, 0)) - Time.get_ticks_msec()
+	var left: int = int(local_ability_ready_at_ms.get(index, 0)) - GameClock.msec()
 	return clampf(float(left) / float(duration), 0.0, 1.0)
 
 ## Host-only, called from main.gd's validated activation RPC. Walks until
@@ -2083,7 +2091,7 @@ func _perform_cast() -> void:
 		_end_cast_command()
 		return
 	ResourceStockpile.spend(owner_peer_id, ability.costs)
-	_ability_ready_at_ms[index] = Time.get_ticks_msec() + int(ability_cooldown(ability) * 1000.0)
+	_ability_ready_at_ms[index] = GameClock.msec() + int(ability_cooldown(ability) * 1000.0)
 
 	var to_target := target - global_position
 	to_target.y = 0.0
@@ -2330,10 +2338,10 @@ func _update_charge(delta: float) -> void:
 		if _charge_rearm_run >= CHARGE_REARM_DISTANCE:
 			_charge_ready = true
 	if _charge_ready and _charge_run >= CHARGE_MIN_RUN:
-		_charge_armed_until_ms = Time.get_ticks_msec() + CHARGE_ARMED_GRACE_MS
+		_charge_armed_until_ms = GameClock.msec() + CHARGE_ARMED_GRACE_MS
 
 func _charge_armed() -> bool:
-	return can_charge and _charge_ready and Time.get_ticks_msec() <= _charge_armed_until_ms
+	return can_charge and _charge_ready and GameClock.msec() <= _charge_armed_until_ms
 
 func _spend_charge() -> void:
 	_charge_ready = false
@@ -2437,7 +2445,7 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	## Sanctuary: nothing gets through while it lasts.
 	if buffs.amount(ResearchNode.Buff.INVULNERABLE) > 0.0:
 		return
-	last_damaged_msec = Time.get_ticks_msec()
+	last_damaged_msec = GameClock.msec()
 	## Counters: the attacker's damage type against this unit's armour class.
 	## Only a Unit attacker has a damage type; buildings and the like hit x1.
 	if attacker is Unit:
@@ -2448,7 +2456,7 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 		flanked = flank > 1.0
 		amount = roundi(amount * flank)
 		if flanked:
-			last_flanked_ms = Time.get_ticks_msec()
+			last_flanked_ms = GameClock.msec()
 			last_flanker = attacker
 	## Armour (Blacksmith upgrades + research buffs) cuts a percentage per
 	## point, capped, rather than a flat amount: flat armour against hits of
@@ -2501,7 +2509,7 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 			## standing order to take the place it was sent to.
 			if not _group_contact(attacker):
 				command_attack(attacker, true)
-		var now := Time.get_ticks_msec()
+		var now := GameClock.msec()
 		if now >= _next_alert_ms:
 			_next_alert_ms = now + CombatUtils.ALERT_INTERVAL_MS
 			CombatUtils.alert_nearby_allies(get_tree(), global_position, owner_peer_id, attacker)
@@ -3202,8 +3210,10 @@ func _retarget_resource(from: Variant = null, skip: Gatherable = null) -> bool:
 	var origin: Vector3 = from if from != null else _last_resource_position
 	var best: Gatherable = null
 	var best_distance: float = RESOURCE_RETARGET_RADIUS
-	for node in get_tree().get_nodes_in_group(&"gatherables"):
-		var candidate := node as Gatherable
+	## Only trees seek a replacement, and trees live in the Forest, not a group.
+	if Forest.active == null:
+		return false
+	for candidate in Forest.active.trees_in_circle(origin, RESOURCE_RETARGET_RADIUS):
 		if candidate == null or candidate == skip or candidate.is_queued_for_deletion() or candidate.amount_remaining <= 0:
 			continue
 		if not candidate.seek_replacement_when_depleted or candidate.resource_type != _replacement_resource_type:
@@ -3403,7 +3413,7 @@ func _start_attacking() -> void:
 	## Swings at once on a fresh engagement, but never sooner than the cooldown
 	## after its last swing — a target knocked back or stepping out of reach and
 	## straight back in would otherwise hand the attacker a free extra hit.
-	attack_timer = minf(attack_cooldown, (Time.get_ticks_msec() - _last_swing_ms) / 1000.0)
+	attack_timer = minf(attack_cooldown, (GameClock.msec() - _last_swing_ms) / 1000.0)
 
 ## Whatever gets in front of a unit while it's closing on a target that's
 ## still a long way off is the more urgent problem. An assault produces exactly
@@ -3510,7 +3520,7 @@ func _effective_cooldown() -> float:
 ## from the sim instead.
 func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 	attack_timer = 0.0
-	_last_swing_ms = Time.get_ticks_msec()
+	_last_swing_ms = GameClock.msec()
 	_play_attack_swing()
 	if projectile_scene != null:
 		## The shot leaves just before the draw/cast animation ends rather
@@ -4020,7 +4030,7 @@ func _sim_slide() -> void:
 	if _unclamped_time > 0.0:
 		_unclamped_time -= delta
 		flags |= ArmySim.MOTION_UNCLAMPED
-	var speed := move_speed * _slow_multiplier() * _buff_speed_multiplier()
+	var speed := move_speed * _slow_multiplier() * _buff_speed_multiplier() * RoadNet.speed_at(global_position)
 	## A charge's knockback carries a man off his place for its moment.
 	var solo_walking := sim_solo and not sim_follow and _solo_walking()
 	if (sim_follow or solo_walking) and flags == 0 and _knockback_remaining <= 0.0:

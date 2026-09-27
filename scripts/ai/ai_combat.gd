@@ -71,13 +71,15 @@ const LEADER_THRESHOLD: float = 0.7
 ## A neutral point is only attacked by a wave this many times stronger than
 ## its guards.
 const GUARD_MARGIN: float = 1.5
-## Enemies within this of a point of ours are an attack on it.
-const POINT_THREAT_RADIUS: float = 9.0
-## A wave's middle within this of its point counts as there, holding it.
+## Enemies within this of a point of ours are an attack on it (past its
+## capture circle, see Objective.capture_radius).
+const POINT_THREAT_MARGIN: float = 4.0
+## A wave's middle within this of its point counts as there, holding it — or
+## anywhere inside a bigger capture circle.
 const POINT_HOLD_RADIUS: float = 8.0
-## Soldiers stand within this of the point's centre while holding — inside
-## the capture zone (radius 5 on the stock objectives) with some margin.
-const CAPTURE_STAND_RADIUS: float = 3.0
+## Soldiers stand within this share of the capture circle while holding:
+## inside it with some margin, spread over it rather than piled on the centre.
+const CAPTURE_STAND_SHARE: float = 0.6
 ## Holding a point this long without the flag moving our way means it can't
 ## be taken right now (an equal enemy on it, guards out of reach).
 const POINT_HOLD_TIMEOUT: float = 40.0
@@ -581,8 +583,7 @@ func _wave_reach_tolerance() -> float:
 func find_blocker(from: Vector3, to: Vector3, tolerance: float) -> ProductionBuilding:
 	if not ai.nav_ready():
 		return null
-	var nav_map: RID = ai.main.get_world_3d().navigation_map
-	var path: PackedVector3Array = NavigationServer3D.map_get_path(nav_map, ai.nearest_navmesh_point(from), to, true)
+	var path: PackedVector3Array = ai.nav_path(ai.nearest_navmesh_point(from), to)
 	if path.is_empty():
 		return null
 	var end: Vector3 = path[path.size() - 1]
@@ -619,7 +620,8 @@ func _update_point_hold(centre: Vector3) -> bool:
 		if not _send_wave_to_next_target(centre):
 			_send_wave_home()
 		return true
-	if Vector2(centre.x - point_pos.x, centre.z - point_pos.z).length() > POINT_HOLD_RADIUS:
+	var zone: float = point.capture_radius()
+	if Vector2(centre.x - point_pos.x, centre.z - point_pos.z).length() > maxf(POINT_HOLD_RADIUS, zone):
 		return false
 	## Headway: our flag rising, or the owner's flag coming down.
 	var progress: float = point.flag_control if point.flag_peer_id == ai.peer_id else -point.flag_control
@@ -644,9 +646,9 @@ func _update_point_hold(centre: Vector3) -> bool:
 	for unit in wave:
 		if walked_in >= POINT_HOLD_MOVES_PER_THINK:
 			break
-		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(point_pos) > CAPTURE_STAND_RADIUS + 1.0:
+		if unit.status_command == Unit.Command.NONE and unit.global_position.distance_to(point_pos) > zone - 1.0:
 			var angle: float = randf() * TAU
-			var spot: Vector3 = point_pos + Vector3(cos(angle), 0.0, sin(angle)) * randf() * CAPTURE_STAND_RADIUS
+			var spot: Vector3 = point_pos + Vector3(cos(angle), 0.0, sin(angle)) * randf() * zone * CAPTURE_STAND_SHARE
 			ai.order_move([unit], ai.nearest_navmesh_point(spot), true)
 			walked_in += 1
 	return true
@@ -655,7 +657,7 @@ func _update_point_hold(centre: Vector3) -> bool:
 func _point_secured(point) -> bool:
 	return point.owner_peer_id > 0 and Teams.is_friendly(ai.peer_id, point.owner_peer_id) \
 			and point.flag_control >= 1.0 and not point.contested \
-			and not _enemies_near(point.global_position, POINT_THREAT_RADIUS)
+			and not _enemies_near(point.global_position, point.capture_radius() + POINT_THREAT_MARGIN)
 
 func _enemies_near(pos: Vector3, radius: float) -> bool:
 	for enemy in visible_enemies:

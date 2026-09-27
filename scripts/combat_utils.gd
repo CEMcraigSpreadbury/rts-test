@@ -151,7 +151,7 @@ static func is_visible_to(tree: SceneTree, viewer_peer_id: int, world_pos: Vecto
 	return false
 
 static func _building_vision_sources(tree: SceneTree) -> Array:
-	var now: float = Time.get_ticks_msec() / 1000.0
+	var now: float = GameClock.msec() / 1000.0
 	if now - _building_eyes_time < BUILDING_EYE_CACHE_SECONDS:
 		return _building_eyes
 	_building_eyes_time = now

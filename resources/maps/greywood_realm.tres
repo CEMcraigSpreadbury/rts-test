@@ -7,4 +7,4 @@ script = ExtResource("1_cc33k")
 map_name = "Greywood Realm"
 scene_path = "res://scenes/maps/greywood_realm.tscn"
 max_players = 2
-capture_points = 9
+capture_points = 15

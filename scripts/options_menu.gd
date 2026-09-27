@@ -22,6 +22,9 @@ const KEY_ACTION_NAMES := {
 	&"idle_villager": "Next Idle Villager",
 	&"select_military": "Select All Military",
 	&"last_attack": "Jump to Last Attack",
+	&"pause_game": "Pause Game",
+	&"speed_up": "Faster",
+	&"slow_down": "Slower",
 }
 
 const LABEL_WIDTH: float = 220.0

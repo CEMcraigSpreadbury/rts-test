@@ -40,6 +40,11 @@ var gatherers: Array[Unit] = []
 ## of the same kind (see Unit._retarget_resource) instead of going idle. On for
 ## trees only — gold deposits need a Mine each, so there's no "next one" to find.
 @export var seek_replacement_when_depleted: bool = false
+## Above zero, this is a forest tree: no collision shape, obstacle or model of
+## its own. Forest draws it and answers clicks and placement checks for it,
+## and the navmesh and the sim grid carve it as a trunk of this radius — see
+## Forest for why.
+@export var trunk_radius: float = 0.0
 
 ## One is picked at random and played through select_audio_player whenever
 ## this node becomes newly selected (see main.gd's selection code). Shared by
@@ -73,6 +78,9 @@ func _exit_tree() -> void:
 	tree_changes += 1
 
 func _ready() -> void:
+	if is_tree():
+		_join_forest()
+		return
 	for child in get_children():
 		if child is Node3D and not (child is CollisionShape3D or child is NavigationObstacle3D):
 			_model = child
@@ -82,16 +90,50 @@ func _ready() -> void:
 			TreeBillboard.apply_to_trees_in(_model)
 			break
 
+func is_tree() -> bool:
+	return trunk_radius > 0.0
+
+## How far this node's solid footprint reaches: the trunk, or the
+## NavigationObstacle3D a deposit or farm carries (1.2 if it has neither).
+func footprint_radius() -> float:
+	if is_tree():
+		return trunk_radius
+	var obstacle := get_node_or_null(^"NavigationObstacle3D") as NavigationObstacle3D
+	return obstacle.radius if obstacle else 1.2
+
+## Hands the model to the forest and leaves physics altogether: a body with no
+## shape still counts against the physics engine's body limit.
+func _join_forest() -> void:
+	var model: Node3D = null
+	for child in get_children():
+		if child is Node3D:
+			model = child
+			break
+	Forest.for_node(self).add_tree(self, model)
+	if model != null:
+		remove_child(model)
+		model.free()
+	PhysicsServer3D.body_set_space(get_rid(), RID())
+
 func play_select_sound() -> void:
+	if is_tree():
+		if Forest.active != null:
+			Forest.active.play_select(on_select_sound_effects)
+		return
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
 
 ## A quick squash on every harvest tick. Purely local per peer — gather() only
 ## runs on the host, so main.gd relays this out (see _on_unit_resource_harvested).
 func play_harvest_squash() -> void:
-	if _model == null:
-		return
 	var now: int = Time.get_ticks_msec()
 	if now < _next_squash_msec:
+		return
+	if is_tree():
+		_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
+		if Forest.active != null:
+			Forest.active.squash(self)
+		return
+	if _model == null:
 		return
 	_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
 	if _squash_tween and _squash_tween.is_valid():
@@ -146,5 +188,7 @@ func _deplete() -> void:
 		return
 	## Stops blocking the moment it's queued, not a frame later when it leaves.
 	tree_changes += 1
+	if is_tree():
+		Forest.for_node(self).remove_tree(self)
 	depleted.emit()
 	queue_free()

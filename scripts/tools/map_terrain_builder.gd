@@ -251,8 +251,6 @@ static func bake_navigation_mesh(layout: MapLayout) -> NavigationMesh:
 				corners.append(Vector3(corner.x - layout.half, corner_height(layout, corner), corner.y - layout.half))
 			_append_down_facing(faces, corners[0], corners[1], corners[2])
 			_append_down_facing(faces, corners[0], corners[2], corners[3])
-	var geometry := NavigationMeshSourceGeometryData3D.new()
-	geometry.add_faces(faces, Transform3D.IDENTITY)
 	var nav_mesh := NavigationMesh.new()
 	nav_mesh.cell_size = 0.25
 	nav_mesh.cell_height = 0.01
@@ -262,8 +260,8 @@ static func bake_navigation_mesh(layout: MapLayout) -> NavigationMesh:
 	## start from its own triangles, which already hugs hills to ~0.3m, while
 	## finer detail here multiplied the rebaked polygon count (~3.7x) and made
 	## every rebake and unit repath visibly hitch.
-	NavigationServer3D.bake_from_source_geometry_data(nav_mesh, geometry)
-	return nav_mesh
+	## In tiles: one whole-map bake gives up somewhere under 2 km across.
+	return NavigationBlockers.bake_tiled(nav_mesh, faces)
 
 ## add_faces() flips winding, and Recast drops downward faces — so hand it
 ## triangles facing down (same trick as NavigationBlockers).

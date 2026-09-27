@@ -181,7 +181,7 @@ render_priority = 21
 [node name="Income" type="Node" parent="."]
 script = ExtResource("7_generator")
 resource_type = ExtResource("8_income")
-amount = 3
+amount = 4
 interval = 5.0
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]

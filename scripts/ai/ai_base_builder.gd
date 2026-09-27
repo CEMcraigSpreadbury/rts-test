@@ -123,6 +123,10 @@ func _follow_build_order() -> void:
 	if not mines.is_empty():
 		steps.append([mines[0], p.first_mine_at_villagers, 1])
 		steps.append([mines[0], p.second_mine_at_villagers, 2])
+		## Wood piling up while gold holds the army back: the one thing wood
+		## can buy that makes gold is another Mine.
+		if ai.stock(AiPlayer.WOOD) > ai.stock(AiPlayer.GOLD) + WOOD_GLUT_FOR_MINE:
+			steps.append([mines[0], p.second_mine_at_villagers + THIRD_MINE_EXTRA_VILLAGERS, 3])
 	if barracks != null:
 		steps.append([barracks, p.barracks_at_villagers, 1])
 		steps.append([barracks, p.second_barracks_at_villagers, 2])
@@ -150,6 +154,9 @@ func _follow_build_order() -> void:
 		## rather than stalling the whole order on it.
 		if try_construct(type) or not _no_site.has(type):
 			return
+
+const WOOD_GLUT_FOR_MINE: int = 300
+const THIRD_MINE_EXTRA_VILLAGERS: int = 4
 
 ## Mines still sitting on a deposit with gold left (a Mine outlives its
 ## deposit, and then only a new one helps).
@@ -247,7 +254,7 @@ func try_construct(type: BuildingType) -> bool:
 ## left, anywhere safe beats an army with nothing to buy it with.
 func _pick_deposit(type: BuildingType) -> Gatherable:
 	var own_side_only: bool = _working_mines() > 0
-	var max_distance: float = MAX_DEPOSIT_DISTANCE if own_side_only else MAX_DEPOSIT_DISTANCE_WHEN_DRY
+	var max_distance: float = (MAX_DEPOSIT_DISTANCE if own_side_only else MAX_DEPOSIT_DISTANCE_WHEN_DRY) * _map_scale()
 	var candidates: Array = []
 	for node in ai.get_tree().get_nodes_in_group("gatherables"):
 		var deposit := node as Gatherable
@@ -264,6 +271,14 @@ func _pick_deposit(type: BuildingType) -> Gatherable:
 		if ai.is_reachable(deposit.global_position, DEPOSIT_REACH_TOLERANCE):
 			return deposit
 	return null
+
+## The deposit distances above were set on maps with bases about
+## HOME_TO_CENTRE_REFERENCE from the middle; a bigger map spreads its gold out
+## by as much, so they stretch with it.
+const HOME_TO_CENTRE_REFERENCE: float = 180.0
+
+func _map_scale() -> float:
+	return clampf(ai.home.distance_to(ai.map_centre) / HOME_TO_CENTRE_REFERENCE, 1.0, 3.0)
 
 ## A valid open-ground spot for `type` near home, or null. Rings of
 ## candidates around the Town Center, best-scored first (see the class notes).

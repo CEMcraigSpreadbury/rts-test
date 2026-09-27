@@ -99,9 +99,9 @@ func _physics_process(delta: float) -> void:
 ## Trees are Gatherables that pay wood; gold deposits and farms are not what
 ## we want to hide deer behind.
 func _collect_tree_positions() -> void:
-	for node in get_tree().get_nodes_in_group("gatherables"):
-		var gatherable := node as Gatherable
-		if gatherable == null or gatherable.resource_type == null:
+	var trees: Array[Gatherable] = Forest.active.all_trees() if Forest.active != null else []
+	for gatherable in trees:
+		if gatherable.resource_type == null:
 			continue
 		if gatherable.resource_type.display_name != "Wood":
 			continue

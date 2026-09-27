@@ -379,7 +379,7 @@ func _is_placement_valid(pos: Vector3, radius: float) -> bool:
 	for result in space_state.intersect_shape(query, 8):
 		if result.collider is ProductionBuilding or result.collider is Gatherable:
 			return false
-	return true
+	return Forest.active == null or not Forest.active.any_trunk_within(pos, radius)
 
 func handle_placement_input(event: InputEvent) -> void:
 	if placing_type.is_wall:
@@ -597,7 +597,7 @@ func is_area_clear(pos: Vector3, radius: float) -> bool:
 	for result in get_world_3d().direct_space_state.intersect_shape(query, 64):
 		if result.collider is ProductionBuilding or result.collider is Gatherable:
 			return false
-	return true
+	return Forest.active == null or not Forest.active.any_trunk_within(pos, radius)
 
 ## Sends whichever villager(s) opened the build menu to go build what they
 ## just placed, instead of leaving them standing idle next to it. Shared by
@@ -791,14 +791,25 @@ func _wall_find_blocking_obstacle(a: Vector3, b: Vector3) -> Gatherable:
 			if dist < closest_dist:
 				closest_dist = dist
 				closest = result.collider
+	## Trees, which have no body: the same box, tested against each trunk.
+	if Forest.active != null:
+		var half := Vector2(shape.size.x * 0.5, shape.size.z * 0.5)
+		var across := dir.cross(Vector3.UP)
+		for tree in Forest.active.trees_in_circle(mid, half.length() + 1.0):
+			var offset: Vector3 = tree.global_position - mid
+			if absf(offset.dot(dir)) > half.x + tree.trunk_radius or absf(offset.dot(across)) > half.y + tree.trunk_radius:
+				continue
+			var dist: float = mid.distance_to(tree.global_position)
+			if dist < closest_dist:
+				closest_dist = dist
+				closest = tree
 	return closest
 
 ## How far a resource node's own footprint extends, read off its
 ## NavigationObstacle3D the same way ProductionBuilding.get_footprint_radius()
 ## does — falls back to a generic clearance if a given Gatherable has none.
 func _obstacle_radius(node: Node3D) -> float:
-	var obstacle := node.get_node_or_null("NavigationObstacle3D") as NavigationObstacle3D
-	return obstacle.radius if obstacle else 1.2
+	return (node as Gatherable).footprint_radius() if node is Gatherable else 1.2
 
 ## Pushes next_point sideways, away from whichever side of the a->next_point
 ## line the obstacle sits on, by enough to clear its footprint plus the
