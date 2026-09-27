@@ -7,6 +7,8 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 
 [ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Mine.glb" id="90_model"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Fantasy SFX/SFX/Chopping and Mining/mine 1.wav" id="fsfx_0"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Fantasy SFX/SFX/Chopping and Mining/mine 4.wav" id="fsfx_1"]
 
 [sub_resource type="Resource" id="ResourceCost_mine"]
 script = ExtResource("3_cost_script")
@@ -106,7 +108,7 @@ script = ExtResource("1_building_script")
 building_name = "Mine"
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_mine")])
 can_rally = false
-on_select_sound_effects = Array[AudioStream]([ExtResource("4_hfgmk")])
+on_select_sound_effects = Array[AudioStream]([ExtResource("4_hfgmk"), ExtResource("fsfx_0"), ExtResource("fsfx_1")])
 max_health = 80
 
 [node name="Model" parent="." instance=ExtResource("90_model")]

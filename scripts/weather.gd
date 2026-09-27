@@ -50,11 +50,8 @@ const DROP_SIZE: Vector2 = Vector2(0.025, 0.7)
 const DROP_COLOR: Color = Color(0.78, 0.84, 0.92, 0.35)
 const DROP_SHADER: Shader = preload("res://shaders/rain_drop.gdshader")
 
-## Looped in its import settings, so it plays for as long as the shower does.
-const RAIN_SOUND: AudioStream = preload("res://assets/sfx/Ambient Sounds/rain.wav")
-## Volume at full rain; it fades up from silence alongside the drops.
-const RAIN_VOLUME_DB: float = -6.0
-const SILENT_DB: float = -60.0
+## The rain's sound is the ambience's (see ambience_player.gd), which turns
+## to its rainy loops while is_raining.
 
 var is_raining: bool = false
 ## Host only: counts down to the next start/stop.
@@ -64,7 +61,6 @@ var _time_to_change: float = 0.0
 var sun_energy_scale: float = 1.0
 
 var _particles: GPUParticles3D
-var _sound: AudioStreamPlayer
 var _intensity: float = 0.0
 var _fade_tween: Tween
 
@@ -72,13 +68,6 @@ var _fade_tween: Tween
 func setup() -> void:
 	_particles = _build_particles()
 	main.add_child(_particles)
-	## Same bus as AmbiencePlayer, so the ambience volume slider covers it.
-	_sound = AudioStreamPlayer.new()
-	_sound.name = "RainSound"
-	_sound.stream = RAIN_SOUND
-	_sound.bus = &"Ambience"
-	_sound.volume_db = SILENT_DB
-	main.add_child(_sound)
 	if multiplayer.is_server():
 		_time_to_change = randf_range(DRY_DURATION_MIN, DRY_DURATION_MAX)
 
@@ -115,8 +104,6 @@ func _rpc_set_raining(raining: bool, wind_heading: float, wind_tilt: float) -> v
 		(_particles.process_material as ParticleProcessMaterial).direction = wind.normalized()
 		_particles.visible = true
 		_particles.emitting = true
-		if not _sound.playing:
-			_sound.play()
 	_fade_tween = create_tween()
 	_fade_tween.tween_method(_set_intensity, _intensity, 1.0 if raining else 0.0, FADE_DURATION)
 	if not raining:
@@ -125,13 +112,11 @@ func _rpc_set_raining(raining: bool, wind_heading: float, wind_tilt: float) -> v
 		_fade_tween.tween_callback(func() -> void:
 			_particles.emitting = false
 			_particles.visible = false
-			_sound.stop()
 		)
 
 func _set_intensity(value: float) -> void:
 	_intensity = value
 	_particles.amount_ratio = value
-	_sound.volume_db = lerpf(SILENT_DB, RAIN_VOLUME_DB, sqrt(value))
 	sun_energy_scale = lerpf(1.0, SUN_ENERGY_IN_RAIN, value)
 	if main.day_night:
 		main.day_night.refresh_lighting()

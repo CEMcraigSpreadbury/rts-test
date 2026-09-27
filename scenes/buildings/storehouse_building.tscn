@@ -10,6 +10,8 @@
 [ext_resource type="AudioStream" uid="uid://b2b2qsrp7ikag" path="res://assets/sfx/Facilities/Market_2.wav" id="5_ej24r"]
 
 [ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Storehouse.glb" id="90_model"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Fantasy SFX/SFX/Doors Gates and Chests/Chest Open 1.wav" id="fsfx_0"]
+[ext_resource type="AudioStream" path="res://assets/sfx/Fantasy SFX/SFX/Doors Gates and Chests/Chest Open 2.wav" id="fsfx_1"]
 
 [sub_resource type="Resource" id="ResourceCost_storehouse"]
 script = ExtResource("3_cost_script")
@@ -108,7 +110,7 @@ script = ExtResource("1_building_script")
 building_name = "Storehouse"
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_storehouse")])
 can_rally = false
-on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResource("5_ej24r")])
+on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResource("5_ej24r"), ExtResource("fsfx_0"), ExtResource("fsfx_1")])
 dropoff_resource_types = Array[ExtResource("7_resource_type_script")]([ExtResource("6_gold"), ExtResource("4_wood")])
 max_health = 80
 

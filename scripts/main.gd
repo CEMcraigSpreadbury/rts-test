@@ -335,6 +335,11 @@ var quests: QuestRunner
 func _enter_tree() -> void:
 	if group_movement == null:
 		_add_components()
+	## Units move on 30 Hz physics ticks, so the engine draws them between
+	## their last two (see Unit._ready, which opts them in). Everything else
+	## moves every frame itself and stays off.
+	get_tree().physics_interpolation = true
+	get_tree().root.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	## Cleared per match, before any child's _enter_tree: a Scenario node in
 	## this scene installs its own rules there, and everything that asks
 	## (a Shrine rolling monsters, a building pricing an item) runs in _ready,
@@ -382,6 +387,7 @@ func _apply_game_speed() -> void:
 ## not follow the player out to the menus or into their next match.
 func _exit_tree() -> void:
 	Engine.time_scale = 1.0
+	get_tree().physics_interpolation = false
 	if sprite_batcher_current == sprite_batcher:
 		sprite_batcher_current = null
 
@@ -434,7 +440,6 @@ func _ready() -> void:
 				child.free()
 		BakedLightingMaterial.apply_to(scenery)
 		TreeWind.apply_to_trees_in(scenery)
-		TreeBillboard.apply_to_trees_in(scenery)
 	_apply_clouds_setting(&"clouds")
 	Settings.changed.connect(_apply_clouds_setting)
 
@@ -562,6 +567,9 @@ func _add_components() -> void:
 	var voices := UnitVoices.new()
 	voices.name = "UnitVoices"
 	add_child(voices)
+	var sfx := Sfx.new()
+	sfx.name = "Sfx"
+	add_child(sfx)
 	army_net = ArmyNet.new()
 	army_net.name = "ArmyNet"
 	add_child(army_net)
@@ -1055,6 +1063,8 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 			building.building_name = data.building_name
 		if data.has("slot_level"):
 			building.setup_slot(data.slot_race, data.slot_kind, data.slot_level, data.slot_level_cap)
+		elif data.has("model_race"):
+			RaceModels.apply(building, data.model_race, data.model_name)
 		building.item_completed.connect(_on_building_item_completed.bind(building))
 		building.destroyed.connect(_on_building_destroyed.bind(building))
 		building.damaged.connect(feedback.relay_damage_number.bind(building))
@@ -1780,13 +1790,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 	if chat.is_input_open():
-		return
-
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == TreeBillboard.TOGGLE_KEY:
-		TreeBillboard.toggle()
-		if Forest.active != null:
-			Forest.active.set_billboards(TreeBillboard.enabled)
-		get_viewport().set_input_as_handled()
 		return
 
 	if event is InputEventKey and event.pressed and not event.echo:

@@ -597,6 +597,7 @@ var crew_sprite: AnimatedSprite3D = null
 func play_select_sound() -> void:
 	if UnitVoices.current != null:
 		AudioUtils.play_random(UnitVoices.current.interface_player(), on_select_sound_effects)
+	Sfx.select_flourish(self)
 
 ## This unit type's authored lines for `kind`, or an empty list if it has
 ## none (see the Command Lines group — empty means silent). A match rather
@@ -939,6 +940,7 @@ func _ensure_dot_particles() -> void:
 	_dot_particles.draw_pass_1 = _status_quad_mesh()
 	_dot_particles.position = Vector3(0, 0.7, 0)
 	_dot_particles.emitting = false
+	_dot_particles.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_dot_particles)
 
 func _ensure_stun_stars() -> void:
@@ -961,6 +963,7 @@ func _ensure_stun_stars() -> void:
 		var angle := TAU * i / STUN_STAR_COUNT
 		star.position = Vector3(cos(angle), 0.0, sin(angle)) * STUN_STAR_RADIUS
 		_stun_stars.add_child(star)
+	_stun_stars.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	add_child(_stun_stars)
 
 static func _status_quad_mesh() -> QuadMesh:
@@ -1545,6 +1548,14 @@ func _ready() -> void:
 	nav_agent = NavTarget.new()
 	nav_agent.target_desired_distance = MOVE_ARRIVAL_DISTANCE
 	nav_agent.target_position = global_position
+	## The host's sim moves the unit on physics ticks only, so it is drawn
+	## between its last two (see Main._enter_tree); a client already eases
+	## its units every frame (ArmyNet). What hangs off the unit animates
+	## every frame by itself, so it rides along as it is.
+	if multiplayer.is_server():
+		physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_ON
+	for child in get_children():
+		child.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 
 ## Paired with _exit_tree rather than _ready, so a unit moved to another
 ## parent (Main._adopt_scenario_entities) leaves the sim and comes back.
@@ -2002,6 +2013,7 @@ func execute_teleport_ability(ability: Ability, target_pos: Vector3) -> void:
 				or ally.global_position.distance_to(old_position) > ability.affected_ally_radius):
 			continue
 		ally.global_position += delta
+		ally.reset_physics_interpolation()
 		if ally.sim_id >= 0 and ArmyBridge.current != null:
 			ArmyBridge.current.sim.set_unit_position(ally.sim_id, Vector2(ally.global_position.x, ally.global_position.z))
 		## Clears any in-flight path the same way command_stop() does, so a
@@ -2476,7 +2488,10 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	var attacker_path: NodePath = NodePath()
 	if attacker != null and is_instance_valid(attacker) and attacker.is_inside_tree():
 		attacker_path = attacker.get_path()
+	## An ability's burn or blast is heard through the ability, not as a blow.
+	Sfx.ability_hit = not directional
 	damaged.emit(amount, attacker_path, fatal, flanked)
+	Sfx.ability_hit = false
 	status_current_health = maxi(status_current_health - amount, 0)
 	if status_current_health <= 0:
 		_die(attacker)

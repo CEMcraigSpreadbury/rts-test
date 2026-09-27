@@ -11,7 +11,7 @@ extends Node3D
 
 var main: Main
 
-const RALLY_BANNER_SCENE: PackedScene = preload("res://assets/art/Models/Banner/banner.glb")
+const RALLY_BANNER_SCENE: PackedScene = preload("res://assets/art/Models/TownBuildings/RallyBanner.glb")
 const RALLY_DUST_HEIGHT: float = 0.35
 ## The game's single display font. Control-based UI picks this up from the
 ## project theme (dark_ages_theme.tres) automatically; this const is for the
@@ -409,6 +409,7 @@ func _rpc_spawn_projectile_visual(shooter_path: NodePath, target_path: NodePath)
 func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 	if shooter.projectile_scene == null or not is_instance_valid(target):
 		return
+	Sfx.shot(shooter)
 	var projectile: Node3D = shooter.projectile_scene.instantiate()
 	add_child(projectile)
 	var start_pos: Vector3 = shooter.global_position + Vector3(0, 1.2, 0)
@@ -461,6 +462,7 @@ func _rpc_spawn_building_projectile_visual(shooter_path: NodePath, target_path: 
 func _spawn_building_projectile_visual(shooter: ProductionBuilding, target: Node3D) -> void:
 	if shooter.projectile_scene == null or not is_instance_valid(target):
 		return
+	Sfx.shot(shooter)
 	var projectile: Node3D = shooter.projectile_scene.instantiate()
 	add_child(projectile)
 	var start_pos: Vector3 = shooter.global_position + Vector3(0, 2.5, 0)
@@ -470,20 +472,31 @@ func _spawn_building_projectile_visual(shooter: ProductionBuilding, target: Node
 	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
 	_fly_projectile_visual(projectile, start_pos, end_pos, duration, arc_height)
 
+## A world sound (see Sfx.SETS) for an event only the host sees happen.
+func relay_sfx(set_name: StringName, world_pos: Vector3) -> void:
+	Sfx.play_at(set_name, world_pos)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_sfx.rpc(set_name, world_pos)
+
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_sfx(set_name: StringName, world_pos: Vector3) -> void:
+	Sfx.play_at(set_name, world_pos)
+
 ## Damage taken and resources deposited only ever happen on the host (both
 ## take_damage() and Unit._deposit_and_continue() are authority-gated), so —
 ## same reasoning as animation/projectile relaying above — the host spawns its
 ## own local popup immediately and relays to every other peer to do the same.
 func relay_damage_number(amount: int, attacker_path: NodePath, fatal: bool, flanked: bool, node: Node3D) -> void:
-	_show_damage_feedback(node, amount, attacker_path, fatal, flanked)
+	var blow: bool = not Sfx.ability_hit
+	_show_damage_feedback(node, amount, attacker_path, fatal, flanked, blow)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_damage_number.rpc(node.get_path(), amount, attacker_path, fatal, flanked)
+		_rpc_damage_number.rpc(node.get_path(), amount, attacker_path, fatal, flanked, blow)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePath, fatal: bool, flanked: bool) -> void:
+func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePath, fatal: bool, flanked: bool, blow: bool) -> void:
 	var node := get_node_or_null(node_path) as Node3D
 	if node:
-		_show_damage_feedback(node, amount, attacker_path, fatal, flanked)
+		_show_damage_feedback(node, amount, attacker_path, fatal, flanked, blow)
 
 ## Floating number for anything damageable; the hit reaction (flash, recoil,
 ## squash) only applies to Unit, and buildings get their own flash/squash
@@ -493,7 +506,9 @@ func _rpc_damage_number(node_path: NodePath, amount: int, attacker_path: NodePat
 ## Unit.take_damage). The attacker is looked up per-peer rather than having its
 ## position sent, so a hit always recoils away from where that peer actually
 ## sees the attacker standing.
-func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, fatal: bool, flanked: bool) -> void:
+## `blow`: a weapon's hit, which makes a sound (an ability's is heard through
+## the ability instead).
+func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, fatal: bool, flanked: bool, blow: bool) -> void:
 	## get() rather than node.owner_peer_id: this takes a plain Node3D (Unit
 	## and ProductionBuilding both land here), and a missing property comes
 	## back null, which simply compares unequal.
@@ -516,6 +531,10 @@ func _show_damage_feedback(node: Node3D, amount: int, attacker_path: NodePath, f
 		node.play_squash()
 	if fatal and attacker is Unit:
 		attacker.play_hitstop()
+	if blow:
+		Sfx.hit(attacker, node, amount)
+	if fatal and node is ProductionBuilding:
+		Sfx.play_at(&"collapse", node.global_position + Vector3(0, 1.0, 0))
 	_maybe_alert_under_attack(node)
 
 ## Sums hits on one target inside DAMAGE_AGGREGATE_WINDOW into a single popup,
@@ -709,6 +728,7 @@ func _rpc_building_squash(building_path: NodePath) -> void:
 ## be relayed the same way damage numbers and hit flashes are.
 func on_unit_resource_harvested(node: Gatherable) -> void:
 	node.play_harvest_squash()
+	Sfx.harvest(node)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_rpc_harvest_squash.rpc(node.get_path())
 
@@ -717,6 +737,7 @@ func _rpc_harvest_squash(node_path: NodePath) -> void:
 	var node := get_node_or_null(node_path) as Gatherable
 	if node:
 		node.play_harvest_squash()
+		Sfx.harvest(node)
 
 func on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
 	_spawn_deposit_popup(unit, amount, color)
@@ -1160,6 +1181,12 @@ func _ensure_rally_marker() -> void:
 		return
 	rally_marker = RALLY_BANNER_SCENE.instantiate()
 	rally_marker.scale = Vector3.ONE * 0.8
+	## Flown in the local player's own colour, like their buildings.
+	var tint: Color = main.get_team_tint(main.my_peer_id())
+	for mesh in rally_marker.find_children("*", "MeshInstance3D", true, false):
+		var mi := mesh as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			mi.set_surface_override_material(i, TeamColorMaterial.build(mi.get_active_material(i), tint, TeamColorMaterial.TEAM_SHADER))
 	add_child(rally_marker)
 
 ## --- Hover highlight ---
@@ -1240,7 +1267,8 @@ func update_hover_ring() -> void:
 	if not is_equal_approx(mesh.outer_radius, radius):
 		mesh.outer_radius = radius
 		mesh.inner_radius = maxf(radius - 0.08, 0.01)
-	hover_ring.global_position = target.global_position + Vector3(0, 0.05, 0)
+	## Where the unit is drawn, between physics ticks (see Unit._ready).
+	hover_ring.global_position = target.get_global_transform_interpolated().origin + Vector3(0, 0.05, 0)
 	hover_ring.visible = true
 
 ## Only meaningful feedback while units are actually selected (nothing to
@@ -1389,6 +1417,7 @@ func _play_cast_windup(unit: Unit, ability_index: int) -> void:
 	var ability := unit.get_ability(ability_index)
 	if ability == null or ability.cast_windup <= 0.0 or not unit.is_visible_in_tree():
 		return
+	Sfx.ability_cast(ability, unit.global_position)
 	var gather := ParticleProcessMaterial.new()
 	gather.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
 	gather.emission_sphere_radius = 0.7
@@ -1452,6 +1481,7 @@ func _play_ability_launch(unit: Unit, ability_index: int, from_pos: Vector3, tar
 	var ability := unit.get_ability(ability_index)
 	if ability == null:
 		return
+	Sfx.ability_launch(ability, from_pos)
 	var direction := target_pos - from_pos
 	direction.y = 0.0
 	if ability.cast_effect and main.fog_of_war.is_visible_at(from_pos):
@@ -1577,6 +1607,7 @@ func _play_power_ability_impact(peer_id: int, node_index: int, target_pos: Vecto
 		_play_ability_impact(ability, target_pos)
 
 func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:
+	Sfx.ability_impact(ability, target_pos)
 	_play_ability_effect(target_pos, ability.area_radius, ability.effect_color, ability.effect_duration, ability.effect_particle_lifetime)
 	## Local, not relayed: every peer reaches this on its own timer.
 	if ability.impact_shake > 0.0:
