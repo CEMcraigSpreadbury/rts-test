@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/Lightning1-Sheet.png" id="fx_0"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/Lightning2-Sheet.png" id="fx_1"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/chain_lightning.png" id="icon_abilities_chain_lightning"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost_script")
@@ -40,6 +41,7 @@ scale = 1.2
 [sub_resource type="Resource" id="Ability_main"]
 script = ExtResource("5_ability_script")
 ability_name = "Chain Lightning"
+icon = ExtResource("icon_abilities_chain_lightning")
 kind = 2
 activation_range = 9.0
 cooldown = 18.0

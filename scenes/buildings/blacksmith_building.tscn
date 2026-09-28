@@ -9,6 +9,12 @@
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="10_gold"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Blacksmith_1.wav" id="90_sfx_a"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Facilities/Blacksmith_2.wav" id="91_sfx_b"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/infantry_weapons.png" id="icon_up_infantry_weapons"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/infantry_armor.png" id="icon_up_infantry_armor"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/lances.png" id="icon_up_lances"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/shields.png" id="icon_up_shields"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/crossbows.png" id="icon_up_crossbows"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/halberds.png" id="icon_up_halberds"]
 
 [sub_resource type="Resource" id="ResourceCost_blacksmith_building"]
 script = ExtResource("8_cost_script")
@@ -24,6 +30,7 @@ amount = 100
 script = ExtResource("3_item_script")
 item_name = "Infantry Weapons I"
 description = "Infantry deal 1 more damage."
+icon = ExtResource("icon_up_infantry_weapons")
 kind = 1
 build_time = 20.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon1")])
@@ -39,6 +46,7 @@ amount = 200
 script = ExtResource("3_item_script")
 item_name = "Infantry Weapons II"
 description = "Infantry deal 2 more damage."
+icon = ExtResource("icon_up_infantry_weapons")
 kind = 1
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon2")])
@@ -55,6 +63,7 @@ amount = 300
 script = ExtResource("3_item_script")
 item_name = "Infantry Weapons III"
 description = "Infantry deal 2 more damage."
+icon = ExtResource("icon_up_infantry_weapons")
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_weapon3")])
@@ -71,6 +80,7 @@ amount = 100
 script = ExtResource("3_item_script")
 item_name = "Infantry Armor I"
 description = "Infantry gain 1 armour."
+icon = ExtResource("icon_up_infantry_armor")
 kind = 1
 build_time = 20.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor1")])
@@ -87,6 +97,7 @@ amount = 200
 script = ExtResource("3_item_script")
 item_name = "Infantry Armor II"
 description = "Infantry gain another 1 armour."
+icon = ExtResource("icon_up_infantry_armor")
 kind = 1
 build_time = 25.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor2")])
@@ -104,6 +115,7 @@ amount = 300
 script = ExtResource("3_item_script")
 item_name = "Infantry Armor III"
 description = "Infantry gain another 1 armour."
+icon = ExtResource("icon_up_infantry_armor")
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_armor3")])
@@ -121,6 +133,7 @@ amount = 150
 script = ExtResource("3_item_script")
 item_name = "Lances"
 description = "Lets every Stables train Cavaliers."
+icon = ExtResource("icon_up_lances")
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_lances")])
@@ -135,6 +148,7 @@ amount = 150
 script = ExtResource("3_item_script")
 item_name = "Shields"
 description = "Lets every Barracks train Shieldmen."
+icon = ExtResource("icon_up_shields")
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_shields")])
@@ -149,6 +163,7 @@ amount = 150
 script = ExtResource("3_item_script")
 item_name = "Crossbows"
 description = "Lets every Archery Range train Crossbowmen."
+icon = ExtResource("icon_up_crossbows")
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_crossbows")])
@@ -163,6 +178,7 @@ amount = 150
 script = ExtResource("3_item_script")
 item_name = "Halberds"
 description = "Lets every Barracks train Halberdiers."
+icon = ExtResource("icon_up_halberds")
 kind = 1
 build_time = 30.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_halberds")])

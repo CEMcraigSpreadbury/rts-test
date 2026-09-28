@@ -7,6 +7,7 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/venom.png" id="icon_abilities_venom"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost_script")
@@ -21,6 +22,7 @@ amount = 150
 [sub_resource type="Resource" id="Ability_on_hit"]
 script = ExtResource("5_ability_script")
 ability_name = "Venom"
+icon = ExtResource("icon_abilities_venom")
 kind = 2
 dot_damage_per_second = 4
 dot_duration = 4.0

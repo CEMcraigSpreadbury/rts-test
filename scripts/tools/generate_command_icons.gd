@@ -1,12 +1,26 @@
 extends Node
 ## Run this scene (F6) to regenerate every command-card icon that comes from
-## art: each of the faction's buildings, rendered from its model, and each
-## trainable unit, cut from its idle sprite. Quits when done. Single icons
-## are made from the Icon Maker dock instead.
+## art: each of the faction's buildings and each settlement-only building,
+## rendered from its model, and each trainable unit, cut from its idle sprite.
+## Quits when done. Single icons are made from the Icon Maker dock instead.
 
 const FACTION_PATH: String = "res://resources/factions/faction_one.tres"
 const BUILDINGS_DIR: String = "res://scenes/buildings"
 const OUTPUT_DIR: String = "res://assets/ui/icons"
+## Built in settlement slots or standing in a settlement, never from the
+## faction's build menu. Saved under the scene's name (see Objective._building_icon_for).
+const SETTLEMENT_BUILDINGS: Array[String] = [
+	"res://scenes/settlements/granary_building.tscn",
+	"res://scenes/settlements/market_building.tscn",
+	"res://scenes/settlements/lumberyard_building.tscn",
+	"res://scenes/buildings/beastmen_barracks_building.tscn",
+	"res://scenes/buildings/gnoll_den_building.tscn",
+	"res://scenes/buildings/gnoll_totem_building.tscn",
+	"res://scenes/buildings/dark_elf_spire_building.tscn",
+	"res://scenes/buildings/dark_elf_coven_building.tscn",
+	"res://scenes/buildings/star_gate_building.tscn",
+	"res://scenes/buildings/star_sanctum_building.tscn",
+]
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUTPUT_DIR + "/buildings")
@@ -17,6 +31,9 @@ func _ready() -> void:
 	for building_type in faction.building_types:
 		var icon: Image = await IconMaker.render_model(self, building_type.scene, model_options)
 		_save(icon, "buildings", building_type.building_name)
+	for scene_path in SETTLEMENT_BUILDINGS:
+		var icon: Image = await IconMaker.render_model(self, load(scene_path), model_options)
+		_save(icon, "buildings", scene_path.get_file().get_basename().trim_suffix("_building"))
 
 	var sprite_options := IconMaker.Options.new()
 	sprite_options.outline = false
@@ -43,6 +60,11 @@ func _ready() -> void:
 				continue
 			done[item.item_name] = true
 			_save(IconMaker.unit_icon(item.unit_scene, sprite_options), "units", item.item_name)
+	## Every production building offers the Lord (ProductionBuilding.LORD_ITEM),
+	## so no scene's list carries it.
+	var lord := ProductionBuilding.LORD_ITEM
+	sprite_options.scale = 0.0
+	_save(IconMaker.unit_icon(lord.unit_scene, sprite_options), "units", lord.item_name)
 	get_tree().quit()
 
 func _save(icon: Image, folder: String, display_name: String) -> void:

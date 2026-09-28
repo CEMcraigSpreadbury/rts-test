@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://b7amoqcrdrtic" path="res://assets/art/MiniBigMonsters/Effect-Sheet.png" id="fx_effect"]
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/bile_hurl.png" id="icon_abilities_bile_hurl"]
 
 [sub_resource type="Resource" id="ResourceCost_orc_mutant_gold"]
 script = ExtResource("3_cost_script")
@@ -42,6 +43,7 @@ tint = Color(0.85, 1.0, 0.35, 1)
 [sub_resource type="Resource" id="Ability_orc_mutant"]
 script = ExtResource("5_ability_script")
 ability_name = "Bile Hurl"
+icon = ExtResource("icon_abilities_bile_hurl")
 kind = 2
 activation_range = 8.0
 cooldown = 15.0

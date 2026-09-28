@@ -143,6 +143,7 @@ static func level_items(military: bool = false) -> Array[ProducibleItem]:
 		else:
 			item.description = "Raises this building's income to %d%% of its base rate." % roundi(LEVEL_INCOME[level - 1] * 100.0)
 		item.kind = ProducibleItem.Kind.LEVEL
+		item.icon = UiStyle.icon_art("settlement", "level_%d" % level)
 		item.level_to = level
 		item.build_time = LEVEL_SECONDS[level - 1]
 		var costs: Array[ResourceCost] = []

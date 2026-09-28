@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/MiniWindBlades-Sheet.png" id="fx_0"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/wind_blades.png" id="icon_abilities_wind_blades"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost_script")
@@ -40,6 +41,7 @@ scale = 1.3
 [sub_resource type="Resource" id="Ability_main"]
 script = ExtResource("5_ability_script")
 ability_name = "Wind Blades"
+icon = ExtResource("icon_abilities_wind_blades")
 kind = 2
 activation_range = 8.0
 cooldown = 15.0

@@ -1,10 +1,22 @@
-[gd_resource type="Resource" script_class="Ruler" load_steps=15 format=3]
+[gd_resource type="Resource" script_class="Ruler" load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/ruler.gd" id="1_ruler"]
 [ext_resource type="Script" path="res://scripts/research_node.gd" id="2_node"]
 [ext_resource type="Script" path="res://scripts/ability.gd" id="3_ability"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="4_fx"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniBigMonsters/Outline/MiniPhoenix-Sheet.png" id="5_phoenix"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/smite.png" id="icon_research_smite"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/wrath_of_the_heavens.png" id="icon_research_wrath_of_the_heavens"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/healing_light.png" id="icon_research_healing_light"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/soothing_aura.png" id="icon_research_soothing_aura"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/warding.png" id="icon_research_warding"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/eyes_of_the_crow.png" id="icon_research_eyes_of_the_crow"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/renewal.png" id="icon_research_renewal"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/arcane_tutelage.png" id="icon_research_arcane_tutelage"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/curse.png" id="icon_research_curse"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/sanctuary.png" id="icon_research_sanctuary"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/spirit_link.png" id="icon_research_spirit_link"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/ascension.png" id="icon_research_ascension"]
 
 [sub_resource type="Resource" id="SpriteEffect_wrath_impact"]
 script = ExtResource("4_fx")
@@ -27,6 +39,7 @@ scale = 0.9
 [sub_resource type="Resource" id="Ability_smite"]
 script = ExtResource("3_ability")
 ability_name = "Smite"
+icon = ExtResource("icon_research_smite")
 kind = 2
 area_radius = 4.0
 area_damage = 45
@@ -38,6 +51,7 @@ impact_shake = 0.5
 [sub_resource type="Resource" id="Ability_wrath"]
 script = ExtResource("3_ability")
 ability_name = "Wrath of the Heavens"
+icon = ExtResource("icon_research_wrath_of_the_heavens")
 kind = 2
 area_radius = 7.0
 area_damage = 30
@@ -60,6 +74,7 @@ upgraded_cooldown_multiplier = 0.75
 upgraded_affects_own_buildings = true
 node_name = "Healing Light"
 description = "Heals your units in the area for 30% of their max health."
+icon = ExtResource("icon_research_healing_light")
 kind = 1
 tier = 1
 column = 0.0
@@ -72,6 +87,7 @@ script = ExtResource("2_node")
 effects = {18: 2.0}
 node_name = "Soothing Aura"
 description = "Your units slowly regenerate health while out of combat."
+icon = ExtResource("icon_research_soothing_aura")
 tier = 1
 column = 1.0
 cost = 5
@@ -81,6 +97,7 @@ script = ExtResource("2_node")
 effects = {19: 0.25}
 node_name = "Warding"
 description = "Your units take 25% less damage from abilities."
+icon = ExtResource("icon_research_warding")
 tier = 1
 column = 2.0
 cost = 5
@@ -90,6 +107,7 @@ script = ExtResource("2_node")
 effects = {20: 0.2}
 node_name = "Eyes of the Crow"
 description = "Your units see 20% further."
+icon = ExtResource("icon_research_eyes_of_the_crow")
 tier = 1
 column = 3.0
 cost = 5
@@ -99,6 +117,7 @@ script = ExtResource("2_node")
 effects = {25: 1.0}
 node_name = "Renewal"
 description = "Healing Light's cooldown is 25% shorter, and it also heals your buildings."
+icon = ExtResource("icon_research_renewal")
 tier = 2
 column = 0.0
 cost = 10
@@ -109,6 +128,7 @@ script = ExtResource("2_node")
 effects = {21: 0.2, 22: 0.25}
 node_name = "Arcane Tutelage"
 description = "Shrine monsters cost 20% less and train 25% faster."
+icon = ExtResource("icon_research_arcane_tutelage")
 tier = 2
 column = 2.0
 cost = 10
@@ -122,6 +142,7 @@ buffs = {2: -1.0, 3: -0.3}
 effect_color = Color(0.6, 0.25, 0.8, 1)
 node_name = "Curse"
 description = "Enemies in the area lose 1 armour and move 30% slower for 15s."
+icon = ExtResource("icon_research_curse")
 kind = 1
 tier = 2
 column = 3.0
@@ -138,6 +159,7 @@ buffs = {8: 1.0}
 effect_color = Color(1, 1, 0.8, 1)
 node_name = "Sanctuary"
 description = "Your units in the area can't be damaged for 6s."
+icon = ExtResource("icon_research_sanctuary")
 kind = 1
 tier = 3
 column = 0.0
@@ -151,6 +173,7 @@ script = ExtResource("2_node")
 effects = {23: 0.3, 24: 0.2}
 node_name = "Spirit Link"
 description = "Monster ability cooldowns are 30% shorter, and monsters have 20% more health."
+icon = ExtResource("icon_research_spirit_link")
 tier = 3
 column = 2.0
 cost = 25
@@ -162,6 +185,7 @@ hit_ability = SubResource("Ability_smite")
 effect_color = Color(1, 0.95, 0.6, 1)
 node_name = "Smite"
 description = "Lightning deals 45 damage to enemies in the area and stuns them for 1.5s."
+icon = ExtResource("icon_research_smite")
 kind = 1
 tier = 3
 column = 3.0
@@ -175,6 +199,7 @@ script = ExtResource("2_node")
 effects = {26: 0.3}
 node_name = "Ascension"
 description = "All your power cooldowns are 30% shorter."
+icon = ExtResource("icon_research_ascension")
 tier = 4
 column = 2.0
 cost = 40
@@ -186,6 +211,7 @@ hit_ability = SubResource("Ability_wrath")
 effect_color = Color(1, 0.4, 0.1, 1)
 node_name = "Wrath of the Heavens"
 description = "A meteor storm scorches the area, leaving it burning for 8s."
+icon = ExtResource("icon_research_wrath_of_the_heavens")
 kind = 1
 tier = 4
 column = 3.0

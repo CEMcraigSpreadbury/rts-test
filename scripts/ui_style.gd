@@ -185,3 +185,9 @@ static func draw_corner_caps(canvas: CanvasItem, rect: Rect2, colour: Color = LI
 ## Applies the pixel-art rule to a texture rect: integer scale, no filtering.
 static func make_pixel_crisp(node: CanvasItem) -> void:
 	node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+
+## The icon saved at assets/ui/icons/<folder>/<icon_name>.png, or null when none
+## has been made yet (the slot then shows its letter).
+static func icon_art(folder: String, icon_name: String) -> Texture2D:
+	var path := "res://assets/ui/icons/%s/%s.png" % [folder, icon_name]
+	return load(path) if ResourceLoader.exists(path) else null

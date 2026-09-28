@@ -1,14 +1,27 @@
-[gd_resource type="Resource" script_class="Ruler" load_steps=15 format=3]
+[gd_resource type="Resource" script_class="Ruler" load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://scripts/ruler.gd" id="1_ruler"]
 [ext_resource type="Script" path="res://scripts/research_node.gd" id="2_node"]
 [ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="3_soldier"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/drill_sergeants.png" id="icon_research_drill_sergeants"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/forced_march.png" id="icon_research_forced_march"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/war_cry.png" id="icon_research_war_cry"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/siegebreakers.png" id="icon_research_siegebreakers"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/rally_banner.png" id="icon_research_rally_banner"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/charge.png" id="icon_research_charge"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/bloodlust.png" id="icon_research_bloodlust"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/muster.png" id="icon_research_muster"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/relentless.png" id="icon_research_relentless"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/hardened_veterans.png" id="icon_research_hardened_veterans"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/army_of_legend.png" id="icon_research_army_of_legend"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/research/warlords_fury.png" id="icon_research_warlords_fury"]
 
 [sub_resource type="Resource" id="drill_sergeants"]
 script = ExtResource("2_node")
 effects = {1: 0.15}
 node_name = "Drill Sergeants"
 description = "Barracks, Archery Ranges and Stables train 15% faster."
+icon = ExtResource("icon_research_drill_sergeants")
 tier = 1
 column = 0.0
 cost = 5
@@ -18,6 +31,7 @@ script = ExtResource("2_node")
 effects = {2: 0.1}
 node_name = "Forced March"
 description = "Combat units move 10% faster."
+icon = ExtResource("icon_research_forced_march")
 tier = 1
 column = 1.0
 cost = 5
@@ -30,6 +44,7 @@ buffs = {1: 0.35}
 effect_color = Color(1, 0.45, 0.2, 1)
 node_name = "War Cry"
 description = "Your units in the area attack 35% faster for 15s."
+icon = ExtResource("icon_research_war_cry")
 kind = 1
 tier = 1
 column = 2.0
@@ -42,6 +57,7 @@ script = ExtResource("2_node")
 effects = {3: 0.25}
 node_name = "Siegebreakers"
 description = "Your units deal 25% more damage to buildings."
+icon = ExtResource("icon_research_siegebreakers")
 tier = 1
 column = 3.0
 cost = 5
@@ -54,6 +70,7 @@ buffs = {2: 2.0}
 effect_color = Color(0.35, 0.6, 1, 1)
 node_name = "Rally Banner"
 description = "Your units in the area gain +2 armour for 30s."
+icon = ExtResource("icon_research_rally_banner")
 kind = 1
 tier = 2
 column = 0.0
@@ -70,6 +87,7 @@ buffs = {3: 0.5}
 effect_color = Color(1, 0.8, 0.3, 1)
 node_name = "Charge!"
 description = "Your units in the area move 50% faster for 8s."
+icon = ExtResource("icon_research_charge")
 kind = 1
 tier = 2
 column = 1.0
@@ -83,6 +101,7 @@ script = ExtResource("2_node")
 effects = {4: 5.0}
 node_name = "Bloodlust"
 description = "Your units heal 5 HP whenever they land a killing blow."
+icon = ExtResource("icon_research_bloodlust")
 tier = 2
 column = 2.0
 cost = 10
@@ -96,6 +115,7 @@ summon_count = 4
 effect_color = Color(0.9, 0.9, 0.9, 1)
 node_name = "Muster"
 description = "Summons 4 Soldiers at the target for 60s."
+icon = ExtResource("icon_research_muster")
 kind = 1
 tier = 3
 column = 0.0
@@ -109,6 +129,7 @@ script = ExtResource("2_node")
 effects = {5: 0.3}
 node_name = "Relentless"
 description = "Your units below 30% health deal 30% more damage."
+icon = ExtResource("icon_research_relentless")
 tier = 3
 column = 1.0
 cost = 25
@@ -119,6 +140,7 @@ script = ExtResource("2_node")
 effects = {6: 0.15}
 node_name = "Hardened Veterans"
 description = "Infantry and cavalry have 15% more health."
+icon = ExtResource("icon_research_hardened_veterans")
 tier = 3
 column = 2.0
 cost = 25
@@ -129,6 +151,7 @@ script = ExtResource("2_node")
 effects = {7: 20.0}
 node_name = "Army of Legend"
 description = "+20 population cap."
+icon = ExtResource("icon_research_army_of_legend")
 tier = 4
 column = 0.0
 cost = 40
@@ -142,6 +165,7 @@ buffs = {4: 1.0}
 effect_color = Color(1, 0.2, 0.15, 1)
 node_name = "Warlord's Fury"
 description = "Your units in the area deal double damage for 12s."
+icon = ExtResource("icon_research_warlords_fury")
 kind = 1
 tier = 4
 column = 1.0

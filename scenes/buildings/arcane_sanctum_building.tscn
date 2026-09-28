@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" path="res://scenes/units/arch_mage_unit.tscn" id="20_1"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/wizard.png" id="icon_wizard"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/arch_mage.png" id="icon_arch_mage"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/ancient_texts.png" id="icon_up_ancient_texts"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
 script = ExtResource("8_cost_script")
@@ -38,6 +39,7 @@ amount = 200
 script = ExtResource("3_item_script")
 item_name = "Ancient Texts"
 description = "Lets every Arcane Sanctum train Arch Mages."
+icon = ExtResource("icon_up_ancient_texts")
 kind = 1
 build_time = 40.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_ancient_texts")])

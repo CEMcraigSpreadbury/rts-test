@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://b2pxwkavg3umx" path="res://assets/art/MiniBigMonsters/Outline/MiniPhoenix-Sheet.png" id="fx_phoenix"]
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
 [ext_resource type="Texture2D" uid="uid://wxx8hmcm6gkt" path="res://assets/art/MiniBigMonsters/Fire-Sheet.png" id="fx_fire"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/fire_breath.png" id="icon_abilities_fire_breath"]
 
 [sub_resource type="Resource" id="ResourceCost_black_dragon_gold"]
 script = ExtResource("3_cost_script")
@@ -61,6 +62,7 @@ scale = 0.9
 [sub_resource type="Resource" id="Ability_black_dragon"]
 script = ExtResource("5_ability_script")
 ability_name = "Fire Breath"
+icon = ExtResource("icon_abilities_fire_breath")
 kind = 2
 activation_range = 8.0
 cooldown = 18.0

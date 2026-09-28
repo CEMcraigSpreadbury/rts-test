@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://c1w14k2e7mha" path="res://assets/art/MiniBigMonsters/Ice spikes 1-Sheet.png" id="fx_ice1"]
 [ext_resource type="Texture2D" uid="uid://qmuws1pb0hll" path="res://assets/art/MiniBigMonsters/Ice spikes 2-Sheet.png" id="fx_ice2"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/frost_nova.png" id="icon_abilities_frost_nova"]
 
 [sub_resource type="Resource" id="ResourceCost_yeti_gold"]
 script = ExtResource("3_cost_script")
@@ -49,6 +50,7 @@ scale = 1.0
 [sub_resource type="Resource" id="Ability_yeti"]
 script = ExtResource("5_ability_script")
 ability_name = "Frost Nova"
+icon = ExtResource("icon_abilities_frost_nova")
 kind = 2
 activation_range = 7.0
 cooldown = 16.0

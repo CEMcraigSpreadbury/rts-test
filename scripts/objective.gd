@@ -890,7 +890,8 @@ func _slot_options() -> Array[ProducibleItem]:
 	return items
 
 ## The build-menu icon of whichever of the faction's building types puts up
-## `scene_path`; null for the settlement-only ones.
+## `scene_path`; the settlement-only ones go by their scene's name (see
+## generate_command_icons.gd).
 static func _building_icon_for(scene_path: String) -> Texture2D:
 	var types: Array = []
 	var faction := load(FACTION_PATH) as Faction
@@ -899,7 +900,7 @@ static func _building_icon_for(scene_path: String) -> Texture2D:
 	for type in types:
 		if type != null and type.scene != null and type.scene.resource_path == scene_path:
 			return type.icon
-	return null
+	return UiStyle.icon_art("buildings", scene_path.get_file().get_basename().trim_suffix("_building"))
 
 const FACTION_PATH: String = "res://resources/factions/faction_one.tres"
 
@@ -935,6 +936,7 @@ func _offer_slots() -> void:
 		raise.item_name = "Upgrade to " + TIER_NAMES[next]
 		raise.description = TIER_DESCRIPTIONS[next]
 		raise.kind = ProducibleItem.Kind.TIER
+		raise.icon = UiStyle.icon_art("settlement", "upgrade_to_" + TIER_NAMES[next].to_lower())
 		raise.tier_to = next
 		raise.build_time = TIER_UPGRADE_SECONDS[next]
 		var raise_costs: Array[ResourceCost] = []
@@ -950,6 +952,7 @@ func _offer_slots() -> void:
 		item.item_name = CHOICE_NAMES[choice]
 		item.description = CHOICE_DESCRIPTIONS[choice]
 		item.kind = ProducibleItem.Kind.CHOICE
+		item.icon = UiStyle.icon_art("settlement", CHOICE_NAMES[choice].to_lower())
 		item.choice = choice
 		item.build_time = 0.0
 		offered.append(item)

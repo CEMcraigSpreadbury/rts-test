@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/venom.png" id="icon_abilities_venom"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost")
@@ -14,6 +15,7 @@ amount = 38
 [sub_resource type="Resource" id="Ability_on_hit"]
 script = ExtResource("5_ability")
 ability_name = "Venom"
+icon = ExtResource("icon_abilities_venom")
 kind = 2
 dot_damage_per_second = 3
 dot_duration = 4.0

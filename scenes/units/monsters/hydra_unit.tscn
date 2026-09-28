@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
 [ext_resource type="Texture2D" uid="uid://bqxlsfqck1qhh" path="res://assets/art/MiniBigMonsters/Fire3-Sheet.png" id="fx_fire3"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/acid_spit.png" id="icon_abilities_acid_spit"]
 
 [sub_resource type="Resource" id="ResourceCost_hydra_gold"]
 script = ExtResource("3_cost_script")
@@ -52,6 +53,7 @@ tint = Color(0.55, 1.0, 0.35, 1)
 [sub_resource type="Resource" id="Ability_hydra"]
 script = ExtResource("5_ability_script")
 ability_name = "Acid Spit"
+icon = ExtResource("icon_abilities_acid_spit")
 kind = 2
 activation_range = 9.0
 cooldown = 18.0

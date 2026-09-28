@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/Fire2-Sheet.png" id="fx_0"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/FireBall2-Sheet.png" id="fx_1"]
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_magic_ball.tscn" id="6_projectile"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/foxfire.png" id="icon_abilities_foxfire"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost_script")
@@ -54,6 +55,7 @@ tint = Color(0.55, 0.75, 1.0, 1)
 [sub_resource type="Resource" id="Ability_main"]
 script = ExtResource("5_ability_script")
 ability_name = "Foxfire"
+icon = ExtResource("icon_abilities_foxfire")
 kind = 2
 activation_range = 10.0
 cooldown = 16.0

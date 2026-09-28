@@ -36,6 +36,7 @@
 [ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/town_center.png" id="icon_town_center"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/wall.png" id="icon_wall"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/watchtower.png" id="icon_watchtower"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/mill.png" id="icon_buildings_mill"]
 
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
@@ -160,6 +161,7 @@ construction_time = 12.0
 script = ExtResource("2_building_type_script")
 building_name = "Mill"
 description = "A food drop-off that comes with three farm fields."
+icon = ExtResource("icon_buildings_mill")
 scene = ExtResource("21_mill")
 footprint_radius = 1.6
 construction_time = 8.0

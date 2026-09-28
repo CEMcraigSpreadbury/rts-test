@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" uid="uid://bgodqytsfivx2" path="res://assets/art/MiniBigMonsters/DarkFire-Sheet.png" id="fx_darkfire"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/shadow_nova.png" id="icon_abilities_shadow_nova"]
 
 [sub_resource type="Resource" id="ResourceCost_dark_lord_gold"]
 script = ExtResource("3_cost_script")
@@ -47,6 +48,7 @@ scale = 1.0
 [sub_resource type="Resource" id="Ability_dark_lord"]
 script = ExtResource("5_ability_script")
 ability_name = "Shadow Nova"
+icon = ExtResource("icon_abilities_shadow_nova")
 kind = 2
 activation_range = 9.0
 cooldown = 22.0
