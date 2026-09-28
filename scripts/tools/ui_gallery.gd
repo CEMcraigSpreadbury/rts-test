@@ -14,7 +14,7 @@ const ALDMERE: Array = [
 	["B", "Barracks", 150], ["R", "Archery Range", 150], ["T", "Stables", 175],
 	["K", "Blacksmith", 120], ["W", "Watchtower", 90], ["V", "Wall", 10],
 	["G", "Gate", 40], ["E", "Siege Workshop", 200], ["A", "Arcane Sanctum", 250],
-	["P", "Pact Hall", 300], ["O", "Observatory", 220], ["N", "Shrine", 140],
+	["N", "Shrine", 140],
 ]
 
 func _ready() -> void:
@@ -34,18 +34,6 @@ func _build_selection_panel() -> void:
 		1080 - UiStyle.SCREEN_MARGIN - UiStyle.SEL_PANEL_SIZE.y)
 	panel.set_insets(UiStyle.SPACE_L, UiStyle.SPACE_L, UiStyle.SPACE_L, UiStyle.SPACE_XL)
 	add_child(panel)
-
-	## Above the panel box, inset so it clears the top-left corner cap.
-	var tabs := RaceTabStrip.new()
-	tabs.add_race(&"aldmere", "Aldmere", Color("4f8ede"), true)
-	tabs.add_race(&"gnolls", "Gnolls", Color("a9702f"), true)
-	tabs.add_race(&"dark_elves", "Dark Elves", UiStyle.DIM, false)
-	tabs.add_race(&"star_wanderers", "Star Wanderers", UiStyle.DIM, false)
-	add_child(tabs)
-	tabs.position = Vector2(panel.position.x + RaceTabStrip.OFFSET_FROM_INSET, 0)
-	## Measured after the strip has sized itself, so it sits on the panel's edge.
-	await get_tree().process_frame
-	tabs.position.y = panel.position.y - tabs.size.y
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UiStyle.SPACE_L)

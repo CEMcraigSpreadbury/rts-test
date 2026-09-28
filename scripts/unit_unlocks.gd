@@ -5,7 +5,7 @@ extends Node
 ## Cavalier on every Stables that player owns, so an unlock can't live on the
 ## building that granted it the way ProductionBuilding._purchased_upgrades does.
 ##
-## Host-authoritative like Pacts, and broadcast rather than sent privately —
+## Host-authoritative like Research, and broadcast rather than sent privately —
 ## what someone can train isn't secret, and every peer's HUD needs it to
 ## decide which producible buttons to draw.
 

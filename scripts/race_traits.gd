@@ -5,7 +5,7 @@ extends Node
 ##
 ## A unit's people and kind (RealmRoster.Kind: infantry, ranged, cavalry,
 ## caster, beast) are read off its scene through RealmRoster, so a Gnoll
-## Archer is ranged Gnolls whether a Pact Den or a settlement Range trained it.
+## Archer is ranged Gnolls whichever settlement trained it.
 ## An upgrade is a plain UPGRADE item whose unlock tag (UnitUnlocks) is its id:
 ## that makes it one purchase per player, broadcast to every peer, and hidden
 ## from every building once owned. Every peer writes its effects onto the

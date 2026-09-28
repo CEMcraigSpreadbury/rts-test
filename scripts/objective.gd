@@ -889,15 +889,13 @@ func _slot_options() -> Array[ProducibleItem]:
 			"Rings the settlement with walls and gates."))
 	return items
 
-## The build-menu icon of whichever building type (the faction's own, or an
-## allied race's) puts up `scene_path`; null for the settlement-only ones.
+## The build-menu icon of whichever of the faction's building types puts up
+## `scene_path`; null for the settlement-only ones.
 static func _building_icon_for(scene_path: String) -> Texture2D:
 	var types: Array = []
 	var faction := load(FACTION_PATH) as Faction
 	if faction != null:
 		types.append_array(faction.building_types)
-	for race in Pacts.list_all():
-		types.append_array(race.building_types)
 	for type in types:
 		if type != null and type.scene != null and type.scene.resource_path == scene_path:
 			return type.icon

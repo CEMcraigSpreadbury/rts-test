@@ -1747,6 +1747,25 @@ func _rpc_status_effects(unit_path: NodePath, dot_seconds: float, slow_seconds: 
 	if unit:
 		unit.show_status_effects(dot_seconds, slow_seconds, stun_seconds, color)
 
+## A man thrown by a charge (Unit.thrown): his sprite's arc on every peer, and
+## a puff of dust where he comes down.
+func relay_thrown(height: float, duration: float, unit: Unit) -> void:
+	_play_thrown(unit, height, duration)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_thrown.rpc(unit.get_path(), height, duration)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_thrown(unit_path: NodePath, height: float, duration: float) -> void:
+	var unit := get_node_or_null(unit_path) as Unit
+	if unit:
+		_play_thrown(unit, height, duration)
+
+func _play_thrown(unit: Unit, height: float, duration: float) -> void:
+	unit.play_thrown(height, duration)
+	get_tree().create_timer(duration).timeout.connect(func() -> void:
+		if is_instance_valid(unit) and main.fog_of_war.is_visible_at(unit.global_position):
+			spawn_rally_dust(unit.global_position))
+
 ## --- Sprite effects ---
 
 ## One-shot flipbook sitting on the ground at `ground_pos`, lifted so the

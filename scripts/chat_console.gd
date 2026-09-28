@@ -314,7 +314,7 @@ func _spawn_debug_unit(peer_id: int, scene_path: String, position: Vector3) -> U
 		"position": position,
 	})
 	if peer_id > 0:
-		Population.reserve(peer_id, unit.population_cost, unit.population_pool)
+		Population.reserve(peer_id, unit.population_cost)
 	return unit
 
 func _find_resource_type_by_name(resource_name: String) -> ResourceType:

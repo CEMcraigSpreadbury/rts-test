@@ -17,8 +17,7 @@ extends Node
 ##   --look     point the camera at the capture point nearest the base
 ##   --realm    play the match as Realm (settlements, food, no houses)
 ##   --walls    with --look --realm: wall the settlement in, gates shut
-##   --build    select a builder and open its build menu (shows the race tabs)
-##   --pact=N   grant Pact race N first, so its tab is unlocked
+##   --build    select a builder and open its build menu
 ##   --seed=N   RNG seed, default 12345; fixed so two runs frame the same view
 ##   --wait=N   seconds to let the match settle before the shot, default 10
 
@@ -30,8 +29,6 @@ func _ready() -> void:
 	var scene: String = ""
 	var plate: bool = false
 	var build_menu: bool = false
-	var pact: String = ""
-	var race: String = ""
 	var single: bool = false
 	var queue: bool = false
 	var switch: bool = false
@@ -56,10 +53,6 @@ func _ready() -> void:
 			plate = true
 		elif arg == "--build":
 			build_menu = true
-		elif arg.begins_with("--pact="):
-			pact = arg.trim_prefix("--pact=")
-		elif arg.begins_with("--race="):
-			race = arg.trim_prefix("--race=")
 		elif arg == "--single":
 			single = true
 		elif arg == "--queue":
@@ -113,8 +106,6 @@ func _ready() -> void:
 	director.settle = wait
 	director.menu_only = not scene.is_empty()
 	director.build_menu = build_menu
-	director.pact = pact
-	director.race = race
 	director.single = single
 	director.queue = queue
 	director.switch = switch

@@ -59,8 +59,6 @@ var military: AiMilitary
 var combat: AiCombat
 var research: AiResearch
 var regiments: AiRegiments
-## Allied-race build-up (see AiPacts).
-var pacts: AiPacts
 
 ## --- Refreshed at the start of every think (see _refresh_world) ---
 var villagers: Array[Unit] = []
@@ -105,7 +103,6 @@ func setup(p_main: Main, p_peer_id: int, difficulty: int) -> void:
 	combat = AiCombat.new(self)
 	research = AiResearch.new(self)
 	regiments = AiRegiments.new(self)
-	pacts = AiPacts.new(self)
 
 func _ready() -> void:
 	var faction: Faction = main.faction_by_peer.get(peer_id)
@@ -188,9 +185,6 @@ func _think() -> void:
 	phase(&"combat", combat.think)
 	## After combat, so powers are aimed off this think's view of the enemy.
 	phase(&"research", research.think)
-	## Last of the spenders: a Pact is what an AI does with a surplus, never
-	## at the cost of its opening build order.
-	phase(&"pacts", pacts.think)
 	## Orders last, so builders picked above aren't also handed a tree.
 	phase(&"workers", economy.think_workers)
 

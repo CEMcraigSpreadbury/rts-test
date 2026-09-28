@@ -10,7 +10,7 @@ extends Node
 ## (is_starving), which the morale system reads. Unpaid wages just leave the
 ## purse at zero for now.
 ##
-## Also pays food for hunting, which in other modes only feeds the Gnoll Pact.
+## Also pays food for hunting.
 ##
 ## Lives on every peer so the host can tell each player their own upkeep; all
 ## the accounting is host-only.
@@ -133,7 +133,7 @@ func _rpc_upkeep(food: int, gold: int, starving: bool) -> void:
 	upkeep_changed.emit(food, gold, starving)
 
 ## Gnolls strip the dead: food for every other side with a gnoll this close to
-## a body. (Their Meat, outside Realm.)
+## a body.
 const SCAVENGE_RADIUS: float = 8.0
 const SCAVENGE_FOOD: int = 2
 const UnitGrid = preload("res://scripts/unit_grid.gd")

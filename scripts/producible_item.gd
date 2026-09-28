@@ -5,7 +5,9 @@ extends Resource
 ## Create new ones by duplicating a .tres of this (or embedding one in a
 ## building's scene) and editing the fields in the inspector.
 
-enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER, LEVEL }
+## RETIRED_2 and RETIRED_3 were the Pact Hall's kinds; they hold their places
+## so the kinds after them keep the numbers scenes have saved.
+enum Kind { UNIT, UPGRADE, RETIRED_2, RETIRED_3, SLOT, CHOICE, TIER, LEVEL }
 
 @export var item_name: String = "Villager"
 ## Shown on its command-card button; left null until real icon art exists,
@@ -22,12 +24,6 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER, LEVEL }
 @export var population_cost: int = 1
 ## Used when kind == UNIT; the scene instanced into the world on completion.
 @export var unit_scene: PackedScene
-
-## Used when kind == PACT (a Pact Hall's alliance with one race): the race
-## allied with on completion. Completing any Pact takes the other races off
-## that hall's menu for good, and a race already allied with can't be taken
-## again at a second hall — both enforced in ProductionBuilding.enqueue().
-@export var pact_race: PactRace
 
 ## Used when kind == SLOT (Realm): the building a settlement puts up in its
 ## next free slot when this finishes (see Objective.place_slot). Offered on a
@@ -50,12 +46,6 @@ enum Kind { UNIT, UPGRADE, PACT, SACRIFICE, SLOT, CHOICE, TIER, LEVEL }
 ## How many units one completed item spawns. Gnolls are trained in litters:
 ## one cost, one build time, three or four bodies. 1 for everything else.
 @export var spawn_count: int = 1
-
-## Used when kind == SACRIFICE (the Dark Elf Altar): one of the owner's own
-## units within SACRIFICE_RADIUS is killed and this much of the building's
-## Pact currency paid instead. The victim is chosen cheapest-first, so an
-## Altar eats villagers before it eats Sorceresses.
-@export var sacrifice_payout: int = 0
 
 ## Used when kind == UPGRADE, for a Blacksmith-style weapon/armor upgrade
 ## (see UnitUpgrades autoload). upgrade_bonus == 0 means this item doesn't
@@ -88,13 +78,6 @@ func get_costs() -> Array[ResourceCost]:
 		return MatchRules.realm_unit_costs(probe.costs, probe.is_worker)
 	return costs
 
-## Which population pool this item spends. Read off the unit itself, like its
-## cost, so a Gnoll scene is the one place its pool is set.
-func get_population_pool() -> PopulationPool.Kind:
-	if kind == Kind.UNIT and unit_scene != null:
-		return _probe().pool
-	return PopulationPool.Kind.MAIN
-
 ## A Lord (see Lords), which only a Realm Town Centre offers.
 func is_lord() -> bool:
 	return kind == Kind.UNIT and unit_scene != null and _probe().is_lord
@@ -114,6 +97,6 @@ func _probe() -> Dictionary:
 	if not _probes.has(path):
 		var temp: Unit = unit_scene.instantiate()
 		_probes[path] = {costs = temp.costs, is_worker = temp.can_gather, is_lord = temp.is_lord,
-				pool = temp.population_pool, population_cost = temp.population_cost}
+				population_cost = temp.population_cost}
 		temp.free()
 	return _probes[path]

@@ -12,8 +12,6 @@ var plate: bool = false
 var settle: float = 10.0
 var menu_only: bool = false
 var build_menu: bool = false
-var pact: String = ""
-var race: String = ""
 var single: bool = false
 var queue: bool = false
 var switch: bool = false
@@ -168,7 +166,6 @@ func _run_match() -> void:
 	await _wait(1.5)
 	await _shoot()
 
-## A builder with its build menu open: the one state that shows the race tabs.
 ## The tracker, dialogue box and briefing only exist on a scenario map, where
 ## Main builds a QuestUi. Presentations normally come from the host's
 ## QuestRunner; this pushes one straight in so the panel can be photographed.
@@ -196,17 +193,9 @@ func _present(main: Node) -> void:
 		})
 
 func _open_build_menu(main: Node) -> void:
-	if not pact.is_empty():
-		## Pacts declares a class_name, so the bare identifier is the class. The
-		## live instance is a node on Main.
-		main.pacts.grant(main.my_peer_id(), pact)
-		await _wait(0.5)
 	main.call("_select_all_idle_villagers")
 	await _wait(0.4)
 	main.hud.open_build_submenu()
-	if not race.is_empty():
-		await _wait(0.3)
-		main.hud._race_tabs.select_race(StringName(race))
 
 ## Reproduces the reported sequence: a building selected (which builds the
 ## production queue row), then a unit selection. The queue row must not survive.

@@ -7,8 +7,6 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="10_gold"]
 [ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
-[ext_resource type="Resource" path="res://resources/meat_resource_type.tres" id="11_currency"]
-[ext_resource type="Script" path="res://scripts/pact_generator.gd" id="2_generator_script"]
 [ext_resource type="PackedScene" uid="uid://cgn1warrior0001" path="res://scenes/units/gnolls/gnoll_warrior_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" uid="uid://cgn2archer00002" path="res://scenes/units/gnolls/gnoll_archer_unit.tscn" id="20_1"]
 [ext_resource type="PackedScene" uid="uid://cgn3hyena000003" path="res://scenes/units/gnolls/hyena_unit.tscn" id="20_2"]
@@ -147,16 +145,7 @@ costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_build_woo
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_0"), SubResource("ProducibleItem_1"), SubResource("ProducibleItem_2")])
 role = 1
 population_capacity = 5
-population_pool = 1
 max_health = 700
-
-[node name="PactGenerator" type="Node" parent="." unique_id=1180000101]
-script = ExtResource("2_generator_script")
-resource_type = ExtResource("11_currency")
-amount = 2
-interval = 8.0
-cost_resource = ExtResource("9_wood")
-cost_amount = 4
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1180000102]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)

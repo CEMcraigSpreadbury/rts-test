@@ -67,7 +67,6 @@ display_name = "Wind Tiger"
 move_speed = 5.8
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_gold"), SubResource("ResourceCost_wood")])
 population_cost = 4
-population_pool = 1
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(48, 32)
 idle_row = 0

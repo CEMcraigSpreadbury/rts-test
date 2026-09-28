@@ -3,23 +3,17 @@
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniDarkElves/Outline/MiniDarkElfGuard-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
-[ext_resource type="Resource" path="res://resources/souls_resource_type.tres" id="4_souls"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
-
-[sub_resource type="Resource" id="ResourceCost_souls"]
-script = ExtResource("3_cost")
-resource_type = ExtResource("4_souls")
-amount = 4
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost")
 resource_type = ExtResource("4_gold")
-amount = 22
+amount = 26
 
 [node name="DarkElfGuard" unique_id=1900000013 instance=ExtResource("1_unit")]
 display_name = "Dark Elf Guard"
 move_speed = 2.80
-costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_souls"), SubResource("ResourceCost_gold")])
+costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_gold")])
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(32, 32)
 idle_frame_count = 4
@@ -42,4 +36,3 @@ armor_class = 2
 damage_type = 1
 unit_category = 0
 can_brace = true
-population_pool = 1

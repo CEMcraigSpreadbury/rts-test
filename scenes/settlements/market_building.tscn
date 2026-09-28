@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="AudioStream" uid="uid://cjgxeqf3o7ixu" path="res://assets/sfx/Facilities/Market_1.wav" id="4_uvdig"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
-[ext_resource type="Script" path="res://scripts/pact_generator.gd" id="7_generator"]
+[ext_resource type="Script" path="res://scripts/income_generator.gd" id="7_generator"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="8_income"]
 [ext_resource type="AudioStream" uid="uid://b2b2qsrp7ikag" path="res://assets/sfx/Facilities/Market_2.wav" id="5_ej24r"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Market.glb" id="90_model"]

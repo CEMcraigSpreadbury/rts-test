@@ -142,7 +142,6 @@ costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_build_woo
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_0"), SubResource("ProducibleItem_1"), SubResource("ProducibleItem_2")])
 role = 1
 population_capacity = 5
-population_pool = 1
 teleports_produced_units = true
 max_health = 800
 

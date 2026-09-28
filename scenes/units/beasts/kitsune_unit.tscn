@@ -85,7 +85,6 @@ display_name = "Kitsune"
 move_speed = 4.5
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_gold"), SubResource("ResourceCost_wood")])
 population_cost = 3
-population_pool = 1
 sprite_sheet = ExtResource("2_sheet")
 sprite_cell_size = Vector2i(64, 32)
 idle_row = 0

@@ -20,7 +20,11 @@ void vertex() {
 
 void fragment() {
 	vec4 texel = texture(sprite_sheet, UV);
-	ALBEDO = texel.rgb * v_modulate.rgb;
+	// Modulate over 1 is a hit flash (Unit.play_hit_flash): that part washes
+	// the sprite toward white and glows, so it reads in shadow and at night.
+	vec3 flash = clamp(v_modulate.rgb - vec3(1.0), vec3(0.0), vec3(1.0));
+	ALBEDO = mix(texel.rgb * min(v_modulate.rgb, vec3(1.0)), vec3(1.0), flash);
+	EMISSION = flash * 0.9;
 	ALPHA = texel.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 	NORMAL = vec3(0.0, 0.0, 1.0);

@@ -1,8 +1,8 @@
 class_name StockpileBar
 extends PanelContainer
 ## The top-left stockpile: one cell per resource the player can actually earn or
-## spend, divided by hairlines, sized to its contents so a Pact currency can
-## join without the panel jumping.
+## spend, divided by hairlines, sized to its contents so a resource can join
+## without the panel jumping.
 ##
 ## A resource shows its name over its amount. The mockup drew a glyph instead of
 ## the name, but the game has no resource icons yet, and a name is better than a
@@ -55,7 +55,7 @@ func set_entries(entries: Array) -> void:
 			rate_line.set_text(("+%d" if rate > 0 else "−%d") % absi(rate))
 			rate_line.label.add_theme_color_override("font_color", UiStyle.GOOD if rate > 0 else UiStyle.BAD)
 
-	## Cells for resources that no longer apply (a Pact currency on a reset) are
+	## Cells for resources that no longer apply (Food leaving on a reset) are
 	## hidden rather than freed, so the next match reuses them.
 	var live: Array = []
 	for entry: Dictionary in entries:

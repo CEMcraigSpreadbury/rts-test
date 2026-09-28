@@ -42,15 +42,6 @@ var _last_command_panel_units: Array[Unit] = []
 ## a selected unit's Build button (as opposed to the always-available idle
 ## construction menu when nothing is selected).
 var showing_build_submenu: bool = false
-## Which page of the construction menu is showing. The action panel's frame
-## art fixes it at ACTION_PANEL_SLOT_COUNT slots, and the Human roster already
-## fills every one, so anything past that (the Pact Hall, and an allied race's
-## buildings in due course) lives on a further page reached by the last slot.
-## Which allied race's buildings the construction menu is showing, or null for
-## the player's own (Human) roster. Set by the category buttons a Pact adds to
-## the build menu (see Pacts).
-var _construction_race: PactRace = null
-var _race_tabs: RaceTabStrip = null
 ## Command panel info section — built once per selection change, then only
 ## had their values (not structure) updated every frame, to avoid rebuilding
 ## Control nodes 60 times a second for something that just needs a number to move.
@@ -101,10 +92,6 @@ var _info_resource_label: Label = null
 var _resource_totals: Dictionary = {}
 var _population_used: int = 0
 var _population_cap: int = 0
-## The separate allied-race pool (see PopulationPool.Kind.PACT), only shown once
-## the player has actually built something that grants pact room.
-var _pact_population_used: int = 0
-var _pact_population_cap: int = 0
 ## Realm only: what this player's army eats a minute (see RealmEconomy).
 var _food_upkeep: int = 0
 ## The army's cards along the bottom of the screen.
@@ -135,72 +122,7 @@ func setup() -> void:
 	var speed_controls := UiSpeedControls.new()
 	speed_controls.setup(main)
 	main.get_node(^"UI").add_child(speed_controls)
-	_build_race_tabs()
 	_populate_construction_buttons()
-
-## The Pact race tabs. They live above the selection panel rather than inside
-## it, so switching race can never move or resize the panel, and they are only
-## visible while a builder is selected -- a barracks has no races to offer.
-func _build_race_tabs() -> void:
-	_race_tabs = RaceTabStrip.new()
-	_race_tabs.name = "RaceTabs"
-	_race_tabs.visible = false
-	_race_tabs.race_selected.connect(_on_race_tab_selected)
-	info_panel.get_parent().add_child(_race_tabs)
-	_race_tabs.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_position_race_tabs()
-
-func _position_race_tabs() -> void:
-	if _race_tabs == null:
-		return
-	## The strip's height is not known until it has been laid out once, so it
-	## re-seats itself on every resize instead of being placed a single time.
-	if not _race_tabs.resized.is_connected(_position_race_tabs):
-		_race_tabs.resized.connect(_position_race_tabs)
-	## Anchored to the bottom edge like the panel, then lifted by the panel's
-	## own height plus the strip's, so it sits on the panel's top border.
-	_race_tabs.offset_left = info_panel.offset_left + RaceTabStrip.OFFSET_FROM_INSET
-	_race_tabs.offset_top = info_panel.offset_top - _race_tabs.size.y
-	_race_tabs.offset_bottom = info_panel.offset_top
-
-func _on_race_tab_selected(race_id: StringName) -> void:
-	var race: PactRace = null
-	if race_id != &"aldmere":
-		for page in Pacts.building_pages(main.my_peer_id()):
-			if StringName(str(page["race"].race_name).to_snake_case()) == race_id:
-				race = page["race"]
-				break
-	if race == _construction_race:
-		return
-	_construction_race = race
-	_clear_command_column()
-	_populate_construction_buttons()
-
-## Rebuilt whenever the construction menu is populated, because a Pact sealed
-## mid-match adds a tab.
-func _refresh_race_tabs() -> void:
-	if _race_tabs == null:
-		return
-	var pages: Array[Dictionary] = Pacts.building_pages(main.my_peer_id())
-	var wanted: Array = [{"id": &"aldmere", "name": "Aldmere", "colour": UiStyle.ACCENT, "unlocked": true}]
-	for race_all in Pacts.list_all():
-		var unlocked := false
-		for page in pages:
-			if page["race"] == race_all:
-				unlocked = true
-				break
-		wanted.append({
-			"id": StringName(str(race_all.race_name).to_snake_case()),
-			"name": race_all.race_name,
-			"colour": race_all.display_color,
-			"unlocked": unlocked,
-		})
-	if _race_tabs.matches(wanted):
-		_race_tabs.visible = showing_build_submenu
-		return
-	_race_tabs.rebuild(wanted)
-	_race_tabs.visible = showing_build_submenu
-	_position_race_tabs()
 
 func _on_unlocks_changed() -> void:
 	if main.selected_building != null:
@@ -263,13 +185,9 @@ func _update_resource_ticker(delta: float) -> void:
 	if changed:
 		_update_resource_label()
 
-func _on_population_changed(used: int, cap: int, pool: int) -> void:
-	if pool == int(PopulationPool.Kind.PACT):
-		_pact_population_used = used
-		_pact_population_cap = cap
-	else:
-		_population_used = used
-		_population_cap = cap
+func _on_population_changed(used: int, cap: int) -> void:
+	_population_used = used
+	_population_cap = cap
 	_update_resource_label()
 
 func _on_upkeep_changed(food_per_minute: int, _gold_per_minute: int, _starving: bool) -> void:
@@ -292,20 +210,10 @@ func _update_resource_label() -> void:
 				entries.append(food)
 			continue
 		entries.append(_stockpile_entry(resource_type.display_name, false))
-	## An allied race's currency joins the bar only once its Pact is made --
-	## before that it is nothing the player can earn or spend.
-	for page in Pacts.building_pages(main.my_peer_id()):
-		var currency: ResourceType = page["race"].currency
-		if currency == null:
-			continue
-		entries.append(_stockpile_entry(currency.display_name, true))
 	## Realm has no population cap to show (only a ceiling nobody meets).
 	if not realm:
 		entries.append({"name": "Population", "amount": _population_used,
 				"cap": _population_cap, "flash": false, "accent": false})
-	if _pact_population_cap > 0:
-		entries.append({"name": "Pact", "amount": _pact_population_used,
-				"cap": _pact_population_cap, "flash": false, "accent": true})
 	stockpile.set_entries(entries)
 
 func _stockpile_entry(display_name: String, accent: bool) -> Dictionary:
@@ -463,12 +371,6 @@ func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) 
 		return false
 	if item.grants_unlock != &"" and UnitUnlocks.has(building.owner_peer_id, item.grants_unlock):
 		return false
-	## A Pact leaves the menu once this hall has sealed one, and a race
-	## already allied with elsewhere is off the menu everywhere.
-	if item.kind == ProducibleItem.Kind.PACT:
-		if not building.synced_pact_name.is_empty():
-			return false
-		return item.pact_race != null and not Pacts.has_pact(building.owner_peer_id, item.pact_race.race_name)
 	if item.kind == ProducibleItem.Kind.SLOT:
 		return building.settlement != null and building.settlement.slot_open(item) \
 				and building.settlement.choice_peer != building.owner_peer_id
@@ -503,7 +405,6 @@ func refresh_command_panel() -> void:
 	_info_resource_label = null
 	_last_command_panel_units = main.selected_units.duplicate()
 	showing_build_submenu = false
-	_construction_race = null
 
 	if not main.selected_units.is_empty():
 		_show_info_header()
@@ -548,17 +449,11 @@ func _populate_construction_buttons() -> void:
 				main.placement.on_construction_button_pressed.bind(building_type))
 		(slot as CommandSlot).tip_description = building_type.description
 		buttons.append(slot)
-	## Allied races are reached by the tab strip above the panel rather than by a
-	## category button that would spend a command slot and hide the roster.
-	_refresh_race_tabs()
 	_fill_action_panel_grid(buttons)
 
-## Which roster the construction menu is currently offering — the player's own
-## or, on a Pact race's page, that race's. Also what the build hotkeys place,
-## so they always match what's on screen (see Main._unhandled_input).
+## What the construction menu offers, and what the build hotkeys place, so they
+## always match what's on screen (see Main._unhandled_input).
 func current_construction_types() -> Array[BuildingType]:
-	if _construction_race != null:
-		return _construction_race.building_types
 	return main.my_faction().building_types
 
 func _fill_action_panel_grid(buttons: Array[Control]) -> void:
@@ -611,17 +506,12 @@ func open_build_submenu() -> void:
 	if not MatchRules.active().hud_allowed(main.my_peer_id(), "build"):
 		return
 	showing_build_submenu = true
-	_construction_race = null
-	if _race_tabs != null:
-		_race_tabs.select_race(&"aldmere")
 	_clear_command_column()
 	_populate_construction_buttons()
 	main.play_command_sound()
 
 func close_build_submenu() -> void:
 	showing_build_submenu = false
-	if _race_tabs != null:
-		_race_tabs.visible = false
 	_clear_command_column()
 	_populate_unit_command_buttons()
 
@@ -662,8 +552,7 @@ func _update_portrait(tint: Color, health_text: String, head: Texture2D = null) 
 	_punch_control(portrait_frame)
 
 ## A placed building knows its name but not its BuildingType, and the icon lives
-## on the type. Searched across the player's own roster and every Pact race so an
-## allied building gets its portrait too.
+## on the type.
 ## By the scene it was built from, then by name. A settlement's hall and slot
 ## buildings are named for their role (Town, Barracks), not their building
 ## type, so for them the name would find the wrong picture (a Gnoll Den
@@ -678,10 +567,6 @@ func _building_icon(building_name: String) -> Texture2D:
 	for building_type in main.my_faction().building_types:
 		if building_type.building_name == building_name:
 			return building_type.icon
-	for race in Pacts.list_all():
-		for building_type in race.building_types:
-			if building_type.building_name == building_name:
-				return building_type.icon
 	return null
 
 ## A tray portrait slot: the command-slot well, washed with the unit's team

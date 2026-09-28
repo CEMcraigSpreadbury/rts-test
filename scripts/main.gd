@@ -286,8 +286,7 @@ const UnitGrid = preload("res://scripts/unit_grid.gd")
 
 ## Extend this when new resource types (Stone, ...) are added.
 ## What every player starts a skirmish with. Favour is score and research
-## points are earned, so only the two spendable resources are stocked; a Pact
-## currency needs its Pact before there is anywhere to put it.
+## points are earned, so only the two spendable resources are stocked.
 const STARTING_RESOURCES: Dictionary = {
 	preload("res://resources/gold_resource_type.tres"): 300,
 	preload("res://resources/wood_resource_type.tres"): 300,
@@ -321,7 +320,6 @@ var chat: ChatConsole
 var weather: Weather
 var day_night: DayNight
 var research: Research
-var pacts: Pacts
 var realm_economy: RealmEconomy
 var morale: Morale
 var lords: Lords
@@ -614,11 +612,6 @@ func _add_components() -> void:
 	research.name = "Research"
 	add_child(research)
 
-	pacts = Pacts.new()
-	pacts.main = self
-	pacts.name = "Pacts"
-	add_child(pacts)
-
 	realm_economy = RealmEconomy.new()
 	realm_economy.main = self
 	realm_economy.name = "RealmEconomy"
@@ -819,9 +812,9 @@ func _register_placed_building(building: ProductionBuilding) -> void:
 	## Placed pre-built, so its population room is granted now rather than
 	## waiting on a construction_finished that will never fire.
 	if building.population_capacity > 0:
-		Population.add_cap(building.owner_peer_id, building.population_capacity, building.population_pool)
+		Population.add_cap(building.owner_peer_id, building.population_capacity)
 		building.destroyed.connect(
-			func(): Population.add_cap(building.owner_peer_id, -building.population_capacity, building.population_pool), CONNECT_ONE_SHOT
+			func(): Population.add_cap(building.owner_peer_id, -building.population_capacity), CONNECT_ONE_SHOT
 		)
 
 ## Host only. A side with a spawn point gets the usual starting base (from its
@@ -978,9 +971,9 @@ func _spawn_player_base(peer_id: int, team_index: int, spawn_index: int, slot: S
 		## immediately rather than waiting on a construction_finished signal
 		## that will never fire.
 		if building.population_capacity > 0:
-			Population.add_cap(peer_id, building.population_capacity, building.population_pool)
+			Population.add_cap(peer_id, building.population_capacity)
 			building.destroyed.connect(
-				func(): Population.add_cap(peer_id, -building.population_capacity, building.population_pool), CONNECT_ONE_SHOT
+				func(): Population.add_cap(peer_id, -building.population_capacity), CONNECT_ONE_SHOT
 			)
 
 func _spawn_unit_from_data(data: Dictionary) -> Node:
@@ -1005,6 +998,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
 	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
+	unit.thrown.connect(feedback.relay_thrown.bind(unit))
 	## After Unit._ready has set its health, so research raises it from there.
 	unit.ready.connect(research.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
 	unit.ready.connect(race_traits.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
@@ -1034,6 +1028,7 @@ func register_objective_unit(unit: Unit) -> void:
 	unit.ability_cast.connect(_on_unit_ability_cast.bind(unit))
 	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
+	unit.thrown.connect(feedback.relay_thrown.bind(unit))
 
 ## Objective Favour income "+N" — called by objective.gd (via current_scene,
 ## so it has to stay reachable on Main); the popup itself is WorldFeedback's.
@@ -1591,31 +1586,12 @@ func announce_point_captured(peer_id: int, letter: String) -> void:
 func _on_network_server_disconnected() -> void:
 	_show_opponent_left("Lost connection to host.")
 
-## Host only. Feeds one of the owner's own units to the Altar that finished
-## this item and pays them for it (see ProductionBuilding.sacrifice_victim).
-## Nothing is paid if the victim wandered off while the rite was running.
-func _resolve_sacrifice(item: ProducibleItem, building: ProductionBuilding) -> void:
-	var victim: Unit = building.sacrifice_victim()
-	if victim == null:
-		chat.send_line(building.owner_peer_id, "Sacrifice failed: nobody at the altar.")
-		return
-	if building.sacrifice_resource != null and item.sacrifice_payout > 0:
-		ResourceStockpile.add(building.owner_peer_id, building.sacrifice_resource, item.sacrifice_payout)
-	## Killed by its own side: take_damage with no attacker, so it dies the
-	## ordinary way (population released, corpse thrown, Pacts paid).
-	victim.take_damage(victim.max_health * 100, null)
-
-## Everything `peer_id` may place: their own roster first, then each allied
-## race's buildings in the order their Pacts were made (see Pacts). Both the
-## client asking to build and the host validating that request index into
-## this same list — Pacts only ever append, so one sealed mid-request can't
-## shift an index already in flight.
+## Everything `peer_id` may place. Both the client asking to build and the
+## host validating that request index into this same list.
 func buildable_types_for(peer_id: int) -> Array[BuildingType]:
 	var types: Array[BuildingType] = []
 	if faction_by_peer.has(peer_id):
 		types.append_array(faction_by_peer[peer_id].building_types)
-	for page in Pacts.building_pages(peer_id):
-		types.append_array(page["buildings"])
 	return types
 
 ## How far above a building's origin its trained units start their bounce.
@@ -1624,20 +1600,8 @@ const POP_OUT_START_HEIGHT: float = 1.2
 func _on_building_item_completed(item: ProducibleItem, building: ProductionBuilding) -> void:
 	if not multiplayer.is_server():
 		return
-	if item.kind != ProducibleItem.Kind.PACT:
-		quests.notify(&"unit_trained" if item.kind == ProducibleItem.Kind.UNIT else &"upgrade_bought",
-				{peer_id = building.owner_peer_id, item_name = item.item_name})
-	if item.kind == ProducibleItem.Kind.PACT:
-		if item.pact_race == null or not pacts.grant(building.owner_peer_id, item.pact_race.race_name):
-			return
-		## Recorded on the hall itself (and replicated) so the two races it
-		## didn't ally with leave its menu for good.
-		building.synced_pact_name = item.pact_race.race_name
-		chat.send_line(building.owner_peer_id, "Pact sealed: %s" % item.pact_race.race_name)
-		return
-	if item.kind == ProducibleItem.Kind.SACRIFICE:
-		_resolve_sacrifice(item, building)
-		return
+	quests.notify(&"unit_trained" if item.kind == ProducibleItem.Kind.UNIT else &"upgrade_bought",
+			{peer_id = building.owner_peer_id, item_name = item.item_name})
 	if item.kind == ProducibleItem.Kind.SLOT:
 		if building.settlement != null:
 			building.settlement.place_slot(item)
@@ -1679,7 +1643,7 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	## one a Star Gate lands on its rally point just appears there.
 	var pop_out_from: Vector3 = building.global_position + Vector3.UP * POP_OUT_START_HEIGHT
 	if building.teleports_produced_units and building.has_rally_point \
-			and pacts.can_see_position(building.owner_peer_id, building.rally_point):
+			and research.can_see(building.owner_peer_id, building.rally_point):
 		spawn_pos = building.rally_point + Vector3(randf_range(-1.2, 1.2), 0.0, randf_range(-1.2, 1.2))
 		pop_out_from = Vector3.INF
 	## population_cost isn't passed here — the spawned scene's own Unit.population_cost
@@ -1704,10 +1668,9 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 	## Bigger Litters: the extra gnolls were never reserved at enqueue, so each
 	## comes only if the pool still has room for it.
 	for _extra in RaceTraits.extra_bodies(building.owner_peer_id, item):
-		var pool := item.get_population_pool()
-		if not Population.has_room(building.owner_peer_id, item.get_population_cost(), pool):
+		if not Population.has_room(building.owner_peer_id, item.get_population_cost()):
 			break
-		Population.reserve(building.owner_peer_id, item.get_population_cost(), pool)
+		Population.reserve(building.owner_peer_id, item.get_population_cost())
 		bodies += 1
 	for i in range(1, bodies):
 		var litter_pos := spawn_pos + Vector3(randf_range(-1.6, 1.6), 0.0, randf_range(-1.6, 1.6))
@@ -1898,8 +1861,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo \
 			and ((selected_building == null and selected_units.is_empty()) or hud.showing_build_submenu):
 		var building_index: int = BUILDING_HOTKEYS.find(event.keycode)
-		## Whichever roster the menu is currently showing — the player's own,
-		## or an allied race's on its Pact page.
+		## Whatever the menu is currently showing.
 		var my_building_types: Array[BuildingType] = hud.current_construction_types()
 		if building_index != -1 and building_index < my_building_types.size():
 			placement.on_construction_button_pressed(my_building_types[building_index])

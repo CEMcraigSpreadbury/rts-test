@@ -142,7 +142,6 @@ costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_build_woo
 producibles = Array[ExtResource("3_item_script")]([SubResource("ProducibleItem_0"), SubResource("ProducibleItem_1"), SubResource("ProducibleItem_2")])
 role = 1
 population_capacity = 5
-population_pool = 1
 max_health = 600
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1180000602]

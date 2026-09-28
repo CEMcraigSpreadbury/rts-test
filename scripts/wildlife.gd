@@ -5,7 +5,7 @@ extends Node
 ##
 ## Animals are ordinary neutral units (peer 0, like an Objective's guards)
 ## rather than resource nodes, so hunting them is just combat: a hunter kills
-## one, Pacts.award_death pays the Meat (and a Soul to anyone watching). That
+## one, RealmEconomy.award_hunt pays its food. That
 ## also means they show up in fog of war, get in the way, and — for the wolves
 ## and bears — bite back.
 ##
@@ -35,8 +35,7 @@ const HERD_MIN: int = 3
 const HERD_MAX: int = 5
 ## Wolves and bears pack smaller than the herds they hunt, and the map holds
 ## only a handful of them at a time however the weights roll — they are a
-## hazard you stumble into, not a Meat supply. A Gnoll player's living comes
-## from the deer and boar instead.
+## hazard you stumble into, not a food supply.
 const PREDATOR_HERD_MAX: int = 2
 const MAX_PREDATORS: int = 6
 ## How far a herd spreads around the spot it was placed.
@@ -49,14 +48,14 @@ const WANDER_RADIUS: float = 9.0
 ## Set through the leash an Objective's guards already use (Unit.leash_origin
 ## /leash_radius), which breaks off a chase and ignores targets beyond it.
 const LEASH_RADIUS: float = 18.0
-## A hunted-out map refills, or Meat would run dry by mid-game. One herd per
+## A hunted-out map refills, or hunting would run dry by mid-game. One herd per
 ## tick, so a cleared wood comes back over a couple of minutes rather than
 ## popping back the moment it is emptied.
 const RESTOCK_INTERVAL: float = 15.0
 
-## Weighted by how common each should be: deer and boar are the staple a Gnoll
-## player lives on, foxes are thin pickings at 7 Meat apiece, and wolves and
-## bears are the risk that comes with hunting rather than a supply.
+## Weighted by how common each should be: deer and boar are the staple, foxes
+## are thin pickings, and wolves and bears are the risk that comes with
+## hunting rather than a supply.
 const ANIMAL_SCENES: Array[String] = [
 	"res://scenes/units/animals/deer_animal.tscn",
 	"res://scenes/units/animals/deer_animal.tscn",

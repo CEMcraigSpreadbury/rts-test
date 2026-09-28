@@ -82,10 +82,12 @@ const FLANK_HIT_FLASH_COLOR: Color = Color(1.0, 0.25, 0.2)
 const REAR_DAMAGE_MULTIPLIER: float = 1.75
 ## Cavalry charge (see can_charge): a charger that has run at least
 ## CHARGE_MIN_RUN at CHARGE_MIN_SPEED_FRACTION of its speed or better lands its
-## next melee hit at CHARGE_DAMAGE_MULTIPLIER, knocking the target back and
-## stunning foot units. Spent on that hit; ready again after running
-## CHARGE_REARM_DISTANCE away from the fight. Within CHARGE_SPRINT_DISTANCE of
-## its target a ready charger sprints at CHARGE_SPEED_MULTIPLIER.
+## next melee hit at CHARGE_DAMAGE_MULTIPLIER, throwing the target and the men
+## packed around it (see receive_charge). Spent on that hit; ready again only
+## once it has pulled CHARGE_REARM_DISTANCE clear of where it last fought
+## (_charge_anchor), so chasing the men it threw, or shuffling back into its
+## place, is no new charge. Within CHARGE_SPRINT_DISTANCE of its target a ready
+## charger sprints at CHARGE_SPEED_MULTIPLIER.
 const CHARGE_MIN_RUN: float = 4.0
 const CHARGE_MIN_SPEED_FRACTION: float = 0.75
 const CHARGE_REARM_DISTANCE: float = 8.0
@@ -95,9 +97,20 @@ const CHARGE_DAMAGE_MULTIPLIER: float = 3.0
 ## How long a charge stays armed after the charger slows — it pulls up at its
 ## target (or its slot in a block) a moment before the first swing.
 const CHARGE_ARMED_GRACE_MS: int = 1000
-const CHARGE_KNOCKBACK_DISTANCE: float = 1.5
-const CHARGE_KNOCKBACK_TIME: float = 0.2
-const CHARGE_STUN_SECONDS: float = 0.5
+## A landed charge throws its target CHARGE_THROW_DISTANCE along the charge,
+## up in an arc CHARGE_THROW_HEIGHT high over CHARGE_THROW_TIME, and leaves him
+## down for CHARGE_STUN_SECONDS after he lands. Up to CHARGE_MAX_THROWN more
+## enemies within CHARGE_IMPACT_RADIUS of the target, ahead of the charger, go
+## flying too, CHARGE_SPLASH_FRACTION as far. Cavalry are shoved
+## CHARGE_SHOVE_FRACTION as far and never leave the ground.
+const CHARGE_THROW_DISTANCE: float = 6.0
+const CHARGE_THROW_HEIGHT: float = 1.8
+const CHARGE_THROW_TIME: float = 0.7
+const CHARGE_IMPACT_RADIUS: float = 3.0
+const CHARGE_MAX_THROWN: int = 10
+const CHARGE_SPLASH_FRACTION: float = 0.75
+const CHARGE_SHOVE_FRACTION: float = 0.3
+const CHARGE_STUN_SECONDS: float = 0.8
 const CHARGE_STUN_COLOR: Color = Color(1.0, 0.9, 0.6)
 ## Spear brace (see can_brace): standing still in a block for BRACE_TIME, a
 ## brace-capable unit meets a charge into its front arc with its spear — the
@@ -218,6 +231,8 @@ signal ability_launched(ability_index: int, from_pos: Vector3, target_pos: Vecto
 ## Host-only, relayed by main.gd so every peer shows burning/slowed/stunned
 ## on a unit hit by an area ability (the effects themselves are host-side).
 signal status_applied(dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color)
+## Host-only, relayed by WorldFeedback: thrown by a charge (see play_thrown).
+signal thrown(height: float, duration: float)
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -367,7 +382,7 @@ func _play_work_role_pop() -> void:
 ## The flash, elastic stretch and hop on their own — shared by the work-role
 ## swap and becoming selected.
 func _play_sprite_pop() -> void:
-	play_hit_flash()
+	play_hit_flash(Color.WHITE, 0.0)
 	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
 		_sprite_scale_tween.kill()
 	sprite.scale = _sprite_base_scale * WORK_ROLE_POP_SCALE
@@ -398,9 +413,6 @@ func _play_sprite_pop() -> void:
 @export var costs: Array[ResourceCost] = []
 ## Released back to the owner's Population pool when this unit dies.
 @export var population_cost: int = 1
-## Which cap this unit spends: MAIN is the ordinary Human population fed by
-## Houses, PACT the separate pool an allied race's units use (see Pacts).
-@export var population_pool: PopulationPool.Kind = PopulationPool.Kind.MAIN
 
 @export_group("Sprite Sheet")
 @export var sprite_sheet: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniGatherer.png")
@@ -486,15 +498,15 @@ func _play_sprite_pop() -> void:
 ## fights better. Never breaks, never joins a regiment.
 @export var is_lord: bool = false
 
-@export_group("Pact")
+@export_group("Race")
 ## Gnolls fight as a pack: damage rises with every packmate fighting beside
 ## them (see PACK_COURAGE_RADIUS) and falls away when no pack leader is near,
 ## which is what makes a gnoll army collapse once its leaders are sniped.
 @export var pack_member: bool = false
 ## A leader steadies every packmate around it; it is not itself steadied.
 @export var pack_leader: bool = false
-## Killing this unit pays Meat to a hunter holding the Gnoll Pact — what the
-## forest animals are worth, and why hunting is worth doing at all.
+## What a hunted animal is worth: its killer is paid this in food (see
+## RealmEconomy), and it marks the unit as wildlife everywhere else.
 @export var hunt_meat: int = 0
 ## Applied to whatever this unit hits (Dark Elf poison). Only the damage-over-
 ## time, slow and stun parts of an Ability are used here.
@@ -757,15 +769,23 @@ var _death_playing: bool = false
 
 ## Called by main.gd when relaying the damaged signal (see there — take_damage
 ## only ever runs on the host, so this needs relaying to show on every peer,
-## same as the floating damage number it's paired with). Flashes to white and
-## eases back to team_tint rather than just snapping back, so a rapid flurry
-## of hits doesn't cut the flash short mid-fade.
-func play_hit_flash(color: Color = Color.WHITE) -> void:
+## same as the floating damage number it's paired with). Flashes toward `color`
+## and eases back to team_tint rather than just snapping back, so a rapid
+## flurry of hits doesn't cut the flash short mid-fade.
+##
+## A modulate channel above 1 is how the flash reaches the batched sprite
+## shader (unit_batch_sprite.gdshader): the part over 1 washes the sprite
+## toward white, where a plain white modulate would only mean "untinted".
+## `strength` 0 is just that untinted blink (the selection pop).
+const HIT_FLASH_DURATION: float = 0.22
+func play_hit_flash(color: Color = Color.WHITE, strength: float = 1.0) -> void:
 	if _flash_tween and _flash_tween.is_valid():
 		_flash_tween.kill()
-	sprite.modulate = color
+	var resting := _resting_modulate()
+	sprite.modulate = Color(1.0 + color.r * strength, 1.0 + color.g * strength, 1.0 + color.b * strength, resting.a)
 	_flash_tween = create_tween()
-	_flash_tween.tween_property(sprite, "modulate", _resting_modulate(), 0.15)
+	_flash_tween.tween_property(sprite, "modulate", resting, HIT_FLASH_DURATION) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 ## The full reaction to taking a hit: flash, a shove directly away from
 ## whatever landed it, and a squash that settles elastically. `from_position`
@@ -776,6 +796,8 @@ func play_hit_reaction(from_position: Vector3, flanked: bool = false) -> void:
 	if _death_playing:
 		return
 	play_hit_flash(FLANK_HIT_FLASH_COLOR if flanked else Color.WHITE)
+	if Time.get_ticks_msec() < _thrown_until_ms:
+		return
 	_play_hit_squash()
 	var away := global_position - from_position
 	away.y = 0.0
@@ -1339,7 +1361,8 @@ var _slow_fraction: float = 0.0
 var _slow_remaining: float = 0.0
 var _stun_remaining: float = 0.0
 ## Host-only charge state (see CHARGE_MIN_RUN). _charge_run is the current
-## unbroken run at speed; _charge_rearm_run counts toward rearming once spent.
+## unbroken run at speed; _charge_anchor is where it last landed a melee blow,
+## which a spent charge has to get CHARGE_REARM_DISTANCE away from.
 var _charge_ready: bool = true
 ## Host-only: the last flank/rear hit on this unit and who landed it — what an
 ## AI reads to know its block is caught on the wrong side (see AiTactics).
@@ -1350,11 +1373,18 @@ var _still_time: float = 0.0
 ## Host-only: when this unit last swung or fired (see _start_attacking).
 var _last_swing_ms: int = -100000
 var _charge_run: float = 0.0
-var _charge_rearm_run: float = 0.0
+var _charge_anchor: Vector3 = Vector3.ZERO
 var _charge_armed_until_ms: int = 0
-## Host-only: being shoved back by a charge, over _knockback_remaining seconds.
+## Host-only: being thrown by a charge, over _knockback_remaining seconds. The
+## velocity is where it starts; it eases to nothing by the time he lands.
 var _knockback_velocity: Vector3 = Vector3.ZERO
 var _knockback_remaining: float = 0.0
+## Host-only: which way this unit was last running flat out (see _update_charge),
+## the line its charge throws men along.
+var _charge_heading: Vector3 = Vector3.ZERO
+## Every peer: the thrown arc is playing (see play_thrown), so a hit recoil
+## arriving meanwhile doesn't drag the sprite back to the ground.
+var _thrown_until_ms: int = 0
 
 ## This unit's id in ArmyNet's movement snapshots: handed out by the host
 ## when it joins the sim, synced once to every client. -1 until then.
@@ -2379,12 +2409,13 @@ func _update_charge(delta: float) -> void:
 	if speed < move_speed * CHARGE_MIN_SPEED_FRACTION:
 		_charge_run = 0.0
 		return
+	_charge_heading = Vector3(velocity.x, 0.0, velocity.z) / speed
 	var step := speed * delta
 	_charge_run += step
-	if not _charge_ready:
-		_charge_rearm_run += step
-		if _charge_rearm_run >= CHARGE_REARM_DISTANCE:
-			_charge_ready = true
+	if not _charge_ready and _flat_distance(global_position, _charge_anchor) >= CHARGE_REARM_DISTANCE:
+		_charge_ready = true
+		## The run that counts starts here, out of the fight.
+		_charge_run = 0.0
 	if _charge_ready and _charge_run >= CHARGE_MIN_RUN:
 		_charge_armed_until_ms = GameClock.msec() + CHARGE_ARMED_GRACE_MS
 
@@ -2394,26 +2425,56 @@ func _charge_armed() -> bool:
 func _spend_charge() -> void:
 	_charge_ready = false
 	_charge_run = 0.0
-	_charge_rearm_run = 0.0
+	_charge_anchor = global_position
 	_charge_armed_until_ms = 0
 
-## Hit by a landed charge (host-only): shoved straight back from the charger,
-## and a unit on foot is stunned too. Siege and monsters are too heavy to move.
-func receive_charge(charger: Unit) -> void:
+## Hit by a landed charge (host-only): a man on foot is thrown along the
+## charge and lies stunned a moment where he lands; a rider is only shoved.
+## Siege and monsters are too heavy to move. `reach` scales the throw (the
+## men around the one struck go less far, see _throw_charge_splash).
+func receive_charge(charger: Unit, reach: float = 1.0) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	wake()
 	if armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER:
 		return
+	## Along the charge, splayed outward by where he stood, so a block
+	## scatters like skittles rather than sliding back as one.
 	var away := global_position - charger.global_position
 	away.y = 0.0
+	var dir := charger._charge_heading
 	if away.length_squared() > 0.0001:
-		_knockback_velocity = away.normalized() * (CHARGE_KNOCKBACK_DISTANCE / CHARGE_KNOCKBACK_TIME)
-		_knockback_remaining = CHARGE_KNOCKBACK_TIME
-	if armor_class != ArmorClass.CAVALRY:
-		_stun_remaining = maxf(_stun_remaining, CHARGE_STUN_SECONDS)
-		status_applied.emit(0.0, 0.0, CHARGE_STUN_SECONDS, CHARGE_STUN_COLOR)
+		dir += away.normalized()
+	var mounted := armor_class == ArmorClass.CAVALRY
+	if dir.length_squared() > 0.0001:
+		var distance := CHARGE_THROW_DISTANCE * reach * (CHARGE_SHOVE_FRACTION if mounted else 1.0)
+		## Eased out to a stop, so it starts at twice the average speed.
+		_knockback_velocity = dir.normalized() * (2.0 * distance / CHARGE_THROW_TIME)
+		_knockback_remaining = CHARGE_THROW_TIME
+		if not mounted:
+			thrown.emit(CHARGE_THROW_HEIGHT * reach, CHARGE_THROW_TIME)
+	if not mounted:
+		var down := CHARGE_THROW_TIME + CHARGE_STUN_SECONDS
+		_stun_remaining = maxf(_stun_remaining, down)
+		status_applied.emit(0.0, 0.0, down, CHARGE_STUN_COLOR)
 	Morale.shake(self, Morale.CHARGED)
+
+## Host-only: the rest of the men a landed charge ploughs into — enemies close
+## around the one it struck and ahead of the charger, nearest first. Spears
+## braced toward the charger stand firm.
+func _throw_charge_splash(struck: Unit) -> void:
+	var origin := struck.global_position
+	var hits: Array[Unit] = []
+	for unit in UnitGrid.enemies_near(get_tree(), origin, CHARGE_IMPACT_RADIUS, owner_peer_id):
+		if unit == struck or not _is_target_alive(unit):
+			continue
+		if _charge_heading.dot(unit.global_position - global_position) <= 0.0 or unit.braces_against(self):
+			continue
+		hits.append(unit)
+	hits.sort_custom(func(a: Unit, b: Unit) -> bool:
+		return a.global_position.distance_squared_to(origin) < b.global_position.distance_squared_to(origin))
+	for i in mini(hits.size(), CHARGE_MAX_THROWN):
+		hits[i].receive_charge(self, CHARGE_SPLASH_FRACTION)
 
 ## --- Spear brace ---
 
@@ -2660,6 +2721,10 @@ func _maybe_sleep(delta: float) -> void:
 		return
 	if _stun_remaining > 0.0 or _slow_remaining > 0.0 or _knockback_remaining > 0.0:
 		return
+	## A charge is built up and landed by this script (_update_charge), so a
+	## rider running at charging pace, or with one armed, stays awake.
+	if can_charge and (_charge_armed() or sim_velocity.length() >= move_speed * CHARGE_MIN_SPEED_FRACTION):
+		return
 	## Standing: only once settled, facing its block's front (or fighting).
 	if status_activity == Activity.IDLE and sim_target == null:
 		if sim_velocity.length() > FOLLOW_WALK_SPEED:
@@ -2676,6 +2741,10 @@ func quiet_motion(vel: Vector2) -> void:
 	sim_velocity = vel
 	velocity.x = vel.x
 	velocity.z = vel.y
+	## Up to charging pace: wake so the charge starts counting.
+	if can_charge and vel.length() >= move_speed * CHARGE_MIN_SPEED_FRACTION:
+		wake()
+		return
 	## Fighting in his sleep: his blows turn him and drive the animation.
 	if sim_target != null:
 		return
@@ -2724,11 +2793,12 @@ func _physics_tick(delta: float) -> void:
 	if PerfStats.enabled:
 		PerfStats.add_unit_section(&"status ticks", Time.get_ticks_usec() - status_start)
 
-	## Knocked back by a charge: carried along, nothing else, until it's spent.
+	## Thrown by a charge: carried along, nothing else, until it lands.
 	if _knockback_remaining > 0.0:
+		var ease_out := _knockback_remaining / CHARGE_THROW_TIME
 		_knockback_remaining -= delta
-		velocity.x = _knockback_velocity.x
-		velocity.z = _knockback_velocity.z
+		velocity.x = _knockback_velocity.x * ease_out
+		velocity.z = _knockback_velocity.z * ease_out
 		_slide()
 		return
 
@@ -3615,6 +3685,9 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 	else:
 		var damage := _effective_attack_damage(attack_target)
 		var charged := _charge_armed() and attack_target is Unit
+		## Still in the fight: a spent charge re-arms only once clear of here.
+		if can_charge:
+			_charge_anchor = global_position
 		if charged and attack_target.braces_against(self):
 			## Straight onto the spears: no charge, and the charger pays.
 			_spend_charge()
@@ -3633,8 +3706,11 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 					heal(race_charge_heal)
 			attack_target.take_damage(damage, self)
 		_apply_on_hit_effects(attack_target)
-		if charged and _is_target_alive(attack_target):
-			attack_target.receive_charge(self)
+		if charged:
+			var struck: Unit = attack_target
+			if _is_target_alive(struck):
+				struck.receive_charge(self)
+			_throw_charge_splash(struck)
 		if retarget and not _is_target_alive(attack_target):
 			_find_new_target_or_idle()
 
@@ -3959,11 +4035,8 @@ func _die(attacker: Node3D = null) -> void:
 	## is_multiplayer_authority(), so this only ever runs once, on the host.
 	## A summon never reserved any population (see Research._summon).
 	if not summoned:
-		Population.release(owner_peer_id, population_cost, population_pool)
+		Population.release(owner_peer_id, population_cost)
 	var main := get_tree().current_scene
-	## Meat for the hunter, Souls for anyone watching — see Pacts.award_death.
-	if main is Main and main.pacts != null:
-		main.pacts.award_death(self, attacker)
 	if main is Main and main.realm_economy != null:
 		main.realm_economy.award_hunt(self, attacker)
 	if main is Main and main.morale != null:
@@ -4066,6 +4139,25 @@ func _play_death_knockback(away: Vector3) -> Tween:
 		tween.tween_callback(_death_squash.bind(DEATH_LAND_SQUASH_SCALE, height / DEATH_BOUNCE_HEIGHTS[0]))
 	return tween
 
+## Every peer: the sprite half of a charge throw — up in an arc and down with a
+## squash and one small bounce. The ground the body covers is the host's
+## knockback, reaching clients through ArmyNet like any other move.
+const THROWN_BOUNCE_FRACTION: float = 0.22
+func play_thrown(height: float, duration: float) -> void:
+	if _death_playing or sprite == null:
+		return
+	var bounce_time := duration * sqrt(THROWN_BOUNCE_FRACTION)
+	_thrown_until_ms = Time.get_ticks_msec() + int((duration + bounce_time) * 1000.0)
+	_restart_sprite_move_tween()
+	var base := _sprite_base_position
+	_death_squash(DEATH_LAUNCH_STRETCH_SCALE, 1.0)
+	for hop in [[height, duration], [height * THROWN_BOUNCE_FRACTION, bounce_time]]:
+		var hop_height: float = hop[0]
+		_sprite_move_tween.tween_method(func(p: float) -> void:
+			sprite.position = base + Vector3.UP * hop_height * 4.0 * p * (1.0 - p)
+		, 0.0, 1.0, hop[1])
+		_sprite_move_tween.tween_callback(_death_squash.bind(DEATH_LAND_SQUASH_SCALE, hop_height / height))
+
 ## Snaps toward `target_scale` by `strength` (0 = none, 1 = full) and wobbles
 ## back elastically, so later, smaller bounces land softer than the first.
 func _death_squash(target_scale: Vector3, strength: float) -> void:
@@ -4119,6 +4211,9 @@ func _sim_slide() -> void:
 	var flags := 0
 	if status_activity == Activity.DEAD:
 		flags |= ArmySim.MOTION_GHOST
+	elif _knockback_remaining > 0.0:
+		## Thrown: carried by the throw whatever he was doing, stun included.
+		pass
 	elif _stun_remaining > 0.0 or status_activity == Activity.GATHERING \
 			or status_activity == Activity.BUILDING or status_activity == Activity.CASTING:
 		flags |= ArmySim.MOTION_PINNED
@@ -4132,7 +4227,7 @@ func _sim_slide() -> void:
 		flags |= ArmySim.MOTION_FOLLOW
 		if is_charging():
 			speed *= CHARGE_SPEED_MULTIPLIER
-	if sim_follow and _fights_from_place() and not (flags & ArmySim.MOTION_GHOST):
+	if sim_follow and _fights_from_place() and not (flags & ArmySim.MOTION_GHOST) and _knockback_remaining <= 0.0:
 		flags |= ArmySim.MOTION_FIGHT
 	var target_id := -1
 	if is_instance_valid(attack_target) and attack_target is Unit:
@@ -4160,7 +4255,7 @@ func _track_blocked(wedged: bool, delta: float) -> void:
 		repath()
 
 
-## --- Pact unit behaviour -------------------------------------------------
+## --- Race unit behaviour -------------------------------------------------
 
 ## How far a packmate looks for company and for its leader.
 const PACK_COURAGE_RADIUS: float = 9.0

@@ -87,9 +87,9 @@ const MINIMAP: int = 236
 const ICON_1X: int = 32
 const ICON_2X: int = 64
 
-## The selection panel never changes size: not on selection, not on race tab.
+## The selection panel never changes size, whatever is selected.
 const SEL_PANEL_SIZE := Vector2(646, 214)
-## Command grid is a fixed 9 x 2 in every race; sparse pacts pad with empties.
+## Command grid is a fixed 9 x 2; a sparse menu pads with empties.
 const CMD_COLUMNS: int = 9
 const CMD_ROWS: int = 2
 

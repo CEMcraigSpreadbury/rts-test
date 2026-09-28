@@ -33,14 +33,13 @@ const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 const WOOD: ResourceType = preload("res://resources/wood_resource_type.tres")
 ## Only built in a Realm match, and never in one.
 const REALM_ONLY_BUILDINGS: Array[String] = ["Mill"]
-const NOT_IN_REALM_BUILDINGS: Array[String] = ["House", "Pact Hall"]
+const NOT_IN_REALM_BUILDINGS: Array[String] = ["House"]
 
 static func realm() -> bool:
 	return active().scenario == null and Network.game_mode == Network.GameMode.REALM
 
-## A unit's listed price as a Realm match charges it: any allied-race currency
-## (Meat, Souls, Starlight — there are no Pacts in Realm) is folded into its
-## gold, and so is its wood while REALM_WOOD_INTO_GOLD is on; a worker keeps
+## A unit's listed price as a Realm match charges it: its wood is folded into
+## its gold while REALM_WOOD_INTO_GOLD is on; a worker keeps
 ## its wood and adds REALM_VILLAGER_FOOD. Outside Realm, `costs` comes back
 ## unchanged.
 ##

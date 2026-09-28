@@ -519,9 +519,9 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 		building.construction_costs = costs
 		if building.population_capacity > 0:
 			building.construction_finished.connect(func():
-				Population.add_cap(sender_id, building.population_capacity, building.population_pool)
+				Population.add_cap(sender_id, building.population_capacity)
 				building.destroyed.connect(
-					func(): Population.add_cap(sender_id, -building.population_capacity, building.population_pool), CONNECT_ONE_SHOT
+					func(): Population.add_cap(sender_id, -building.population_capacity), CONNECT_ONE_SHOT
 				)
 			, CONNECT_ONE_SHOT)
 		if building_type.companion_scene != null:
