@@ -213,7 +213,7 @@ func _approach(target: Unit) -> void:
 		return
 	var centre := ai.group_centroid(_cavalry)
 	## Already round its side or behind it, charge ready: straight in. Spent,
-	## the ride round is what rearms it (Unit.CHARGE_REARM_DISTANCE clear of the fight).
+	## the ride round waits out the cooldown (Unit.CHARGE_COOLDOWN_SECONDS).
 	if target._flank_multiplier(centre) > 1.0 and not _all_spent():
 		_charge(target)
 		return

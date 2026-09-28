@@ -83,14 +83,15 @@ const REAR_DAMAGE_MULTIPLIER: float = 1.75
 ## Cavalry charge (see can_charge): a charger that has run at least
 ## CHARGE_MIN_RUN at CHARGE_MIN_SPEED_FRACTION of its speed or better lands its
 ## next melee hit at CHARGE_DAMAGE_MULTIPLIER, throwing the target and the men
-## packed around it (see receive_charge). Spent on that hit; ready again only
-## once it has pulled CHARGE_REARM_DISTANCE clear of where it last fought
-## (_charge_anchor), so chasing the men it threw, or shuffling back into its
-## place, is no new charge. Within CHARGE_SPRINT_DISTANCE of its target a ready
-## charger sprints at CHARGE_SPEED_MULTIPLIER.
+## packed around it (see receive_charge). Spent on that hit, and its whole
+## block with it: nobody in the block charges again for CHARGE_COOLDOWN_SECONDS,
+## bar the riders who hit home in the same impact (within
+## CHARGE_GROUP_GRACE_SECONDS of the first). Within CHARGE_SPRINT_DISTANCE of
+## its target a ready charger sprints at CHARGE_SPEED_MULTIPLIER.
 const CHARGE_MIN_RUN: float = 4.0
 const CHARGE_MIN_SPEED_FRACTION: float = 0.75
-const CHARGE_REARM_DISTANCE: float = 8.0
+const CHARGE_COOLDOWN_SECONDS: float = 10.0
+const CHARGE_GROUP_GRACE_SECONDS: float = 1.5
 const CHARGE_SPRINT_DISTANCE: float = 10.0
 const CHARGE_SPEED_MULTIPLIER: float = 1.4
 const CHARGE_DAMAGE_MULTIPLIER: float = 3.0
@@ -112,16 +113,11 @@ const CHARGE_SPLASH_FRACTION: float = 0.75
 const CHARGE_SHOVE_FRACTION: float = 0.3
 const CHARGE_STUN_SECONDS: float = 0.8
 const CHARGE_STUN_COLOR: Color = Color(1.0, 0.9, 0.6)
-## Spear brace (see can_brace): standing still in a block for BRACE_TIME, a
-## brace-capable unit meets a charge into its front arc with its spear — the
-## charge gets no bonus, the charger is stopped dead (stunned) and takes the
-## bracer's hit at BRACE_COUNTER_MULTIPLIER. A charge into its flank or rear
-## lands as normal.
-const BRACE_TIME: float = 1.5
-## Below this flat speed a unit counts as standing still (separation nudges
-## in a crowded block stay under it).
-const BRACE_STILL_SPEED: float = 0.6
-const BRACE_COUNTER_MULTIPLIER: float = 3.0
+## Spear brace (see can_brace): a spear unit always meets a charge with its
+## spear, whichever way it comes — it is never thrown, the charge gets no
+## bonus, and the charger is stopped dead (stunned) and takes the bracer's hit
+## at BRACE_COUNTER_MULTIPLIER on top of the spear-against-cavalry counter.
+const BRACE_COUNTER_MULTIPLIER: float = 4.5
 const BRACE_STOP_SECONDS: float = 0.6
 ## Percentage armour (see take_damage): each point of armour cuts this much of
 ## a hit, up to the cap.
@@ -486,7 +482,7 @@ func _play_sprite_pop() -> void:
 @export var unit_category: UnitCategory = UnitCategory.NONE
 ## Mounted: sprints into melee and lands a charge (see CHARGE_MIN_RUN).
 @export var can_charge: bool = false
-## Spear-armed: braces against a charge when standing in a block (see BRACE_TIME).
+## Spear-armed: braces against every charge (see BRACE_COUNTER_MULTIPLIER).
 @export var can_brace: bool = false
 
 @export_group("Regiment")
@@ -1361,19 +1357,17 @@ var _slow_fraction: float = 0.0
 var _slow_remaining: float = 0.0
 var _stun_remaining: float = 0.0
 ## Host-only charge state (see CHARGE_MIN_RUN). _charge_run is the current
-## unbroken run at speed; _charge_anchor is where it last landed a melee blow,
-## which a spent charge has to get CHARGE_REARM_DISTANCE away from.
-var _charge_ready: bool = true
+## unbroken run at speed. No charge from _charge_blocked_from_ms until
+## _charge_blocked_until_ms: the cooldown after this rider's block charged.
+var _charge_blocked_from_ms: int = 0
+var _charge_blocked_until_ms: int = 0
 ## Host-only: the last flank/rear hit on this unit and who landed it — what an
 ## AI reads to know its block is caught on the wrong side (see AiTactics).
 var last_flanked_ms: int = -100000
 var last_flanker: Node3D = null
-## Host-only: how long this unit has stood still (see is_braced).
-var _still_time: float = 0.0
 ## Host-only: when this unit last swung or fired (see _start_attacking).
 var _last_swing_ms: int = -100000
 var _charge_run: float = 0.0
-var _charge_anchor: Vector3 = Vector3.ZERO
 var _charge_armed_until_ms: int = 0
 ## Host-only: being thrown by a charge, over _knockback_remaining seconds. The
 ## velocity is where it starts; it eases to nothing by the time he lands.
@@ -2389,7 +2383,7 @@ func ability_cooldown(ability: Ability) -> float:
 ## Ready to charge, with its target (its own, or its block's) close enough to
 ## sprint at. Read by the movement step (see _sim_slide).
 func is_charging() -> bool:
-	if not can_charge or not _charge_ready:
+	if not is_charge_ready():
 		return false
 	var target: Node3D = attack_target
 	if not _is_target_alive(target) and in_formation_fight:
@@ -2399,7 +2393,10 @@ func is_charging() -> bool:
 	return _flat_distance(global_position, target.global_position) <= CHARGE_SPRINT_DISTANCE
 
 func is_charge_ready() -> bool:
-	return can_charge and _charge_ready
+	if not can_charge:
+		return false
+	var now := GameClock.msec()
+	return now < _charge_blocked_from_ms or now >= _charge_blocked_until_ms
 
 ## Runs every physics frame on the host, off last frame's velocity.
 func _update_charge(delta: float) -> void:
@@ -2410,23 +2407,34 @@ func _update_charge(delta: float) -> void:
 		_charge_run = 0.0
 		return
 	_charge_heading = Vector3(velocity.x, 0.0, velocity.z) / speed
+	## The run that arms the next charge only starts once the cooldown is over.
+	if not is_charge_ready():
+		_charge_run = 0.0
+		return
 	var step := speed * delta
 	_charge_run += step
-	if not _charge_ready and _flat_distance(global_position, _charge_anchor) >= CHARGE_REARM_DISTANCE:
-		_charge_ready = true
-		## The run that counts starts here, out of the fight.
-		_charge_run = 0.0
-	if _charge_ready and _charge_run >= CHARGE_MIN_RUN:
+	if is_charge_ready() and _charge_run >= CHARGE_MIN_RUN:
 		_charge_armed_until_ms = GameClock.msec() + CHARGE_ARMED_GRACE_MS
 
 func _charge_armed() -> bool:
-	return can_charge and _charge_ready and GameClock.msec() <= _charge_armed_until_ms
+	return is_charge_ready() and GameClock.msec() <= _charge_armed_until_ms
 
+## Host-only: this rider's charge has landed (or broken on spears). It and its
+## block go on cooldown; the others keep a moment to land theirs in the same
+## impact.
 func _spend_charge() -> void:
-	_charge_ready = false
+	var now := GameClock.msec()
+	var until := now + int(CHARGE_COOLDOWN_SECONDS * 1000.0)
 	_charge_run = 0.0
-	_charge_anchor = global_position
 	_charge_armed_until_ms = 0
+	_charge_blocked_from_ms = now
+	_charge_blocked_until_ms = until
+	if ArmyBridge.current == null:
+		return
+	for mate in ArmyBridge.current.block_mates(self):
+		if mate != self and mate.can_charge and now >= mate._charge_blocked_until_ms:
+			mate._charge_blocked_from_ms = now + int(CHARGE_GROUP_GRACE_SECONDS * 1000.0)
+			mate._charge_blocked_until_ms = until
 
 ## Hit by a landed charge (host-only): a man on foot is thrown along the
 ## charge and lies stunned a moment where he lands; a rider is only shoved.
@@ -2436,7 +2444,7 @@ func receive_charge(charger: Unit, reach: float = 1.0) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	wake()
-	if armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER:
+	if armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER or can_brace:
 		return
 	## Along the charge, splayed outward by where he stood, so a block
 	## scatters like skittles rather than sliding back as one.
@@ -2461,14 +2469,14 @@ func receive_charge(charger: Unit, reach: float = 1.0) -> void:
 
 ## Host-only: the rest of the men a landed charge ploughs into — enemies close
 ## around the one it struck and ahead of the charger, nearest first. Spears
-## braced toward the charger stand firm.
+## stand firm.
 func _throw_charge_splash(struck: Unit) -> void:
 	var origin := struck.global_position
 	var hits: Array[Unit] = []
 	for unit in UnitGrid.enemies_near(get_tree(), origin, CHARGE_IMPACT_RADIUS, owner_peer_id):
 		if unit == struck or not _is_target_alive(unit):
 			continue
-		if _charge_heading.dot(unit.global_position - global_position) <= 0.0 or unit.braces_against(self):
+		if _charge_heading.dot(unit.global_position - global_position) <= 0.0 or unit.can_brace:
 			continue
 		hits.append(unit)
 	hits.sort_custom(func(a: Unit, b: Unit) -> bool:
@@ -2478,25 +2486,10 @@ func _throw_charge_splash(struck: Unit) -> void:
 
 ## --- Spear brace ---
 
-func _update_brace(delta: float) -> void:
-	if not can_brace:
-		return
-	if Vector2(velocity.x, velocity.z).length() < BRACE_STILL_SPEED:
-		_still_time += delta
-	else:
-		_still_time = 0.0
-
-## Standing set in its block, spear levelled: long enough still, in a block
-## (the same test as flank damage — idle, holding, or fighting from its place),
-## and not reeling from a stun.
-func is_braced() -> bool:
-	return can_brace and _still_time >= BRACE_TIME * (0.5 if race_fast_brace else 1.0) and _stun_remaining <= 0.0 \
-			and _stands_in_block()
-
-## Whether `charger` runs onto this unit's braced spears: braced, and the
-## charge comes in through its front arc.
-func braces_against(charger: Unit) -> bool:
-	return is_braced() and _flank_multiplier(charger.global_position) <= 1.0
+## Whether `charger` runs onto this unit's spears: any spear unit, from any
+## side, that is on its feet.
+func braces_against(_charger: Unit) -> bool:
+	return can_brace and status_activity != Activity.DEAD
 
 ## A charge broken on this unit's spears (host-only): the charger is stopped
 ## dead and takes this unit's hit at BRACE_COUNTER_MULTIPLIER, through the
@@ -2789,7 +2782,6 @@ func _physics_tick(delta: float) -> void:
 	_tick_pending_casts(delta)
 
 	_update_charge(delta)
-	_update_brace(delta)
 	if PerfStats.enabled:
 		PerfStats.add_unit_section(&"status ticks", Time.get_ticks_usec() - status_start)
 
@@ -3685,9 +3677,6 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 	else:
 		var damage := _effective_attack_damage(attack_target)
 		var charged := _charge_armed() and attack_target is Unit
-		## Still in the fight: a spent charge re-arms only once clear of here.
-		if can_charge:
-			_charge_anchor = global_position
 		if charged and attack_target.braces_against(self):
 			## Straight onto the spears: no charge, and the charger pays.
 			_spend_charge()

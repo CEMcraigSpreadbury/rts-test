@@ -262,6 +262,19 @@ func units_near(pos: Vector3, radius: float, not_team: int = -1) -> Variant:
 			found.append(unit)
 	return found
 
+## The living men in `unit`'s sim block, himself included; just him when loose.
+func block_mates(unit: Unit) -> Array[Unit]:
+	var mates: Array[Unit] = []
+	var formation: int = sim.get_unit_formation(unit.sim_id) if unit.sim_id >= 0 else -1
+	if formation < 0:
+		mates.append(unit)
+		return mates
+	for id in sim.get_formation_members(formation):
+		var mate: Unit = _units_by_id[id] if id < _units_by_id.size() else null
+		if mate != null and mate.status_activity != Unit.Activity.DEAD:
+			mates.append(mate)
+	return mates
+
 ## Whether any living unit on `peer_id`'s team has `pos` in its sight (see
 ## CombatUtils.is_visible_to, which adds the buildings).
 func team_sees(peer_id: int, pos: Vector3) -> bool:

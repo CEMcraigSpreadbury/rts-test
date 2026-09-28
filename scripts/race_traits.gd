@@ -52,7 +52,7 @@ const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 ##   bleed / slow / venom: an on-hit effect (for units with none of their own)
 ##   pack_radius / pack_max: Pack Courage reach (fraction) and peak (added)
 ##   night_always: Starlit by day too   charge_damage: fraction   charge_heal: health
-##   fast_brace: braces in half the time and counters harder
+##   fast_brace: spears counter charging cavalry harder
 ##   pierce_guard: less damage from arrows and bolts while in a block
 ##   grant_aura: a healing aura of this much for units without one
 ##   building_damage: added to the building damage multiplier
@@ -63,7 +63,7 @@ const UPGRADES: Array[Dictionary] = [
 		text = "Infantry standing in a block take 25% less damage from arrows and bolts.",
 		wood = 120, gold = 100, time = 35.0, effects = {pierce_guard = 0.25}},
 	{id = &"hum_pike_drill", race = "Human", at = RealmRoster.Kind.BARRACKS, name = "Pike Drill",
-		text = "Spearmen and Halberdiers brace in half the time and hit charging cavalry harder.",
+		text = "Spearmen and Halberdiers hit charging cavalry harder.",
 		wood = 80, gold = 120, time = 35.0, effects = {fast_brace = 1}},
 	{id = &"hum_bodkin", race = "Human", at = RealmRoster.Kind.RANGE, name = "Bodkin Points",
 		text = "Archers and Crossbowmen shoot 3 m further.",
