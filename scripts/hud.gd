@@ -914,10 +914,14 @@ func _populate_unit_command_buttons() -> void:
 		_make_command_button(OS.get_keycode_string(Main.UNIT_ATTACK_KEY), "Attack", [], null, main.arm_attack_mode),
 		_make_command_button(OS.get_keycode_string(Main.UNIT_PATROL_KEY), "Patrol", [], null, main.arm_patrol_mode),
 	]
-	_hold_button = _make_command_button(OS.get_keycode_string(Main.UNIT_HOLD_KEY), "Hold Position", [], null, main.toggle_hold_position)
-	_hold_button.toggle_mode = true
-	_hold_button.set_pressed_no_signal(main.selection_holds_position())
-	buttons.append(_hold_button)
+	if main.selection_can_gather():
+		_hold_button = null
+		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_GATHER_KEY), "Gather", [], null, main.arm_gather_mode))
+	else:
+		_hold_button = _make_command_button(OS.get_keycode_string(Main.UNIT_HOLD_KEY), "Hold Position", [], null, main.toggle_hold_position)
+		_hold_button.toggle_mode = true
+		_hold_button.set_pressed_no_signal(main.selection_holds_position())
+		buttons.append(_hold_button)
 	if main.any_selected_can_build():
 		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_BUILD_KEY), "Build", [], null, open_build_submenu))
 	var regiment_action: Main.RegimentAction = main.selection_regiment_action()

@@ -27,6 +27,16 @@ const UNIT_PATROL_KEY: Key = KEY_P
 ## Shares G with BUILDING_HOTKEYS, which only take it while the build submenu
 ## is open (checked first in _unhandled_input), so the two never collide.
 const UNIT_HOLD_KEY: Key = KEY_G
+## Same key as UNIT_HOLD_KEY: a selection of nothing but gatherers gets Gather
+## in its place (see selection_can_gather).
+const UNIT_GATHER_KEY: Key = KEY_G
+## How far from a Gather click the host looks for resource nodes; with
+## nothing inside it, the order falls back to a plain move.
+const GATHER_SEARCH_RADIUS: float = 30.0
+## Each villager already at a node counts as this many metres of extra
+## distance, so a group sent into a forest fans out over the nearest trees
+## rather than all crowding one trunk.
+const GATHER_SPREAD_PENALTY: float = 2.0
 ## Only shown/live when at least one selected unit has can_build; opens the
 ## same construction menu the idle action panel shows, reusing BUILDING_HOTKEYS
 ## for the actual building choice — safe since only one of the two menus is
@@ -176,7 +186,7 @@ var dragging: bool = false
 ## Captured from the press event (double_click is only ever set there, not on
 ## release) and consumed by _finish_selection once the button comes back up.
 var _pending_double_click: bool = false
-## "" | "move" | "attack" | "patrol" — armed by a command-card button/hotkey,
+## "" | "move" | "attack" | "patrol" | "gather" — armed by a command-card button/hotkey,
 ## consumed by the next left-click (see _handle_pending_order_input).
 var pending_order_mode: String = ""
 ## True once the first click of the current patrol-targeting session has been
@@ -1900,6 +1910,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			issue_stop_order()
 			get_viewport().set_input_as_handled()
 			return
+		elif event.keycode == UNIT_GATHER_KEY and selection_can_gather():
+			arm_gather_mode()
+			get_viewport().set_input_as_handled()
+			return
 		elif event.keycode == UNIT_HOLD_KEY:
 			toggle_hold_position()
 			get_viewport().set_input_as_handled()
@@ -2605,6 +2619,90 @@ func _issue_attack_order(screen_pos: Vector2, append: bool = false) -> void:
 	feedback.play_command_feedback(result.position, true)
 	feedback.spawn_command_popup("attack", result.position, feedback.command_speaker())
 	_update_order_path_markers(result.position, append)
+
+## Like an attack-move, but for villagers: each goes to work the nearest
+## resource node to the clicked spot (see issue_gather_as).
+func _issue_gather_order(screen_pos: Vector2, append: bool = false) -> void:
+	prune_selected_units()
+	if selected_units.is_empty():
+		return
+	var result := raycast(screen_pos)
+	if result.is_empty():
+		return
+	var unit_paths: Array[NodePath] = []
+	for unit in selected_units:
+		unit_paths.append(unit.get_path())
+	_rpc_issue_gather.rpc_id(1, unit_paths, result.position, append)
+	play_command_sound()
+	feedback.play_command_feedback(result.position, false)
+	feedback.spawn_command_popup("move", result.position, feedback.command_speaker())
+	_update_order_path_markers(result.position, append)
+
+## Whether the command card offers Gather instead of Hold Position: every
+## selected unit is a gatherer.
+func selection_can_gather() -> bool:
+	for unit in selected_units:
+		if is_instance_valid(unit) and not unit.can_gather:
+			return false
+	return not selected_units.is_empty()
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_issue_gather(unit_paths: Array[NodePath], world_pos: Vector3, append: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	issue_gather_as(sender_id, unit_paths, world_pos, append)
+
+## Sends each villager to the nearest node to world_pos that will take him,
+## counting the ones already sent there so a group spreads out. Anyone left
+## without a node (nothing in range, or not a gatherer) just moves there.
+func issue_gather_as(sender_id: int, unit_paths: Array[NodePath], world_pos: Vector3, append: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	var candidates := _gather_candidates_near(world_pos, sender_id)
+	var movers: Array[NodePath] = []
+	for path in unit_paths:
+		var unit := get_node_or_null(path) as Unit
+		if unit == null or unit.owner_peer_id != sender_id or unit.is_routing():
+			continue
+		var best: Gatherable = null
+		var best_score := INF
+		if unit.can_gather:
+			for node: Gatherable in candidates:
+				if not is_instance_valid(node) or (node != unit.target_resource and not node.can_accept_gatherer()):
+					continue
+				var score: float = world_pos.distance_to(node.global_position) + node.gatherers.size() * GATHER_SPREAD_PENALTY
+				if score < best_score:
+					best_score = score
+					best = node
+		if best == null:
+			movers.append(path)
+			continue
+		var unit_is_busy := unit.status_command != Unit.Command.NONE or not unit.order_queue.is_empty()
+		if append and unit_is_busy:
+			unit.queue_order(best.get_path(), world_pos, false)
+		else:
+			unit.clear_order_queue()
+			_dispatch_smart_command(unit, best, world_pos, false)
+	if not movers.is_empty():
+		issue_command_as(sender_id, movers, NodePath(), world_pos, false, append)
+
+## Every node within GATHER_SEARCH_RADIUS of point that sender_id may work
+## right now. Trees live in the Forest rather than the "gatherables" group.
+func _gather_candidates_near(point: Vector3, sender_id: int) -> Array[Gatherable]:
+	var nodes: Array = []
+	if Forest.active != null:
+		nodes.append_array(Forest.active.trees_in_circle(point, GATHER_SEARCH_RADIUS))
+	for node in get_tree().get_nodes_in_group(&"gatherables"):
+		if node is Gatherable and point.distance_to(node.global_position) <= GATHER_SEARCH_RADIUS:
+			nodes.append(node)
+	var usable: Array[Gatherable] = []
+	for node: Gatherable in nodes:
+		if node != null and not node.is_queued_for_deletion() and node.amount_remaining > 0 				and node.can_be_gathered() and (node.owner_peer_id == 0 or node.owner_peer_id == sender_id):
+			usable.append(node)
+	return usable
 
 ## Turns hold position on for the whole selection unless every selected unit
 ## already holds, in which case it turns it off for all of them.
@@ -3333,6 +3431,10 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 			_issue_attack_order(event.position, event.shift_pressed)
 			if not event.shift_pressed:
 				pending_order_mode = ""
+		"gather":
+			_issue_gather_order(event.position, event.shift_pressed)
+			if not event.shift_pressed:
+				pending_order_mode = ""
 		"patrol":
 			var result := raycast(event.position)
 			if result.is_empty():
@@ -3442,6 +3544,10 @@ func arm_move_mode() -> void:
 
 func arm_attack_mode() -> void:
 	pending_order_mode = "attack"
+	play_command_sound()
+
+func arm_gather_mode() -> void:
+	pending_order_mode = "gather"
 	play_command_sound()
 
 func arm_patrol_mode() -> void:
