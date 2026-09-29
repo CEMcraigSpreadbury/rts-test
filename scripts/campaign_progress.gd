@@ -1,21 +1,20 @@
 class_name CampaignProgress
 extends RefCounted
-## What the player has finished, kept in user:// so it survives the game
-## closing. Deliberately tiny: a mission id, whether it is won, and the hardest
-## difficulty it was won on.
+## Which missions the player has won, kept in user:// so it survives the game
+## closing: a mission id and the hardest difficulty it was won on.
 ##
-## Static, and read straight off disk the first time it is asked, because the
-## menus and the end of a mission both need it and neither owns the other.
+## Static, and read off disk the first time it is asked, because the menu and
+## the end of a mission both need it and neither owns the other.
 
-const PATH: String = "user://campaign_progress.cfg"
-const SECTION: String = "completed"
+const PATH: String = "user://campaign.cfg"
+const SECTION: String = "won"
 
 static var _config: ConfigFile = null
 
 static func _load() -> ConfigFile:
 	if _config == null:
 		_config = ConfigFile.new()
-		## A missing file is simply a player who hasn't won anything yet.
+		## A missing file is a player who hasn't won anything yet.
 		_config.load(PATH)
 	return _config
 
@@ -33,7 +32,6 @@ static func mark_completed(scenario_id: StringName, difficulty: int) -> void:
 	config.set_value(SECTION, String(scenario_id), maxi(difficulty, best_difficulty(scenario_id)))
 	config.save(PATH)
 
-## For a player who wants to start over, and for testing.
 static func clear() -> void:
 	_config = ConfigFile.new()
 	_config.save(PATH)

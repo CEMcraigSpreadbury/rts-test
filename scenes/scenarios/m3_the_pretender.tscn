@@ -1,0 +1,375 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/four_kingdoms_realm.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold"]
+[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="food"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone"]
+[ext_resource type="PackedScene" path="res://scenes/units/lord_unit.tscn" id="unit_lord"]
+[ext_resource type="Script" path="res://scripts/quests/actions/spawn_units_action.gd" id="a_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="unit_soldier"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="a_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/settlements_condition.gd" id="c_settlements"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="unit_villager"]
+[ext_resource type="PackedScene" path="res://scenes/units/spearman_unit.tscn" id="unit_spearman"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="a_ping"]
+[ext_resource type="Script" path="res://scripts/quests/actions/give_resources_action.gd" id="a_give"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/elapsed_time_condition.gd" id="c_time"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_warrior_unit.tscn" id="unit_warrior"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_raider_unit.tscn" id="unit_raider"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_druid_unit.tscn" id="unit_druid"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/eliminate_slot_condition.gd" id="c_eliminate"]
+[ext_resource type="Script" path="res://scripts/quests/actions/reveal_area_action.gd" id="a_reveal"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="a_end"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/units_in_zone_condition.gd" id="c_zone"]
+
+[sub_resource type="Resource" id="cost_1"]
+script = ExtResource("cost")
+resource_type = ExtResource("wood")
+amount = 400
+
+[sub_resource type="Resource" id="cost_2"]
+script = ExtResource("cost")
+resource_type = ExtResource("gold")
+amount = 300
+
+[sub_resource type="Resource" id="cost_3"]
+script = ExtResource("cost")
+resource_type = ExtResource("food")
+amount = 300
+
+[sub_resource type="Resource" id="cost_4"]
+script = ExtResource("cost")
+resource_type = ExtResource("wood")
+amount = 300
+
+[sub_resource type="Resource" id="cost_5"]
+script = ExtResource("cost")
+resource_type = ExtResource("gold")
+amount = 300
+
+[sub_resource type="Resource" id="cost_6"]
+script = ExtResource("cost")
+resource_type = ExtResource("food")
+amount = 200
+
+[sub_resource type="Resource" id="a_spawn_7"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_lord")
+count = 1
+slot_index = 0
+at = &"Muster"
+spread = 0.0
+
+[sub_resource type="Resource" id="a_spawn_8"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_soldier")
+count = 12
+slot_index = 0
+at = &"Muster"
+spread = 3.0
+
+[sub_resource type="Resource" id="a_dialogue_9"]
+script = ExtResource("a_dialogue")
+speaker = "Lord Varric"
+text = "So the Crown sends a child to take my March. Go home, little lord, while you still have one to go to."
+speaker_scene = ExtResource("unit_lord")
+
+[sub_resource type="Resource" id="c_settlements_10"]
+script = ExtResource("c_settlements")
+count = 3
+
+[sub_resource type="Resource" id="a_dialogue_11"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Varric is taking the land as fast as his men can walk. Every settlement you hold is one he cannot."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="a_spawn_12"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_spearman")
+count = 12
+slot_index = 0
+at = &"Muster"
+spread = 3.0
+
+[sub_resource type="Resource" id="a_dialogue_13"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Three settlements, and the March is rallying to you. Hollin's Rest has sent spearmen; they are waiting at the hall."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="c_settlements_14"]
+script = ExtResource("c_settlements")
+settlement_names = Array[String](["Objective1"])
+count = 1
+
+[sub_resource type="Resource" id="a_ping_15"]
+script = ExtResource("a_ping")
+at = &"Heart"
+
+[sub_resource type="Resource" id="cost_16"]
+script = ExtResource("cost")
+resource_type = ExtResource("wood")
+amount = 300
+
+[sub_resource type="Resource" id="cost_17"]
+script = ExtResource("cost")
+resource_type = ExtResource("gold")
+amount = 300
+
+[sub_resource type="Resource" id="a_give_18"]
+script = ExtResource("a_give")
+amounts = Array[ExtResource("cost")]([SubResource("cost_16"), SubResource("cost_17")])
+
+[sub_resource type="Resource" id="a_dialogue_19"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "The city at the heart of the March is ours, and its coffers with it."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="a_dialogue_20"]
+script = ExtResource("a_dialogue")
+speaker = "Lord Varric"
+text = "My Beastmen are hungry, little lord. Let them feed on your fields."
+speaker_scene = ExtResource("unit_lord")
+
+[sub_resource type="Resource" id="c_time_21"]
+script = ExtResource("c_time")
+seconds = 540.0
+
+[sub_resource type="Resource" id="a_spawn_22"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_warrior")
+count = 10
+slot_index = 2
+at = &"SellswordCamp"
+spread = 3.0
+attack_move_to = &"Holding"
+
+[sub_resource type="Resource" id="a_spawn_23"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_raider")
+count = 4
+slot_index = 2
+at = &"SellswordCamp"
+spread = 3.0
+attack_move_to = &"Holding"
+
+[sub_resource type="Resource" id="a_spawn_24"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_druid")
+count = 3
+slot_index = 2
+at = &"SellswordCamp"
+spread = 3.0
+attack_move_to = &"Holding"
+
+[sub_resource type="Resource" id="a_ping_25"]
+script = ExtResource("a_ping")
+at = &"SellswordCamp"
+hostile = true
+
+[sub_resource type="Resource" id="a_dialogue_26"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Varric's Beastmen again, my lord, more of them than before!"
+speaker_scene = ExtResource("unit_soldier")
+
+[sub_resource type="Resource" id="c_time_27"]
+script = ExtResource("c_time")
+seconds = 300.0
+
+[sub_resource type="Resource" id="a_spawn_28"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_warrior")
+count = 12
+slot_index = 2
+at = &"SellswordCamp"
+spread = 3.0
+attack_move_to = &"Holding"
+
+[sub_resource type="Resource" id="a_spawn_29"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_raider")
+count = 5
+slot_index = 2
+at = &"SellswordCamp"
+spread = 3.0
+attack_move_to = &"Holding"
+
+[sub_resource type="Resource" id="a_spawn_30"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_druid")
+count = 4
+slot_index = 2
+at = &"SellswordCamp"
+spread = 3.0
+attack_move_to = &"Holding"
+
+[sub_resource type="Resource" id="a_ping_31"]
+script = ExtResource("a_ping")
+at = &"SellswordCamp"
+hostile = true
+
+[sub_resource type="Resource" id="c_eliminate_32"]
+script = ExtResource("c_eliminate")
+slot_index = 1
+main_bases_only = true
+
+[sub_resource type="Resource" id="a_reveal_33"]
+script = ExtResource("a_reveal")
+at = &"VarricHold"
+radius = 36.0
+seconds = 20.0
+
+[sub_resource type="Resource" id="a_ping_34"]
+script = ExtResource("a_ping")
+at = &"VarricHold"
+hostile = true
+
+[sub_resource type="Resource" id="a_dialogue_35"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "His Town Center stands in the far corner of the Four Kingdoms. Burn it, and his claim burns with it."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="a_dialogue_36"]
+script = ExtResource("a_dialogue")
+speaker = "Lord Varric"
+text = "This... is not the end of it."
+speaker_scene = ExtResource("unit_lord")
+
+[sub_resource type="Resource" id="a_dialogue_37"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "It is for the March, my lord. It is yours."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="a_end_38"]
+script = ExtResource("a_end")
+victory = true
+
+[sub_resource type="Resource" id="c_zone_39"]
+script = ExtResource("c_zone")
+zone_name = &"VarricHold"
+count = 6
+
+[sub_resource type="Resource" id="a_dialogue_40"]
+script = ExtResource("a_dialogue")
+speaker = "Lord Varric"
+text = "You bring your rabble to my gates? Then come and die at them."
+speaker_scene = ExtResource("unit_lord")
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario")
+scenario_name = "The Pretender"
+briefing_title = "The Pretender"
+briefing_text = "Lord Varric has named himself Lord of the March and raised a holding on the far side of the Four Kingdoms. It was his gold that armed Grimhold. Take the land before he does, then burn his Town Center."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot")
+spawn_point_index = 0
+starting_resources = Array[ExtResource("cost")]([SubResource("cost_1"), SubResource("cost_2"), SubResource("cost_3")])
+
+[node name="Varric" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot")
+kind = 1
+team = 2
+color_index = 1
+spawn_point_index = 2
+starting_resources = Array[ExtResource("cost")]([SubResource("cost_4"), SubResource("cost_5"), SubResource("cost_6")])
+
+[node name="Sellswords" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot")
+kind = 2
+team = 2
+color_index = 1
+
+[node name="Holding" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -278.39, 0.078, 278.39)
+radius = 30.0
+
+[node name="VarricHold" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 286.39, 0.078, -286.39)
+radius = 30.0
+
+[node name="Heart" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0, 0.0, 0.0)
+radius = 12.0
+
+[node name="Muster" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -262.0, 0.08, 262.0)
+
+[node name="SellswordCamp" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -270.0, 0.0, -120.0)
+
+[node name="Muster" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+on_start = Array[ExtResource("action")]([SubResource("a_spawn_7"), SubResource("a_spawn_8"), SubResource("a_dialogue_9")])
+
+[node name="HoldThree" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Hold three settlements"
+requires = Array[NodePath]([NodePath("Muster")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_10")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_11")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_12"), SubResource("a_dialogue_13")])
+
+[node name="TakeHeart" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Take the city at the heart of the March"
+optional = true
+requires = Array[NodePath]([NodePath("Muster")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_14")])
+on_start = Array[ExtResource("action")]([SubResource("a_ping_15")])
+on_complete = Array[ExtResource("action")]([SubResource("a_give_18"), SubResource("a_dialogue_19")])
+
+[node name="Sellswords1" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("Muster")])
+conditions = Array[ExtResource("condition")]([SubResource("c_time_21")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_22"), SubResource("a_spawn_23"), SubResource("a_spawn_24"), SubResource("a_ping_25"), SubResource("a_dialogue_20")])
+
+[node name="Sellswords2" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("Sellswords1")])
+conditions = Array[ExtResource("condition")]([SubResource("c_time_27")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_28"), SubResource("a_spawn_29"), SubResource("a_spawn_30"), SubResource("a_ping_31"), SubResource("a_dialogue_26")])
+
+[node name="BurnVarric" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Burn Varric's Town Center"
+requires = Array[NodePath]([NodePath("HoldThree")])
+conditions = Array[ExtResource("condition")]([SubResource("c_eliminate_32")])
+on_start = Array[ExtResource("action")]([SubResource("a_reveal_33"), SubResource("a_ping_34"), SubResource("a_dialogue_35")])
+on_complete = Array[ExtResource("action")]([SubResource("a_dialogue_36"), SubResource("a_dialogue_37"), SubResource("a_end_38")])
+
+[node name="AtTheGates" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("HoldThree")])
+conditions = Array[ExtResource("condition")]([SubResource("c_zone_39")])
+on_complete = Array[ExtResource("action")]([SubResource("a_dialogue_40")])

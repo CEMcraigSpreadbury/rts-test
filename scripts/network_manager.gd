@@ -90,40 +90,13 @@ var game_mode: GameMode = GameMode.REALM
 ## carries over to another.
 var favour_target: int = 0
 
-## Campaign and tutorial missions only: 0 Easy, 1 Normal, 2 Hard. Shifts every
-## enemy AI's level and scales enemy numbers and starting resources (see
+## Campaign missions only: 0 Easy, 1 Normal, 2 Hard. Shifts every enemy AI's
+## level and scales enemy numbers and starting resources (see
 ## MatchRules.enemy_scale). Skirmish ignores it.
 var campaign_difficulty: int = 1
-## The ScenarioInfo id of the mission being played, so winning it can be
-## written down (see CampaignProgress). Empty in a skirmish. In a lobby this is
-## the host's choice, mirrored to everyone like the map is.
+## The ScenarioInfo id of the campaign mission being played, so winning it can
+## be written down (see CampaignProgress). Empty otherwise.
 var current_scenario_id: StringName = &""
-signal scenario_changed
-
-## Host: pick a campaign mission for the lobby to play, or &"" for an ordinary
-## skirmish on the chosen map.
-func set_scenario(id: StringName) -> void:
-	if multiplayer.multiplayer_peer != null and not is_host():
-		return
-	current_scenario_id = id
-	scenario_changed.emit()
-	if multiplayer.multiplayer_peer != null and is_host():
-		_rpc_scenario_changed.rpc(id)
-	trim_ai_to_capacity()
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_scenario_changed(id: StringName) -> void:
-	current_scenario_id = id
-	scenario_changed.emit()
-
-## The mission the lobby is set to play, or null for a skirmish.
-func current_scenario() -> ScenarioInfo:
-	if String(current_scenario_id).is_empty():
-		return null
-	for info in ScenarioInfo.list_all():
-		if info.id == current_scenario_id:
-			return info
-	return null
 
 ## 0 when not hosting/in a Steam lobby.
 var _steam_lobby_id: int = 0
@@ -312,6 +285,8 @@ func start_offline() -> void:
 	## rather than whatever a previous lobby left behind.
 	game_mode = GameMode.REALM
 	favour_target = 0
+	## Set again by the campaign menu when a mission is what is starting.
+	current_scenario_id = &""
 
 func is_host() -> bool:
 	return multiplayer.multiplayer_peer != null and multiplayer.is_server()
@@ -349,11 +324,6 @@ func ai_peer_ids() -> Array[int]:
 ## points for (MAX_PLAYERS for a map that doesn't say). The single player
 ## screen keeps its own map choice and works this out itself.
 func player_capacity() -> int:
-	## A mission seats exactly as many people as it has human slots; any it is
-	## short of are filled by an allied AI when it starts.
-	var scenario := current_scenario()
-	if scenario != null:
-		return clampi(scenario.human_slots, 1, MAX_PLAYERS)
 	var maps: Array[MapInfo] = MapInfo.list_all()
 	if maps.is_empty():
 		return MAX_PLAYERS

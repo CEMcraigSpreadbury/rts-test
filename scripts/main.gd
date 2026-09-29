@@ -442,6 +442,13 @@ func _ready() -> void:
 	_apply_clouds_setting(&"clouds")
 	Settings.changed.connect(_apply_clouds_setting)
 
+	## Every peer works out the same sides — none of it is networked (see
+	## Scenario.resolve_players). Before the HUD is built, which draws the
+	## build menu and the Research button off each side's rules.
+	if scenario != null:
+		scenario_peer_by_slot = scenario.resolve_players()
+		_apply_scenario_modifiers()
+
 	hud.setup()
 	if conquest_enabled:
 		conquest_hud = ConquestHud.new()
@@ -454,11 +461,9 @@ func _ready() -> void:
 	power_bar.main = self
 	ui_root.add_child(power_bar)
 
-	## Every peer works out the same sides and adopts the same hand-placed
-	## units — none of it is networked (see Scenario.resolve_players).
+	## Every peer adopts the same hand-placed units, so this isn't networked
+	## either.
 	if scenario != null:
-		scenario_peer_by_slot = scenario.resolve_players()
-		_apply_scenario_modifiers()
 		_adopt_scenario_entities()
 
 	unit_spawner.spawn_function = _spawn_unit_from_data
@@ -1395,7 +1400,8 @@ func _build_next_mission_button() -> void:
 func _offer_next_mission() -> void:
 	if scenario == null or not Network.is_single_player():
 		return
-	var next: ScenarioInfo = Campaign.next_mission_after(Network.current_scenario_id)
+	var campaign: Campaign = Campaign.current()
+	var next: ScenarioInfo = campaign.mission_after(Network.current_scenario_id) if campaign != null else null
 	if next == null or next.scene_path.is_empty():
 		return
 	_next_mission_button.text = "Next: %s" % next.scenario_name

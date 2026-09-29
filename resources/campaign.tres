@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="Campaign" format=3]
+
+[ext_resource type="Script" path="res://scripts/campaign.gd" id="1_campaign"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="2_info"]
+[ext_resource type="Resource" path="res://resources/scenarios/a_holding_in_the_march.tres" id="3_m1"]
+[ext_resource type="Resource" path="res://resources/scenarios/smoke_over_the_vale.tres" id="4_m2"]
+[ext_resource type="Resource" path="res://resources/scenarios/the_pretender.tres" id="5_m3"]
+
+[resource]
+script = ExtResource("1_campaign")
+campaign_name = "The Unclaimed March"
+missions = Array[ExtResource("2_info")]([ExtResource("3_m1"), ExtResource("4_m2"), ExtResource("5_m3")])

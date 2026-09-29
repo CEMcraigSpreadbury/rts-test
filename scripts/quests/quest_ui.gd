@@ -128,8 +128,12 @@ func _build_tracker() -> void:
 	_tracker_panel.anchor_bottom = 0.0
 	_tracker_panel.offset_left = -(TRACKER_WIDTH + TRACKER_MARGIN)
 	_tracker_panel.offset_right = -TRACKER_MARGIN
-	_tracker_panel.offset_top = TRACKER_MARGIN
-	_tracker_panel.offset_bottom = TRACKER_MARGIN
+	## Under the game-speed buttons, which share the corner in single player.
+	var top: float = TRACKER_MARGIN
+	if main.can_change_speed():
+		top += UiSpeedControls.BUTTON_SIZE.y + UiStyle.SPACE_S
+	_tracker_panel.offset_top = top
+	_tracker_panel.offset_bottom = top
 	_add_caps(_tracker_panel)
 	_tracker_box = VBoxContainer.new()
 	_tracker_box.add_theme_constant_override("separation", 7)
@@ -452,6 +456,10 @@ func _highlight_target(element_name: String) -> Control:
 			return main.power_bar.get_node_or_null(^"ResearchButton") if main.power_bar != null else null
 		"quest_tracker":
 			return _tracker_panel
+		"unit_cards":
+			return main.hud.unit_cards if main.hud != null else null
+		"speed_controls":
+			return main.get_node_or_null(^"UI/SpeedControls")
 	return null
 
 ## A pulsing outline laid over the element, following it each frame rather than

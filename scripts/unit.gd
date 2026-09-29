@@ -3322,6 +3322,11 @@ func _deposit_and_continue() -> void:
 	if status_carried_amount > 0 and status_carried_type != null:
 		ResourceStockpile.add(owner_peer_id, status_carried_type, status_carried_amount)
 		resource_deposited.emit(status_carried_amount, status_carried_type.display_color)
+		var main := get_tree().current_scene
+		if main is Main and main.quests != null:
+			main.quests.notify(&"resource_gathered", {
+				peer_id = owner_peer_id, resource_type = status_carried_type, amount = status_carried_amount,
+			})
 	status_carried_amount = 0
 	status_carried_type = null
 

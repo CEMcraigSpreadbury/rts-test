@@ -9,6 +9,9 @@ extends QuestCondition
 ## Ignore its units and go by buildings alone — for "raze their base" when
 ## stragglers shouldn't hold the mission open.
 @export var buildings_only: bool = false
+## Only its main bases (Town Centers) — "burn their Town Center", whatever
+## else of theirs is still standing.
+@export var main_bases_only: bool = false
 
 func progress(runner) -> Vector2i:
 	var peer_id: int = runner.peer_for_slot(slot_index)
@@ -17,9 +20,10 @@ func progress(runner) -> Vector2i:
 	var left := 0
 	for node in runner.get_tree().get_nodes_in_group(&"buildings"):
 		var building := node as ProductionBuilding
-		if building != null and not building.is_destroyed and building.owner_peer_id == peer_id:
+		if building != null and not building.is_destroyed and building.owner_peer_id == peer_id \
+				and (building.is_main_base or not main_bases_only):
 			left += 1
-	if not buildings_only:
+	if not buildings_only and not main_bases_only:
 		for node in runner.get_tree().get_nodes_in_group(&"units"):
 			var unit := node as Unit
 			if unit != null and unit.status_activity != Unit.Activity.DEAD and unit.owner_peer_id == peer_id:

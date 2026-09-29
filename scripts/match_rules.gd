@@ -25,7 +25,6 @@ static func enemy_scale() -> float:
 ## Mill, and every soldier eats it; Houses and the population cap go, leaving
 ## only a ceiling high enough that nobody meets it in play; soldiers are bought
 ## with gold alone, and a villager costs a little food on top of its wood.
-## Missions keep their own authored rules, so a scenario is never Realm.
 const REALM_POPULATION_CEILING: int = 800
 const REALM_VILLAGER_FOOD: int = 8
 const FOOD: ResourceType = preload("res://resources/food_resource_type.tres")
@@ -35,8 +34,13 @@ const WOOD: ResourceType = preload("res://resources/wood_resource_type.tres")
 const REALM_ONLY_BUILDINGS: Array[String] = ["Mill"]
 const NOT_IN_REALM_BUILDINGS: Array[String] = ["House"]
 
+## A skirmish follows the lobby's mode; a mission says for itself (see
+## Scenario.realm_rules).
 static func realm() -> bool:
-	return active().scenario == null and Network.game_mode == Network.GameMode.REALM
+	var mission: Scenario = active().scenario
+	if mission != null:
+		return mission.realm_rules
+	return Network.game_mode == Network.GameMode.REALM
 
 ## A unit's listed price as a Realm match charges it: its wood is folded into
 ## its gold while REALM_WOOD_INTO_GOLD is on; a worker keeps

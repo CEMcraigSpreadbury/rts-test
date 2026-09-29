@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"a_holding_in_the_march"
+scenario_name = "A Holding in the March"
+scene_path = "res://scenes/scenarios/m1_a_holding_in_the_march.tscn"
+briefing_title = "A Holding in the March"
+briefing_text = "The Crown has granted you the March: a wild borderland of villages and camps that answer to no one. You have a hall, a handful of villagers and a steward who knows the work. Learn to run a holding, raise an army, and bring your first village under your banner."
+human_slots = 1

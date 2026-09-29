@@ -72,9 +72,9 @@ func _reveal(scene: Node) -> void:
 			return
 		## CampaignMenu.open() needs a campaign, so it cannot be called blindly.
 		if node.name == "CampaignMenu" and node.has_method("open"):
-			var campaigns: Array = Campaign.list_all()
-			if not campaigns.is_empty():
-				node.call("open", campaigns[0])
+			var campaign: Campaign = Campaign.current()
+			if campaign != null:
+				node.call("open", campaign)
 			return
 
 ## --- in-game frames ---

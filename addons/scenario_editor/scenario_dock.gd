@@ -319,6 +319,12 @@ func _validate() -> void:
 	for slot in slots:
 		for entity in slot.placed_entities():
 			placed.append(String(entity.name))
+	## Settlements are the map's own objectives, named as they stand in it.
+	var settlements: Array[String] = []
+	var objectives: Node = scenario.get_parent().get_node_or_null(^"Objectives")
+	if objectives != null:
+		for child in objectives.get_children():
+			settlements.append(String(child.name))
 	var wins := false
 	for step in steps:
 		for path in step.requires:
@@ -332,14 +338,18 @@ func _validate() -> void:
 		for action in step.on_complete + step.on_start + step.on_fail:
 			if action is EndMissionAction and action.victory:
 				wins = true
-			if action != null and "at" in action and String(action.at) != "" \
-					and not _place_exists(scenario, String(action.at)):
-				problems.append("%s refers to '%s', which is not a zone or marker." % [step.name, action.at])
+			problems.append_array(_missing_places(scenario, step, action))
 			problems.append_array(_missing_targets(step, action, placed))
 		## A condition naming something that was never placed would sit at zero
 		## forever — or, for a destroy condition, be satisfied from the start.
 		for condition in step.conditions + step.fail_conditions:
+			problems.append_array(_missing_places(scenario, step, condition))
 			problems.append_array(_missing_targets(step, condition, placed))
+			if condition is SettlementsCondition:
+				for settlement_name in condition.settlement_names:
+					if not settlements.has(settlement_name):
+						problems.append("%s names settlement '%s', which is not one of the map's Objectives." \
+								% [step.name, settlement_name])
 	if not wins:
 		problems.append("Nothing wins this mission: no EndMissionAction with victory set.")
 
@@ -347,6 +357,18 @@ func _validate() -> void:
 		_report.text = "No problems found. %d side(s), %d step(s)." % [slots.size(), steps.size()]
 	else:
 		_report.text = "\n".join(problems)
+
+## Zones and markers a condition or action sends something to that the
+## scenario does not have.
+func _missing_places(scenario: Scenario, step: QuestStep, resource: Resource) -> Array[String]:
+	var problems: Array[String] = []
+	if resource == null:
+		return problems
+	for property in ["at", "attack_move_to", "zone_name"]:
+		if property in resource and String(resource.get(property)) != "" \
+				and not _place_exists(scenario, String(resource.get(property))):
+			problems.append("%s refers to '%s', which is not a zone or marker." % [step.name, resource.get(property)])
+	return problems
 
 ## Names of placed units/buildings a condition or action refers to that the
 ## scenario does not actually have.

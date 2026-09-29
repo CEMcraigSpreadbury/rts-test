@@ -1,0 +1,459 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/angel_crossing_realm.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_modifiers.gd" id="mods"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold"]
+[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="food"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/tutorial_input_condition.gd" id="c_input"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="unit_villager"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="a_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/gathered_condition.gd" id="c_gathered"]
+[ext_resource type="Script" path="res://scripts/quests/actions/highlight_ui_action.gd" id="a_highlight"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/have_buildings_condition.gd" id="c_buildings"]
+[ext_resource type="Script" path="res://scripts/quests/actions/set_unlocks_action.gd" id="a_unlocks"]
+[ext_resource type="Script" path="res://scripts/quests/actions/world_marker_action.gd" id="a_marker"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/trained_units_condition.gd" id="c_trained"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="unit_soldier"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/have_units_condition.gd" id="c_units"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/regiments_condition.gd" id="c_regiments"]
+[ext_resource type="Script" path="res://scripts/quests/actions/give_resources_action.gd" id="a_give"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/settlements_condition.gd" id="c_settlements"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="a_ping"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="a_end"]
+
+[sub_resource type="Resource" id="mods_player"]
+script = ExtResource("mods")
+allowed_buildings = Array[String](["Mine", "Mill", "Storehouse"])
+locked_hud = Array[String](["build", "research"])
+
+[sub_resource type="Resource" id="cost_2"]
+script = ExtResource("cost")
+resource_type = ExtResource("wood")
+amount = 300
+
+[sub_resource type="Resource" id="cost_3"]
+script = ExtResource("cost")
+resource_type = ExtResource("gold")
+amount = 300
+
+[sub_resource type="Resource" id="cost_4"]
+script = ExtResource("cost")
+resource_type = ExtResource("food")
+amount = 200
+
+[sub_resource type="Resource" id="c_input_5"]
+script = ExtResource("c_input")
+label = "Move the view"
+kind = "camera_move"
+
+[sub_resource type="Resource" id="c_input_6"]
+script = ExtResource("c_input")
+label = "Zoom in or out"
+kind = "camera_zoom"
+
+[sub_resource type="Resource" id="a_dialogue_7"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Welcome to the March, my lord. Before anything else, look over what you have. W, A, S and D move the view, Q and E turn it, and the mouse wheel brings it closer or further off."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_input_8"]
+script = ExtResource("c_input")
+kind = "select_units"
+detail = "Villager"
+
+[sub_resource type="Resource" id="a_dialogue_9"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Those are your villagers, by the Town Center. Click one to take charge of it, or drag a box around several at once."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_gathered_10"]
+script = ExtResource("c_gathered")
+resource_type = ExtResource("wood")
+amount = 50
+
+[sub_resource type="Resource" id="a_dialogue_11"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Everything here is built of wood. With villagers selected, right-click a tree: they cut it and carry it home to the Town Center by themselves. The idle villager button finds anyone left standing about."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_highlight_12"]
+script = ExtResource("a_highlight")
+element = "idle_button"
+
+[sub_resource type="Resource" id="a_highlight_13"]
+script = ExtResource("a_highlight")
+element = "idle_button"
+clear = true
+
+[sub_resource type="Resource" id="c_buildings_14"]
+script = ExtResource("c_buildings")
+building_name = "Mine"
+count = 1
+
+[sub_resource type="Resource" id="a_unlocks_15"]
+script = ExtResource("a_unlocks")
+unlock_hud = Array[String](["build"])
+
+[sub_resource type="Resource" id="a_highlight_16"]
+script = ExtResource("a_highlight")
+element = "action_panel"
+
+[sub_resource type="Resource" id="a_marker_17"]
+script = ExtResource("a_marker")
+at = &"HomeGold"
+marker_id = &"gold"
+radius = 2.5
+
+[sub_resource type="Resource" id="a_dialogue_18"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Gold is dug, not picked up. Select a villager and press B to open the build menu, then M for a Mine, and set it down on the gold I have marked."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_highlight_19"]
+script = ExtResource("a_highlight")
+element = "action_panel"
+clear = true
+
+[sub_resource type="Resource" id="a_marker_20"]
+script = ExtResource("a_marker")
+at = &"HomeGold"
+marker_id = &"gold"
+radius = 2.5
+clear = true
+
+[sub_resource type="Resource" id="c_gathered_21"]
+script = ExtResource("c_gathered")
+resource_type = ExtResource("gold")
+amount = 30
+
+[sub_resource type="Resource" id="a_dialogue_22"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "A Mine needs miners. Select a few villagers and right-click the Mine, and they will bring the gold home."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_buildings_23"]
+script = ExtResource("c_buildings")
+building_name = "Mill"
+count = 1
+
+[sub_resource type="Resource" id="a_dialogue_24"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Soldiers eat, and food comes from the fields. Build a Mill (B, then P) where there is open ground around it. Its fields are laid out once it stands; right-click one with villagers and they will sow it, tend it and bring in the harvest."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_trained_25"]
+script = ExtResource("c_trained")
+unit_name = "Villager"
+count = 2
+
+[sub_resource type="Resource" id="a_dialogue_26"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "More hands, more of everything. Select the Town Center and train two villagers. Each costs a little wood and food."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_buildings_27"]
+script = ExtResource("c_buildings")
+building_name = "Barracks"
+count = 1
+
+[sub_resource type="Resource" id="a_unlocks_28"]
+script = ExtResource("a_unlocks")
+unlock_buildings = Array[String](["Barracks"])
+
+[sub_resource type="Resource" id="a_dialogue_29"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Captain Bram, my lord, at your service, as soon as there is somewhere to serve from. Have a villager raise a Barracks: B, then B again."
+speaker_scene = ExtResource("unit_soldier")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_units_30"]
+script = ExtResource("c_units")
+unit_name = "Soldier"
+count = 12
+
+[sub_resource type="Resource" id="a_dialogue_31"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Select the Barracks and click Soldier once for each man. Right-click the ground while it is selected and new men will gather there. Mind the food: every soldier eats, and what they eat a minute shows beside your food."
+speaker_scene = ExtResource("unit_soldier")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_regiments_32"]
+script = ExtResource("c_regiments")
+count = 1
+
+[sub_resource type="Resource" id="a_dialogue_33"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Loose men are a crowd. Select the soldiers and press N to form them into a regiment. It is raised in ranks of six, every man keeps his place in the line, and its card appears along the bottom of the screen."
+speaker_scene = ExtResource("unit_soldier")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_highlight_34"]
+script = ExtResource("a_highlight")
+element = "unit_cards"
+
+[sub_resource type="Resource" id="c_trained_35"]
+script = ExtResource("c_trained")
+unit_name = "Lord"
+count = 1
+
+[sub_resource type="Resource" id="a_highlight_36"]
+script = ExtResource("a_highlight")
+element = "unit_cards"
+clear = true
+
+[sub_resource type="Resource" id="cost_37"]
+script = ExtResource("cost")
+resource_type = ExtResource("gold")
+amount = 150
+
+[sub_resource type="Resource" id="a_give_38"]
+script = ExtResource("a_give")
+amounts = Array[ExtResource("cost")]([SubResource("cost_37")])
+
+[sub_resource type="Resource" id="a_dialogue_39"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "A regiment fights harder and holds its nerve under a Lord. The Crown has sent gold for one: select the Town Center and raise him. You may keep one Lord, and one more for every two settlements you hold."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_regiments_40"]
+script = ExtResource("c_regiments")
+count = 1
+in_lords_army = true
+
+[sub_resource type="Resource" id="a_dialogue_41"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Now put the men under him. Select the Lord and the regiment together and press J. The Lord's tab above the cards selects his whole army at once."
+speaker_scene = ExtResource("unit_soldier")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_settlements_42"]
+script = ExtResource("c_settlements")
+settlement_names = Array[String](["Objective6"])
+count = 1
+
+[sub_resource type="Resource" id="a_marker_43"]
+script = ExtResource("a_marker")
+at = &"Brackenford"
+marker_id = &"village"
+radius = 12.0
+
+[sub_resource type="Resource" id="a_ping_44"]
+script = ExtResource("a_ping")
+at = &"Brackenford"
+
+[sub_resource type="Resource" id="a_dialogue_45"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "West of the hall, down the slope, lies Brackenford, a village of our own people. Its militia will not bow to a banner they have not seen win. Beat the garrison, then keep men standing in the village until your flag is raised."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_dialogue_46"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Right-click to march there, or press F and click to fight whatever we meet on the way."
+speaker_scene = ExtResource("unit_soldier")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_marker_47"]
+script = ExtResource("a_marker")
+at = &"Brackenford"
+marker_id = &"village"
+radius = 12.0
+clear = true
+
+[sub_resource type="Resource" id="a_dialogue_48"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Brackenford is yours. Its hall asks what becomes of the place: Occupy keeps it and its people; Raze burns it for a little gold. Select the hall and choose Occupy."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="c_buildings_49"]
+script = ExtResource("c_buildings")
+building_name = "Granary"
+count = 1
+
+[sub_resource type="Resource" id="a_dialogue_50"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "A settlement builds in slots of its own, with no villagers needed. Select the village hall and put a Granary in a slot: it pays food by itself. A Barracks there would recruit Brackenford's own people."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_dialogue_51"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "That is a holding in good order. Villages grow into Towns and Cities with more slots, and every two settlements let you keep another Lord. When you play alone, Pause and the - and = keys slow or quicken the day."
+speaker_scene = ExtResource("unit_villager")
+pause_in_single_player = true
+
+[sub_resource type="Resource" id="a_dialogue_52"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "A rider came in while you worked, my lord. Smoke over Aldmere Vale: the Beastmen of Grimhold are burning the villages. The Crown wants you there."
+speaker_scene = ExtResource("unit_soldier")
+
+[sub_resource type="Resource" id="a_end_53"]
+script = ExtResource("a_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario")
+scenario_name = "A Holding in the March"
+briefing_title = "A Holding in the March"
+briefing_text = "The Crown has granted you the March: a wild borderland of villages and camps that answer to no one. You have a hall, a handful of villagers and a steward who knows the work. Learn to run a holding, raise an army, and bring your first village under your banner."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot")
+spawn_point_index = 0
+starting_resources = Array[ExtResource("cost")]([SubResource("cost_2"), SubResource("cost_3"), SubResource("cost_4")])
+modifiers = SubResource("mods_player")
+
+[node name="Brackenford" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -213.515, -0.179, -158.88)
+radius = 12.0
+
+[node name="HomeGold" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -157.9, 4.11, -162.0)
+
+[node name="LookAround" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Look over your holding"
+conditions = Array[ExtResource("condition")]([SubResource("c_input_5"), SubResource("c_input_6")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_7")])
+
+[node name="SelectVillagers" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Select your villagers"
+requires = Array[NodePath]([NodePath("LookAround")])
+conditions = Array[ExtResource("condition")]([SubResource("c_input_8")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_9")])
+
+[node name="GatherWood" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Bring in wood"
+requires = Array[NodePath]([NodePath("SelectVillagers")])
+conditions = Array[ExtResource("condition")]([SubResource("c_gathered_10")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_11"), SubResource("a_highlight_12")])
+on_complete = Array[ExtResource("action")]([SubResource("a_highlight_13")])
+
+[node name="BuildMine" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Build a Mine on the gold"
+requires = Array[NodePath]([NodePath("GatherWood")])
+conditions = Array[ExtResource("condition")]([SubResource("c_buildings_14")])
+on_start = Array[ExtResource("action")]([SubResource("a_unlocks_15"), SubResource("a_highlight_16"), SubResource("a_marker_17"), SubResource("a_dialogue_18")])
+on_complete = Array[ExtResource("action")]([SubResource("a_highlight_19"), SubResource("a_marker_20")])
+
+[node name="GatherGold" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Bring in gold"
+requires = Array[NodePath]([NodePath("BuildMine")])
+conditions = Array[ExtResource("condition")]([SubResource("c_gathered_21")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_22")])
+
+[node name="BuildMill" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Build a Mill"
+requires = Array[NodePath]([NodePath("GatherGold")])
+conditions = Array[ExtResource("condition")]([SubResource("c_buildings_23")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_24")])
+
+[node name="TrainVillagers" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Train two villagers"
+requires = Array[NodePath]([NodePath("BuildMill")])
+conditions = Array[ExtResource("condition")]([SubResource("c_trained_25")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_26")])
+
+[node name="BuildBarracks" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Build a Barracks"
+requires = Array[NodePath]([NodePath("TrainVillagers")])
+conditions = Array[ExtResource("condition")]([SubResource("c_buildings_27")])
+on_start = Array[ExtResource("action")]([SubResource("a_unlocks_28"), SubResource("a_dialogue_29")])
+
+[node name="TrainSoldiers" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Train twelve soldiers"
+requires = Array[NodePath]([NodePath("BuildBarracks")])
+conditions = Array[ExtResource("condition")]([SubResource("c_units_30")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_31")])
+
+[node name="FormRegiment" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Form a regiment"
+requires = Array[NodePath]([NodePath("TrainSoldiers")])
+conditions = Array[ExtResource("condition")]([SubResource("c_regiments_32")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_33")])
+on_complete = Array[ExtResource("action")]([SubResource("a_highlight_34")])
+
+[node name="RaiseLord" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Raise a Lord"
+requires = Array[NodePath]([NodePath("FormRegiment")])
+conditions = Array[ExtResource("condition")]([SubResource("c_trained_35")])
+on_start = Array[ExtResource("action")]([SubResource("a_highlight_36"), SubResource("a_give_38"), SubResource("a_dialogue_39")])
+
+[node name="JoinArmy" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Bring the regiment into the Lord's army"
+requires = Array[NodePath]([NodePath("RaiseLord")])
+conditions = Array[ExtResource("condition")]([SubResource("c_regiments_40")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_41")])
+
+[node name="TakeBrackenford" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Take Brackenford"
+requires = Array[NodePath]([NodePath("JoinArmy")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_42")])
+on_start = Array[ExtResource("action")]([SubResource("a_marker_43"), SubResource("a_ping_44"), SubResource("a_dialogue_45"), SubResource("a_dialogue_46")])
+on_complete = Array[ExtResource("action")]([SubResource("a_marker_47"), SubResource("a_dialogue_48")])
+
+[node name="BuildGranary" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Build a Granary in Brackenford"
+requires = Array[NodePath]([NodePath("TakeBrackenford")])
+conditions = Array[ExtResource("condition")]([SubResource("c_buildings_49")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_50")])
+on_complete = Array[ExtResource("action")]([SubResource("a_dialogue_51"), SubResource("a_dialogue_52"), SubResource("a_end_53")])

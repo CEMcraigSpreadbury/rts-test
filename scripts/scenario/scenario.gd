@@ -9,6 +9,11 @@ extends Node3D
 @export var scenario_name: String = "Scenario"
 @export var briefing_title: String = ""
 @export_multiline var briefing_text: String = ""
+## Plays by Realm's rules, as a Realm skirmish does: the map's points are
+## settlements to take and build in, soldiers eat food, Lords lead armies, and
+## there are no Houses or population cap. Off, the older rules: plain capture
+## points, Houses and a population cap.
+@export var realm_rules: bool = true
 ## Favour is not scored in a scenario unless a mission wants it: points pay it
 ## and the Conquest bar shows it. Quest steps can then count it (FavourCondition).
 @export var favour_enabled: bool = false

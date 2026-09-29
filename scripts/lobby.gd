@@ -31,28 +31,12 @@ var _settings_row: MatchSettingsRow
 ## Under the player list, host only: fills an empty slot with an AI (see
 ## Network.add_ai_player). Disabled once the map's spawn points are all taken.
 var _add_ai_button: Button
-## Campaign mission picker: "Skirmish" plus every mission the host has
-## unlocked. Host-editable, mirrored to everyone else like the map is.
-var _scenario_option: OptionButton
-## Parallel to the picker's items; index 0 is &"" for an ordinary skirmish.
-var _scenario_ids: Array[StringName] = []
 
 func _ready() -> void:
 	for map in available_maps:
 		map_option.add_item(map.map_name)
 	map_option.item_selected.connect(Network.set_map)
 	Network.map_changed.connect(_on_map_changed)
-	## A mission played from the campaign menu earlier in the session leaves its
-	## id behind; without clearing it the lobby would quietly carry a single
-	## player mission into a multiplayer match.
-	Network.set_scenario(&"")
-	_scenario_option = OptionButton.new()
-	_scenario_option.name = "ScenarioOption"
-	_populate_scenarios()
-	_scenario_option.item_selected.connect(_on_scenario_picked)
-	map_option.add_sibling(_scenario_option)
-	map_option.get_parent().move_child(_scenario_option, map_option.get_index())
-	Network.scenario_changed.connect(_on_scenario_changed)
 	_settings_row = MatchSettingsRow.new()
 	_settings_row.edited.connect(func(): Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target()))
 	map_option.add_sibling(_settings_row)
@@ -196,39 +180,6 @@ func _set_connect_controls_enabled(enabled: bool) -> void:
 	quick_play_button.disabled = not enabled or not Steamworks.is_available
 	host_steam_button.disabled = not enabled or not Steamworks.is_available
 
-## --- Campaign missions ---
-
-## Only what the host has unlocked is offered: their progress decides what the
-## group can play (see CampaignProgress). Missions built for one player are
-## left out entirely — there would be nowhere for anyone else to sit.
-func _populate_scenarios() -> void:
-	_scenario_option.clear()
-	_scenario_ids.clear()
-	_scenario_option.add_item("Skirmish")
-	_scenario_ids.append(&"")
-	for campaign in Campaign.list_all():
-		var unlocked: int = campaign.unlocked_count()
-		for i in mini(unlocked, campaign.missions.size()):
-			var info: ScenarioInfo = campaign.missions[i]
-			if info.human_slots < 2:
-				continue
-			_scenario_option.add_item("%s: %s" % [campaign.campaign_name, info.scenario_name])
-			_scenario_ids.append(info.id)
-
-func _on_scenario_picked(index: int) -> void:
-	if index >= 0 and index < _scenario_ids.size():
-		Network.set_scenario(_scenario_ids[index])
-
-## A mission brings its own map, sides and rules, so the map picker and the
-## game-mode row have nothing to say while one is chosen.
-func _on_scenario_changed() -> void:
-	var index: int = maxi(_scenario_ids.find(Network.current_scenario_id), 0)
-	_scenario_option.select(index)
-	var playing_mission: bool = not String(Network.current_scenario_id).is_empty()
-	map_option.visible = not playing_mission
-	_settings_row.visible = not playing_mission
-	_refresh_player_list()
-
 ## A smaller map can't seat everyone the last one did — the host drops the
 ## newest AIs to fit (see Network.trim_ai_to_capacity).
 func _on_map_changed(_index: int) -> void:
@@ -241,8 +192,6 @@ func _on_map_changed(_index: int) -> void:
 ## gets to pick — a joined client just sees the host's choice.
 func _refresh_map_option() -> void:
 	var host_picks: bool = multiplayer.multiplayer_peer == null or Network.is_host()
-	if _scenario_option != null:
-		_scenario_option.disabled = not host_picks
 	if available_maps.is_empty():
 		return
 	map_option.select(clampi(Network.map_index, 0, available_maps.size() - 1))
@@ -357,12 +306,6 @@ func _on_start_pressed() -> void:
 	Network.resolve_random_rulers()
 	start_button.disabled = true
 	map_option.disabled = true
-	_scenario_option.disabled = true
 	_add_ai_button.disabled = true
 	_settings_row.set_editable(false)
-	## A mission brings its own map; everything else plays the chosen one.
-	var scenario: ScenarioInfo = Network.current_scenario()
-	if scenario != null:
-		SceneLoader.start_match(scenario.scene_path)
-		return
 	SceneLoader.start_match(available_maps[clampi(Network.map_index, 0, available_maps.size() - 1)].scene_path)

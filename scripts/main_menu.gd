@@ -28,9 +28,7 @@ var _settings_row: MatchSettingsRow
 ## same Network.add_ai_player() etc. a lobby host does.
 var _players_box: GridContainer
 var _add_ai_button: Button
-## The campaign list and the mission list inside one, built only when there is
-## a campaign to show.
-var _campaign_select: CampaignSelect = null
+## The campaign's mission list, built only when there is a campaign to show.
 var _campaign_menu: CampaignMenu = null
 
 func _ready() -> void:
@@ -47,7 +45,7 @@ func _ready() -> void:
 	_show_map_default(Network.GameMode.REALM)
 	Network.player_updated.connect(_refresh_players.unbind(1))
 	Network.player_disconnected.connect(_refresh_players.unbind(2))
-	_build_campaign_buttons()
+	_build_campaign_button()
 	map_select.visible = false
 	options_menu.visible = false
 	options_menu.closed.connect(_on_options_closed)
@@ -102,19 +100,12 @@ func _selected_map_index() -> int:
 	var picked: PackedInt32Array = map_list.get_selected_items()
 	return picked[0] if not picked.is_empty() else -1
 
-## --- Campaigns ---
+## --- Campaign ---
 
-## Three screens, one at a time: the main menu, the list of campaigns, and the
-## missions inside the chosen one. Adding a campaign is a matter of dropping a
-## .tres into resources/campaigns/ — no menu code to touch.
-func _build_campaign_buttons() -> void:
-	if Campaign.list_all().is_empty():
+## A Campaign entry above Single Player, opening the mission list.
+func _build_campaign_button() -> void:
+	if Campaign.current() == null:
 		return
-	_campaign_select = CampaignSelect.new()
-	_campaign_select.campaign_chosen.connect(_on_campaign_chosen)
-	_campaign_select.closed.connect(_on_campaign_select_closed)
-	_centre_panel(_campaign_select)
-
 	_campaign_menu = CampaignMenu.new()
 	_campaign_menu.closed.connect(_on_campaign_menu_closed)
 	_centre_panel(_campaign_menu)
@@ -146,24 +137,11 @@ func _centre_panel(panel: Control) -> void:
 
 func _on_campaign_pressed() -> void:
 	menu.visible = false
-	_campaign_select.get_parent().visible = true
-	_campaign_select.open()
-
-## Chosen a campaign: swap the list for its missions.
-func _on_campaign_chosen(campaign: Campaign) -> void:
-	_campaign_select.get_parent().visible = false
 	_campaign_menu.get_parent().visible = true
-	_campaign_menu.open(campaign)
+	_campaign_menu.open(Campaign.current())
 
-## Back out of the missions to the campaigns, refreshing the counts in case one
-## was just won.
 func _on_campaign_menu_closed() -> void:
 	_campaign_menu.get_parent().visible = false
-	_campaign_select.get_parent().visible = true
-	_campaign_select.refresh()
-
-func _on_campaign_select_closed() -> void:
-	_campaign_select.get_parent().visible = false
 	menu.visible = true
 
 func _on_single_player_pressed() -> void:

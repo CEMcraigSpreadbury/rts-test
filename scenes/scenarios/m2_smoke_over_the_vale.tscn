@@ -1,0 +1,416 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/maps/aldmere_vale_realm.tscn" id="map"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario.gd" id="scenario"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="wood"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="cost"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="gold"]
+[ext_resource type="Resource" path="res://resources/food_resource_type.tres" id="food"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_slot.gd" id="slot"]
+[ext_resource type="Script" path="res://scripts/scenario/scenario_zone.gd" id="zone"]
+[ext_resource type="PackedScene" path="res://scenes/units/lord_unit.tscn" id="unit_lord"]
+[ext_resource type="Script" path="res://scripts/quests/actions/spawn_units_action.gd" id="a_spawn"]
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="unit_soldier"]
+[ext_resource type="Script" path="res://scripts/quests/actions/dialogue_action.gd" id="a_dialogue"]
+[ext_resource type="Script" path="res://scripts/quests/quest_action.gd" id="action"]
+[ext_resource type="Script" path="res://scripts/quests/quest_step.gd" id="step"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/settlements_condition.gd" id="c_settlements"]
+[ext_resource type="Script" path="res://scripts/quests/actions/world_marker_action.gd" id="a_marker"]
+[ext_resource type="Script" path="res://scripts/quests/actions/ping_minimap_action.gd" id="a_ping"]
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="unit_villager"]
+[ext_resource type="Script" path="res://scripts/quests/quest_condition.gd" id="condition"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_warrior_unit.tscn" id="unit_warrior"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_raider_unit.tscn" id="unit_raider"]
+[ext_resource type="Script" path="res://scripts/quests/conditions/elapsed_time_condition.gd" id="c_time"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_druid_unit.tscn" id="unit_druid"]
+[ext_resource type="Script" path="res://scripts/quests/actions/reveal_area_action.gd" id="a_reveal"]
+[ext_resource type="Script" path="res://scripts/quests/actions/end_mission_action.gd" id="a_end"]
+
+[sub_resource type="Resource" id="cost_1"]
+script = ExtResource("cost")
+resource_type = ExtResource("wood")
+amount = 400
+
+[sub_resource type="Resource" id="cost_2"]
+script = ExtResource("cost")
+resource_type = ExtResource("gold")
+amount = 300
+
+[sub_resource type="Resource" id="cost_3"]
+script = ExtResource("cost")
+resource_type = ExtResource("food")
+amount = 300
+
+[sub_resource type="Resource" id="a_spawn_4"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_lord")
+count = 1
+slot_index = 0
+at = &"Muster"
+spread = 0.0
+
+[sub_resource type="Resource" id="a_spawn_5"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_soldier")
+count = 12
+slot_index = 0
+at = &"Muster"
+spread = 3.0
+
+[sub_resource type="Resource" id="a_dialogue_6"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "The men are mustered, my lord: twelve soldiers, and you to lead them. Form them up and take them into your army before we march."
+speaker_scene = ExtResource("unit_soldier")
+
+[sub_resource type="Resource" id="c_settlements_7"]
+script = ExtResource("c_settlements")
+settlement_names = Array[String](["Objective8"])
+count = 1
+
+[sub_resource type="Resource" id="a_marker_8"]
+script = ExtResource("a_marker")
+at = &"Hollin"
+marker_id = &"hollin"
+radius = 12.0
+
+[sub_resource type="Resource" id="a_ping_9"]
+script = ExtResource("a_ping")
+at = &"Hollin"
+
+[sub_resource type="Resource" id="a_dialogue_10"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Hollin's Rest is the nearest village, and the raiders will reach it soon. Take it first."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="a_marker_11"]
+script = ExtResource("a_marker")
+at = &"Hollin"
+marker_id = &"hollin"
+radius = 12.0
+clear = true
+
+[sub_resource type="Resource" id="a_ping_12"]
+script = ExtResource("a_ping")
+at = &"RaidCamp"
+hostile = true
+
+[sub_resource type="Resource" id="a_dialogue_13"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "Smoke to the north! Grimhold has seen our banner go up over Hollin's Rest. Its raiders will come for it, and they will keep coming."
+speaker_scene = ExtResource("unit_soldier")
+
+[sub_resource type="Resource" id="a_spawn_14"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_warrior")
+count = 5
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_15"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_raider")
+count = 2
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_ping_16"]
+script = ExtResource("a_ping")
+at = &"RaidCamp"
+hostile = true
+
+[sub_resource type="Resource" id="c_time_17"]
+script = ExtResource("c_time")
+seconds = 45.0
+
+[sub_resource type="Resource" id="a_dialogue_18"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "More of them, my lord, and druids with them this time."
+speaker_scene = ExtResource("unit_soldier")
+
+[sub_resource type="Resource" id="a_spawn_19"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_warrior")
+count = 7
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_20"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_raider")
+count = 3
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_21"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_druid")
+count = 2
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_ping_22"]
+script = ExtResource("a_ping")
+at = &"RaidCamp"
+hostile = true
+
+[sub_resource type="Resource" id="c_time_23"]
+script = ExtResource("c_time")
+seconds = 180.0
+
+[sub_resource type="Resource" id="a_spawn_24"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_warrior")
+count = 9
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_25"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_raider")
+count = 4
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_26"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_druid")
+count = 3
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_ping_27"]
+script = ExtResource("a_ping")
+at = &"RaidCamp"
+hostile = true
+
+[sub_resource type="Resource" id="c_time_28"]
+script = ExtResource("c_time")
+seconds = 180.0
+
+[sub_resource type="Resource" id="a_dialogue_29"]
+script = ExtResource("a_dialogue")
+speaker = "Grimhold Warchief"
+text = "The Vale burns, little lord. Your villages next, then your hall!"
+speaker_scene = ExtResource("unit_warrior")
+
+[sub_resource type="Resource" id="a_spawn_30"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_warrior")
+count = 12
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_31"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_raider")
+count = 5
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_spawn_32"]
+script = ExtResource("a_spawn")
+unit_scene = ExtResource("unit_druid")
+count = 4
+slot_index = 1
+at = &"RaidCamp"
+spread = 3.0
+attack_move_to = &"Hollin"
+
+[sub_resource type="Resource" id="a_ping_33"]
+script = ExtResource("a_ping")
+at = &"RaidCamp"
+hostile = true
+
+[sub_resource type="Resource" id="c_time_34"]
+script = ExtResource("c_time")
+seconds = 180.0
+
+[sub_resource type="Resource" id="c_settlements_35"]
+script = ExtResource("c_settlements")
+count = 3
+
+[sub_resource type="Resource" id="a_dialogue_36"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "One village will not hold the Vale. Win two more settlements; the Dark Elves and Star Wanderers here will fight for whoever holds their homes."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="c_settlements_37"]
+script = ExtResource("c_settlements")
+count = 1
+min_tier = 1
+
+[sub_resource type="Resource" id="c_settlements_38"]
+script = ExtResource("c_settlements")
+settlement_names = Array[String](["Objective4"])
+count = 1
+
+[sub_resource type="Resource" id="a_reveal_39"]
+script = ExtResource("a_reveal")
+at = &"Grimhold"
+radius = 30.0
+seconds = 20.0
+
+[sub_resource type="Resource" id="a_marker_40"]
+script = ExtResource("a_marker")
+at = &"Grimhold"
+marker_id = &"grimhold"
+radius = 12.0
+
+[sub_resource type="Resource" id="a_ping_41"]
+script = ExtResource("a_ping")
+at = &"Grimhold"
+hostile = true
+
+[sub_resource type="Resource" id="a_dialogue_42"]
+script = ExtResource("a_dialogue")
+speaker = "Captain Bram"
+text = "The Vale is with us. Now Grimhold: break its warband and raise your banner over it, and the raids end."
+speaker_scene = ExtResource("unit_soldier")
+
+[sub_resource type="Resource" id="a_marker_43"]
+script = ExtResource("a_marker")
+at = &"Grimhold"
+marker_id = &"grimhold"
+radius = 12.0
+clear = true
+
+[sub_resource type="Resource" id="a_dialogue_44"]
+script = ExtResource("a_dialogue")
+speaker = "Steward Edda"
+text = "Grimhold is ours and the Vale can breathe again. But look at what the Beastmen carried, my lord: black banners with a silver tower. Lord Varric's arms. It was his gold that sent them."
+speaker_scene = ExtResource("unit_villager")
+
+[sub_resource type="Resource" id="a_end_45"]
+script = ExtResource("a_end")
+victory = true
+
+[node name="Main" instance=ExtResource("map")]
+
+[node name="Scenario" type="Node3D" parent="."]
+script = ExtResource("scenario")
+scenario_name = "Smoke over the Vale"
+briefing_title = "Smoke over the Vale"
+briefing_text = "The Beastmen of Grimhold have come down into Aldmere Vale, and its villages are burning. Win the Vale's settlements to your banner before the raiders take them, then break Grimhold itself."
+
+[node name="Slots" type="Node3D" parent="Scenario"]
+
+[node name="Zones" type="Node3D" parent="Scenario"]
+
+[node name="Markers" type="Node3D" parent="Scenario"]
+
+[node name="Quests" type="Node" parent="Scenario"]
+
+[node name="Player" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot")
+spawn_point_index = 0
+starting_resources = Array[ExtResource("cost")]([SubResource("cost_1"), SubResource("cost_2"), SubResource("cost_3")])
+
+[node name="GrimholdRaiders" type="Node3D" parent="Scenario/Slots"]
+script = ExtResource("slot")
+kind = 2
+team = 2
+color_index = 1
+
+[node name="Hollin" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -183.092, -0.337, 335.188)
+radius = 12.0
+
+[node name="Grimhold" type="Node3D" parent="Scenario/Zones"]
+script = ExtResource("zone")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -213.214, 0.541, 8.367)
+radius = 12.0
+
+[node name="Muster" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -262.0, -0.3, 292.0)
+
+[node name="RaidCamp" type="Marker3D" parent="Scenario/Markers"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -205.0, 0.0, 55.0)
+
+[node name="Muster" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+on_start = Array[ExtResource("action")]([SubResource("a_spawn_4"), SubResource("a_spawn_5"), SubResource("a_dialogue_6")])
+
+[node name="TakeHollin" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Take Hollin's Rest"
+requires = Array[NodePath]([NodePath("Muster")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_7")])
+on_start = Array[ExtResource("action")]([SubResource("a_marker_8"), SubResource("a_ping_9"), SubResource("a_dialogue_10")])
+on_complete = Array[ExtResource("action")]([SubResource("a_marker_11"), SubResource("a_ping_12"), SubResource("a_dialogue_13")])
+
+[node name="Raid1" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("TakeHollin")])
+conditions = Array[ExtResource("condition")]([SubResource("c_time_17")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_14"), SubResource("a_spawn_15"), SubResource("a_ping_16")])
+
+[node name="Raid2" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("Raid1")])
+conditions = Array[ExtResource("condition")]([SubResource("c_time_23")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_19"), SubResource("a_spawn_20"), SubResource("a_spawn_21"), SubResource("a_ping_22"), SubResource("a_dialogue_18")])
+
+[node name="Raid3" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("Raid2")])
+conditions = Array[ExtResource("condition")]([SubResource("c_time_28")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_24"), SubResource("a_spawn_25"), SubResource("a_spawn_26"), SubResource("a_ping_27")])
+
+[node name="Raid4" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+hidden = true
+requires = Array[NodePath]([NodePath("Raid3")])
+conditions = Array[ExtResource("condition")]([SubResource("c_time_34")])
+on_complete = Array[ExtResource("action")]([SubResource("a_spawn_30"), SubResource("a_spawn_31"), SubResource("a_spawn_32"), SubResource("a_ping_33"), SubResource("a_dialogue_29")])
+
+[node name="HoldThree" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Hold three settlements"
+requires = Array[NodePath]([NodePath("TakeHollin")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_35")])
+on_start = Array[ExtResource("action")]([SubResource("a_dialogue_36")])
+
+[node name="HoldTown" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Hold a Town"
+optional = true
+requires = Array[NodePath]([NodePath("TakeHollin")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_37")])
+
+[node name="TakeGrimhold" type="Node" parent="Scenario/Quests"]
+script = ExtResource("step")
+title = "Take Grimhold"
+requires = Array[NodePath]([NodePath("HoldThree")])
+conditions = Array[ExtResource("condition")]([SubResource("c_settlements_38")])
+on_start = Array[ExtResource("action")]([SubResource("a_reveal_39"), SubResource("a_marker_40"), SubResource("a_ping_41"), SubResource("a_dialogue_42")])
+on_complete = Array[ExtResource("action")]([SubResource("a_marker_43"), SubResource("a_dialogue_44"), SubResource("a_end_45")])

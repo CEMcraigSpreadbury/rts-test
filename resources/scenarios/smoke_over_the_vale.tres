@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ScenarioInfo" format=3]
+
+[ext_resource type="Script" path="res://scripts/scenario/scenario_info.gd" id="1_info"]
+
+[resource]
+script = ExtResource("1_info")
+id = &"smoke_over_the_vale"
+scenario_name = "Smoke over the Vale"
+scene_path = "res://scenes/scenarios/m2_smoke_over_the_vale.tscn"
+briefing_title = "Smoke over the Vale"
+briefing_text = "The Beastmen of Grimhold have come down into Aldmere Vale, and its villages are burning. Win the Vale's settlements to your banner before the raiders take them, then break Grimhold itself."
+human_slots = 1
