@@ -932,7 +932,7 @@ Vec2 normalized(Vec2 v) {
 } // namespace
 
 // Ported from Very War's BattleWorld::update_steering. A man seeks his place
-// (easing off inside kArriveRadius), is pushed off whoever is closer than
+// (braking onto it at kArriveDecel), is pushed off whoever is closer than
 // kFollowSeparationRadius (inverse square, enemies harder), drifts a little
 // toward and along with the friends round him, and changes velocity no faster
 // than kAcceleration — so a block flows after its front rather than snapping
@@ -1028,11 +1028,11 @@ void World::steer_follower(uint32_t u, float dt, bool was_wedged) {
 	const Vec2 to_slot(goal.x - pos.x, goal.y - pos.y);
 	const float slot_dist = length(to_slot);
 	Vec2 seek(0.0f, 0.0f);
-	if (slot_dist > 1e-4f) {
-		// Only the place itself is eased into; a detour point is walked through.
-		const float ramp = (!detouring && slot_dist < kArriveRadius) ? slot_dist / kArriveRadius : 1.0f;
-		seek = to_slot * ((speed * ramp) / slot_dist);
-	}
+	// Only the place itself is braked onto; a detour point is walked through.
+	float seek_speed = speed;
+	if (!detouring) seek_speed = std::min(speed, std::min(std::sqrt(2.0f * kArriveDecel * slot_dist), slot_dist / dt));
+	const bool braking = seek_speed < speed;
+	if (slot_dist > 1e-4f) seek = to_slot * (seek_speed / slot_dist);
 
 	Vec2 separation(0.0f, 0.0f), cohesion(0.0f, 0.0f), alignment(0.0f, 0.0f), enemy_push(0.0f, 0.0f);
 	int friendly_seen = 0, seen = 0;
@@ -1080,7 +1080,9 @@ void World::steer_follower(uint32_t u, float dt, bool was_wedged) {
 		steer += normalized(cohesion * inv_n - pos) * (speed * kCohesionWeight * urgency);
 		steer += (alignment * inv_n - vel) * (kAlignmentWeight * urgency);
 	}
-	const float response = kSettleResponse + (kResponse - kSettleResponse) * urgency;
+	// Braking onto his place he takes the velocity he wants outright (up to
+	// kAcceleration), so he stops dead on it rather than swinging past.
+	const float response = braking ? 1.0f / dt : kResponse;
 	vel += truncated((steer - vel) * response, kAcceleration) * dt;
 	vel = truncated(vel, speed * kOverspeed);
 

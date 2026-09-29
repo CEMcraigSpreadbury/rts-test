@@ -108,15 +108,11 @@ public:
 	// The block stops heading for a point once this close to it.
 	static constexpr float kStopDistance = 0.5f;
 	// How hard a man closes the gap between the velocity he has and the one
-	// he wants, per second: kSettleResponse on his place, rising to kResponse
-	// with somewhere to go. Very War's is 1 throughout (a one-second lag),
-	// which read as sluggish on the order and let a man arriving overshoot his
-	// place and swing back. The stiffer answer only made a standing block
-	// drift while neighbours kept pushing each other, which the separation
-	// reach (see kSeparationSpacingFraction) and cohesion fading on the place
-	// now stop.
+	// he wants, per second, while walking. Very War's is 1 (a one-second lag),
+	// which read as sluggish on the order. Once he is braking onto his place
+	// there is no lag at all (see kArriveDecel): any lag there is a spring,
+	// and a spring overshoots and swings back.
 	static constexpr float kResponse = 7.0f;
-	static constexpr float kSettleResponse = 4.0f;
 	// Men may run this much over their pace to catch their places up.
 	static constexpr float kOverspeed = 1.3f;
 	// How far friends push each other apart: this much of the block's spacing
@@ -202,9 +198,11 @@ public:
 	// Neighbours one unit considers per tick. Bounds the work in a crush,
 	// which is exactly when armies meet and the frame can least afford it.
 	static constexpr int kMaxNeighbours = 12;
-	// A unit following its place eases off inside this, instead of vibrating
-	// round the exact point forever.
-	static constexpr float kArriveRadius = 0.6f;
+	// A unit following its place brakes onto it at this (m/s^2): as fast as
+	// he could still stop in the distance left, and never more than that
+	// distance in one tick, so he lands on the point instead of overshooting
+	// and creeping back. Under kAcceleration, so the brake is always there.
+	static constexpr float kArriveDecel = 20.0f;
 	// How far behind the rear rank an officer rides.
 	static constexpr float kOfficerStandoff = 2.4f;
 	// Most a Loose place is moved off its grid point, either way.
