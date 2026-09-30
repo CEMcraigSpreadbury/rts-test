@@ -30,6 +30,10 @@
 [ext_resource type="Script" path="res://scripts/ui/ui_caps.gd" id="35_caps"]
 [ext_resource type="Script" path="res://scripts/ui/ui_button.gd" id="36_uibutton"]
 [ext_resource type="Shader" uid="uid://3jy7355quai3" path="res://shaders/ambient_dust.gdshader" id="ambient_dust_shader"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud/idle_villagers.svg" id="hud_idle_villagers"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud/formation_box.svg" id="hud_formation_box"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud/formation_line.svg" id="hud_formation_line"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/hud/formation_loose.svg" id="hud_formation_loose"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -374,28 +378,52 @@ custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 tooltip_text = "Idle Villagers"
 theme_type_variation = &"SquareButton"
-text = "I"
+theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+icon = ExtResource("hud_idle_villagers")
+icon_alignment = 1
 
 [node name="FormationBoxButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=609675057]
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 tooltip_text = "Box Formation"
 theme_type_variation = &"SquareButton"
-text = "1"
+theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+icon = ExtResource("hud_formation_box")
+icon_alignment = 1
 
 [node name="FormationLineButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=2084477781]
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 tooltip_text = "Line Formation"
 theme_type_variation = &"SquareButton"
-text = "2"
+theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+icon = ExtResource("hud_formation_line")
+icon_alignment = 1
 
 [node name="FormationLooseButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=1775017322]
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
 tooltip_text = "Loose Formation"
 theme_type_variation = &"SquareButton"
-text = "3"
+theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
+theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+icon = ExtResource("hud_formation_loose")
+icon_alignment = 1
 
 [node name="ChatLog" type="RichTextLabel" parent="UI/BottomBar" unique_id=742747127]
 layout_mode = 1
