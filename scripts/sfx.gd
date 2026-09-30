@@ -91,6 +91,13 @@ const LISTEN_SPAN: float = 30.0
 const FADE_FROM_ZOOM: float = 25.0
 const OVERVIEW_FADE_DB: float = -9.0
 const PITCH_JITTER: float = 0.07
+## Looped while builders are working on a site: one voice, following the
+## nearest audible one, fading in and out rather than cutting.
+const BUILD_LOOP: AudioStream = preload("res://assets/sfx/Construction/Building_Loop.wav")
+const BUILD_LOOP_DB: float = 3.0
+const BUILD_LOOP_CHECK: float = 0.25
+const BUILD_LOOP_FADE_DB_PER_SEC: float = 60.0
+const SILENT_DB: float = -60.0
 
 var _streams: Dictionary = {}
 var _players: Array[AudioStreamPlayer3D] = []
@@ -102,6 +109,10 @@ var _playing_set: Dictionary = {}
 ## Set -> index of the clip it last played, so a set never repeats itself.
 var _last_clip: Dictionary = {}
 var _main: Main
+var _build_loop: AudioStreamPlayer3D
+var _build_loop_target_db: float = SILENT_DB
+var _build_loop_level_db: float = SILENT_DB
+var _build_check_timer: float = 0.0
 
 func _enter_tree() -> void:
 	current = self
@@ -131,6 +142,57 @@ func _ready() -> void:
 		flat.bus = &"SFX"
 		add_child(flat)
 		_flat.append(flat)
+	_build_loop = AudioStreamPlayer3D.new()
+	_build_loop.bus = &"SFX"
+	_build_loop.unit_size = 12.0
+	_build_loop.max_distance = LISTEN_SPAN * 1.5
+	_build_loop.stream = BUILD_LOOP
+	_build_loop.finished.connect(_build_loop.play)
+	add_child(_build_loop)
+
+func _process(delta: float) -> void:
+	_build_check_timer -= delta
+	if _build_check_timer <= 0.0:
+		_build_check_timer = BUILD_LOOP_CHECK
+		_update_build_loop_target()
+	_build_loop_level_db = move_toward(_build_loop_level_db, _build_loop_target_db, BUILD_LOOP_FADE_DB_PER_SEC * delta)
+	if _build_loop_level_db <= SILENT_DB:
+		if _build_loop.playing:
+			_build_loop.stop()
+		return
+	_build_loop.volume_db = _build_loop_level_db
+	if not _build_loop.playing:
+		_build_loop.play()
+
+## Moves the loop onto the nearest site in hearing with builders on it, or
+## lets it fade out when there's none.
+func _update_build_loop_target() -> void:
+	_build_loop_target_db = SILENT_DB
+	if _main == null or _main.camera == null or not (_main.camera_rig is RtsCamera):
+		return
+	var rig := _main.camera_rig as RtsCamera
+	var zoom: float = rig.zoom_distance
+	var hearing: float = clampf(zoom * HEARING_PER_ZOOM, HEARING_MIN, HEARING_MAX)
+	var best_offset := Vector3.ZERO
+	var best_distance := INF
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var building := node as ProductionBuilding
+		if building == null or not building.is_under_construction or building.is_destroyed 				or building.synced_builder_count <= 0:
+			continue
+		var offset: Vector3 = building.global_position - rig.global_position
+		offset.y = 0.0
+		var distance: float = offset.length()
+		if distance > hearing or distance >= best_distance:
+			continue
+		if _main.fog_of_war != null and not _main.fog_of_war.is_visible_at(building.global_position):
+			continue
+		best_offset = offset
+		best_distance = distance
+	if best_distance == INF:
+		return
+	_build_loop.global_position = _main.camera.global_position + best_offset * (LISTEN_SPAN / hearing)
+	var fade: float = clampf((zoom - FADE_FROM_ZOOM) / maxf(rig.overview_zoom - FADE_FROM_ZOOM, 1.0), 0.0, 1.0)
+	_build_loop_target_db = BUILD_LOOP_DB + OVERVIEW_FADE_DB * fade
 
 ## `set_name` from SETS at `pos`, if it can be heard there and the set has room.
 static func play_at(set_name: StringName, pos: Vector3, volume_offset_db: float = 0.0, pitch: float = 1.0) -> void:
