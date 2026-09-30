@@ -89,7 +89,11 @@ const LISTEN_SPAN: float = 30.0
 ## Quieter as the camera pulls out: 0 dB up to FADE_FROM_ZOOM, this much by
 ## the overview zoom.
 const FADE_FROM_ZOOM: float = 25.0
-const OVERVIEW_FADE_DB: float = -9.0
+const OVERVIEW_FADE_DB: float = -6.0
+## Also pushed this far in front of the listener by the overview zoom, so a
+## sound right under the camera doesn't sit on top of it: zoomed out, the
+## middle of the screen is no louder than the rest of it.
+const OVERVIEW_DEPTH: float = 26.0
 const PITCH_JITTER: float = 0.07
 ## Looped while builders are working on a site: one voice, following the
 ## nearest audible one, fading in and out rather than cutting.
@@ -134,7 +138,7 @@ func _ready() -> void:
 		var player := AudioStreamPlayer3D.new()
 		player.bus = &"SFX"
 		player.unit_size = 12.0
-		player.max_distance = LISTEN_SPAN * 1.5
+		player.max_distance = LISTEN_SPAN * 1.5 + OVERVIEW_DEPTH
 		add_child(player)
 		_players.append(player)
 	for i in 2:
@@ -145,7 +149,7 @@ func _ready() -> void:
 	_build_loop = AudioStreamPlayer3D.new()
 	_build_loop.bus = &"SFX"
 	_build_loop.unit_size = 12.0
-	_build_loop.max_distance = LISTEN_SPAN * 1.5
+	_build_loop.max_distance = LISTEN_SPAN * 1.5 + OVERVIEW_DEPTH
 	_build_loop.stream = BUILD_LOOP
 	_build_loop.finished.connect(_build_loop.play)
 	add_child(_build_loop)
@@ -190,8 +194,8 @@ func _update_build_loop_target() -> void:
 		best_distance = distance
 	if best_distance == INF:
 		return
-	_build_loop.global_position = _main.camera.global_position + best_offset * (LISTEN_SPAN / hearing)
 	var fade: float = clampf((zoom - FADE_FROM_ZOOM) / maxf(rig.overview_zoom - FADE_FROM_ZOOM, 1.0), 0.0, 1.0)
+	_build_loop.global_position = _placed(_main.camera, best_offset, hearing, fade)
 	_build_loop_target_db = BUILD_LOOP_DB + OVERVIEW_FADE_DB * fade
 
 ## `set_name` from SETS at `pos`, if it can be heard there and the set has room.
@@ -234,10 +238,16 @@ func _play(set_name: StringName, pos: Vector3, volume_offset_db: float, pitch: f
 		return
 	## Kept on the same side of the listener as on screen, so panning still
 	## follows the picture.
-	free_player.global_position = camera.global_position + offset * (LISTEN_SPAN / hearing)
 	var fade: float = clampf((zoom - FADE_FROM_ZOOM) / maxf(rig.overview_zoom - FADE_FROM_ZOOM, 1.0), 0.0, 1.0)
+	free_player.global_position = _placed(camera, offset, hearing, fade)
 	free_player.volume_db = float(limit[2]) + volume_offset_db + OVERVIEW_FADE_DB * fade
 	_start(free_player, set_name, pitch)
+
+## Where a sound `offset` from the camera's pivot stands relative to the
+## listener: squeezed into LISTEN_SPAN and pushed out ahead with zoom.
+func _placed(camera: Camera3D, offset: Vector3, hearing: float, fade: float) -> Vector3:
+	var ahead: Vector3 = -camera.global_transform.basis.z * (OVERVIEW_DEPTH * fade)
+	return camera.global_position + offset * (LISTEN_SPAN / hearing) + ahead
 
 func _may_play(set_name: StringName) -> bool:
 	var clips: Array = _streams.get(set_name, [])
