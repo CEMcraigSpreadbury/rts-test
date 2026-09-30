@@ -1,6 +1,7 @@
 class_name RtsCamera
 extends Node3D
-## RTS camera rig: WASD/edge pan, Q/E or middle-mouse-drag rotate, scroll-wheel zoom.
+## RTS camera rig: WASD/edge/middle-mouse-drag pan, Q/E rotate, scroll-wheel
+## zoom. Middle-mouse drag rotates instead with the middle_mouse_pan setting off.
 
 ## At the default zoom (DEFAULT_ZOOM); panning scales with zoom distance so
 ## the ground slides past the screen at the same rate at any zoom.
@@ -9,6 +10,8 @@ extends Node3D
 ## Off by default: with two windows open side-by-side for multiplayer testing,
 ## the mouse sitting near a window's edge would otherwise pan that camera unintentionally.
 @export var edge_pan_enabled: bool = false
+## Middle-mouse drag grabs the ground and pans; off, it rotates.
+@export var middle_mouse_pan: bool = true
 @export var rotate_speed: float = 2.0
 ## How quickly panning ramps up to speed and coasts back down, as a fraction of
 ## the remaining gap closed per second.
@@ -62,6 +65,9 @@ const MIN_PAN_SCALE: float = 0.6
 var zoom_distance: float = DEFAULT_ZOOM
 var _zoom_target: float = 18.0
 var rotating: bool = false
+## Middle-mouse drag in pan mode: the ground point grabbed, kept under the cursor.
+var _dragging: bool = false
+var _drag_anchor: Vector3 = Vector3.ZERO
 var _pan_velocity: Vector3 = Vector3.ZERO
 var _shake_trauma: float = 0.0
 
@@ -76,6 +82,7 @@ func _ready() -> void:
 ## The player's options menu choices override the exported defaults above.
 func _apply_settings(_key: StringName) -> void:
 	edge_pan_enabled = Settings.get_value(&"edge_pan")
+	middle_mouse_pan = Settings.get_value(&"middle_mouse_pan")
 	pan_speed = Settings.get_value(&"pan_speed")
 	zoom_speed = Settings.get_value(&"zoom_speed")
 	var attributes := camera.attributes as CameraAttributesPractical
@@ -93,11 +100,35 @@ func _unhandled_input(event: InputEvent) -> void:
 			_zoom_target = clamp(_zoom_target + _zoom_step(), min_zoom, _zoom_limit())
 			_report_zoom()
 		elif event.button_index == MOUSE_BUTTON_MIDDLE:
-			rotating = event.pressed
+			rotating = event.pressed and not middle_mouse_pan
+			_dragging = false
+			if event.pressed and middle_mouse_pan:
+				var grabbed: Variant = _drag_point(event.position)
+				if grabbed != null:
+					_dragging = true
+					_drag_anchor = grabbed
 	elif event is InputEventMouseMotion and rotating:
 		## Horizontal drag only — pitch follows zoom (see _pitch_now), and the
 		## DOF band is fitted to it.
 		yaw.rotation.y -= event.relative.x * mouse_rotate_sensitivity
+	elif event is InputEventMouseMotion and _dragging:
+		## Let go over the HUD, where the release never reaches here.
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE):
+			_dragging = false
+			return
+		var now: Variant = _drag_point(event.position)
+		if now != null:
+			var moved: Vector3 = (_drag_anchor - now) * Vector3(1, 0, 1)
+			global_position += moved
+			_pan_velocity = Vector3.ZERO
+			_report_camera_use(moved.length())
+
+## Where the ray through `screen_pos` meets the flat plane at the rig's own
+## height, or null if it looks above the horizon. A plane rather than the
+## terrain, so the grabbed point doesn't jump as the cursor crosses a hill.
+func _drag_point(screen_pos: Vector2) -> Variant:
+	var plane := Plane(Vector3.UP, global_position.y)
+	return plane.intersects_ray(camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos))
 
 var _last_frame_usec: int = 0
 

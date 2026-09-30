@@ -18,6 +18,7 @@ enum WindowMode { WINDOWED, BORDERLESS_FULLSCREEN, EXCLUSIVE_FULLSCREEN }
 
 const DEFAULTS := {
 	&"edge_pan": false,
+	&"middle_mouse_pan": true,
 	&"pan_speed": 24.0,
 	&"zoom_speed": 2.0,
 	&"damage_numbers": true,

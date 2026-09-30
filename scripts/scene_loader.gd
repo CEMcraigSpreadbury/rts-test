@@ -17,6 +17,9 @@ const FADE_DURATION: float = 0.35
 ## Keeps the loading screen from flashing up for a single frame when the scene
 ## is already cached (e.g. the second time back to the lobby).
 const MIN_LOADING_TIME: float = 0.4
+## How long whatever music is playing takes to fade out on the way out of a
+## scene. Runs on under the loading screen, so it can outlast FADE_DURATION.
+const MUSIC_FADE_DURATION: float = 1.0
 
 var is_transitioning: bool = false
 ## Bumped by every new load, so an in-flight one can tell it's been superseded.
@@ -175,6 +178,9 @@ func _swap_and_fade_in(scene: Node) -> void:
 
 func _fade_out() -> void:
 	_fade.mouse_filter = Control.MOUSE_FILTER_STOP
+	for player in get_tree().get_nodes_in_group(&"music"):
+		var music := create_tween()
+		music.tween_property(player, "volume_db", -60.0, MUSIC_FADE_DURATION)
 	var tween := create_tween()
 	tween.tween_property(_fade, "color:a", 1.0, FADE_DURATION)
 	await tween.finished

@@ -21,7 +21,7 @@ extends Node
 ##   --seed=N   RNG seed, default 12345; fixed so two runs frame the same view
 ##   --wait=N   seconds to let the match settle before the shot, default 10
 
-const MAP_PATH: String = "res://scenes/maps/aethermoor_creek.tscn"
+const MAP_PATH: String = "res://scenes/maps/angel_crossing_realm.tscn"
 const DIRECTOR_SCRIPT: String = "res://scripts/tools/ui_shot_director.gd"
 
 func _ready() -> void:

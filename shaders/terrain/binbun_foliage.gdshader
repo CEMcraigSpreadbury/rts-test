@@ -54,6 +54,32 @@ group_uniforms FogOfWar;
 group_uniforms;
 #include "res://shaders/terrain/ground_stamp.gdshaderinc"
 
+group_uniforms Paths;
+// The splatmap channels binbun_terrain.gdshader blends as grass and path dirt.
+uniform int ground_texture_index = 0;
+uniform int dirt_texture_index = 1;
+// No blade where this share of the ground (path or stamp) is dirt, the same
+// cut for both. A stamp's own 0.5 is its dirt edge, so blades stop just short.
+uniform float dirt_cut : hint_range(0.0, 1.0, 0.01) = 0.4;
+group_uniforms;
+
+// dirt / (grass + dirt) at a point in the terrain's space, as the terrain shader
+// takes it. TerraBrush's own placement grows a blade anywhere the grass channel
+// is over 0.2, which puts a scatter of blades out on the soft edge of a path.
+float painted_dirt(vec3 terrain_pos) {
+	if (dirt_texture_index < 0 || dirt_texture_index >= NumberOfTextures) {
+		return 0.0;
+	}
+	vec3 zone_uv = calculateZoneUVResolution(vec3(terrain_pos.x, 0.0, terrain_pos.z), false);
+	if (zone_uv.z < 0.0) {
+		return 0.0;
+	}
+	float layers = zone_uv.z * ceil(float(NumberOfTextures) / 4.0);
+	float grass = texture(Splatmaps, vec3(zone_uv.xy, float(ground_texture_index / 4) + layers))[ground_texture_index % 4];
+	float dirt = texture(Splatmaps, vec3(zone_uv.xy, float(dirt_texture_index / 4) + layers))[dirt_texture_index % 4];
+	return dirt / max(grass + dirt, 0.0001);
+}
+
 varying vec3 world_pos;
 varying flat int blade_index;
 varying flat float blade_random;
@@ -98,7 +124,7 @@ void vertex() {
 	calculateFoliageVertex(INSTANCE_ID, centre, base, probe_normal, probe_color, grid_position, cell_width);
 	calculateFoliageVertex(INSTANCE_ID, centre, top, probe_normal, probe_color, grid_position, cell_width);
 	bool blade_present = length(top - base) > 0.0001
-			&& ground_stamp((MODEL_MATRIX * vec4(base, 1.0)).xz) < 0.4;
+			&& max(ground_stamp((MODEL_MATRIX * vec4(base, 1.0)).xz), painted_dirt(base)) < dirt_cut;
 
 	vec3 rnd = hash_noise_range(grid_position) * 0.5 + 0.5;
 	blade_index = int(rnd.y * float(atlas_size * atlas_size));

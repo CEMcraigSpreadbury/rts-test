@@ -101,6 +101,7 @@ func _input(event: InputEvent) -> void:
 
 func _build_game_page(page: Control) -> void:
 	_add_check(page, "Edge Scrolling", &"edge_pan")
+	_add_check(page, "Middle Mouse Pans", &"middle_mouse_pan")
 	_add_slider(page, "Camera Pan Speed", Settings.get_value(&"pan_speed"), 8.0, 48.0, 1.0,
 			func(v: float): Settings.set_value(&"pan_speed", v), func(v: float): return "%d" % v)
 	_add_slider(page, "Camera Zoom Speed", Settings.get_value(&"zoom_speed"), 0.5, 5.0, 0.25,

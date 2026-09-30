@@ -1,4 +1,4 @@
-// Dirt stamped around finished buildings at runtime (scripts/ground_stamps.gd).
+// Dirt stamped under buildings and fields at runtime (scripts/ground_stamps.gd).
 global uniform sampler2D ground_stamp_tex;
 global uniform vec4 ground_stamp_rect;
 

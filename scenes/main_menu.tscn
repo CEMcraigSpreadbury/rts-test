@@ -3,6 +3,11 @@
 [ext_resource type="Script" uid="uid://d145bbwalkfc6" path="res://scripts/main_menu.gd" id="1_script"]
 [ext_resource type="PackedScene" path="res://scenes/options_menu.tscn" id="2_options"]
 [ext_resource type="Script" uid="uid://kawg8mc4g0e3" path="res://scripts/ui/section_rule.gd" id="4_rule"]
+[ext_resource type="Script" path="res://scripts/ui/menu_backdrop.gd" id="5_backdrop"]
+[ext_resource type="Script" path="res://scripts/menu_music.gd" id="5_music"]
+[ext_resource type="AudioStream" uid="uid://bx3gumjsc5m58" path="res://assets/sfx/Music/Early/Pastoral Journey.mp3" id="6_music_a"]
+[ext_resource type="AudioStream" uid="uid://pdoobln6beg6" path="res://assets/sfx/Music/Early/Spring Begins.mp3" id="7_music_b"]
+[ext_resource type="AudioStream" uid="uid://csdot2d6k8m88" path="res://assets/sfx/Music/Early/Castle Courtyard Bloom.mp3" id="8_music_c"]
 
 [node name="MainMenu" type="Control" unique_id=282548150]
 layout_mode = 3
@@ -22,6 +27,16 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 color = Color(0.07, 0.055, 0.045, 1)
+
+[node name="Backdrop" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("5_backdrop")
 
 [node name="Menu" type="VBoxContainer" parent="." unique_id=1729468213]
 layout_mode = 1
@@ -112,3 +127,8 @@ grow_vertical = 2
 [node name="OptionsMenu" parent="." unique_id=1258885204 instance=ExtResource("2_options")]
 visible = false
 layout_mode = 1
+
+[node name="MenuMusic" type="AudioStreamPlayer" parent="."]
+bus = &"Music"
+script = ExtResource("5_music")
+tracks = Array[AudioStream]([ExtResource("6_music_a"), ExtResource("7_music_b"), ExtResource("8_music_c")])

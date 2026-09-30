@@ -18,7 +18,7 @@ const SCENARIOS_DIR: String = "res://resources/scenarios/"
 
 static func list_all() -> Array[ScenarioInfo]:
 	var out: Array[ScenarioInfo] = []
-	if not DirAccess.dir_exists_absolute(ProjectSettings.globalize_path(SCENARIOS_DIR)):
+	if not DirAccess.dir_exists_absolute(SCENARIOS_DIR):
 		return out
 	var files: PackedStringArray = ResourceLoader.list_directory(SCENARIOS_DIR)
 	files.sort()

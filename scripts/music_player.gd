@@ -19,6 +19,10 @@ const OUTCOME_FADE_SECONDS: float = 1.5
 var _phase: Phase = Phase.EARLY
 
 func _ready() -> void:
+	## Plays on through the pause menu and quest dialogue (both pause the tree).
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	## SceneLoader fades this out on the way out of the match.
+	add_to_group(&"music")
 	## Relies on `finished` actually firing to advance phases — an imported
 	## stream with its own loop flag set (common for .ogg/.wav) never fires
 	## this and would play that one track forever instead of progressing.

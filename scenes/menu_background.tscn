@@ -5,9 +5,9 @@
 [ext_resource type="TextureSetsResource" uid="uid://vt73r0wu8y65" path="res://resources/terrain/binbun/binbun_texture_sets.tres" id="3_sttmp"]
 [ext_resource type="Shader" uid="uid://dd650cj0qosyd" path="res://shaders/terrain/binbun_foliage.gdshader" id="4_ybfwt"]
 [ext_resource type="Texture2D" uid="uid://dv6g2qxppq3ec" path="res://BinbunGrass/src/texture/basic/grass_basic_atlas.png" id="5_xfwpa"]
-[ext_resource type="Image" uid="uid://cxapgwn6e1sdq" path="res://scenes/maps/aethermoor_creek_data/Foliage_0_0_0.res" id="6_blih1"]
-[ext_resource type="Image" uid="uid://ccad37mv8k6x" path="res://scenes/maps/aethermoor_creek_data/Heightmap_0_0.res" id="7_lvyni"]
-[ext_resource type="Image" uid="uid://dmpm01nbst5jv" path="res://scenes/maps/aethermoor_creek_data/Splatmap_0_0_0.res" id="8_os7os"]
+[ext_resource type="Image" uid="uid://cxapgwn6e1sdq" path="res://scenes/menu_background_data/Foliage_0_0_0.res" id="6_blih1"]
+[ext_resource type="Image" uid="uid://ccad37mv8k6x" path="res://scenes/menu_background_data/Heightmap_0_0.res" id="7_lvyni"]
+[ext_resource type="Image" uid="uid://dmpm01nbst5jv" path="res://scenes/menu_background_data/Splatmap_0_0_0.res" id="8_os7os"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.35, 0.5, 0.75, 1)
@@ -239,7 +239,7 @@ light_color = Color(0.48, 0.63, 0.92, 1)
 light_energy = 0.32
 
 [node name="Terrain" type="TerraBrush" parent="."]
-dataPath = "res://scenes/maps/aethermoor_creek_data"
+dataPath = "res://scenes/menu_background_data"
 zonesSize = 257
 customShader = SubResource("ShaderMaterial_sttmp")
 createCollisionInThread = false

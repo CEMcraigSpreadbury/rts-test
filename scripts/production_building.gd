@@ -298,6 +298,10 @@ func _ready() -> void:
 	_apply_team_color()
 	if drop_in_delay >= 0.0:
 		play_drop_in(drop_in_delay)
+	## From the moment it is placed, not when it is finished: no grass through
+	## a foundation, and a building that starts the match built still gets it.
+	## Deferred so a spawner's position has landed.
+	(func(): GroundStamps.stamp_building(self, get_footprint_radius())).call_deferred()
 
 func _collect_visuals() -> void:
 	for child in get_children():
@@ -1072,7 +1076,6 @@ func _update_construction_visual() -> void:
 			construction_particles.emitting = false
 		if not is_destroyed:
 			play_finish_pop()
-			GroundStamps.stamp_building(self, get_footprint_radius())
 
 const _CONSTRUCTION_ALPHA: float = 0.45
 

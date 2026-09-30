@@ -15,3 +15,5 @@ addons/army_sim/bin/*.exp
 addons/army_sim/bin/*.lib
 addons/army_sim/bin/*.pdb
 addons/army_sim/bin/~*
+addons/*/bin/~*
+addons/*/win64/~*

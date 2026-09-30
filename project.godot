@@ -8,14 +8,14 @@
 
 config_version=5
 
-"ï»¿config_version"=5
-
 [application]
 
 config/name="Crowns of Aldmere"
+config/version="0.7.2"
 run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
-config/icon="res://icon.svg"
+config/icon="res://assets/icon/icon.png"
+config/windows_native_icon="res://assets/icon/icon.ico"
 
 [autoload]
 

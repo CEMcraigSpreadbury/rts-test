@@ -465,11 +465,32 @@ func sim_team(peer_id: int) -> int:
 ## given something else to do. `facing` is a right-drag's facing, or zero to
 ## face the way the group is going. `append` queues the leg after whatever
 ## each block is already doing.
+## How far behind his army's rear rank a Lord marching with it stands, and how
+## far apart two Lords ordered together stand.
+const LORD_BEHIND: float = 2.5
+const LORD_SPACING: float = 2.0
+
 func order_blocks(units: Array[Unit], world_pos: Vector3, attack_move: bool, append: bool, formation_type: Formation.Type, facing: Vector3) -> void:
 	var blocks := _split_blocks(units)
 	if blocks.is_empty():
 		return
-	var centre := GroupMovement.group_centroid_of(units)
+	## A Lord goes with his men rather than keeping whatever gap he had to
+	## them: he takes his place behind their rear rank (see below), and the
+	## rest are laid out round their own centre, not one dragged toward him.
+	var lords: Array = []
+	var army: Array = []
+	for block: Array[Unit] in blocks:
+		if block.size() == 1 and block[0].is_lord:
+			lords.append(block)
+		else:
+			army.append(block)
+	if army.is_empty():
+		army = lords
+		lords = []
+	var army_units: Array[Unit] = []
+	for block: Array[Unit] in army:
+		army_units.append_array(block)
+	var centre := GroupMovement.group_centroid_of(army_units)
 	var forward := facing
 	if forward == Vector3.ZERO:
 		forward = (world_pos - centre) * Vector3(1, 0, 1)
@@ -481,21 +502,36 @@ func order_blocks(units: Array[Unit], world_pos: Vector3, attack_move: bool, app
 	var order := {}
 	if attack_move:
 		order = {"units": units.duplicate(), "target": world_pos, "type": formation_type, "forward": forward, "front_width": -1.0}
-	for block: Array[Unit] in blocks:
+	var rear: float = 0.0
+	for block: Array[Unit] in army:
 		var offset := Vector3.ZERO
-		if blocks.size() > 1:
+		if army.size() > 1:
 			offset = (GroupMovement.group_centroid_of(block) - centre) * Vector3(1, 0, 1)
+		var layout := block_layout(formation_type, block.size(), block_spacing(block))
+		var rows: int = ceili(float(block.size()) / maxi(int(layout.columns), 1))
+		rear = minf(rear, offset.dot(forward) - (rows - 1) * float(layout.spacing))
 		_order_block(block, world_pos + offset, forward, attack_move, append, formation_type, order)
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	for i in lords.size():
+		var across: float = (i - (lords.size() - 1) * 0.5) * LORD_SPACING
+		_order_block(lords[i], world_pos + forward * (rear - LORD_BEHIND) + right * across, forward, attack_move, append, formation_type, order)
 
 ## One unit walking somewhere on its own (Unit.move_to): out of any block it
 ## was in, and its formation of one sent there at its own pace. The sim plans
 ## the route, as it does for a block.
+const SOLO_POINT_DRIFT: float = 1.0
+
 func solo_move(unit: Unit, target: Vector3) -> void:
 	if not _ready_for_units or unit.sim_id < 0:
 		return
 	var here := Vector2(unit.global_position.x, unit.global_position.z)
 	var formation: int = sim.get_unit_formation(unit.sim_id)
-	if formation < 0 or sim.get_formation_members(formation).size() > 1:
+	## A lone formation's point stays wherever its last walk ended — inside the
+	## Town Centre, for a villager who dropped off at its edge. Walking on from
+	## there, the point reaches the goal metres ahead of him and the sim calls
+	## the walk over while he is still on his way.
+	if formation < 0 or sim.get_formation_members(formation).size() > 1 \
+			or (sim.get_formation_info(formation)["position"] as Vector2).distance_to(here) > SOLO_POINT_DRIFT:
 		formation = sim.release(unit.sim_id, here)
 	if formation < 0:
 		return
@@ -634,6 +670,11 @@ func _existing_formation(block: Array[Unit]) -> int:
 		return -1
 	var members: PackedInt32Array = sim.get_formation_members(formation)
 	if members.size() != block.size():
+		return -1
+	## A block of one whose point was left behind by a walk of his own (see
+	## solo_move) is formed afresh where he stands.
+	if block.size() == 1 and (sim.get_formation_info(formation)["position"] as Vector2) \
+			.distance_to(Vector2(block[0].global_position.x, block[0].global_position.z)) > SOLO_POINT_DRIFT:
 		return -1
 	for unit in block:
 		if not members.has(unit.sim_id):

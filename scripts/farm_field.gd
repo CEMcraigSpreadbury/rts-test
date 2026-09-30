@@ -42,6 +42,11 @@ func _ready() -> void:
 	if _model != null:
 		_collect_meshes(_model)
 	_show_stage()
+	## Bare earth under and round the field, as under a building, so no grass
+	## grows up through the crop.
+	var obstacle := get_node_or_null(^"NavigationObstacle3D") as NavigationObstacle3D
+	if obstacle != null:
+		(func(): GroundStamps.stamp_building(self, obstacle.radius)).call_deferred()
 
 func _collect_meshes(node: Node) -> void:
 	if node is GeometryInstance3D:

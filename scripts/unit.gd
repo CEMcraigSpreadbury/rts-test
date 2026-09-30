@@ -1032,6 +1032,8 @@ const RESOURCE_RETARGET_RADIUS: float = 15.0
 ## Where a gatherer heads: this fraction of the node's gather_range out from
 ## its centre, on the gatherer's own side (see _gather_approach_point).
 const GATHER_APPROACH_FRACTION: float = 0.6
+## Arc between neighbouring gatherers' spots on one node, at its gather_range.
+const GATHER_SLOT_SPACING: float = 1.0
 ## Arrived further than gather_range + this from the node: it could not get
 ## in (a tree walled in by others), so it tries a node it can reach instead,
 ## up to GATHER_APPROACH_TRIES times before working from where it stands.
@@ -3221,12 +3223,23 @@ func _head_to_resource() -> void:
 ## sim moves a destination inside something solid (a trunk) to the nearest open
 ## ground — which in a clump of trees can be the far side, or the clump's edge
 ## metres away, and the gatherer then works from there.
+##
+## Several gatherers on one node (a Mine's crew) each get their own spot, fanned
+## out around it from the drop-off side. All heading for the same spot, the
+## first back from each trip takes it and the rest queue behind, working the
+## node from metres away.
 func _gather_approach_point(node: Gatherable) -> Vector3:
-	var away := global_position - node.global_position
+	var from := dropoff_point.global_position if is_instance_valid(dropoff_point) else global_position
+	var away := from - node.global_position
 	away.y = 0.0
 	if away.length_squared() < 0.0001:
+		away = global_position - node.global_position
+		away.y = 0.0
+	if away.length_squared() < 0.0001:
 		return node.global_position
-	return node.global_position + away.normalized() * node.gather_range * GATHER_APPROACH_FRACTION
+	var slot: int = maxi(node.gatherers.find(self), 0)
+	var turn: float = GATHER_SLOT_SPACING / node.gather_range * ceili(slot / 2.0) * (1.0 if slot % 2 == 1 else -1.0)
+	return node.global_position + away.normalized().rotated(Vector3.UP, turn) * node.gather_range * GATHER_APPROACH_FRACTION
 
 ## Close enough to `target_resource` to work it.
 func _in_gather_reach() -> bool:
@@ -3238,11 +3251,14 @@ func _start_gathering() -> void:
 	if not _has_live_resource():
 		_head_to_resource()
 		return
-	## Stopped short: the node is walled in by others. The nearest one it can
-	## get to instead, rather than working this one from out of reach.
+	## Stopped short: the node is walled in by others, or this unit was held up
+	## in the crowd round it and the sim called the walk over anyway. The
+	## nearest node it can get to instead, else another go at this one, rather
+	## than working it from out of reach.
 	if _flat_distance(global_position, target_resource.global_position) > target_resource.gather_range + GATHER_REACH_SLACK \
-			and _gather_approach_tries < GATHER_APPROACH_TRIES and _retarget_resource(global_position, target_resource):
+			and _gather_approach_tries < GATHER_APPROACH_TRIES:
 		_gather_approach_tries += 1
+		_retarget_resource(global_position, target_resource)
 		_head_to_resource()
 		return
 	_gather_approach_tries = 0

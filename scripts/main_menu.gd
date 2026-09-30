@@ -34,6 +34,9 @@ var _campaign_menu: CampaignMenu = null
 func _ready() -> void:
 	$Menu/SinglePlayerButton.pressed.connect(_on_single_player_pressed)
 	$Menu/MultiplayerButton.pressed.connect(SceneLoader.change_scene.bind(LOBBY_SCENE_PATH))
+	## Demo exports (the "demo" feature tag in export_presets.cfg) are single player only.
+	$Menu/MultiplayerButton.disabled = OS.has_feature("demo")
+	$VersionStamp.text = "v" + str(ProjectSettings.get_setting("application/config/version", ""))
 	$Menu/OptionsButton.pressed.connect(_on_options_pressed)
 	$Menu/ExitButton.pressed.connect(get_tree().quit)
 	_build_skirmish_panel()
