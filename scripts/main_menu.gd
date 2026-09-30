@@ -30,6 +30,7 @@ var _players_box: GridContainer
 var _add_ai_button: Button
 ## The campaign's mission list, built only when there is a campaign to show.
 var _campaign_menu: CampaignMenu = null
+var _credits: CreditsScreen
 
 func _ready() -> void:
 	$Menu/SinglePlayerButton.pressed.connect(_on_single_player_pressed)
@@ -49,6 +50,7 @@ func _ready() -> void:
 	Network.player_updated.connect(_refresh_players.unbind(1))
 	Network.player_disconnected.connect(_refresh_players.unbind(2))
 	_build_campaign_button()
+	_build_credits()
 	map_select.visible = false
 	options_menu.visible = false
 	options_menu.closed.connect(_on_options_closed)
@@ -146,6 +148,41 @@ func _on_campaign_pressed() -> void:
 func _on_campaign_menu_closed() -> void:
 	_campaign_menu.get_parent().visible = false
 	menu.visible = true
+
+## --- Credits ---
+
+## A small caption-sized button in the bottom-left corner, opposite the version
+## stamp. It shows only while the nav menu does, so it never sits over the
+## skirmish, campaign or options screens.
+func _build_credits() -> void:
+	_credits = CreditsScreen.new()
+	_credits.name = "Credits"
+	_credits.closed.connect(func(): menu.visible = true)
+	add_child(_credits)
+
+	var button := Button.new()
+	button.name = "CreditsButton"
+	button.text = "Credits"
+	button.flat = true
+	button.add_theme_font_override("font", UiStyle.font_display())
+	button.add_theme_font_size_override("font_size", UiStyle.SIZE_LABEL)
+	button.add_theme_color_override("font_color", UiStyle.DIM)
+	button.add_theme_color_override("font_hover_color", UiStyle.ACCENT)
+	button.add_theme_color_override("font_pressed_color", UiStyle.ACCENT)
+	button.pressed.connect(_on_credits_pressed)
+	add_child(button)
+	button.anchor_top = 1.0
+	button.anchor_bottom = 1.0
+	button.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	button.offset_left = 28.0
+	button.offset_right = 28.0
+	button.offset_top = -22.0
+	button.offset_bottom = -22.0
+	menu.visibility_changed.connect(func(): button.visible = menu.visible)
+
+func _on_credits_pressed() -> void:
+	menu.visible = false
+	_credits.open()
 
 func _on_single_player_pressed() -> void:
 	Network.start_offline()
