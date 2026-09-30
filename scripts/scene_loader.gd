@@ -53,6 +53,19 @@ func change_scene(path: String) -> void:
 	var scene: Node = await _load_and_instantiate(path, _generation)
 	await _swap_and_fade_in(scene)
 
+## For a caller that has already faded to black itself (the splash screen):
+## snaps the overlay opaque so nothing shows between the two scenes, gives the
+## new one a few frames to draw (the menu backdrop's viewports start empty),
+## then fades in.
+func change_scene_from_black(packed: PackedScene) -> void:
+	if is_transitioning:
+		return
+	is_transitioning = true
+	_fade.color.a = 1.0
+	_fade.mouse_filter = Control.MOUSE_FILTER_STOP
+	await get_tree().process_frame
+	await _swap_and_fade_in(packed.instantiate(), 3)
+
 func start_match(path: String) -> void:
 	if not Network.is_host() or is_transitioning:
 		return
@@ -123,7 +136,7 @@ func _on_server_disconnected() -> void:
 	if _pending_scene != null:
 		_pending_scene.free()
 		_pending_scene = null
-	var lobby_path: String = ProjectSettings.get_setting("application/run/main_scene")
+	var lobby_path: String = "res://scenes/main_menu.tscn"
 	_synced_path = ""
 	_loaded_peers.clear()
 	is_transitioning = false
@@ -160,7 +173,7 @@ func _load_and_instantiate(path: String, generation: int) -> Node:
 	var packed := ResourceLoader.load_threaded_get(path) as PackedScene
 	return packed.instantiate() if packed else Node.new()
 
-func _swap_and_fade_in(scene: Node) -> void:
+func _swap_and_fade_in(scene: Node, settle_frames: int = 0) -> void:
 	var tree := get_tree()
 	var old_scene := tree.current_scene
 	if old_scene:
@@ -173,6 +186,8 @@ func _swap_and_fade_in(scene: Node) -> void:
 	tree.root.add_child(scene)
 	tree.paused = false
 	_loading_root.visible = false
+	for i in settle_frames:
+		await tree.process_frame
 	await _fade_in()
 	is_transitioning = false
 
