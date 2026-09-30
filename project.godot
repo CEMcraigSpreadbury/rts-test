@@ -28,6 +28,7 @@ UnitUnlocks="*res://scripts/unit_unlocks.gd"
 Steamworks="*res://scripts/steamworks.gd"
 UiDebugEditor="*res://scripts/ui_debug_editor.gd"
 SceneLoader="*res://scripts/scene_loader.gd"
+UiClickSound="*res://scripts/ui_click_sound.gd"
 
 [debug]
 
