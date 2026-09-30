@@ -11,6 +11,16 @@ var main: Main
 
 @onready var _chat_log: RichTextLabel = main.get_node(^"UI/BottomBar/ChatLog")
 @onready var _chat_input: LineEdit = main.get_node(^"UI/BottomBar/ChatInput")
+## The docked HUD modules the chat must stay clear of (see _place_above_hud).
+@onready var _hud_panels: Array[Control] = [
+	main.get_node(^"UI/BottomBar/InfoPanel"),
+	main.get_node(^"UI/BottomBar/ActionPanel"),
+]
+
+## Space between the chat input and the top of the HUD modules, and between
+## the log and the input.
+const CHAT_HUD_GAP: float = 16.0
+const CHAT_INPUT_GAP: float = 6.0
 
 const MAX_CHAT_LINES: int = 8
 var chat_lines: Array[String] = []
@@ -68,6 +78,7 @@ const MIN_GAME_SPEED: float = 0.25
 const MAX_GAME_SPEED: float = 8.0
 
 func open_chat_input() -> void:
+	_place_above_hud()
 	_chat_input.visible = true
 	_chat_input.text = ""
 	_chat_input.grab_focus()
@@ -334,6 +345,7 @@ func _rpc_display_chat(line: String) -> void:
 ## Shows the chat log and (re)starts its auto-hide countdown; a stale timer
 ## from an earlier call is ignored via the token check.
 func _show_chat_log() -> void:
+	_place_above_hud()
 	if _chat_log_tween:
 		_chat_log_tween.kill()
 	_chat_log.visible = true
@@ -346,6 +358,25 @@ func _show_chat_log() -> void:
 			_chat_log_tween = create_tween()
 			_chat_log_tween.tween_property(_chat_log, "modulate:a", 0.0, CHAT_LOG_FADE_DURATION)
 	)
+
+## Stacks the input and the log just above whichever HUD module reaches
+## highest, measured from where they actually are rather than trusting fixed
+## scene offsets, so a notification never lands on the command panel. The log
+## grows upward (grow_vertical BEGIN + fit_content), so only its bottom edge
+## is pinned.
+func _place_above_hud() -> void:
+	var bar := _chat_log.get_parent() as Control
+	var hud_top: float = bar.size.y
+	for panel in _hud_panels:
+		if panel.is_visible_in_tree():
+			hud_top = minf(hud_top, panel.get_global_rect().position.y - bar.get_global_rect().position.y)
+	var input_bottom: float = hud_top - CHAT_HUD_GAP - bar.size.y
+	var input_height: float = _chat_input.offset_bottom - _chat_input.offset_top
+	_chat_input.offset_bottom = input_bottom
+	_chat_input.offset_top = input_bottom - input_height
+	var log_bottom: float = input_bottom - input_height - CHAT_INPUT_GAP
+	_chat_log.offset_bottom = log_bottom
+	_chat_log.offset_top = log_bottom
 
 ## Right-click on the minimap; relayed through the host (same call-to-1-then-
 ## broadcast shape as chat) so every player sees the same ping at once,
