@@ -15,8 +15,8 @@ extends Node3D
 const TOWN_CENTRE: PackedScene = preload("res://assets/art/Models/TownBuildings/TownCentre.glb")
 const GOLD_DEPOSIT: PackedScene = preload("res://assets/art/Models/TownBuildings/GoldDeposit.glb")
 const PINES: Array[PackedScene] = [
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_1.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_2.glb"),
+	preload("res://assets/art/Trees/tree_pine_low.glb"),
+	preload("res://assets/art/Trees/tree_pine_low_2.glb"),
 ]
 const LUMBERJACK_SHEET: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniLumberjack.png")
 const MINER_SHEET: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniMiner.png")

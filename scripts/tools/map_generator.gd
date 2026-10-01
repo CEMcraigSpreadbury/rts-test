@@ -180,8 +180,8 @@ func is_settlement_map() -> bool:
 ]
 @export_range(1.5, 8.0, 0.1) var border_tree_spacing: float = 2.4
 @export var border_tree_scenes: Array[PackedScene] = [
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_1.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/tree_pine_2.glb"),
+	preload("res://assets/art/Trees/tree_pine_low.glb"),
+	preload("res://assets/art/Trees/tree_pine_low_2.glb"),
 ]
 
 @export_group("Scenes")
