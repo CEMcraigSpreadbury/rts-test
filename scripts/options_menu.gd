@@ -29,6 +29,8 @@ const KEY_ACTION_NAMES := {
 
 const LABEL_WIDTH: float = 220.0
 const CONTROL_WIDTH: float = 260.0
+## Extra room a Sound row takes for its Mute box, so the slider keeps its length.
+const SOUND_MUTE_WIDTH: float = 130.0
 
 @onready var tab_buttons: BoxContainer = $Margin/VBox/Body/Tabs
 @onready var pages: Array[Control] = [
@@ -40,6 +42,8 @@ const CONTROL_WIDTH: float = 260.0
 @onready var key_list: VBoxContainer = $Margin/VBox/Body/Pages/Controls/Scroll/KeyList
 
 var _key_buttons: Dictionary = {}
+## Bus name -> its Mute CheckBox on the Sound page.
+var _mute_boxes: Dictionary = {}
 ## The action waiting for its next key press, or &"" when not rebinding.
 var _rebinding_action: StringName = &""
 
@@ -59,6 +63,10 @@ func _ready() -> void:
 	_build_sound_page($Margin/VBox/Body/Pages/SoundEffects/List)
 	_build_controls_page()
 	Settings.changed.connect(_on_settings_changed)
+	## A method, not a lambda: a lambda that never touches `self` belongs to
+	## the script rather than this menu, so it outlived the main menu's copy
+	## and then poked its freed checkboxes.
+	Settings.mute_changed.connect(_on_mute_changed)
 	visibility_changed.connect(_on_visibility_changed)
 	_show_page(0)
 
@@ -126,8 +134,15 @@ func _build_visuals_page(page: Control) -> void:
 
 func _build_sound_page(page: Control) -> void:
 	for bus_name in Settings.BUSES:
-		_add_slider(page, bus_name,Settings.volumes[bus_name] * 100.0, 0.0, 100.0, 1.0,
+		var box := _add_slider(page, bus_name,Settings.volumes[bus_name] * 100.0, 0.0, 100.0, 1.0,
 				func(v: float): Settings.set_bus_volume(bus_name, v / 100.0), func(v: float): return "%d%%" % v)
+		var mute := CheckBox.new()
+		mute.text = "Mute"
+		mute.button_pressed = Settings.muted[bus_name]
+		mute.toggled.connect(func(on: bool): Settings.set_bus_muted(bus_name, on))
+		_mute_boxes[bus_name] = mute
+		box.add_child(mute)
+		box.custom_minimum_size.x = CONTROL_WIDTH + SOUND_MUTE_WIDTH
 
 func _build_controls_page() -> void:
 	for action in KEY_ACTION_NAMES:
@@ -159,7 +174,7 @@ func _add_check(page: Control, text: String, key: StringName) -> CheckBox:
 	return check
 
 func _add_slider(page: Control, text: String, value: float, min_value: float, max_value: float,
-		step: float, on_changed: Callable, format: Callable) -> void:
+		step: float, on_changed: Callable, format: Callable) -> HBoxContainer:
 	var box := HBoxContainer.new()
 	var slider := HSlider.new()
 	slider.min_value = min_value
@@ -178,6 +193,7 @@ func _add_slider(page: Control, text: String, value: float, min_value: float, ma
 	box.add_child(slider)
 	box.add_child(readout)
 	_add_row(page, text, box)
+	return box
 
 func _add_choice(page: Control, text: String, names: Array[String], selected: int, on_selected: Callable) -> void:
 	var option := OptionButton.new()
@@ -207,6 +223,11 @@ func _on_reset_keys_pressed() -> void:
 func _on_settings_changed(key: StringName) -> void:
 	if _key_buttons.has(key):
 		_refresh_key_buttons()
+
+## The HUD's music button mutes the same bus as the box here.
+func _on_mute_changed(bus_name: String, on: bool) -> void:
+	if _mute_boxes.has(bus_name):
+		(_mute_boxes[bus_name] as CheckBox).set_pressed_no_signal(on)
 
 func _refresh_key_buttons() -> void:
 	for action in _key_buttons:

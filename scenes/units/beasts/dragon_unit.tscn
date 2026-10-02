@@ -52,6 +52,7 @@ scale = 0.9
 script = ExtResource("5_ability_script")
 ability_name = "Fireball"
 icon = ExtResource("icon_abilities_fireball")
+glyph = &"fireball"
 kind = 2
 activation_range = 10.0
 cooldown = 16.0
@@ -75,6 +76,7 @@ linger_effect = SubResource("SpriteEffect_linger")
 linger_effect_count = 5
 
 [node name="Dragon" instance=ExtResource("1_unit")]
+glyph = &"unit_dragon"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

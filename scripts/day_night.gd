@@ -9,18 +9,43 @@ extends Node
 ## same moment (see SceneLoader.start_match) and starts at midday, so there's
 ## no state to catch a late joiner up on.
 ##
-## Nothing here animates per frame: a single tween drives one 0..1 value and
-## everything the time of day touches is re-derived from it (see refresh_lighting).
+## Nothing here animates per frame: a single tween drives one 0..1 value, the
+## sun's height and warmth follow the clock in half-second steps, and everything
+## the time of day touches is re-derived from those (see refresh_lighting).
 ## Rain dims the sun on top of that, so both go through refresh_lighting rather than
 ## writing to the light themselves.
 
 var main: Main
 
 ## How long each phase lasts. Night is the shorter half of the cycle.
-const DAY_DURATION: float = 360.0
+const DAY_DURATION: float = 240.0
 const NIGHT_DURATION: float = 150.0
 ## How long the sky takes to turn over, rather than switching.
 const FADE_DURATION: float = 25.0
+
+## The sun climbs through the morning, holds, then sinks and warms toward
+## sunset, so the day can be seen passing; it used to sit still all day and
+## change only in the fade. Only its height moves: its bearing follows the
+## camera (light_follow_camera_yaw.gd) so sprites stay lit from the front.
+## Degrees above the horizon; noon is the map's own authored height.
+const MORNING_SUN_HEIGHT: float = 40.0
+const EVENING_SUN_HEIGHT: float = 30.0
+## Shares of the day spent climbing, and where it starts to sink.
+const MORNING_END: float = 0.3
+const AFTERNOON_END: float = 0.6
+## A lower sun lights the ground more weakly; this much of that is made up in
+## energy, so evening dims a little without the map going dark.
+const SUN_HEIGHT_COMPENSATION: float = 0.6
+## What the sun and the horizon lean toward at sunset, and how far (dawn gets
+## a lighter touch of the same).
+const EVENING_SUN_COLOR: Color = Color(1.0, 0.68, 0.45, 1.0)
+const EVENING_SKY_HORIZON: Color = Color(1.0, 0.72, 0.52, 1.0)
+const EVENING_WARMTH: float = 0.7
+const MORNING_WARMTH: float = 0.25
+const EVENING_SKY_WARMTH: float = 0.6
+## Game seconds between time-of-day lighting updates. Not every frame: a
+## changed sky re-renders its radiance.
+const TIME_OF_DAY_STEP: float = 0.5
 
 ## Moonlight: the sun keeps its direction and picks up a cool cast instead.
 const MOON_COLOR: Color = Color(0.5, 0.63, 1.0)
@@ -49,6 +74,13 @@ var is_night: bool = false
 var night_amount: float = 0.0
 ## Host only: counts down to the next sunset/sunrise.
 var _time_to_change: float = 0.0
+## Days begun, the first included. Each peer counts its own sunrises.
+var day_number: int = 1
+## Game seconds into the current day or night, kept on every peer: each one
+## restarts it on the same RPC, which is what lets the clock run everywhere.
+var _phase_elapsed: float = 0.0
+var _time_of_day_timer: float = 0.0
+var _noon_sun_height: float = 50.0
 
 var _sun: DirectionalLight3D
 var _fill: DirectionalLight3D
@@ -87,6 +119,7 @@ func setup() -> void:
 	if _sun:
 		_day_sun_color = _sun.light_color
 		_day_sun_energy = _sun.light_energy
+		_noon_sun_height = -_sun.rotation_degrees.x
 	if _fill:
 		_day_fill_energy = _fill.light_energy
 	if _environment:
@@ -104,6 +137,11 @@ func setup() -> void:
 		_time_to_change = DAY_DURATION
 
 func _process(delta: float) -> void:
+	_phase_elapsed += delta
+	_time_of_day_timer -= delta
+	if _time_of_day_timer <= 0.0:
+		_time_of_day_timer = TIME_OF_DAY_STEP
+		refresh_lighting()
 	if not multiplayer.is_server():
 		return
 	_time_to_change -= delta
@@ -111,16 +149,37 @@ func _process(delta: float) -> void:
 		set_night(not is_night)
 
 ## Host only. Also restarts the clock, so a night started by "cmd day" runs a
-## normal length before the sun comes back up.
+## normal length before the sun comes back up. Sent even when it is already
+## that time, so every peer's clock restarts with the host's.
 func set_night(night: bool) -> void:
 	if not multiplayer.is_server():
 		return
 	_time_to_change = NIGHT_DURATION if night else DAY_DURATION
-	if night != is_night:
-		_rpc_set_night.rpc(night)
+	_rpc_set_night.rpc(night)
+
+## 0..1 through the current day, or the current night.
+func phase_progress() -> float:
+	return clampf(_phase_elapsed / (NIGHT_DURATION if is_night else DAY_DURATION), 0.0, 1.0)
+
+## The day's share of a whole day and night.
+static func day_share() -> float:
+	return DAY_DURATION / (DAY_DURATION + NIGHT_DURATION)
+
+## 0..1 round a whole day and night, from sunrise: the day fills the first
+## day_share() of it.
+func cycle_fraction() -> float:
+	if is_night:
+		return day_share() + phase_progress() * (1.0 - day_share())
+	return phase_progress() * day_share()
 
 @rpc("authority", "call_local", "reliable")
 func _rpc_set_night(night: bool) -> void:
+	_phase_elapsed = 0.0
+	if night == is_night:
+		refresh_lighting()
+		return
+	if not night:
+		day_number += 1
 	is_night = night
 	if _fade_tween:
 		_fade_tween.kill()
@@ -135,28 +194,66 @@ func _set_night_amount(value: float) -> void:
 	night_amount = value
 	refresh_lighting()
 
+## Degrees above the horizon. At night the moon rides back up the same arc,
+## so dawn begins where the morning sun does.
+func _sun_height() -> float:
+	var p: float = phase_progress()
+	if is_night:
+		return lerpf(EVENING_SUN_HEIGHT, MORNING_SUN_HEIGHT, p)
+	if p < MORNING_END:
+		return lerpf(MORNING_SUN_HEIGHT, _noon_sun_height, smoothstep(0.0, MORNING_END, p))
+	if p < AFTERNOON_END:
+		return _noon_sun_height
+	return lerpf(_noon_sun_height, EVENING_SUN_HEIGHT, smoothstep(AFTERNOON_END, 1.0, p))
+
+## 0 = the authored daylight, 1 = full sunset colour. Fades out with the light
+## as night falls, so nothing jumps when the fade starts.
+func _warmth() -> float:
+	var p: float = phase_progress()
+	if is_night:
+		return EVENING_WARMTH * (1.0 - night_amount)
+	if p < MORNING_END:
+		return MORNING_WARMTH * (1.0 - p / MORNING_END)
+	if p < AFTERNOON_END:
+		return 0.0
+	var q: float = (p - AFTERNOON_END) / (1.0 - AFTERNOON_END)
+	return EVENING_WARMTH * q * q
+
 ## Re-derives everything the time of day drives. Called again by Weather when
 ## a shower comes or goes, since rain dims the same sun.
 func refresh_lighting() -> void:
 	var t: float = night_amount
+	var warmth: float = _warmth()
 	if _sun:
-		_sun.light_color = _day_sun_color.lerp(MOON_COLOR, t)
+		_sun.light_color = _day_sun_color.lerp(EVENING_SUN_COLOR, warmth).lerp(MOON_COLOR, t)
+		var height: float = _sun_height()
+		_sun.rotation_degrees.x = -height
+		var low_sun: float = sin(deg_to_rad(_noon_sun_height)) / sin(deg_to_rad(height))
 		var rain_scale: float = main.weather.sun_energy_scale if main and main.weather else 1.0
-		_sun.light_energy = _day_sun_energy * lerpf(1.0, NIGHT_SUN_ENERGY_SCALE, t) * rain_scale
+		_sun.light_energy = _day_sun_energy * lerpf(1.0, low_sun, SUN_HEIGHT_COMPENSATION) \
+				* lerpf(1.0, NIGHT_SUN_ENERGY_SCALE, t) * rain_scale
 	if _fill:
 		_fill.light_energy = _day_fill_energy * lerpf(1.0, NIGHT_FILL_ENERGY_SCALE, t)
 	if _environment:
 		_environment.ambient_light_energy = _day_ambient_energy * lerpf(1.0, NIGHT_AMBIENT_ENERGY_SCALE, t)
-		_environment.background_energy_multiplier = _day_sky_energy * lerpf(1.0, NIGHT_SKY_ENERGY_SCALE, t)
+		var sky_energy: float = _day_sky_energy * lerpf(1.0, NIGHT_SKY_ENERGY_SCALE, t)
+		if _environment.background_energy_multiplier != sky_energy:
+			_environment.background_energy_multiplier = sky_energy
 		_environment.volumetric_fog_albedo = _day_fog_albedo.lerp(NIGHT_FOG_ALBEDO, t)
 		if CompatLighting.is_active():
 			## Its flat stand-in haze is lit by nothing, so it dims with the sun.
 			_environment.fog_light_color = CompatLighting.FOG_COLOR.lerp(NIGHT_FOG_ALBEDO * NIGHT_SUN_ENERGY_SCALE, t)
 		_environment.adjustment_saturation = _day_saturation * lerpf(1.0, NIGHT_SATURATION_SCALE, t)
 	if _sky_material:
-		_sky_material.sky_top_color = _day_sky_top.lerp(NIGHT_SKY_TOP, t)
-		_sky_material.sky_horizon_color = _day_sky_horizon.lerp(NIGHT_SKY_HORIZON, t)
-		_sky_material.ground_bottom_color = _day_ground_bottom.lerp(NIGHT_GROUND_BOTTOM, t)
-		_sky_material.ground_horizon_color = _day_ground_horizon.lerp(NIGHT_GROUND_HORIZON, t)
+		_set_sky(&"sky_top_color", _day_sky_top.lerp(NIGHT_SKY_TOP, t))
+		_set_sky(&"sky_horizon_color", _day_sky_horizon.lerp(EVENING_SKY_HORIZON, warmth * EVENING_SKY_WARMTH).lerp(NIGHT_SKY_HORIZON, t))
+		_set_sky(&"ground_bottom_color", _day_ground_bottom.lerp(NIGHT_GROUND_BOTTOM, t))
+		_set_sky(&"ground_horizon_color", _day_ground_horizon.lerp(NIGHT_GROUND_HORIZON, t))
 	## One write for every unit on the map, however many there are.
 	RenderingServer.global_shader_parameter_set(UNIT_NIGHT_LIFT, t)
+
+## Only real changes reach the sky: the lighting is refreshed all day long, and
+## a changed sky re-renders its radiance.
+func _set_sky(property: StringName, value: Color) -> void:
+	if _sky_material.get(property) != value:
+		_sky_material.set(property, value)

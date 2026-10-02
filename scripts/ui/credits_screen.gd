@@ -30,6 +30,7 @@ const SECTIONS: Array = [
 	]],
 	["Interface", [
 		["Dark Ages UI", "Hypnobius"],
+		["Icons from game-icons.net", "Lorc, Delapouite, Skoll, Sbed, Carl Olsen, Caro Asercion, Cathelineau, DarkZaitzev, Faithtoken, Kier Heyl and Sparker (CC BY 3.0)"],
 	]],
 	["Sound", [
 		["Universal UI/Menu Soundpack", "Nathan Gibson (CC BY 4.0)"],

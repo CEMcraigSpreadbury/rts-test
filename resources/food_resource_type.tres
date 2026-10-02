@@ -6,3 +6,4 @@
 script = ExtResource("1_script")
 display_name = "Food"
 display_color = Color(0.6, 0.9, 0.45, 1)
+glyph = &"food"

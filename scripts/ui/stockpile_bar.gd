@@ -4,11 +4,11 @@ extends PanelContainer
 ## spend, divided by hairlines, sized to its contents so a resource can join
 ## without the panel jumping.
 ##
-## A resource shows its name over its amount. The mockup drew a glyph instead of
-## the name, but the game has no resource icons yet, and a name is better than a
-## placeholder shape.
+## A resource shows its glyph (UiGlyphs, in the resource's own colour) beside
+## its amount, as the mockup drew it; anything without a glyph shows its name.
 
 const CELL_GAP: int = 13
+const GLYPH_GAP: int = 7
 const RATE_GAP: int = 5
 
 var _row: HBoxContainer
@@ -21,7 +21,7 @@ func _init() -> void:
 	add_child(UiCaps.new())
 
 ## `entries` is an ordered array of {name: String, amount: int, flash: bool,
-## accent: bool}, plus an optional `rate` (a per-minute change shown after the
+## accent: bool}, an optional `glyph` and its `tint`, plus an optional `rate` (a per-minute change shown after the
 ## amount, red when negative; 0 hides it). Cells are reused between calls so the panel does not rebuild
 ## its whole subtree every time a villager drops a log.
 func set_entries(entries: Array) -> void:
@@ -30,7 +30,7 @@ func set_entries(entries: Array) -> void:
 		var key: String = entry.get("name", "")
 		var cell: Dictionary = _cells.get(key, {})
 		if cell.is_empty():
-			cell = _make_cell(key)
+			cell = _make_cell(key, entry.get("glyph", &""), entry.get("tint", UiStyle.INK))
 			_cells[key] = cell
 			_row.add_child(cell["root"])
 		_row.move_child(cell["root"] as Node, i)
@@ -69,7 +69,7 @@ func set_entries(entries: Array) -> void:
 	## a six-resource one and trails empty brass across the corner of the screen.
 	reset_size()
 
-func _make_cell(display_name: String) -> Dictionary:
+func _make_cell(display_name: String, glyph: StringName, tint: Color) -> Dictionary:
 	var root := HBoxContainer.new()
 	root.add_theme_constant_override("separation", 0)
 
@@ -79,20 +79,25 @@ func _make_cell(display_name: String) -> Dictionary:
 		UiStyle.flat(UiStyle.LINE, UiStyle.LINE, 0, 0))
 	root.add_child(divider)
 
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 3)
-	column.add_theme_constant_override("margin_left", CELL_GAP)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", GLYPH_GAP)
 	var pad := MarginContainer.new()
 	pad.add_theme_constant_override("margin_left", CELL_GAP)
 	pad.add_theme_constant_override("margin_right", CELL_GAP)
-	pad.add_child(column)
+	pad.add_child(row)
 	root.add_child(pad)
 
-	var caption := UiTextLine.make(display_name, &"CaptionLabel", UiStyle.SIZE_LABEL, UiStyle.DIM)
-	column.add_child(caption)
+	if glyph != &"":
+		var icon := UiGlyphs.rect(glyph, UiStyle.GLYPH_STOCK, tint)
+		icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(icon)
+	else:
+		var caption := UiTextLine.make(display_name, &"CaptionLabel", UiStyle.SIZE_LABEL, UiStyle.DIM)
+		caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(caption)
 	var value_row := HBoxContainer.new()
 	value_row.add_theme_constant_override("separation", RATE_GAP)
-	column.add_child(value_row)
+	row.add_child(value_row)
 	var value := UiTextLine.make("0", &"ValueLabel", UiStyle.SIZE_VALUE, UiStyle.INK)
 	value_row.add_child(value)
 	var rate := UiTextLine.make("", &"ValueLabel", UiStyle.SIZE_LABEL, UiStyle.BAD)
@@ -100,4 +105,4 @@ func _make_cell(display_name: String) -> Dictionary:
 	rate.visible = false
 	value_row.add_child(rate)
 
-	return {"root": root, "divider": divider, "value": value, "caption": caption, "rate": rate}
+	return {"root": root, "divider": divider, "value": value, "rate": rate}

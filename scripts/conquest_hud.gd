@@ -2,7 +2,7 @@ class_name ConquestHud
 extends Control
 ## Conquest bar, top-centre of the screen, kept to two slim rows so it never
 ## eats into the battlefield: one slot per capture point (gold frame for points
-## your team holds) showing its letter over the owner's colour, with a strip
+## your team holds) showing its glyph over the owner's colour, with a strip
 ## for a flag that's moving and a pulse while contested; and under that every
 ## team's score bar side by side, filling toward the target in that team's
 ## colour. Allies share one bar, because they win together (see Main.scores). The leader's bar shakes once they're past NEAR_VICTORY_FRACTION.
@@ -23,7 +23,8 @@ const SLOT_GAP: float = 5.0
 ## How far the owner-colour fill sits inside the slot's frame.
 const SLOT_INSET: float = 7.5
 const SLOT_STRIP_HEIGHT: float = 5.0
-const SLOT_FONT_SIZE: int = 23
+## Glyphs sit this far above centre, clear of the flag strip.
+const GLYPH_LIFT: float = 2.0
 ## Bars share the slot row's width between them, but never shrink below this
 ## (the panel widens instead) so a score still fits inside.
 const BAR_MIN_WIDTH: float = 106.7
@@ -48,7 +49,7 @@ const UNDER_ATTACK_ALERT_COOLDOWN_MS: int = 8000
 var main: Main
 
 var _panel: Panel
-## Objective -> {frame: TextureRect, fill: ColorRect, strip_bg, strip, label}
+## Objective -> {frame: Panel, fill: ColorRect, strip_bg, strip, glyph: TextureRect}
 var _slots: Dictionary = {}
 ## team -> {bar: ProgressBar, fill: StyleBoxFlat, label: Label}
 var _bars: Dictionary = {}
@@ -107,12 +108,12 @@ func _tint_for(team: int) -> Color:
 func _sync_nodes(objectives: Array, teams: Array) -> void:
 	for o in objectives:
 		if not _slots.has(o):
-			_slots[o] = _make_slot(o.letter)
+			_slots[o] = _make_slot()
 	for team in teams:
 		if not _bars.has(team):
 			_bars[team] = _make_bar()
 
-func _make_slot(letter: String) -> Dictionary:
+func _make_slot() -> Dictionary:
 	var frame := Panel.new()
 	frame.add_theme_stylebox_override("panel", UiStyle.slot_box())
 	frame.size = Vector2(SLOT_SIZE, SLOT_SIZE)
@@ -137,17 +138,15 @@ func _make_slot(letter: String) -> Dictionary:
 	strip.size = strip_bg.size
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(strip)
-	var label := Label.new()
-	label.text = letter
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	label.size = Vector2(SLOT_SIZE, SLOT_SIZE - 2.0)
-	label.add_theme_font_size_override("font_size", SLOT_FONT_SIZE)
-	label.add_theme_constant_override("outline_size", 5)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	frame.add_child(label)
-	return {frame = frame, fill = fill, strip_bg = strip_bg, strip = strip, label = label}
+	## Its texture follows the point's glyph (a settlement's changes as it
+	## grows), so it is set each frame in _layout.
+	var glyph := TextureRect.new()
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	glyph.size = Vector2(UiStyle.GLYPH_POINT, UiStyle.GLYPH_POINT)
+	glyph.position = Vector2((SLOT_SIZE - UiStyle.GLYPH_POINT) * 0.5, (SLOT_SIZE - UiStyle.GLYPH_POINT) * 0.5 - GLYPH_LIFT)
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(glyph)
+	return {frame = frame, fill = fill, strip_bg = strip_bg, strip = strip, glyph = glyph}
 
 ## Flat styleboxes rather than the bottom bar's framed bar art, whose frame
 ## is too thick to leave any fill visible at this height.
@@ -204,6 +203,11 @@ func _layout(objectives: Array, teams: Array) -> void:
 		frame.add_theme_stylebox_override("panel",
 				UiStyle.slot_box(UiStyle.ACCENT if held_by_us else UiStyle.LINE))
 		(slot.fill as ColorRect).color = Color(o.owner_tint(), OWNER_FILL_ALPHA) if o.owner_peer_id > 0 else NEUTRAL_FILL_COLOR
+		var glyph: TextureRect = slot.glyph
+		var glyph_texture: Texture2D = UiGlyphs.texture(o.glyph(), UiStyle.GLYPH_POINT)
+		if glyph.texture != glyph_texture:
+			glyph.texture = glyph_texture
+		glyph.self_modulate = UiStyle.INK if o.owner_peer_id > 0 else UiStyle.DIM
 		var moving: bool = not o.is_flag_at_rest()
 		(slot.strip_bg as ColorRect).visible = moving
 		var strip: ColorRect = slot.strip

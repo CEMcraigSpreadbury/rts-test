@@ -55,6 +55,7 @@ static func build(display_name: String, costs: Array = [], hotkey: String = "", 
 				tex.custom_minimum_size = Vector2(15, 15)
 				tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 				tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				tex.self_modulate = cost.get("tint", Color.WHITE)
 				cell.add_child(tex)
 			var amount := Label.new()
 			amount.text = str(cost.get("amount", 0))

@@ -44,6 +44,7 @@ tint = Color(0.85, 1.0, 0.35, 1)
 script = ExtResource("5_ability_script")
 ability_name = "Bile Hurl"
 icon = ExtResource("icon_abilities_bile_hurl")
+glyph = &"bile_hurl"
 kind = 2
 activation_range = 8.0
 cooldown = 15.0
@@ -65,6 +66,7 @@ linger_duration = 10.0
 linger_damage_per_second = 2
 
 [node name="OrcMutant" instance=ExtResource("1_unit")]
+glyph = &"unit_orc_mutant"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

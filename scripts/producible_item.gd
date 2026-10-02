@@ -13,6 +13,16 @@ enum Kind { UNIT, UPGRADE, RETIRED_2, RETIRED_3, SLOT, CHOICE, TIER, LEVEL }
 ## Shown on its command-card button; left null until real icon art exists,
 ## in which case the button falls back to showing just its hotkey letter.
 @export var icon: Texture2D
+## Its UiGlyphs icon on the command card. Takes the place of `icon` when set;
+## clear it to go back to the pixel art.
+@export var glyph: StringName = &""
+## The glyph its button shows: its own, or for a unit with none of its own,
+## that unit's (UiGlyphs.unit_glyph).
+func display_glyph() -> StringName:
+	if glyph != &"" or kind != Kind.UNIT or unit_scene == null:
+		return glyph
+	return UiGlyphs.unit_glyph(unit_scene.resource_path)
+
 ## One short sentence under the name in its button's tooltip.
 @export_multiline var description: String = ""
 @export var kind: Kind = Kind.UNIT

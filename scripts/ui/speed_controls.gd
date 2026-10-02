@@ -27,8 +27,9 @@ func setup(p_main: Main) -> void:
 	_speed.custom_minimum_size = Vector2(52, BUTTON_SIZE.y)
 	_speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_speed.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_speed.add_theme_font_override("font", UiStyle.font_display())
-	_speed.add_theme_font_size_override("font_size", UiStyle.SIZE_BUTTON)
+	## The number face: Marcellus SC draws "1x" as "Ix".
+	_speed.add_theme_font_override("font", UiStyle.font_data_bold())
+	_speed.add_theme_font_size_override("font_size", UiStyle.SIZE_VALUE)
 	_speed.add_theme_color_override("font_color", UiStyle.INK)
 	add_child(_speed)
 	_button("+", main.step_game_speed.bind(1))

@@ -18,6 +18,7 @@ resource_type = ExtResource("6_gold")
 amount = 60
 
 [node name="Wizard" instance=ExtResource("1_unit")]
+glyph = &"unit_wizard"
 display_name = "Wizard"
 move_speed = 2.7
 costs = Array[Resource]([SubResource("ResourceCost_wizard_wood"), SubResource("ResourceCost_wizard_gold")])

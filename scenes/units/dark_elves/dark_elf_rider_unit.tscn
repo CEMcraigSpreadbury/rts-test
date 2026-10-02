@@ -17,6 +17,7 @@ resource_type = ExtResource("5_gold")
 amount = 30
 
 [node name="DarkElfRider" instance=ExtResource("1_unit")]
+glyph = &"unit_dark_elf_rider"
 display_name = "Dark Elf Rider"
 costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_wood"), SubResource("ResourceCost_gold")])
 sprite_sheet = ExtResource("2_sheet")

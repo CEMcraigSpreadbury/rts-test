@@ -7,6 +7,9 @@ extends Resource
 ## Shown on its command-card button; left null until real icon art exists,
 ## in which case the button falls back to showing just its hotkey letter.
 @export var icon: Texture2D
+## Its UiGlyphs icon on the command card. Takes the place of `icon` when set;
+## clear it to go back to the pixel art.
+@export var glyph: StringName = &""
 ## One short sentence under the name in its build button's tooltip.
 @export_multiline var description: String = ""
 @export var scene: PackedScene

@@ -17,6 +17,7 @@ resource_type = ExtResource("5_gold")
 amount = 30
 
 [node name="PandaWarrior" instance=ExtResource("1_unit")]
+glyph = &"unit_beastman_panda_warrior"
 display_name = "Panda Warrior"
 costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_wood"), SubResource("ResourceCost_gold")])
 sprite_sheet = ExtResource("2_sheet")

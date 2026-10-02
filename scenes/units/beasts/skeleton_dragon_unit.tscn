@@ -55,6 +55,7 @@ tint = Color(0.6, 1.0, 0.5, 1)
 script = ExtResource("5_ability_script")
 ability_name = "Death Breath"
 icon = ExtResource("icon_abilities_death_breath")
+glyph = &"death_breath"
 kind = 2
 activation_range = 8.0
 cooldown = 18.0
@@ -78,6 +79,7 @@ linger_effect = SubResource("SpriteEffect_linger")
 linger_effect_count = 5
 
 [node name="SkeletonDragon" instance=ExtResource("1_unit")]
+glyph = &"unit_skeleton_dragon"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

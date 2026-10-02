@@ -11,6 +11,7 @@ resource_type = ExtResource("4_gold")
 amount = 38
 
 [node name="StarWarrior" unique_id=1900000018 instance=ExtResource("1_unit")]
+glyph = &"unit_sw_warrior"
 display_name = "Star Warrior"
 move_speed = 2.90
 costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_gold")])

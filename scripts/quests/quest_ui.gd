@@ -128,10 +128,9 @@ func _build_tracker() -> void:
 	_tracker_panel.anchor_bottom = 0.0
 	_tracker_panel.offset_left = -(TRACKER_WIDTH + TRACKER_MARGIN)
 	_tracker_panel.offset_right = -TRACKER_MARGIN
-	## Under the game-speed buttons, which share the corner in single player.
-	var top: float = TRACKER_MARGIN
-	if main.can_change_speed():
-		top += UiSpeedControls.BUTTON_SIZE.y + UiStyle.SPACE_S
+	## Under the row of the day clock and (in single player) the game-speed
+	## buttons, which share the corner.
+	var top: float = TRACKER_MARGIN + UiSpeedControls.BUTTON_SIZE.y + UiStyle.SPACE_S
 	_tracker_panel.offset_top = top
 	_tracker_panel.offset_bottom = top
 	_add_caps(_tracker_panel)
@@ -453,7 +452,7 @@ func _highlight_target(element_name: String) -> Control:
 		"resources":
 			return main.get_node_or_null(^"UI/ResourceLabel")
 		"research_button":
-			return main.power_bar.get_node_or_null(^"ResearchButton") if main.power_bar != null else null
+			return main.get_node_or_null(PowerBar.RESEARCH_BUTTON_PATH)
 		"quest_tracker":
 			return _tracker_panel
 		"unit_cards":

@@ -51,6 +51,7 @@ scale = 1.0
 script = ExtResource("5_ability_script")
 ability_name = "Frost Nova"
 icon = ExtResource("icon_abilities_frost_nova")
+glyph = &"frost_nova"
 kind = 2
 activation_range = 7.0
 cooldown = 16.0
@@ -74,6 +75,7 @@ linger_effect = SubResource("SpriteEffect_yeti_linger")
 linger_effect_count = 7
 
 [node name="Yeti" instance=ExtResource("1_unit")]
+glyph = &"unit_yeti"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

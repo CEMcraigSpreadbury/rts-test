@@ -21,7 +21,8 @@ const ATTACK_PING_DURATION: float = 4.0
 ## communication ping draws.
 const ATTACK_PING_PULSES: int = 3
 const OBJECTIVE_MARKER_RADIUS: float = 11.7
-const OBJECTIVE_FONT_SIZE: int = 18
+## How much of a marker's width its glyph fills.
+const OBJECTIVE_GLYPH_FILL: float = 0.68
 ## A Realm settlement's badge grows with its tier (Village, Town, City), and a
 ## held one is filled with its owner's colour, so the prizes and who has them
 ## read at a glance on a big map.
@@ -179,7 +180,7 @@ func _draw_minimap() -> void:
 			draw_rect(Rect2(p - Vector2.ONE * (UNIT_DOT_RADIUS + 1.0), Vector2.ONE * (UNIT_DOT_RADIUS + 1.0) * 2.0), OWN_OUTLINE_COLOR)
 		draw_rect(Rect2(p - Vector2.ONE * UNIT_DOT_RADIUS, Vector2.ONE * UNIT_DOT_RADIUS * 2.0), unit.team_tint)
 
-	_draw_objective_letters()
+	_draw_objective_glyphs()
 	_draw_camera_frustum()
 	if _ping_time_left > 0.0:
 		var t: float = 1.0 - _ping_time_left / PING_DURATION
@@ -205,7 +206,7 @@ func _draw_minimap() -> void:
 			acolor.a = (1.0 - pt * pt) * fade
 			draw_arc(_attack_ping_local_pos, lerpf(4.0, 26.0, pt), 0.0, TAU, 24, acolor, 3.0)
 
-## Every capture point's letter in its owner's colour, regardless of fog —
+## Every capture point's glyph in its owner's colour, regardless of fog —
 ## like Battlefield's map, where every flag is always marked. The Conquest
 ## bar already tells everyone who holds what; this is just where.
 ## --- Territory (Realm) ---
@@ -265,14 +266,13 @@ func _territory_image(sites: Array) -> Image:
 			image.set_pixel(x, y, Color(tints[owner], TERRITORY_ALPHA))
 	return image
 
-func _draw_objective_letters() -> void:
-	var font := get_theme_default_font()
+func _draw_objective_glyphs() -> void:
 	for node in get_tree().get_nodes_in_group(&"objectives"):
 		var objective := node as Objective
 		if objective == null or objective.letter.is_empty():
 			continue
 		var p := _world_to_local(objective.global_position)
-		## An unheld point reads as dim brass rather than white, so the letters
+		## An unheld point reads as dim brass rather than white, so the glyphs
 		## sit with the rest of the UI instead of shouting over the fog.
 		var tint: Color = objective.owner_tint().lightened(0.3) if objective.owner_peer_id > 0 else UiStyle.DIM
 		var radius: float = OBJECTIVE_MARKER_RADIUS
@@ -283,8 +283,12 @@ func _draw_objective_letters() -> void:
 				fill = objective.owner_tint().darkened(0.55)
 		draw_circle(p, radius, fill)
 		draw_arc(p, radius, 0.0, TAU, 20, tint, 1.5)
-		var baseline := p + Vector2(-radius, OBJECTIVE_FONT_SIZE * 0.35)
-		draw_string(font, baseline, objective.letter, HORIZONTAL_ALIGNMENT_CENTER, radius * 2.0, OBJECTIVE_FONT_SIZE, tint)
+		## Rasterised at the marker's own size, so a City's castle is as crisp
+		## as a Village's hut.
+		var glyph_size: int = int(round(radius * OBJECTIVE_GLYPH_FILL * 2.0))
+		var glyph: Texture2D = UiGlyphs.texture(objective.glyph(), glyph_size)
+		if glyph != null:
+			draw_texture(glyph, (p - Vector2(glyph_size, glyph_size) * 0.5).round(), tint)
 
 ## Approximates what the main camera currently frames by ray-casting its four
 ## viewport corners onto the ground plane — gives a properly perspective-skewed

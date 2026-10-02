@@ -86,6 +86,20 @@ const MINIMAP: int = 236
 ## anything else smears it however it is filtered.
 const ICON_1X: int = 32
 const ICON_2X: int = 64
+## Glyphs (UiGlyphs) are vector and drawn at exactly these sizes: in a command
+## slot, a tool button, a stockpile cell, a tooltip's cost line and a capture
+## point slot.
+const GLYPH_CMD: int = 32
+const GLYPH_QUEUE: int = 24
+## A research node's glyph, beside its name.
+const GLYPH_NODE: int = 40
+## A selected building's portrait (a 104 well) and a Lord's tab (44).
+const GLYPH_PORTRAIT: int = 64
+const GLYPH_TAB: int = 28
+const GLYPH_TOOL: int = 22
+const GLYPH_STOCK: int = 19
+const GLYPH_TIP: int = 15
+const GLYPH_POINT: int = 26
 
 ## The selection panel never changes size, whatever is selected.
 const SEL_PANEL_SIZE := Vector2(646, 214)

@@ -18,6 +18,7 @@ resource_type = ExtResource("5_gold")
 amount = 40
 
 [node name="Cavalier" instance=ExtResource("1_unit")]
+glyph = &"unit_cavalier"
 display_name = "Cavalier"
 costs = Array[Resource]([SubResource("ResourceCost_cavalier_wood"), SubResource("ResourceCost_cavalier_gold")])
 team_tint = Color(0.35, 0.6, 1, 1)

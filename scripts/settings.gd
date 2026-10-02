@@ -7,6 +7,8 @@ extends Node
 ## `changed` rather than polling, so the options menu takes effect live.
 
 signal changed(key: StringName)
+## A bus was switched off or back on (Options > Sound, or the HUD's music button).
+signal mute_changed(bus_name: String, muted: bool)
 
 const SAVE_PATH := "user://settings.cfg"
 ## Where volumes lived before there was an options menu — read only when
@@ -52,6 +54,8 @@ const DEFAULT_KEYS := {
 }
 
 var volumes: Dictionary = {"Master": 1.0, "Music": 1.0, "Ambience": 1.0, "SFX": 1.0}
+## Kept apart from the volumes, so switching a bus back on returns it to its level.
+var muted: Dictionary = {"Master": false, "Music": false, "Ambience": false, "SFX": false}
 var values: Dictionary = DEFAULTS.duplicate()
 var keys: Dictionary = DEFAULT_KEYS.duplicate()
 
@@ -81,6 +85,14 @@ func set_bus_volume(bus_name: String, linear_volume: float) -> void:
 	volumes[bus_name] = clampf(linear_volume, 0.0, 1.0)
 	_apply_volume(bus_name)
 	_save()
+
+func set_bus_muted(bus_name: String, on: bool) -> void:
+	if muted[bus_name] == on:
+		return
+	muted[bus_name] = on
+	_apply_volume(bus_name)
+	_save()
+	mute_changed.emit(bus_name, on)
 
 ## --- Key bindings ---
 
@@ -116,6 +128,7 @@ func _apply_volume(bus_name: String) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
 	if idx != -1:
 		AudioServer.set_bus_volume_db(idx, linear_to_db(volumes[bus_name]))
+		AudioServer.set_bus_mute(idx, muted[bus_name])
 
 ## Only the settings the engine owns directly are applied here; the rest
 ## (camera, damage numbers, depth of field) are read by whatever uses them.
@@ -155,6 +168,7 @@ func _load() -> void:
 			return
 	for bus_name in BUSES:
 		volumes[bus_name] = config.get_value("audio", bus_name, 1.0)
+		muted[bus_name] = bool(config.get_value("audio_mute", bus_name, false))
 	for key in DEFAULTS:
 		var loaded: Variant = config.get_value("settings", key, DEFAULTS[key])
 		if typeof(loaded) == typeof(DEFAULTS[key]):
@@ -166,6 +180,7 @@ func _save() -> void:
 	var config := ConfigFile.new()
 	for bus_name in BUSES:
 		config.set_value("audio", bus_name, volumes[bus_name])
+		config.set_value("audio_mute", bus_name, muted[bus_name])
 	for key in values:
 		config.set_value("settings", key, values[key])
 	for action in keys:

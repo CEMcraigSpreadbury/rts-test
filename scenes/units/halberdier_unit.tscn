@@ -18,6 +18,7 @@ resource_type = ExtResource("5_gold")
 amount = 20
 
 [node name="Halberdier" instance=ExtResource("1_unit")]
+glyph = &"unit_halberdier"
 display_name = "Halberdier"
 costs = Array[Resource]([SubResource("ResourceCost_halberdier_wood"), SubResource("ResourceCost_halberdier_gold")])
 move_speed = 2.2

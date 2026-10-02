@@ -1,6 +1,6 @@
 class_name ResearchPanel
 extends PanelContainer
-## The Research overlay (Tab, or the Research button on the PowerBar):
+## The Research overlay (Tab, or the Research button in the tool column):
 ## the local player's Ruler tree as four tier rows, with a line from each node
 ## up to every node it requires. A live overlay — the match keeps running
 ## behind it, even in single player. Buying goes through Research.request_buy;
@@ -22,6 +22,11 @@ const LOCKED_MODULATE: Color = Color(1.0, 1.0, 1.0, 0.55)
 const DETAIL_MIN_HEIGHT: float = 66.7
 ## Nudged up from dead centre so the bottom bar doesn't cover the last row.
 const VERTICAL_OFFSET: float = -100.0
+## Inside a node: its glyph against the left edge, then its name over its cost.
+const NODE_INSET: float = 14.0
+const NODE_GAP: float = 12.0
+const NODE_NAME_SIZE: int = 18
+const NODE_COST_SIZE: int = 16
 ## so a wide button doesn't stretch the border. The frame is first shrunk to
 ## the command card's own 40px button size, so its border comes out the same
 ## thickness on screen as it does there.
@@ -33,6 +38,9 @@ var _canvas: TreeCanvas
 var _detail: Label
 ## Parallel to _ruler.nodes.
 var _buttons: Array[Button] = []
+## Parallel to _ruler.nodes: {glyph: TextureRect or null, title: Label,
+## cost_row: Control, cost: Label} -- what _refresh recolours.
+var _parts: Array[Dictionary] = []
 var _node_styles: Dictionary = {}
 var _owned_style: StyleBoxFlat
 
@@ -117,13 +125,52 @@ func _make_node_button(index: int) -> Button:
 	for state in _node_styles:
 		button.add_theme_stylebox_override(state, _node_styles[state])
 	button.focus_mode = Control.FOCUS_NONE
-	button.text = "%s\n%d" % [node.node_name, node.cost]
-	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	button.size = NODE_SIZE
 	button.pressed.connect(_on_node_pressed.bind(index))
 	button.pressed.connect(main.hud._punch_control.bind(button))
 	button.mouse_entered.connect(func(): _detail.text = node.description)
 	button.mouse_exited.connect(func(): _detail.text = "")
+
+	## Placed by hand rather than in containers that fill the button: a Button
+	## is not a container, so nothing inside it can make it grow.
+	var text_left: float = NODE_INSET
+	var glyph: TextureRect = null
+	if node.glyph != &"":
+		glyph = UiGlyphs.rect(node.glyph, UiStyle.GLYPH_NODE, CommandSlot.GLYPH_TINT)
+		glyph.position = Vector2(NODE_INSET, (NODE_SIZE.y - UiStyle.GLYPH_NODE) * 0.5)
+		glyph.size = Vector2(UiStyle.GLYPH_NODE, UiStyle.GLYPH_NODE)
+		button.add_child(glyph)
+		text_left += UiStyle.GLYPH_NODE + NODE_GAP
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", 4)
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.position = Vector2(text_left, 0.0)
+	column.size = Vector2(NODE_SIZE.x - text_left - NODE_INSET, NODE_SIZE.y)
+	button.add_child(column)
+	var title := Label.new()
+	title.text = node.node_name
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	title.max_lines_visible = 2
+	title.add_theme_font_override("font", UiStyle.font_data_bold())
+	title.add_theme_font_size_override("font_size", NODE_NAME_SIZE)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(title)
+	var cost_row := HBoxContainer.new()
+	cost_row.add_theme_constant_override("separation", 5)
+	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(cost_row)
+	var cost_glyph := UiGlyphs.rect(Research.RESOURCE.glyph, UiStyle.GLYPH_TIP, Research.RESOURCE.display_color)
+	cost_glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cost_row.add_child(cost_glyph)
+	var cost := Label.new()
+	cost.text = str(node.cost)
+	cost.add_theme_font_override("font", UiStyle.font_data_bold())
+	cost.add_theme_font_size_override("font_size", NODE_COST_SIZE)
+	cost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost)
+	_parts.append({"glyph": glyph, "title": title, "cost_row": cost_row, "cost": cost})
+
 	_canvas.add_child(button)
 	return button
 
@@ -177,8 +224,6 @@ func _refresh() -> void:
 	for i in _ruler.nodes.size():
 		var node: ResearchNode = _ruler.nodes[i]
 		var button: Button = _buttons[i]
-		## Centred on its real size, which can outgrow NODE_SIZE when a long
-		## name wraps onto a third line.
 		button.position = _slot_centre(node) - button.size * 0.5
 		var is_owned := owned.has(i)
 		## A tier a scenario has put out of reach reads as locked, the same way
@@ -187,18 +232,16 @@ func _refresh() -> void:
 				and MatchRules.active().research_allowed(main.my_peer_id(), node)
 		button.disabled = is_owned or not unlocked
 		button.modulate = Color.WHITE if is_owned or unlocked else LOCKED_MODULATE
-		if is_owned:
-			button.add_theme_stylebox_override(&"disabled", _owned_style)
-			button.add_theme_color_override(&"font_disabled_color", OWNED_FONT_COLOR)
-		else:
-			button.add_theme_stylebox_override(&"disabled", _node_styles.get(&"disabled"))
-			button.remove_theme_color_override(&"font_disabled_color")
+		button.add_theme_stylebox_override(&"disabled", _owned_style if is_owned else _node_styles.get(&"disabled"))
+		## Bought: glyph and name go accent and the cost leaves. Otherwise only
+		## the cost turns red when there are not the points for it.
 		var short := unlocked and not is_owned and not main.hud.can_afford_locally(Research.node_costs(node))
-		for color_name in [&"font_color", &"font_hover_color", &"font_pressed_color"]:
-			if short:
-				button.add_theme_color_override(color_name, UNAFFORDABLE_FONT_COLOR)
-			else:
-				button.remove_theme_color_override(color_name)
+		var parts: Dictionary = _parts[i]
+		if parts.glyph != null:
+			(parts.glyph as TextureRect).self_modulate = OWNED_FONT_COLOR if is_owned else CommandSlot.GLYPH_TINT
+		(parts.title as Label).add_theme_color_override(&"font_color", OWNED_FONT_COLOR if is_owned else UiStyle.INK)
+		(parts.cost_row as Control).visible = not is_owned
+		(parts.cost as Label).add_theme_color_override(&"font_color", UNAFFORDABLE_FONT_COLOR if short else UiStyle.INK)
 
 	## After every button is placed, so each line meets the real edges.
 	var lines: Array = []

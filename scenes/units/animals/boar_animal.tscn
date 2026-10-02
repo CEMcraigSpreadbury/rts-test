@@ -5,6 +5,7 @@
 
 
 [node name="Boar" unique_id=1900000002 instance=ExtResource("1_unit")]
+glyph = &"unit_boar"
 display_name = "Boar"
 move_speed = 2.60
 sprite_sheet = ExtResource("2_sheet")

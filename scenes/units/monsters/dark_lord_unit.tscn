@@ -49,6 +49,7 @@ scale = 1.0
 script = ExtResource("5_ability_script")
 ability_name = "Shadow Nova"
 icon = ExtResource("icon_abilities_shadow_nova")
+glyph = &"shadow_nova"
 kind = 2
 activation_range = 9.0
 cooldown = 22.0
@@ -70,6 +71,7 @@ linger_effect = SubResource("SpriteEffect_dark_lord_linger")
 linger_effect_count = 6
 
 [node name="DarkLord" instance=ExtResource("1_unit")]
+glyph = &"unit_dark_lord"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

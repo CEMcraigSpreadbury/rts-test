@@ -217,6 +217,7 @@ static func _on_hit(effect: StringName) -> Ability:
 			ability.dot_duration = 4.0
 			ability.effect_color = Color(0.45, 0.85, 0.35)
 	ability.icon = UiStyle.icon_art("abilities", ability.ability_name.to_lower())
+	ability.glyph = StringName(ability.ability_name.to_lower())
 	_on_hits[effect] = ability
 	return ability
 
@@ -335,6 +336,7 @@ static func _item(entry: Dictionary) -> ProducibleItem:
 	if icon_name.begins_with("smith_"):
 		icon_name = icon_name.left(icon_name.rfind("_"))
 	item.icon = UiStyle.icon_art("upgrades", icon_name)
+	item.glyph = StringName(icon_name)
 	item.build_time = entry.time
 	item.grants_unlock = entry.id
 	item.requires_unlock = entry.get("requires", &"")

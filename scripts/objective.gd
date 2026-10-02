@@ -620,6 +620,18 @@ const CAPTURE_RIPPLE_PER_METRE: float = 0.03
 func is_settlement() -> bool:
 	return MatchRules.realm() and not (self is ShrineObjective)
 
+## Its UiGlyphs icon on the conquest bar and the minimap, which used to show
+## its letter (a "K" there read as the Blacksmith's hotkey): a settlement by
+## tier, a Shrine its skull, any other capture point a flag.
+const TIER_GLYPHS: Array[StringName] = [&"village", &"town", &"city"]
+
+func glyph() -> StringName:
+	if self is ShrineObjective:
+		return &"shrine"
+	if is_settlement():
+		return TIER_GLYPHS[tier]
+	return &"point"
+
 func _tier_income() -> float:
 	return TIER_INCOME[tier] if is_settlement() else 1.0
 
@@ -876,16 +888,16 @@ func _slot_options() -> Array[ProducibleItem]:
 	for kind in RealmRoster.kinds_for(race_name):
 		var cost: Array = RealmRoster.KIND_COSTS[kind]
 		items.append(_slot_item(RealmRoster.KIND_NAMES[kind], RealmRoster.scene_for(race_name, kind), cost[0], cost[1],
-				RealmRoster.describe_kind(race_name, kind)))
-	items.append(_slot_item(GRANARY, "res://scenes/settlements/granary_building.tscn", 80, 0,
+				RealmRoster.KIND_GLYPHS[kind], RealmRoster.describe_kind(race_name, kind)))
+	items.append(_slot_item(GRANARY, "res://scenes/settlements/granary_building.tscn", 80, 0, &"granary",
 			"Produces 4 food every 5 seconds; more at higher levels."))
-	items.append(_slot_item(MARKET, "res://scenes/settlements/market_building.tscn", 60, 40,
+	items.append(_slot_item(MARKET, "res://scenes/settlements/market_building.tscn", 60, 40, &"market",
 			"Produces 4 gold every 5 seconds; more at higher levels."))
-	items.append(_slot_item(LUMBERYARD, "res://scenes/settlements/lumberyard_building.tscn", 40, 40,
+	items.append(_slot_item(LUMBERYARD, "res://scenes/settlements/lumberyard_building.tscn", 40, 40, &"lumberyard",
 			"Produces 4 wood every 5 seconds; more at higher levels."))
-	items.append(_slot_item(WATCHTOWER, "res://scenes/buildings/watchtower_building.tscn", 100, 20,
+	items.append(_slot_item(WATCHTOWER, "res://scenes/buildings/watchtower_building.tscn", 100, 20, &"watchtower",
 			"A tower that shoots enemies coming near the settlement."))
-	items.append(_slot_item(WALLS, "res://scenes/buildings/wall_gate.tscn", 300, 100,
+	items.append(_slot_item(WALLS, "res://scenes/buildings/wall_gate.tscn", 300, 100, &"wall",
 			"Rings the settlement with walls and gates."))
 	return items
 
@@ -906,7 +918,8 @@ const FACTION_PATH: String = "res://resources/factions/faction_one.tres"
 
 ## The same items on every peer and in the same order: the hall's menu is
 ## indexed by position (Main.enqueue_as).
-static func _slot_item(item_name: String, scene_path: String, wood: int, gold: int, description: String = "") -> ProducibleItem:
+static func _slot_item(item_name: String, scene_path: String, wood: int, gold: int, glyph: StringName,
+		description: String = "") -> ProducibleItem:
 	var item := ProducibleItem.new()
 	item.item_name = item_name
 	item.description = description
@@ -914,6 +927,7 @@ static func _slot_item(item_name: String, scene_path: String, wood: int, gold: i
 	item.build_time = SLOT_BUILD_SECONDS
 	item.slot_scene = load(scene_path)
 	item.icon = _building_icon_for(scene_path)
+	item.glyph = glyph
 	var costs: Array[ResourceCost] = []
 	for pair in [[WOOD_COST, wood], [GOLD_COST, gold]]:
 		if int(pair[1]) > 0:
@@ -937,6 +951,8 @@ func _offer_slots() -> void:
 		raise.description = TIER_DESCRIPTIONS[next]
 		raise.kind = ProducibleItem.Kind.TIER
 		raise.icon = UiStyle.icon_art("settlement", "upgrade_to_" + TIER_NAMES[next].to_lower())
+		## Raising to a tier shows that tier's own glyph, as the minimap does.
+		raise.glyph = TIER_GLYPHS[next]
 		raise.tier_to = next
 		raise.build_time = TIER_UPGRADE_SECONDS[next]
 		var raise_costs: Array[ResourceCost] = []
@@ -953,6 +969,7 @@ func _offer_slots() -> void:
 		item.description = CHOICE_DESCRIPTIONS[choice]
 		item.kind = ProducibleItem.Kind.CHOICE
 		item.icon = UiStyle.icon_art("settlement", CHOICE_NAMES[choice].to_lower())
+		item.glyph = StringName(CHOICE_NAMES[choice].to_lower())
 		item.choice = choice
 		item.build_time = 0.0
 		offered.append(item)

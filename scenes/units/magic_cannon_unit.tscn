@@ -20,6 +20,7 @@ resource_type = ExtResource("6_gold")
 amount = 35
 
 [node name="MagicCannon" instance=ExtResource("1_unit")]
+glyph = &"unit_magic_cannon"
 display_name = "Magic Cannon"
 costs = Array[Resource]([SubResource("ResourceCost_cannon_wood"), SubResource("ResourceCost_cannon_gold")])
 population_cost = 2

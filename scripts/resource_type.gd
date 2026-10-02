@@ -9,6 +9,9 @@ extends Resource
 ## pick it to stay legible over sunlit terrain rather than to match the
 ## resource's art.
 @export var display_color: Color = Color(0.55, 0.35, 0.2)
+## Its UiGlyphs icon in the stockpile and on cost lines, tinted display_color so
+## it matches the "+N" popups. Empty shows the name instead.
+@export var glyph: StringName = &""
 @export var gather_amount_per_tick: int = 1
 @export var gather_interval: float = 1.0
 ## Played when a purchase is refused for lack of this specific resource, so

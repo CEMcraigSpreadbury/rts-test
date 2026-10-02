@@ -12,6 +12,7 @@ resource_type = ExtResource("4_gold")
 amount = 48
 
 [node name="DarkElfSpellstealer" unique_id=1900000017 instance=ExtResource("1_unit")]
+glyph = &"unit_dark_elf_spellstealer"
 display_name = "Dark Elf Spellstealer"
 move_speed = 3.00
 costs = Array[ExtResource("3_cost")]([SubResource("ResourceCost_gold")])

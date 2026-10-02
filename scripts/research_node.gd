@@ -42,6 +42,9 @@ enum Stat {
 @export var node_name: String = "Research"
 @export_multiline var description: String = ""
 @export var icon: Texture2D
+## Its UiGlyphs icon in the research tree and on the power bar. Takes the place
+## of `icon` when set; clear it to go back to the pixel art.
+@export var glyph: StringName = &""
 ## PASSIVE applies everywhere the moment it's bought. POWER is cast at a spot
 ## the player can see, then goes on cooldown.
 @export var kind: Kind = Kind.PASSIVE

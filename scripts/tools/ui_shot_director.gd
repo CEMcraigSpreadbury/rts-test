@@ -24,6 +24,8 @@ var show_node: String = ""
 var ai_count: int = -1
 ## "dialogue" or "briefing" -- only meaningful on a scenario map.
 var present: String = ""
+## -1 leaves the clock alone; 0..1 is a point round the day and night.
+var time_of_day: float = -1.0
 
 func _ready() -> void:
 	_run.call_deferred()
@@ -163,8 +165,23 @@ func _run_match() -> void:
 		main.chat.send_line(main.my_peer_id(), "Ready when you are")
 		main.chat.open_chat_input()
 
+	if time_of_day >= 0.0:
+		_set_time_of_day(main.get("day_night"))
+
 	await _wait(1.5)
 	await _shoot()
+
+## Jumps the clock straight there, with no fade.
+func _set_time_of_day(day_night: DayNight) -> void:
+	var share: float = DayNight.day_share()
+	var night: bool = time_of_day >= share
+	day_night.is_night = night
+	day_night.night_amount = 1.0 if night else 0.0
+	if night:
+		day_night._phase_elapsed = (time_of_day - share) / (1.0 - share) * DayNight.NIGHT_DURATION
+	else:
+		day_night._phase_elapsed = time_of_day / share * DayNight.DAY_DURATION
+	day_night.refresh_lighting()
 
 ## The tracker, dialogue box and briefing only exist on a scenario map, where
 ## Main builds a QuestUi. Presentations normally come from the host's

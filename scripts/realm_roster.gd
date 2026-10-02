@@ -10,6 +10,9 @@ extends RefCounted
 
 enum Kind { BARRACKS, RANGE, STABLES, SANCTUM, BESTIARY }
 const KIND_NAMES: Array[String] = ["Barracks", "Range", "Stables", "Sanctum", "Bestiary"]
+## Each kind's UiGlyphs icon on a settlement hall's menu: one per kind of
+## building, whatever race puts it up, like the capital's own.
+const KIND_GLYPHS: Array[StringName] = [&"barracks", &"range", &"stables", &"sanctum", &"bestiary"]
 ## [wood, gold] to build one.
 const KIND_COSTS: Array = [[120, 40], [120, 60], [150, 80], [140, 100], [180, 150]]
 ## Seconds to train one of each kind (a litter counts as one).
@@ -144,6 +147,7 @@ static func level_items(military: bool = false) -> Array[ProducibleItem]:
 			item.description = "Raises this building's income to %d%% of its base rate." % roundi(LEVEL_INCOME[level - 1] * 100.0)
 		item.kind = ProducibleItem.Kind.LEVEL
 		item.icon = UiStyle.icon_art("settlement", "level_%d" % level)
+		item.glyph = StringName("level_%d" % level)
 		item.level_to = level
 		item.build_time = LEVEL_SECONDS[level - 1]
 		var costs: Array[ResourceCost] = []

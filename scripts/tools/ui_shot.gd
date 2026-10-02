@@ -20,6 +20,8 @@ extends Node
 ##   --build    select a builder and open its build menu
 ##   --seed=N   RNG seed, default 12345; fixed so two runs frame the same view
 ##   --wait=N   seconds to let the match settle before the shot, default 10
+##   --tod=F    time of day: 0..1 round a day and night from sunrise (night
+##              starts at DayNight.day_share(), about 0.71)
 
 const MAP_PATH: String = "res://scenes/maps/angel_crossing_realm.tscn"
 const DIRECTOR_SCRIPT: String = "res://scripts/tools/ui_shot_director.gd"
@@ -43,6 +45,7 @@ func _ready() -> void:
 	var present: String = ""
 	var rng_seed: int = 12345
 	var wait: float = 10.0
+	var time_of_day: float = -1.0
 
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--out="):
@@ -81,6 +84,8 @@ func _ready() -> void:
 			rng_seed = int(arg.trim_prefix("--seed="))
 		elif arg.begins_with("--wait="):
 			wait = float(arg.trim_prefix("--wait="))
+		elif arg.begins_with("--tod="):
+			time_of_day = float(arg.trim_prefix("--tod="))
 
 	if out.is_empty():
 		push_error("ui_shot: pass --out=<absolute png path>")
@@ -113,6 +118,7 @@ func _ready() -> void:
 	director.show_node = show_node
 	director.ai_count = ai_count
 	director.present = present
+	director.time_of_day = time_of_day
 	get_tree().root.add_child.call_deferred(director)
 
 	var target: String = scene if not scene.is_empty() else (map if not map.is_empty() else MAP_PATH)

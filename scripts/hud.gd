@@ -122,6 +122,9 @@ func setup() -> void:
 	var speed_controls := UiSpeedControls.new()
 	speed_controls.setup(main)
 	main.get_node(^"UI").add_child(speed_controls)
+	var day_clock := UiDayClock.new()
+	day_clock.setup(main, speed_controls)
+	main.get_node(^"UI").add_child(day_clock)
 	_populate_construction_buttons()
 
 func _on_unlocks_changed() -> void:
@@ -166,6 +169,7 @@ func _on_stockpile_changed(resource_name: String, amount: int) -> void:
 		_resource_display_totals[resource_name] = float(amount)
 	_resource_totals[resource_name] = amount
 	_update_resource_label()
+	_refresh_construction_affordability()
 
 ## Eases each displayed total toward its real value so income reads as a
 ## counter ticking up rather than numbers popping between frames.
@@ -205,22 +209,25 @@ func _update_resource_label() -> void:
 		## Food only exists in a Realm match, where it carries the army's upkeep.
 		if resource_type == RealmEconomy.FOOD:
 			if realm:
-				var food := _stockpile_entry(resource_type.display_name, false)
+				var food := _stockpile_entry(resource_type, false)
 				food["rate"] = -_food_upkeep
 				entries.append(food)
 			continue
-		entries.append(_stockpile_entry(resource_type.display_name, false))
+		entries.append(_stockpile_entry(resource_type, false))
 	## Realm has no population cap to show (only a ceiling nobody meets).
 	if not realm:
-		entries.append({"name": "Population", "amount": _population_used,
-				"cap": _population_cap, "flash": false, "accent": false})
+		entries.append({"name": "Population", "glyph": &"population", "tint": UiStyle.INK,
+				"amount": _population_used, "cap": _population_cap, "flash": false, "accent": false})
 	stockpile.set_entries(entries)
 
-func _stockpile_entry(display_name: String, accent: bool) -> Dictionary:
+func _stockpile_entry(resource_type: ResourceType, accent: bool) -> Dictionary:
+	var display_name: String = resource_type.display_name
 	var shown: int = int(round(_resource_display_totals.get(display_name,
 			float(_resource_totals.get(display_name, 0)))))
 	return {
 		"name": display_name,
+		"glyph": resource_type.glyph,
+		"tint": resource_type.display_color,
 		"amount": shown,
 		"flash": _resource_flash_on and _flashing_resource_names.has(display_name),
 		"accent": accent,
@@ -281,20 +288,21 @@ func flash_missing_resources(costs: Array[ResourceCost]) -> void:
 func show_building(building: ProductionBuilding) -> void:
 	_show_info_header()
 	info_panel_name_label.text = building.building_name
-	_update_portrait(building.team_tint, "", _building_icon_of(building))
+	_update_portrait(building.team_tint, "", _building_icon_of(building), _building_glyph_of(building))
 	_clear_command_column()
 	_build_building_info(building)
 
 	if building.is_under_construction:
 		if not building.construction_finished.is_connected(_on_selected_building_constructed):
 			building.construction_finished.connect(_on_selected_building_constructed.bind(building), CONNECT_ONE_SHOT)
-		## Nothing can be produced here yet, so the only command a half-built
-		## site of yours offers is abandoning it for a refund.
+		## Nothing can be produced here yet, so a half-built site of yours
+		## offers only getting villagers onto it, or abandoning it for a refund.
 		var construction_buttons: Array[Control] = []
 		if main.can_command_building(building):
-			construction_buttons.append(
-				_make_command_button("X", "Cancel Construction", [], null, main.cancel_construction.bind(building))
-			)
+			construction_buttons.append(_make_glyph_button(OS.get_keycode_string(Main.SITE_BUILDERS_KEY),
+					"Assign Builders", &"build", main.assign_builders.bind(building)))
+			construction_buttons.append(_make_glyph_button(OS.get_keycode_string(Main.SITE_CANCEL_KEY),
+					"Cancel Construction", &"cancel", main.cancel_construction.bind(building)))
 		_fill_action_panel_grid(construction_buttons)
 		return
 
@@ -346,9 +354,14 @@ func show_building(building: ProductionBuilding) -> void:
 		elif item.icon != null and hotkey == "?":
 			hotkey = ""
 		var tooltip := "%s (%s)" % [item.item_name, _format_item_costs(item, building)]
-		var button := _make_command_button(hotkey, item.item_name,
-				_tooltip_costs(building.costs_for(item)), item.icon,
-				main.on_producible_button_pressed.bind(building, i))
+		var item_costs: Array = _tooltip_costs(building.costs_for(item))
+		var pressed: Callable = main.on_producible_button_pressed.bind(building, i)
+		var button: Button
+		var glyph: StringName = item.display_glyph()
+		if glyph != &"":
+			button = _make_glyph_button(hotkey, item.item_name, glyph, pressed, item_costs)
+		else:
+			button = _make_command_button(hotkey, item.item_name, item_costs, item.icon, pressed)
 		(button as CommandSlot).tip_description = item.description
 		_info_producible_badges[item.item_name] = _add_queue_count_badge(button)
 		if item.kind == ProducibleItem.Kind.UNIT:
@@ -431,7 +444,25 @@ func _refresh_resource_info() -> void:
 	if _info_resource_label and is_instance_valid(main.selected_resource):
 		_info_resource_label.text = "%d remaining" % main.selected_resource.display_remaining()
 
+## The construction menu's slots and what each costs: whether one can be paid
+## for follows the stockpile (see _refresh_construction_affordability) rather
+## than staying as it was when the menu was built -- at match start that was
+## before the starting resources arrived, and every building read red.
+var _construction_slots: Array = []
+
+func _refresh_construction_affordability() -> void:
+	for entry in _construction_slots:
+		## Checked before the cast: casting a freed slot is itself an error.
+		if not is_instance_valid(entry[0]):
+			continue
+		var slot := entry[0] as CommandSlot
+		var wanted: CommandSlot.State = CommandSlot.State.NORMAL if can_afford_locally(entry[1]) \
+				else CommandSlot.State.UNAFFORDABLE
+		if slot.state != wanted:
+			slot.state = wanted
+
 func _populate_construction_buttons() -> void:
+	_construction_slots.clear()
 	var building_types: Array[BuildingType] = current_construction_types()
 	var buttons: Array[Control] = []
 	var rules := MatchRules.active()
@@ -444,10 +475,16 @@ func _populate_construction_buttons() -> void:
 			continue
 		var hotkey: String = OS.get_keycode_string(Main.BUILDING_HOTKEYS[i]) if i < Main.BUILDING_HOTKEYS.size() else "?"
 		var costs: Array[ResourceCost] = rules.scaled_costs(me, building_type.get_costs())
-		var slot := _make_letter_slot(hotkey, building_type.building_name,
-				_tooltip_costs(costs), can_afford_locally(costs),
-				main.placement.on_construction_button_pressed.bind(building_type))
-		(slot as CommandSlot).tip_description = building_type.description
+		var place: Callable = main.placement.on_construction_button_pressed.bind(building_type)
+		var slot: CommandSlot
+		if building_type.glyph != &"":
+			slot = _make_glyph_button(hotkey, building_type.building_name, building_type.glyph, place, _tooltip_costs(costs)) as CommandSlot
+		else:
+			slot = _make_command_button(hotkey, building_type.building_name, _tooltip_costs(costs), building_type.icon, place) as CommandSlot
+		if not can_afford_locally(costs):
+			slot.state = CommandSlot.State.UNAFFORDABLE
+		_construction_slots.append([slot, costs])
+		slot.tip_description = building_type.description
 		buttons.append(slot)
 	_fill_action_panel_grid(buttons)
 
@@ -476,14 +513,27 @@ func _grid_slot_count(used: int) -> int:
 ## sibling of the grid, not one of its children, so clearing only the grid
 ## left a stale queue row behind after a building selection -- the "stuck
 ## extra row".
-## A building's producible list is the only place an item's icon lives.
-func _producible_icon(building: ProductionBuilding, item_name: String) -> Texture2D:
+## A building's producible list is the only place an item's art lives.
+func _producible_item(building: ProductionBuilding, item_name: String) -> ProducibleItem:
 	if item_name.is_empty():
 		return null
 	for item in building.producibles:
 		if item.item_name == item_name:
-			return item.icon
+			return item
 	return null
+
+## A queue slot's art: the item's glyph drawn 1:1 in the glyph tint, or its
+## pixel art filling the slot, or nothing.
+func _show_item_art(icon: TextureRect, item: ProducibleItem) -> void:
+	var glyph_name: StringName = item.display_glyph() if item != null else &""
+	var glyph: bool = glyph_name != &""
+	if glyph:
+		icon.texture = UiGlyphs.texture(glyph_name, UiStyle.GLYPH_QUEUE)
+	else:
+		icon.texture = item.icon if item != null else null
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED if glyph else TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if glyph else CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.self_modulate = CommandSlot.GLYPH_TINT if glyph else Color.WHITE
 
 static func _is_settlement_hall(building: ProductionBuilding) -> bool:
 	return building != null and building.settlement != null and building.settlement.hall == building
@@ -491,6 +541,7 @@ static func _is_settlement_hall(building: ProductionBuilding) -> bool:
 func _clear_command_column() -> void:
 	for child in action_panel_grid.get_children():
 		child.queue_free()
+	_construction_slots.clear()
 	if _info_slot_row != null and is_instance_valid(_info_slot_row):
 		_info_slot_row.queue_free()
 	_info_slot_row = null
@@ -531,7 +582,9 @@ func _clear_info_header() -> void:
 
 ## `head`: the selected unit's face (UnitPortrait) over its team colour;
 ## null for a building, which shows the colour alone.
-func _update_portrait(tint: Color, health_text: String, head: Texture2D = null) -> void:
+## `glyph`, when given, takes the place of `head`: drawn 1:1 at
+## GLYPH_PORTRAIT in the glyph tint, like the command buttons.
+func _update_portrait(tint: Color, health_text: String, head: Texture2D = null, glyph: StringName = &"") -> void:
 	portrait_frame.visible = true
 	portrait_health_label.visible = true
 	## A wash rather than a fill: the well stays dark so the sprite on top of it
@@ -540,14 +593,22 @@ func _update_portrait(tint: Color, health_text: String, head: Texture2D = null) 
 	if _portrait_head == null:
 		_portrait_head = TextureRect.new()
 		_portrait_head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_portrait_head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		## Pixel art: crisp rather than smeared when blown up.
-		_portrait_head.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_portrait_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		portrait_rect.add_child(_portrait_head)
 		_portrait_head.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_portrait_head.texture = head
-	_portrait_head.visible = head != null
+	var drawn: Texture2D = UiGlyphs.texture(glyph, UiStyle.GLYPH_PORTRAIT) if glyph != &"" else null
+	if drawn != null:
+		_portrait_head.texture = drawn
+		_portrait_head.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		_portrait_head.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		_portrait_head.self_modulate = CommandSlot.GLYPH_TINT
+	else:
+		_portrait_head.texture = head
+		_portrait_head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		## Pixel art: crisp rather than smeared when blown up.
+		_portrait_head.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_portrait_head.self_modulate = Color.WHITE
+	_portrait_head.visible = _portrait_head.texture != null
 	portrait_health_label.text = health_text
 	_punch_control(portrait_frame)
 
@@ -562,6 +623,23 @@ func _building_icon_of(building: ProductionBuilding) -> Texture2D:
 	if icon != null or building.settlement != null:
 		return icon
 	return _building_icon(building.building_name)
+
+## The glyph a placed building's portrait shows: a settlement's hall the same
+## glyph as the settlement itself (its tier, a Shrine's skull), a slot building
+## by its kind (or its own name for the resource ones), anything else by the
+## BuildingType it was built from.
+const SLOT_BUILDING_GLYPHS: Dictionary = {"Granary": &"granary", "Market": &"market",
+		"Lumberyard": &"lumberyard", "Watchtower": &"watchtower"}
+
+func _building_glyph_of(building: ProductionBuilding) -> StringName:
+	if _is_settlement_hall(building):
+		return building.settlement.glyph()
+	if building.slot_kind >= 0:
+		return RealmRoster.KIND_GLYPHS[building.slot_kind]
+	for building_type in main.my_faction().building_types:
+		if building_type.scene != null and building_type.scene.resource_path == building.scene_file_path:
+			return building_type.glyph
+	return SLOT_BUILDING_GLYPHS.get(building.building_name, &"")
 
 func _building_icon(building_name: String) -> Texture2D:
 	for building_type in main.my_faction().building_types:
@@ -740,7 +818,7 @@ func _style_queue_slots(filled: int, building: ProductionBuilding) -> void:
 		slot.tooltip_text = item_name if occupied else ""
 		var icon := slot.get_node_or_null("Icon") as TextureRect
 		if icon != null:
-			icon.texture = _producible_icon(building, item_name) if occupied else null
+			_show_item_art(icon, _producible_item(building, item_name) if occupied else null)
 		var normal := UiStyle.slot_box() if occupied else UiStyle.empty_slot_box()
 		slot.add_theme_stylebox_override("normal", normal)
 		slot.add_theme_stylebox_override("disabled", normal)
@@ -831,8 +909,9 @@ func _build_unit_info() -> void:
 		portrait.add_theme_stylebox_override("hover", _tray_slot_box(unit.team_tint, UiStyle.LINE_STRONG))
 		portrait.add_theme_stylebox_override("pressed", _tray_slot_box(unit.team_tint, UiStyle.ACCENT))
 		portrait.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		## The unit's own portrait over its team colour, scaled to fit (aspect
-		## kept) and kept crisp — the same image the big portrait shows.
+		## The unit's own sprite over its team colour, scaled to fit (aspect
+		## kept) and kept crisp: a unit on the field is shown as itself, as its
+		## card and its regiment's standard show it. Glyphs are for commands.
 		portrait.icon = UnitPortrait.of_unit(unit)
 		portrait.expand_icon = true
 		portrait.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -909,34 +988,38 @@ func _refresh_unit_stat_row(unit: Unit) -> void:
 
 func _populate_unit_command_buttons() -> void:
 	var buttons: Array[Control] = [
-		_make_command_button(OS.get_keycode_string(Main.UNIT_MOVE_KEY), "Move", [], null, main.arm_move_mode),
-		_make_command_button(OS.get_keycode_string(Main.UNIT_STOP_KEY), "Stop", [], null, main.issue_stop_order),
-		_make_command_button(OS.get_keycode_string(Main.UNIT_ATTACK_KEY), "Attack", [], null, main.arm_attack_mode),
-		_make_command_button(OS.get_keycode_string(Main.UNIT_PATROL_KEY), "Patrol", [], null, main.arm_patrol_mode),
+		_make_glyph_button(OS.get_keycode_string(Main.UNIT_MOVE_KEY), "Move", &"move", main.arm_move_mode),
+		_make_glyph_button(OS.get_keycode_string(Main.UNIT_STOP_KEY), "Stop", &"stop", main.issue_stop_order),
+		_make_glyph_button(OS.get_keycode_string(Main.UNIT_ATTACK_KEY), "Attack", &"attack", main.arm_attack_mode),
+		_make_glyph_button(OS.get_keycode_string(Main.UNIT_PATROL_KEY), "Patrol", &"patrol", main.arm_patrol_mode),
 	]
 	if main.selection_can_gather():
 		_hold_button = null
-		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_GATHER_KEY), "Gather", [], null, main.arm_gather_mode))
+		buttons.append(_make_glyph_button(OS.get_keycode_string(Main.UNIT_GATHER_KEY), "Gather", &"gather", main.arm_gather_mode))
 	else:
-		_hold_button = _make_command_button(OS.get_keycode_string(Main.UNIT_HOLD_KEY), "Hold Position", [], null, main.toggle_hold_position)
+		_hold_button = _make_glyph_button(OS.get_keycode_string(Main.UNIT_HOLD_KEY), "Hold Position", &"hold", main.toggle_hold_position)
 		_hold_button.toggle_mode = true
 		_hold_button.set_pressed_no_signal(main.selection_holds_position())
 		buttons.append(_hold_button)
 	if main.any_selected_can_build():
-		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_BUILD_KEY), "Build", [], null, open_build_submenu))
+		buttons.append(_make_glyph_button(OS.get_keycode_string(Main.UNIT_BUILD_KEY), "Build", &"build", open_build_submenu))
 	var regiment_action: Main.RegimentAction = main.selection_regiment_action()
 	if regiment_action != Main.RegimentAction.NONE:
 		var label: String = "Form Regiment"
+		var glyph: StringName = &"regiment_form"
 		if regiment_action == Main.RegimentAction.DISBAND:
 			label = "Disband"
+			glyph = &"regiment_disband"
 		elif regiment_action == Main.RegimentAction.REINFORCE:
 			label = "Reinforce"
-		buttons.append(_make_command_button(
-			OS.get_keycode_string(Main.UNIT_REGIMENT_KEY), label, [], null, main.toggle_regiment))
+			glyph = &"regiment_reinforce"
+		buttons.append(_make_glyph_button(
+			OS.get_keycode_string(Main.UNIT_REGIMENT_KEY), label, glyph, main.toggle_regiment))
 	var army_action: Main.ArmyAction = main.selection_army_action()
 	if army_action != Main.ArmyAction.NONE:
-		buttons.append(_make_command_button(OS.get_keycode_string(Main.UNIT_ARMY_KEY),
-				"Join Army" if army_action == Main.ArmyAction.JOIN else "Leave Army", [], null, main.toggle_army))
+		var joining: bool = army_action == Main.ArmyAction.JOIN
+		buttons.append(_make_glyph_button(OS.get_keycode_string(Main.UNIT_ARMY_KEY),
+				"Join Army" if joining else "Leave Army", &"army_join" if joining else &"army_leave", main.toggle_army))
 
 	## Promotion and abilities only make sense for a single selected unit — a
 	## group promote/activate has no sensible target.
@@ -951,15 +1034,21 @@ func _populate_unit_command_buttons() -> void:
 			if not ability.is_activated():
 				## Shown for visibility but never actionable — a passive
 				## works continuously, there's nothing to click.
-				var button := _make_command_button(hotkey_label, ability.ability_name, [], ability.icon, func(): pass)
+				var button := _make_ability_button(hotkey_label, ability, func(): pass)
 				button.disabled = true
 				buttons.append(button)
 			else:
-				var button := _make_command_button(hotkey_label, ability.ability_name, [], ability.icon, main.arm_ability.bind(unit, i))
+				var button := _make_ability_button(hotkey_label, ability, main.arm_ability.bind(unit, i))
 				_ability_buttons.append({"button": button, "unit": unit, "index": i, "sweep": _add_cooldown_sweep(button)})
 				buttons.append(button)
 	_refresh_ability_buttons()
 	_fill_action_panel_grid(buttons)
+
+## An ability's glyph where it has one, else its pixel art.
+func _make_ability_button(hotkey_label: String, ability: Ability, callback: Callable) -> Button:
+	if ability.glyph != &"":
+		return _make_glyph_button(hotkey_label, ability.ability_name, ability.glyph, callback)
+	return _make_command_button(hotkey_label, ability.ability_name, [], ability.icon, callback)
 
 ## Greys out an activated ability's button and winds its cooldown sweep down
 ## while it's cooling — ticked every frame from _refresh_unit_info_values.
@@ -1008,39 +1097,51 @@ func _format_construction_status(building: ProductionBuilding) -> String:
 ## unit-command panel: a square button showing its icon with the hotkey letter
 ## tucked in the corner, or just the letter when there is no icon (icons come
 ## from the Icon Maker dock / scenes/tools/generate_command_icons.tscn).
-## A unit or an action that has real art: its sprite, with the hotkey as a
-## corner badge. Anything without art goes through _make_letter_slot instead.
 func _make_command_button(hotkey_label: String, display_name: String,
 		costs: Array, icon: Texture2D, callback: Callable) -> Button:
 	var slot := CommandSlot.new()
-	slot.set_meta(&"hotkey", hotkey_label)
 	if icon == null:
 		slot.setup_letter(hotkey_label, display_name, costs)
 	else:
 		slot.setup_icon(icon, hotkey_label, display_name, costs)
-	slot.pressed.connect(callback)
-	slot.pressed.connect(_punch_control.bind(slot))
-	return slot
+	return _wire_slot(slot, hotkey_label, callback)
 
-## Buildings are the hotkey letter and nothing else -- no icon, no cost number.
-## Whether the player can afford it is carried by the letter's colour.
-func _make_letter_slot(letter: String, display_name: String, costs: Array,
-		affordable: bool, callback: Callable) -> Button:
+## A command, or a building, drawn as its game-icons.net glyph (see UiGlyphs),
+## with the hotkey in the corner like everything else.
+func _make_glyph_button(hotkey_label: String, display_name: String, glyph: StringName,
+		callback: Callable, costs: Array = []) -> Button:
 	var slot := CommandSlot.new()
-	slot.set_meta(&"hotkey", letter)
-	slot.setup_letter(letter, display_name, costs)
-	if not affordable:
-		slot.state = CommandSlot.State.UNAFFORDABLE
+	slot.setup_glyph(glyph, hotkey_label, display_name, costs)
+	return _wire_slot(slot, hotkey_label, callback)
+
+func _wire_slot(slot: CommandSlot, hotkey_label: String, callback: Callable) -> Button:
+	slot.set_meta(&"hotkey", hotkey_label)
 	slot.pressed.connect(callback)
 	slot.pressed.connect(_punch_control.bind(slot))
 	return slot
 
-## Cost lines for a tooltip. No resource icons exist yet, so each line names its
-## resource rather than showing a glyph.
+## Presses the command button labelled `hotkey_label`, as a click would. True if
+## there was one to press: a selected building's buttons answer to the letters
+## they show this way, whatever the building offers.
+func press_action_button(hotkey_label: String) -> bool:
+	for child in action_panel_grid.get_children():
+		var button := child as Button
+		if button and not button.disabled and button.get_meta(&"hotkey", "") == hotkey_label:
+			button.pressed.emit()
+			return true
+	return false
+
+## Cost lines for a tooltip: each resource's glyph in its colour, or its name
+## where it has no glyph.
 func _tooltip_costs(costs: Array[ResourceCost]) -> Array:
 	var out: Array = []
 	for cost in costs:
-		out.append({"label": cost.resource_type.display_name, "amount": cost.amount})
+		var resource_type: ResourceType = cost.resource_type
+		if resource_type.glyph != &"":
+			out.append({"icon": UiGlyphs.texture(resource_type.glyph, UiStyle.GLYPH_TIP),
+					"tint": resource_type.display_color, "amount": cost.amount})
+		else:
+			out.append({"label": resource_type.display_name, "amount": cost.amount})
 	return out
 
 ## Quick squash-and-settle on a HUD control, so a click or hotkey visibly
@@ -1070,25 +1171,18 @@ func pulse_action_button(hotkey_label: String) -> void:
 ## visibility every frame instead of adding/removing nodes.
 func _add_queue_count_badge(button: Button) -> Label:
 	var badge := Label.new()
-	badge.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	## Anchored corner is the growth pivot too, so a wider (multi-digit) label
-	## expands up-and-left back into the button instead of out past its edge.
-	badge.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	badge.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	badge.offset_right = -3
-	badge.offset_bottom = -1
-	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	badge.add_theme_font_size_override("font_size", 33)
-	badge.add_theme_color_override("font_shadow_color", Color.BLACK)
-	badge.add_theme_constant_override("shadow_offset_x", 2)
-	badge.add_theme_constant_override("shadow_offset_y", 2)
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	## Top-left: the hotkey has the bottom-right corner and the repeat mark the
+	## top-right. It used to sit on the hotkey at 33px, covering it and the art.
+	badge.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	badge.offset_left = 4
+	badge.offset_top = 0
+	_style_slot_badge(badge, UiStyle.ACCENT)
 	badge.visible = false
 	button.add_child(badge)
 	return badge
 
-## Top-left hotkey letter over an icon button — the other corners belong to
-## the queue count and repeat badges.
+## Top-right mark on a unit set to train on repeat. The queue count has the
+## top-left corner and the hotkey the bottom-right.
 func _add_repeat_badge(button: Button) -> Label:
 	var badge := Label.new()
 	badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -1096,14 +1190,20 @@ func _add_repeat_badge(button: Button) -> Label:
 	badge.offset_right = -2
 	badge.offset_top = -4
 	badge.text = "∞"
-	badge.add_theme_font_size_override("font_size", 33)
-	badge.add_theme_color_override("font_shadow_color", Color.BLACK)
-	badge.add_theme_constant_override("shadow_offset_x", 2)
-	badge.add_theme_constant_override("shadow_offset_y", 2)
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_style_slot_badge(badge, UiStyle.INK)
 	badge.visible = false
 	button.add_child(badge)
 	return badge
+
+## A count or repeat mark on a command slot: small, bold and outlined like the
+## hotkey badge, so it reads over a glyph without burying it.
+func _style_slot_badge(badge: Label, colour: Color) -> void:
+	badge.add_theme_font_override("font", UiStyle.font_data_bold())
+	badge.add_theme_font_size_override("font_size", UiStyle.SIZE_BUTTON)
+	badge.add_theme_color_override("font_color", colour)
+	badge.add_theme_color_override("font_outline_color", CommandSlot.BADGE_OUTLINE)
+	badge.add_theme_constant_override("outline_size", CommandSlot.BADGE_OUTLINE_SIZE)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func format_costs(costs: Array[ResourceCost]) -> String:
 	var parts: Array[String] = []

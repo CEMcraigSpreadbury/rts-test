@@ -17,6 +17,9 @@ enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT, ACTIVATED_AREA }
 ## itself just shows a hotkey letter (see ABILITY_HOTKEYS in main.gd).
 @export_multiline var description: String = ""
 @export var icon: Texture2D
+## Its UiGlyphs icon on the command card. Takes the place of `icon` when set;
+## clear it to go back to the pixel art.
+@export var glyph: StringName = &""
 @export var kind: Kind = Kind.PASSIVE_AURA
 
 @export_group("Activated")

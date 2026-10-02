@@ -234,6 +234,11 @@ signal thrown(height: float, duration: float)
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
 ## "Unit2") when several of the same unit are siblings under Units.
 @export var display_name: String = "Villager"
+## Its UiGlyphs icon where the HUD offers this unit type as a command: its
+## training button, its place in a queue, a Lord's tab. A unit on the field (the
+## portrait, the selection tray, its card) shows its sprite instead, matching
+## its regiment's standard. Empty falls back to the sprite (UnitPortrait).
+@export var glyph: StringName = &""
 @export var move_speed: float = 3.75
 @export var rotation_speed: float = 10.0
 ## Setter (guarded — sprite isn't ready yet the first time Godot applies this

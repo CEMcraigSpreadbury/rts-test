@@ -54,6 +54,7 @@ tint = Color(0.55, 1.0, 0.35, 1)
 script = ExtResource("5_ability_script")
 ability_name = "Acid Spit"
 icon = ExtResource("icon_abilities_acid_spit")
+glyph = &"acid_spit"
 kind = 2
 activation_range = 9.0
 cooldown = 18.0
@@ -76,6 +77,7 @@ linger_duration = 10.0
 linger_damage_per_second = 2
 
 [node name="Hydra" instance=ExtResource("1_unit")]
+glyph = &"unit_hydra"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

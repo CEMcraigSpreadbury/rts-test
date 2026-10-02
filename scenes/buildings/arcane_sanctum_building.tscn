@@ -40,6 +40,7 @@ script = ExtResource("3_item_script")
 item_name = "Ancient Texts"
 description = "Lets every Arcane Sanctum train Arch Mages."
 icon = ExtResource("icon_up_ancient_texts")
+glyph = &"ancient_texts"
 kind = 1
 build_time = 40.0
 costs = Array[ExtResource("8_cost_script")]([SubResource("ResourceCost_ancient_texts")])

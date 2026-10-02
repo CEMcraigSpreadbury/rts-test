@@ -261,7 +261,7 @@ func _refresh_tabs() -> void:
 		if not root.visible:
 			continue
 		var lord: Unit = _tab_lords[i]
-		(tab["figure"] as TextureRect).texture = UnitPortrait.of_unit(lord)
+		_show_figure(tab["figure"], lord, UiStyle.GLYPH_TAB)
 		(tab["level"] as UiTextLine).set_text(str(lord.lord_level))
 		root.add_theme_stylebox_override("panel", UiStyle.slot_box(UiStyle.ACCENT if lord.selected else UiStyle.LINE))
 
@@ -301,6 +301,21 @@ func _show_more(card: Dictionary, hidden_count: int) -> void:
 	(card["more"] as UiTextLine).set_text("+%d" % hidden_count)
 	(card["root"] as Panel).add_theme_stylebox_override("panel", UiStyle.slot_box())
 
+## A tab's figure: the Lord's glyph at `px`, centred and drawn 1:1 in ink over
+## the team colour. A card keeps the unit's sprite (`px` 0), because a card is
+## the same picture its regiment's standard flies in the world.
+func _show_figure(figure: TextureRect, unit: Unit, px: int) -> void:
+	if px > 0 and unit.glyph != &"":
+		figure.texture = UiGlyphs.texture(unit.glyph, px)
+		figure.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		figure.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		figure.self_modulate = UiStyle.INK
+	else:
+		figure.texture = UnitPortrait.of_unit(unit)
+		figure.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		figure.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		figure.self_modulate = Color.WHITE
+
 func _show_group(card: Dictionary, group: Dictionary, well: Texture2D) -> void:
 	(card["more"] as UiTextLine).visible = false
 	for key in ["well", "figure", "count"]:
@@ -310,7 +325,7 @@ func _show_group(card: Dictionary, group: Dictionary, well: Texture2D) -> void:
 	var well_rect: TextureRect = card["well"]
 	well_rect.texture = well
 	var sample: Unit = group["sample"]
-	(card["figure"] as TextureRect).texture = UnitPortrait.of_unit(sample)
+	_show_figure(card["figure"], sample, 0)
 	var pip: Panel = card["pip"]
 	pip.visible = group["regiment"]
 	if pip.visible:

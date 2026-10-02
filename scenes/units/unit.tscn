@@ -53,6 +53,7 @@ shader_parameter/albedo_color = Color(0.2, 1, 0.3, 1)
 
 [node name="Unit" type="Node3D" unique_id=1622850852 groups=["units"]]
 script = ExtResource("1_script")
+glyph = &"unit_villager"
 costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_villager")])
 walk_row = 3
 walk_frame_count = 6

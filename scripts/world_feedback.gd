@@ -1281,10 +1281,21 @@ func _update_hover_cursor(collider: Object) -> void:
 	if (collider is Unit and Teams.is_enemy(main.my_peer_id(), collider.owner_peer_id)) \
 			or (collider is ProductionBuilding and Teams.is_enemy(main.my_peer_id(), collider.owner_peer_id) and collider.can_be_attacked()):
 		Input.set_default_cursor_shape(Input.CURSOR_CROSS)
-	elif collider is Gatherable:
+	elif collider is Gatherable or _is_work_site(collider):
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND)
 	else:
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+
+## One of your own buildings the selected villagers would work at on a
+## right-click, so it gets the same hand as a tree: a site still going up, or
+## a Mine standing on its deposit.
+func _is_work_site(collider: Object) -> bool:
+	var building := collider as ProductionBuilding
+	if building == null or not main.can_command_building(building):
+		return false
+	if building.is_under_construction:
+		return main.any_selected_can_build()
+	return is_instance_valid(building.linked_deposit) and main.selection_can_gather()
 
 ## Clearance between a building's drawn edge and its ring. Sized off the
 ## model rather than the NavigationObstacle3D because several models overhang

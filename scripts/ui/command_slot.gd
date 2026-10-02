@@ -2,12 +2,23 @@ class_name CommandSlot
 extends Button
 ## One cell of a command grid.
 ##
-## Buildings and actions show their hotkey LETTER and nothing else: no icon, no
-## cost number. Affordability is carried by the letter's colour instead, so the
-## slot stays a single readable glyph. Units show their real sprite, because that
-## art comes from the game itself, at 1x of its 32px source.
+## Anything with art shows it, with the hotkey as a small corner badge: pixel
+## art at 1x of its 32px source, or a command's glyph (UiGlyphs) tinted brass.
+## Anything with neither falls back to its hotkey letter alone. No cost number
+## either way: affordability is carried by colour, a red wash over the art, a
+## red glyph or a red letter.
 
 enum State { NORMAL, SELECTED, UNAFFORDABLE, LOCKED, EMPTY }
+
+## Over the art of something the player cannot pay for yet.
+const UNAFFORDABLE_ICON_TINT := Color(1.0, 0.5, 0.45, 0.8)
+const BADGE_OUTLINE := Color(0.0706, 0.0510, 0.0353)
+const BADGE_OUTLINE_SIZE: int = 4
+## A glyph at rest: halfway between DIM and INK, so it reads beside pixel art
+## without outshining it. Hover, press and selection take it to ACCENT.
+const GLYPH_TINT := Color(0.8275, 0.7706, 0.6784)
+## Glyphs sit this far above centre, clear of the hotkey badge.
+const GLYPH_LIFT: float = 3.0
 
 var state: State = State.NORMAL:
 	set(value):
@@ -17,6 +28,8 @@ var state: State = State.NORMAL:
 var _letter: Label
 var _icon: TextureRect
 var _badge: Label
+## The icon is a glyph rather than pixel art (see setup_glyph).
+var _glyph: bool = false
 var _tip_name: String = ""
 var _tip_costs: Array = []
 var _tip_hotkey: String = ""
@@ -49,7 +62,7 @@ func setup_letter(letter: String, display_name: String, costs: Array = []) -> vo
 	_letter.text = letter
 	_restyle()
 
-## A unit: its own sprite at 1x, with the hotkey as a small corner badge.
+## Art at 1x, with the hotkey as a small corner badge.
 func setup_icon(texture: Texture2D, hotkey: String, display_name: String, costs: Array = []) -> void:
 	_tip_name = display_name
 	_tip_costs = costs
@@ -71,6 +84,9 @@ func setup_icon(texture: Texture2D, hotkey: String, display_name: String, costs:
 		_badge.add_theme_font_override("font", UiStyle.font_data_bold())
 		_badge.add_theme_font_size_override("font_size", UiStyle.SIZE_BADGE)
 		_badge.add_theme_color_override("font_color", UiStyle.DIM)
+		## The badge sits on the art itself, and vanished against a bright roof.
+		_badge.add_theme_color_override("font_outline_color", BADGE_OUTLINE)
+		_badge.add_theme_constant_override("outline_size", BADGE_OUTLINE_SIZE)
 		_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_badge.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		_badge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -78,6 +94,20 @@ func setup_icon(texture: Texture2D, hotkey: String, display_name: String, costs:
 		_badge.offset_bottom = -1
 		add_child(_badge)
 	_badge.text = hotkey
+	_restyle()
+
+## A command with no art of its own: its glyph, centred and lifted clear of
+## the badge, drawn 1:1 at GLYPH_CMD and tinted by state (see _glyph_tint).
+func setup_glyph(glyph: StringName, hotkey: String, display_name: String, costs: Array = []) -> void:
+	setup_icon(UiGlyphs.texture(glyph, UiStyle.GLYPH_CMD), hotkey, display_name, costs)
+	_glyph = true
+	var half: float = UiStyle.GLYPH_CMD * 0.5
+	_icon.set_anchors_preset(Control.PRESET_CENTER)
+	_icon.offset_left = -half
+	_icon.offset_right = half
+	_icon.offset_top = -half - GLYPH_LIFT
+	_icon.offset_bottom = half - GLYPH_LIFT
+	_icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_restyle()
 
 ## A padding cell in a fixed grid: visible, obviously not a control.
@@ -113,6 +143,27 @@ func _restyle() -> void:
 	modulate = UiStyle.DISABLED_MODULATE if state == State.LOCKED else Color.WHITE
 	if _letter != null:
 		_letter.add_theme_color_override("font_color", letter_colour)
+	if _badge != null:
+		_badge.add_theme_color_override("font_color", UiStyle.DIM if state == State.NORMAL else letter_colour)
+	if _icon != null:
+		_icon.modulate = UNAFFORDABLE_ICON_TINT if state == State.UNAFFORDABLE and not _glyph else Color.WHITE
+	queue_redraw()
+
+## A Button redraws whenever it is hovered, pressed or toggled (the Hold button
+## is toggled without a signal), so that is where a glyph takes its colour.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAW and _glyph and _icon != null:
+		_icon.self_modulate = _glyph_tint()
+
+func _glyph_tint() -> Color:
+	if state == State.UNAFFORDABLE:
+		return UiStyle.BAD
+	if state == State.SELECTED:
+		return UiStyle.ACCENT
+	match get_draw_mode():
+		DRAW_HOVER, DRAW_PRESSED, DRAW_HOVER_PRESSED:
+			return UiStyle.ACCENT
+	return GLYPH_TINT
 
 func _make_custom_tooltip(_for_text: String) -> Object:
 	if _tip_name.is_empty():

@@ -42,6 +42,14 @@ const GATHER_SPREAD_PENALTY: float = 2.0
 ## for the actual building choice — safe since only one of the two menus is
 ## ever live for a given selection state.
 const UNIT_BUILD_KEY: Key = KEY_B
+## A selected site of yours still going up: sends villagers to it (see
+## assign_builders). Same key as Build, since it is the same job.
+const SITE_BUILDERS_KEY: Key = KEY_B
+## A selected site of yours: abandons it for a refund.
+const SITE_CANCEL_KEY: Key = KEY_X
+## How many villagers assign_builders sends, and a building placed with nobody
+## selected gets (see BuildingPlacement._take_nearest_builders).
+const AUTO_BUILDER_COUNT: int = 2
 ## Forms a regiment from the selection, or breaks up the one that is selected
 ## — one key for both, since a selection can only ever be in a position to do
 ## one of them (see selection_regiment_action).
@@ -524,6 +532,10 @@ func _ready() -> void:
 	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
 	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
 	utility_buttons.get_node(^"FormationLooseButton").pressed.connect(_set_formation_type.bind(Formation.Type.LOOSE))
+	_setup_music_button(utility_buttons.get_node(^"MusicButton"))
+	var research_button: Button = utility_buttons.get_node(^"ResearchButton")
+	research_button.icon = UiGlyphs.texture(&"research", UiStyle.GLYPH_TOOL)
+	research_button.pressed.connect(research_panel.toggle)
 	UiDebugEditor.register_editable_root(ui_root, "main")
 
 	game_over_panel.visible = false
@@ -1884,6 +1896,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
+	## A selected building of yours: its command buttons answer to the letters
+	## they show (production I-L, a site's Assign Builders and Cancel). Those
+	## letters were only labels before, so pressing one did nothing.
+	if event is InputEventKey and event.pressed and not event.echo and selected_units.is_empty() \
+			and can_command_building(selected_building) \
+			and hud.press_action_button(OS.get_keycode_string(event.keycode)):
+		get_viewport().set_input_as_handled()
+		return
+
 	if event is InputEventKey and event.pressed and not event.echo and not selected_units.is_empty() \
 			and not hud.showing_build_submenu:
 		if event.keycode == FORMATION_BOX_KEY:
@@ -2159,6 +2180,25 @@ func _idle_villagers() -> Array[Unit]:
 			idle_villagers.append(unit)
 	return idle_villagers
 
+const MUSIC_ICON: Texture2D = preload("res://assets/ui/icons/hud/music.svg")
+const MUSIC_OFF_ICON: Texture2D = preload("res://assets/ui/icons/hud/music_off.svg")
+
+var _music_button: Button
+
+## The utility bar's music button mutes the Music bus, the same switch as its
+## Mute box in Options > Sound, so each follows the other. Settings is an
+## autoload, so it is told through a method: a lambda that never touches `self`
+## belongs to the script, not this match, and would outlive it.
+func _setup_music_button(button: Button) -> void:
+	_music_button = button
+	button.pressed.connect(func(): Settings.set_bus_muted("Music", not Settings.muted["Music"]))
+	_on_mute_changed("Music", Settings.muted["Music"])
+	Settings.mute_changed.connect(_on_mute_changed)
+
+func _on_mute_changed(bus_name: String, on: bool) -> void:
+	if bus_name == "Music":
+		_music_button.icon = MUSIC_OFF_ICON if on else MUSIC_ICON
+
 ## The utility bar's idle button: every idle gatherer at once, left where the
 ## camera is (they may be scattered across the map).
 func _select_all_idle_villagers() -> void:
@@ -2240,11 +2280,14 @@ func _select_all_visible_units_of_type(unit_type: String) -> void:
 
 ## Double-clicking one of your finished buildings adds every other finished
 ## building of yours with the same name that's on screen, so one Barracks'
-## command panel trains from all of them. Anything else (an enemy building,
-## one still going up) just gets the camera centred on it, as before.
+## command panel trains from all of them. An enemy building just gets the
+## camera centred on it. One of yours still going up stays selected where it
+## is: jumping the camera there read as the click having done something else.
 func _select_all_visible_buildings_of_type(clicked: ProductionBuilding) -> void:
-	if not can_command_building(clicked) or clicked.is_under_construction:
+	if not can_command_building(clicked):
 		_center_camera_on([clicked])
+		return
+	if clicked.is_under_construction:
 		return
 	var group: Array[ProductionBuilding] = [clicked]
 	var viewport_rect := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
@@ -2351,6 +2394,10 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 		Vector2(min(start_pos.x, end_pos.x), min(start_pos.y, end_pos.y)),
 		(end_pos - start_pos).abs()
 	)
+
+	if hud.showing_build_submenu and start_pos.distance_to(end_pos) <= CLICK_DRAG_THRESHOLD \
+			and _build_clicked_site(end_pos):
+		return
 
 	for u in selected_units:
 		u.selected = false
@@ -3722,6 +3769,69 @@ func cancel_production_as(sender_id: int, building_path: NodePath, queue_index: 
 	if building == null or building.owner_peer_id != sender_id:
 		return
 	building.cancel_at(queue_index)
+
+## The local player's villagers best placed to build at `pos`: the nearest idle
+## ones, up to `count`. With nobody idle, the one nearest villager who is not
+## already building something, so a site never waits on an empty answer.
+func nearest_builders(pos: Vector3, count: int) -> Array[Unit]:
+	var idle: Array[Unit] = []
+	var working: Array[Unit] = []
+	for node in get_tree().get_nodes_in_group("units"):
+		var unit := node as Unit
+		if unit == null or unit.owner_peer_id != my_peer_id() or not unit.can_build \
+				or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if unit.status_activity == Unit.Activity.IDLE and unit.status_command == Unit.Command.NONE:
+			idle.append(unit)
+		elif unit.status_command != Unit.Command.BUILD:
+			working.append(unit)
+	var pool: Array[Unit] = idle if not idle.is_empty() else working
+	var take: int = count if not idle.is_empty() else 1
+	pool.sort_custom(func(a: Unit, b: Unit) -> bool:
+		return a.global_position.distance_squared_to(pos) < b.global_position.distance_squared_to(pos))
+	var picked: Array[Unit] = []
+	for unit in pool:
+		if picked.size() >= take:
+			break
+		picked.append(unit)
+	return picked
+
+## A site's Assign Builders button: the villagers nearest_builders picks go to
+## it exactly as if they had been selected and right-clicked onto it.
+func assign_builders(building: ProductionBuilding) -> void:
+	if not can_command_building(building) or not building.is_under_construction:
+		return
+	var builders := nearest_builders(building.global_position, AUTO_BUILDER_COUNT)
+	if builders.is_empty():
+		play_placement_blocked_sound()
+		return
+	_send_builders(builders, building)
+
+## With the build menu open, clicking one of your own unfinished buildings puts
+## the selected villagers to work on it instead of selecting it -- the click a
+## player reaches for after pressing Build. True if it did.
+func _build_clicked_site(screen_pos: Vector2) -> bool:
+	var site := raycast(screen_pos).get("collider") as ProductionBuilding
+	if site == null or not site.is_under_construction or not can_command_building(site):
+		return false
+	var builders: Array[Unit] = []
+	for unit in selected_units:
+		if is_instance_valid(unit) and unit.can_build:
+			builders.append(unit)
+	if builders.is_empty():
+		return false
+	_send_builders(builders, site)
+	hud.close_build_submenu()
+	return true
+
+func _send_builders(builders: Array[Unit], building: ProductionBuilding) -> void:
+	var unit_paths: Array[NodePath] = []
+	for unit in builders:
+		unit_paths.append(unit.get_path())
+	_rpc_issue_command.rpc_id(1, unit_paths, building.get_path(), building.global_position, false, false, current_formation_type)
+	play_command_sound()
+	feedback.play_command_feedback(building.global_position, false)
+	feedback.spawn_command_popup("build", building.global_position, builders[0])
 
 ## Abandons a half-built site the local player owns, refunding what it cost.
 func cancel_construction(building: ProductionBuilding) -> void:

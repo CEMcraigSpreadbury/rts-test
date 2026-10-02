@@ -54,6 +54,7 @@ tint = Color(0.78, 0.56, 0.36, 1)
 script = ExtResource("5_ability_script")
 ability_name = "Ground Slam"
 icon = ExtResource("icon_abilities_ground_slam")
+glyph = &"ground_slam"
 kind = 2
 activation_range = 6.0
 cooldown = 16.0
@@ -76,6 +77,7 @@ linger_effect = SubResource("SpriteEffect_giant_bear_linger")
 linger_effect_count = 5
 
 [node name="GiantBear" instance=ExtResource("1_unit")]
+glyph = &"unit_giant_bear"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

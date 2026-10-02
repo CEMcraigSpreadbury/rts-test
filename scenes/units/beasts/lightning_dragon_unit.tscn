@@ -42,6 +42,7 @@ scale = 1.2
 script = ExtResource("5_ability_script")
 ability_name = "Chain Lightning"
 icon = ExtResource("icon_abilities_chain_lightning")
+glyph = &"chain_lightning"
 kind = 2
 activation_range = 9.0
 cooldown = 18.0
@@ -57,6 +58,7 @@ impact_effect = SubResource("SpriteEffect_impact")
 impact_scatter_count = 4
 
 [node name="LightningDragon" instance=ExtResource("1_unit")]
+glyph = &"unit_lightning_dragon"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])

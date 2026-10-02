@@ -423,6 +423,8 @@ func _confirm_placement() -> void:
 	var placed_type := placing_type
 	var shift_held := Input.is_key_pressed(KEY_SHIFT)
 	var build_position := placement_ghost.global_position
+	if _pending_builder_paths.is_empty():
+		_take_nearest_builders(build_position)
 	_rpc_request_build.rpc_id(1, type_index, build_position, target_path, _pending_builder_paths, shift_held)
 	main.report_tutorial_input(&"build_placed", placed_type.building_name)
 	AudioUtils.play_random(main.command_audio_player, main.on_building_placed_sound_effects)
@@ -618,6 +620,13 @@ func _dispatch_builders_to(building: ProductionBuilding, builder_paths: Array[No
 		else:
 			builder.clear_order_queue()
 			builder.command_build(building)
+
+## Placed with nobody selected (the construction menu also shows on an empty
+## selection), a building would stand unbuilt until someone thought to
+## right-click it. It gets the nearest villagers instead (Main.nearest_builders).
+func _take_nearest_builders(pos: Vector3) -> void:
+	for unit in main.nearest_builders(pos, Main.AUTO_BUILDER_COUNT):
+		_pending_builder_paths.append(unit.get_path())
 
 func _cancel_placement() -> void:
 	if placement_ghost:
@@ -1022,6 +1031,8 @@ func _confirm_wall_placement() -> void:
 		positions.append(piece["position"])
 		directions.append(piece["direction"])
 		kinds.append(piece["kind"])
+	if _pending_builder_paths.is_empty():
+		_take_nearest_builders(positions[0])
 	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths)
 	AudioUtils.play_random(main.command_audio_player, main.on_building_placed_sound_effects)
 	## Last piece rather than the first: that is where the drag ended, so it is
@@ -1212,6 +1223,8 @@ func _confirm_gate_placement() -> void:
 	var type_index: int = my_building_types.find(placing_type)
 	var target_path := _gate_target.get_path()
 	var gate_position := _gate_target.global_position
+	if _pending_builder_paths.is_empty():
+		_take_nearest_builders(gate_position)
 	_rpc_request_build_gate.rpc_id(1, type_index, target_path, _pending_builder_paths)
 	AudioUtils.play_random(main.command_audio_player, main.on_building_placed_sound_effects)
 	main.feedback.spawn_command_popup("build", gate_position, _builder_speaker())

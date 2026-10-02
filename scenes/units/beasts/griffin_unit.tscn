@@ -18,6 +18,7 @@ resource_type = ExtResource("4_wood")
 amount = 100
 
 [node name="Griffin" instance=ExtResource("1_unit")]
+glyph = &"unit_griffin"
 move_command_lines = Array[ExtResource("109_command_line")]([])
 attack_command_lines = Array[ExtResource("109_command_line")]([])
 patrol_command_lines = Array[ExtResource("109_command_line")]([])
