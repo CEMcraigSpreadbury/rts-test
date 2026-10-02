@@ -8,19 +8,41 @@ uniform sampler2DArray LockTextures : hint_default_black;
 uniform sampler2DArray WaterTextures : hint_default_transparent, repeat_disable;
 uniform float WaterFactor = 1;
 uniform sampler2DArray Textures : source_color, filter_linear_mipmap;
-uniform sampler2DArray TexturesNearest : source_color, filter_nearest_mipmap;
 uniform sampler2DArray Splatmaps : repeat_disable;
 uniform int[100] TexturesDetail;
 uniform int NumberOfTextures;
+uniform bool HasNormalTextures;
+uniform bool HasRoughnessTextures;
+uniform bool HasHeightTextures;
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
+uniform sampler2DArray TexturesNearest : source_color, filter_nearest_mipmap;
 uniform sampler2DArray Normals : filter_linear_mipmap;
 uniform sampler2DArray NormalsNearest : filter_nearest_mipmap;
-uniform bool HasNormalTextures;
 uniform sampler2DArray RoughnessTextures : filter_linear_mipmap;
 uniform sampler2DArray RoughnessTexturesNearest : filter_nearest_mipmap;
-uniform bool HasRoughnessTextures;
 uniform sampler2DArray HeightTextures : filter_linear_mipmap;
 uniform sampler2DArray HeightTexturesNearest : filter_nearest_mipmap;
-uniform bool HasHeightTextures;
+#else
+// WebGL allows 16 textures per shader, Godot's own included: nearest filtering
+// shares the linear arrays, and a shader whose texture sets are albedo-only can
+// define TERRABRUSH_ALBEDO_ONLY to drop the normal/roughness/height arrays.
+#define TexturesNearest Textures
+#ifdef TERRABRUSH_ALBEDO_ONLY
+#define Normals Textures
+#define NormalsNearest Textures
+#define RoughnessTextures Textures
+#define RoughnessTexturesNearest Textures
+#define HeightTextures Textures
+#define HeightTexturesNearest Textures
+#else
+uniform sampler2DArray Normals : filter_linear_mipmap;
+#define NormalsNearest Normals
+uniform sampler2DArray RoughnessTextures : filter_linear_mipmap;
+#define RoughnessTexturesNearest RoughnessTextures
+uniform sampler2DArray HeightTextures : filter_linear_mipmap;
+#define HeightTexturesNearest HeightTextures
+#endif
+#endif
 uniform bool UseAntitile = true;
 uniform float BlendFactor;
 uniform bool NearestFilter = false;

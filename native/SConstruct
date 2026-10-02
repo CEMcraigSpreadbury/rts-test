@@ -8,6 +8,11 @@ That keeps the bindings exactly in step with the engine we run against.
     cd native
     python -m SCons platform=windows target=template_debug custom_api_file=api/extension_api.json -j12
     python -m SCons platform=windows target=template_release custom_api_file=api/extension_api.json -j12
+
+Web (needs emsdk 4.0.20 active, the version Godot 4.7's web templates use; with
+threads, to match TerraBrush's web build):
+
+    python -m SCons platform=web threads=yes target=template_release custom_api_file=api/extension_api.json -j12
 """
 
 env = SConscript("godot-cpp/SConstruct")
@@ -22,7 +27,10 @@ if env.get("is_msvc", False) or env["CC"] == "cl":
         env.Append(CXXFLAGS=["/arch:AVX2"])
 else:
     env.Append(CXXFLAGS=["-std=c++20", "-ffast-math"])
-    if env["target"] != "template_debug":
+    if env["platform"] == "web":
+        # Every browser that runs Godot's WebGL2 build has wasm SIMD.
+        env.Append(CXXFLAGS=["-msimd128"])
+    elif env["target"] != "template_debug":
         env.Append(CXXFLAGS=["-mavx2", "-mfma"])
 
 sources = Glob("src/*.cpp")

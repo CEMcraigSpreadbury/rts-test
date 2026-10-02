@@ -8,3 +8,5 @@ reloadable = false
 
 windows.debug.x86_64 = "res://addons/army_sim/bin/libarmysim.windows.template_debug.x86_64.dll"
 windows.release.x86_64 = "res://addons/army_sim/bin/libarmysim.windows.template_release.x86_64.dll"
+
+web.wasm32 = "res://addons/army_sim/bin/libarmysim.web.template_release.wasm32.wasm"

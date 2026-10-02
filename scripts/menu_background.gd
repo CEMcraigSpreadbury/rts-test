@@ -13,6 +13,7 @@ extends Node3D
 ## FogOfWar out here, so this does the same job for the backdrop's foliage.
 
 const TOWN_CENTRE: PackedScene = preload("res://assets/art/Models/TownBuildings/TownCentre.glb")
+const GRASS_SHADER: Shader = preload("res://shaders/terrain/binbun_foliage.gdshader")
 const GOLD_DEPOSIT: PackedScene = preload("res://assets/art/Models/TownBuildings/GoldDeposit.glb")
 const PINES: Array[PackedScene] = [
 	preload("res://assets/art/Trees/tree_pine_low.glb"),
@@ -74,6 +75,9 @@ const SPRITE_LIFT: float = 0.628
 enum Job { WALK_OUT, WORK, WALK_BACK, DROP }
 
 var _materials: Array[ShaderMaterial] = []
+## The Binbun grass, shown or hidden with the Grass setting as FogOfWar does
+## in a match.
+var _grass_nodes: Array[GeometryInstance3D] = []
 var _direction: float = 0.7
 var _offset: Vector2 = Vector2.ZERO
 var _rng := RandomNumberGenerator.new()
@@ -85,6 +89,10 @@ var _villagers: Array[Dictionary] = []
 
 func _ready() -> void:
 	_rng.seed = 20260930
+	var world_env := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	if world_env and CompatLighting.is_active():
+		world_env.environment = world_env.environment.duplicate()
+		CompatLighting.apply(world_env.environment)
 	_centre = _ground(CENTRE_XZ)
 	_camera = get_node_or_null("Camera3D")
 	if _camera != null:
@@ -114,6 +122,8 @@ func _ready() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_collect(self)
+	_apply_grass_visibility()
+	Settings.changed.connect(_on_setting_changed)
 
 func _place_camera() -> void:
 	if _camera == null:
@@ -238,8 +248,19 @@ func _collect(node: Node) -> void:
 		if material != null and material.shader != null \
 				and material.shader.code.contains("wind_velocity"):
 			_materials.append(material)
+			if material.shader == GRASS_SHADER:
+				_grass_nodes.append(node)
 	for child in node.get_children():
 		_collect(child)
+
+func _on_setting_changed(key: StringName) -> void:
+	if key == &"grass":
+		_apply_grass_visibility()
+
+func _apply_grass_visibility() -> void:
+	var show_grass: bool = Settings.get_value(&"grass")
+	for node in _grass_nodes:
+		node.visible = show_grass
 
 func _blow_wind(delta: float) -> void:
 	if _materials.is_empty():

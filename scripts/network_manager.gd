@@ -101,6 +101,9 @@ var current_scenario_id: StringName = &""
 ## 0 when not hosting/in a Steam lobby.
 var _steam_lobby_id: int = 0
 var _quick_play_searching: bool = false
+## GodotSteam's singleton, looked up at runtime so this script still compiles
+## where GodotSteam doesn't exist (the web build). Null there.
+var _steam = Engine.get_singleton("Steam") if Engine.has_singleton("Steam") else null
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -109,10 +112,11 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connected_fail)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
-	Steam.lobby_created.connect(_on_steam_lobby_created)
-	Steam.lobby_match_list.connect(_on_steam_lobby_match_list)
-	Steam.lobby_joined.connect(_on_steam_lobby_joined)
-	Steam.join_requested.connect(_on_steam_join_requested)
+	if _steam != null:
+		_steam.lobby_created.connect(_on_steam_lobby_created)
+		_steam.lobby_match_list.connect(_on_steam_lobby_match_list)
+		_steam.lobby_joined.connect(_on_steam_lobby_joined)
+		_steam.join_requested.connect(_on_steam_join_requested)
 
 ## --- Direct Connect (typed IP), unchanged ---
 
@@ -142,7 +146,7 @@ func host_steam_lobby() -> Error:
 		return ERR_UNAVAILABLE
 	if _steam_lobby_id != 0:
 		return ERR_ALREADY_IN_USE
-	Steam.createLobby(Steam.LOBBY_TYPE_PUBLIC, MAX_PLAYERS)
+	_steam.createLobby(_steam_const("LOBBY_TYPE_PUBLIC"), MAX_PLAYERS)
 	return OK
 
 ## Steam's lobby-list response usually arrives within a second or two, but
@@ -161,10 +165,10 @@ func quick_play() -> Error:
 	if _steam_lobby_id != 0:
 		return ERR_ALREADY_IN_USE
 	_quick_play_searching = true
-	Steam.addRequestLobbyListDistanceFilter(Steam.LOBBY_DISTANCE_FILTER_WORLDWIDE)
-	Steam.addRequestLobbyListStringFilter("game", GAME_LOBBY_TAG, Steam.LOBBY_COMPARISON_EQUAL)
-	Steam.addRequestLobbyListStringFilter("status", "open", Steam.LOBBY_COMPARISON_EQUAL)
-	Steam.requestLobbyList()
+	_steam.addRequestLobbyListDistanceFilter(_steam_const("LOBBY_DISTANCE_FILTER_WORLDWIDE"))
+	_steam.addRequestLobbyListStringFilter("game", GAME_LOBBY_TAG, _steam_const("LOBBY_COMPARISON_EQUAL"))
+	_steam.addRequestLobbyListStringFilter("status", "open", _steam_const("LOBBY_COMPARISON_EQUAL"))
+	_steam.requestLobbyList()
 	_start_quick_play_timeout()
 	return OK
 
@@ -194,21 +198,21 @@ func cancel_quick_play() -> void:
 func join_steam_lobby(lobby_id: int) -> Error:
 	if not Steamworks.is_available:
 		return ERR_UNAVAILABLE
-	Steam.joinLobby(lobby_id)
+	_steam.joinLobby(lobby_id)
 	return OK
 
 ## Opens Steam's native "invite a friend" overlay for the lobby currently
 ## being hosted; a no-op if not hosting one.
 func invite_friend() -> void:
 	if _steam_lobby_id != 0:
-		Steam.activateGameOverlayInviteDialog(_steam_lobby_id)
+		_steam.activateGameOverlayInviteDialog(_steam_lobby_id)
 
 ## Host-only: hides the lobby from future Quick Play searches once the match
 ## actually starts (only the lobby owner is guaranteed permission to write
 ## lobby data, so this can't happen the moment a second player joins).
 func mark_steam_lobby_in_progress() -> void:
 	if is_host() and _steam_lobby_id != 0:
-		Steam.setLobbyData(_steam_lobby_id, "status", "in_progress")
+		_steam.setLobbyData(_steam_lobby_id, "status", "in_progress")
 
 func _on_steam_lobby_created(connection: int, lobby_id: int) -> void:
 	if connection != 1:
@@ -217,12 +221,12 @@ func _on_steam_lobby_created(connection: int, lobby_id: int) -> void:
 		steam_lobby_failed.emit("Failed to create Steam lobby.")
 		return
 	_steam_lobby_id = lobby_id
-	Steam.setLobbyJoinable(lobby_id, true)
-	Steam.setLobbyData(lobby_id, "game", GAME_LOBBY_TAG)
-	Steam.setLobbyData(lobby_id, "status", "open")
+	_steam.setLobbyJoinable(lobby_id, true)
+	_steam.setLobbyData(lobby_id, "game", GAME_LOBBY_TAG)
+	_steam.setLobbyData(lobby_id, "status", "open")
 
-	var peer := SteamMultiplayerPeer.new()
-	peer.create_host(0)
+	var peer: MultiplayerPeer = ClassDB.instantiate("SteamMultiplayerPeer")
+	peer.call("create_host", 0)
 	multiplayer.multiplayer_peer = peer
 	players.clear()
 	players[my_peer_id()] = {"name": Steamworks.steam_username, "color": TEAM_COLORS[0], "ruler_index": 0, "ready": false}
@@ -241,17 +245,17 @@ func _on_steam_lobby_match_list(lobbies: Array) -> void:
 	join_steam_lobby(lobbies[0])
 
 func _on_steam_lobby_joined(lobby_id: int, _permissions: int, _locked: bool, response: int) -> void:
-	if response != Steam.CHAT_ROOM_ENTER_RESPONSE_SUCCESS:
+	if response != _steam_const("CHAT_ROOM_ENTER_RESPONSE_SUCCESS"):
 		_quick_play_searching = false
 		_stop_quick_play_timeout()
 		steam_lobby_failed.emit("Could not join lobby (code %d)." % response)
 		return
 	_steam_lobby_id = lobby_id
 	## If we're the owner, _on_steam_lobby_created already set up our peer.
-	if Steam.getLobbyOwner(lobby_id) == Steamworks.steam_id:
+	if _steam.getLobbyOwner(lobby_id) == Steamworks.steam_id:
 		return
-	var peer := SteamMultiplayerPeer.new()
-	peer.create_client(Steam.getLobbyOwner(lobby_id), 0)
+	var peer: MultiplayerPeer = ClassDB.instantiate("SteamMultiplayerPeer")
+	peer.call("create_client", _steam.getLobbyOwner(lobby_id), 0)
 	multiplayer.multiplayer_peer = peer
 	players.clear()
 
@@ -261,11 +265,14 @@ func _on_steam_lobby_joined(lobby_id: int, _permissions: int, _locked: bool, res
 func _on_steam_join_requested(lobby_id: int, _friend_id: int) -> void:
 	join_steam_lobby(lobby_id)
 
+func _steam_const(constant: String) -> int:
+	return ClassDB.class_get_integer_constant("Steam", constant)
+
 ## --- Shared by both transports ---
 
 func leave_game() -> void:
 	if _steam_lobby_id != 0:
-		Steam.leaveLobby(_steam_lobby_id)
+		_steam.leaveLobby(_steam_lobby_id)
 		_steam_lobby_id = 0
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer.close()

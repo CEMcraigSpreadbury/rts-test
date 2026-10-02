@@ -17,10 +17,14 @@ func _init() -> void:
 	OS.set_environment("SteamGameId", str(APP_ID))
 
 func _ready() -> void:
-	var response: Dictionary = Steam.steamInitEx(APP_ID, true)
+	## Looked up at runtime so this compiles without GodotSteam (the web build).
+	if not Engine.has_singleton("Steam"):
+		return
+	var steam = Engine.get_singleton("Steam")
+	var response: Dictionary = steam.steamInitEx(APP_ID, true)
 	is_available = response.get("status", 1) == 0
 	if not is_available:
 		push_warning("Steam did not initialize (Quick Play / Steam lobbies unavailable): %s" % response.get("verbal", "unknown error"))
 		return
-	steam_id = Steam.getSteamID()
-	steam_username = Steam.getPersonaName()
+	steam_id = steam.getSteamID()
+	steam_username = steam.getPersonaName()

@@ -119,7 +119,8 @@ func _build_visuals_page(page: Control) -> void:
 			func(v: float): Settings.set_value(&"render_scale", v / 100.0), func(v: float): return "%d%%" % v)
 	_add_check(page, "Depth of Field", &"depth_of_field")
 	_add_check(page, "Clouds", &"clouds")
-	_add_check(page, "Grass", &"grass")
+	## Always off on web (see Settings._ready).
+	_add_check(page, "Grass", &"grass").disabled = OS.has_feature("web")
 	_add_check(page, "Wind", &"wind")
 	_add_check(page, "Water Reflections", &"water_reflections")
 
@@ -150,11 +151,12 @@ func _add_row(page: Control, text: String, control: Control) -> void:
 	row.add_child(control)
 	page.add_child(row)
 
-func _add_check(page: Control, text: String, key: StringName) -> void:
+func _add_check(page: Control, text: String, key: StringName) -> CheckBox:
 	var check := CheckBox.new()
 	check.button_pressed = Settings.get_value(key)
 	check.toggled.connect(func(on: bool): Settings.set_value(key, on))
 	_add_row(page, text, check)
+	return check
 
 func _add_slider(page: Control, text: String, value: float, min_value: float, max_value: float,
 		step: float, on_changed: Callable, format: Callable) -> void:

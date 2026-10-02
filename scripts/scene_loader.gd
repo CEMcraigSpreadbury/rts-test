@@ -151,6 +151,13 @@ func _load_and_instantiate(path: String, generation: int) -> Node:
 	_status_label.text = "Loading..."
 	_loading_root.visible = true
 	var started_ms: int = Time.get_ticks_msec()
+	if OS.has_feature("web"):
+		## See SplashScreen._go_to_menu.
+		await get_tree().process_frame
+		var loaded: PackedScene = load(path)
+		if generation != _generation:
+			return Node.new()
+		return loaded.instantiate() if loaded else Node.new()
 	ResourceLoader.load_threaded_request(path)
 	var progress: Array = []
 	while true:

@@ -9,6 +9,7 @@ render_mode cull_disabled;
 #include "res://shaders/util/baked_sun_shadow.gdshaderinc"
 #include "res://shaders/util/tree_wind.gdshaderinc"
 #include "res://shaders/util/cloud_shade.gdshaderinc"
+#include "res://shaders/util/compat_color.gdshaderinc"
 
 uniform sampler2D source_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec4 emission_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
@@ -23,7 +24,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec3 baked = texture(source_texture, UV).rgb * emission_color.rgb * emission_energy * tint;
+	vec3 baked = compat_out(compat_in(texture(source_texture, UV).rgb) * compat_in(emission_color.rgb) * emission_energy * compat_in(tint));
 	EMISSION = baked * cloud_shade((INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
 	ALBEDO = baked;
 	AO = 0.0;

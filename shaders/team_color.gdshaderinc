@@ -12,6 +12,8 @@
 // (and how it reaches the surface) is passed in by team_color_material.gd
 // from the material the model shipped with rather than assumed here.
 
+#include "res://shaders/util/compat_color.gdshaderinc"
+
 uniform sampler2D source_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec4 base_albedo : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform vec4 emission_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
@@ -126,7 +128,7 @@ vec3 apply_team_color(vec3 linear_rgb) {
 	// and the faded ones stay proportionally faded. Value deliberately does
 	// *not* do the same — see value_match above for why matching it outright
 	// clips half the band flat.
-	vec3 team_hsv = rgb_to_hsv(linear_to_srgb(team_color.rgb));
+	vec3 team_hsv = rgb_to_hsv(linear_to_srgb(compat_in(team_color.rgb)));
 	float value_factor = mix(1.0, team_hsv.z / source_value, value_match);
 	vec3 tinted_hsv = vec3(
 		team_hsv.x,
@@ -139,19 +141,20 @@ vec3 apply_team_color(vec3 linear_rgb) {
 // Writes the recolored texture out the same way the model's own material did,
 // so a team-colored building is lit identically to an untinted one.
 void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, out float ao) {
+	texel.rgb = compat_in(texel.rgb);
 	vec3 recolored = apply_team_color(texel.rgb);
 	if (texture_drives_emission) {
 		// Albedo mirrors the emission only so light() below has something to
 		// subtract from under a shadow; AO = 0 keeps ambient light off it, so
 		// out of shadow the result is exactly the baked emission as before.
-		emission = recolored * emission_color.rgb * emission_energy;
+		emission = compat_out(recolored * compat_in(emission_color.rgb) * emission_energy);
 		albedo = emission;
 		ao = 0.0;
 	} else {
 		// Untextured models carry their colour in base_albedo alone (the
 		// sampler falls back to white), so it has to be recolored together
 		// with the texel or their team-blue parts never get tinted.
-		albedo = apply_team_color(texel.rgb * base_albedo.rgb);
+		albedo = compat_out(apply_team_color(texel.rgb * compat_in(base_albedo.rgb)));
 		emission = vec3(0.0);
 		ao = 1.0;
 	}

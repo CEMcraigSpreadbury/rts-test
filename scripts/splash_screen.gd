@@ -36,7 +36,8 @@ var _shake: float = 0.0
 var _puffs: Array = []
 
 func _ready() -> void:
-	ResourceLoader.load_threaded_request(MAIN_MENU_SCENE_PATH)
+	if not OS.has_feature("web"):
+		ResourceLoader.load_threaded_request(MAIN_MENU_SCENE_PATH)
 	_castle.pivot_offset = Vector2(_castle.size.x * 0.5, _castle.size.y)
 	_text.pivot_offset = _text.size * 0.5
 	_dust.draw.connect(_draw_dust)
@@ -144,5 +145,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	_tween.finished.connect(_go_to_menu)
 
 func _go_to_menu() -> void:
-	var scene := ResourceLoader.load_threaded_get(MAIN_MENU_SCENE_PATH) as PackedScene
+	## Web loads on the main thread: off-thread loads there build WebGL
+	## objects in a context the renderer can't use.
+	var scene: PackedScene
+	if OS.has_feature("web"):
+		scene = load(MAIN_MENU_SCENE_PATH)
+	else:
+		scene = ResourceLoader.load_threaded_get(MAIN_MENU_SCENE_PATH)
 	SceneLoader.change_scene_from_black(scene)

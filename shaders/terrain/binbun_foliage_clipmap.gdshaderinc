@@ -11,13 +11,21 @@ uniform int LODRowsPerLevel = 10;
 uniform int LODLevels = 5;
 uniform float WindStrength = 0.1;
 uniform vec4 FoliageAlbedo: source_color = vec4(1.0);
+// WebGL allows 16 textures per shader, Godot's own included, so the
+// Compatibility renderer drops what binbun_foliage never reads: the foliage
+// albedo arrays (it colours blades itself), the scale noise (never set, so
+// white) and the water heights (WaterFactor is 0 on foliage).
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
 uniform sampler2DArray FoliageAlbedoTextures: source_color, hint_default_white, repeat_disable;
 uniform sampler2DArray FoliageAlbedoTexturesNearest: source_color, hint_default_white, repeat_disable, filter_nearest_mipmap;
+#endif
 uniform int FoliageNumberOfTexture;
 uniform bool UseGroundColor = true;
 uniform vec3 MeshScale = vec3(1.0);
 uniform bool UseBrushScale = true;
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
 uniform sampler2D ScaleNoiseTexture: hint_default_white;
+#endif
 uniform float RandomPlacementRange = 2.0;
 uniform int[100] ApplyOnTextureIndexes;
 uniform int NumberOfTexturesToApplyOn = 0;
@@ -35,7 +43,9 @@ uniform int TextureDetail;
 uniform int NumberOfTextures;
 
 // Water textures to adjust the height
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
 uniform sampler2DArray WaterTextures : hint_default_transparent, repeat_disable;
+#endif
 uniform float WaterFactor;
 
 #include "res://addons/terrabrush/Resources/Shaders/zones_shader_include.gdshaderinc"
@@ -270,10 +280,12 @@ void calculateFoliageVertex(int instanceID, vec3 clipCentre, inout vec3 vertex, 
 			} else {
 				float height = heightMapPosition.x;
 
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
 				vec4 waterPosition = texture(WaterTextures, heightmapZoneUV);
 				float waterHeight = waterPosition.x * WaterFactor;
 
 				height -= waterHeight;
+#endif
 
 				particlePosition.y = height;
 
@@ -286,7 +298,9 @@ void calculateFoliageVertex(int instanceID, vec3 clipCentre, inout vec3 vertex, 
 					vertex *= meshScaleFactor;
 				}
 
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
 				vertex *= texture(ScaleNoiseTexture, foliageZoneUV.xy).r;
+#endif
 
 				// Assign the position to the transform
 				vertex.x += particlePosition.x;
@@ -322,6 +336,7 @@ void calculateFoliageVertex(int instanceID, vec3 clipCentre, inout vec3 vertex, 
 	}
 }
 
+#if CURRENT_RENDERER != RENDERER_COMPATIBILITY
 void calculateFoliageFragment(vec2 uv, vec4 color, vec3 instancePosition, out vec3 albedo, out float alpha, out float alphaScissorThreshold, out float alphaAntiAliasingEdge) {
 	vec4 albedoTexture = vec4(1.0);
 	if (FoliageNumberOfTexture > 0) {
@@ -336,3 +351,4 @@ void calculateFoliageFragment(vec2 uv, vec4 color, vec3 instancePosition, out ve
 	alphaScissorThreshold = 0.01;
 	alphaAntiAliasingEdge = 0.5;
 }
+#endif

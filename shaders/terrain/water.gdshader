@@ -6,6 +6,11 @@
 shader_type spatial;
 render_mode shadows_disabled;
 
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+// fma() is Forward+/Mobile only.
+#define fma(a, b, c) ((a) * (b) + (c))
+#endif
+
 #define CAUSTICS
 #define FRESNEL
 //#define PLAYER_WAVES

@@ -4,6 +4,11 @@
 shader_type spatial;
 render_mode cull_back, blend_mix, depth_draw_opaque;
 
+// Our texture sets are albedo-only; dropping the other arrays keeps this under
+// WebGL's 16 textures (see the include).
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+#define TERRABRUSH_ALBEDO_ONLY
+#endif
 #include "res://addons/terrabrush/Resources/Shaders/heightmap_clipmap_shader_include.gdshaderinc"
 
 group_uniforms FogOfWar;

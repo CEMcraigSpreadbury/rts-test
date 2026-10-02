@@ -9,6 +9,7 @@
 native/godot-cpp/
 native/**/*.obj
 native/**/*.os
+native/**/*.o
 native/**/*.pdb
 native/.sconsign.dblite
 addons/army_sim/bin/*.exp

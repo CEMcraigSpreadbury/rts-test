@@ -57,6 +57,10 @@ var keys: Dictionary = DEFAULT_KEYS.duplicate()
 
 func _ready() -> void:
 	_load()
+	## The browser draws the grass several times slower than desktop does, enough
+	## to take a mid-range GPU well under playable, so the web build goes without.
+	if OS.has_feature("web"):
+		values[&"grass"] = false
 	for bus_name in BUSES:
 		_apply_volume(bus_name)
 	for key in values:

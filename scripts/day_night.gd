@@ -82,6 +82,8 @@ func setup() -> void:
 		_environment = world_env.environment.duplicate(true)
 		world_env.environment = _environment
 		_sky_material = _environment.sky.sky_material as ProceduralSkyMaterial if _environment.sky else null
+		## Before the day values below are taken, so night scales from these.
+		CompatLighting.apply(_environment)
 	if _sun:
 		_day_sun_color = _sun.light_color
 		_day_sun_energy = _sun.light_energy
@@ -147,6 +149,9 @@ func refresh_lighting() -> void:
 		_environment.ambient_light_energy = _day_ambient_energy * lerpf(1.0, NIGHT_AMBIENT_ENERGY_SCALE, t)
 		_environment.background_energy_multiplier = _day_sky_energy * lerpf(1.0, NIGHT_SKY_ENERGY_SCALE, t)
 		_environment.volumetric_fog_albedo = _day_fog_albedo.lerp(NIGHT_FOG_ALBEDO, t)
+		if CompatLighting.is_active():
+			## Its flat stand-in haze is lit by nothing, so it dims with the sun.
+			_environment.fog_light_color = CompatLighting.FOG_COLOR.lerp(NIGHT_FOG_ALBEDO * NIGHT_SUN_ENERGY_SCALE, t)
 		_environment.adjustment_saturation = _day_saturation * lerpf(1.0, NIGHT_SATURATION_SCALE, t)
 	if _sky_material:
 		_sky_material.sky_top_color = _day_sky_top.lerp(NIGHT_SKY_TOP, t)
