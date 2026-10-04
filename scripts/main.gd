@@ -421,6 +421,16 @@ func _apply_clouds_setting(key: StringName) -> void:
 	if clouds:
 		clouds.visible = Settings.get_value(&"clouds")
 
+## Screen-space AO: contact shading where buildings, trunks and rocks meet the
+## ground. Read off the live WorldEnvironment each time, since DayNight swaps
+## in its own copy of the environment.
+func _apply_ambient_occlusion_setting(key: StringName) -> void:
+	if key != &"ambient_occlusion":
+		return
+	var world_env := get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+	if world_env and world_env.environment:
+		world_env.environment.ssao_enabled = Settings.get_value(&"ambient_occlusion")
+
 func _ready() -> void:
 	GameClock.reset()
 	RoadNet.build(self)
@@ -463,6 +473,8 @@ func _ready() -> void:
 		TreeWind.apply_to_trees_in(scenery)
 	_apply_clouds_setting(&"clouds")
 	Settings.changed.connect(_apply_clouds_setting)
+	_apply_ambient_occlusion_setting(&"ambient_occlusion")
+	Settings.changed.connect(_apply_ambient_occlusion_setting)
 
 	## Every peer works out the same sides — none of it is networked (see
 	## Scenario.resolve_players). Before the HUD is built, which draws the

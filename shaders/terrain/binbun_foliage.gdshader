@@ -173,6 +173,10 @@ void fragment() {
 	float noise_value = texture(noise_texture, root_pos.xz * noise_scale).r;
 	if (blade_random < random_variation) noise_value += 0.4;
 	SPECULAR = 0.0;
+	// None: blades occlude one another, and any AO here lands on them as dark
+	// patches across the meadow. The ground under them carries the contact
+	// shading round walls and rocks.
+	AO_LIGHT_AFFECT = 0.0;
 	// Tells the outline pass this is a grass blade (see outline.gdshader).
 	ROUGHNESS = 0.985;
 	// Sunlit tips: the top of each blade a touch lighter and warmer (UV.y runs

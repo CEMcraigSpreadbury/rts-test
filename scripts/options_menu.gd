@@ -127,6 +127,8 @@ func _build_visuals_page(page: Control) -> void:
 			func(v: float): Settings.set_value(&"render_scale", v / 100.0), func(v: float): return "%d%%" % v)
 	_add_check(page, "Depth of Field", &"depth_of_field")
 	_add_check(page, "Clouds", &"clouds")
+	## The web build's renderer has no screen-space AO to turn on.
+	_add_check(page, "Ambient Occlusion", &"ambient_occlusion").disabled = OS.has_feature("web")
 	## Always off on web (see Settings._ready).
 	_add_check(page, "Grass", &"grass").disabled = OS.has_feature("web")
 	_add_check(page, "Wind", &"wind")

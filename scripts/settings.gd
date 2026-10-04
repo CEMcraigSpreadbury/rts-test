@@ -30,6 +30,7 @@ const DEFAULTS := {
 	&"render_scale": 1.0,
 	&"depth_of_field": true,
 	&"clouds": true,
+	&"ambient_occlusion": true,
 	&"wind": true,
 	&"grass": true,
 	&"water_reflections": true,

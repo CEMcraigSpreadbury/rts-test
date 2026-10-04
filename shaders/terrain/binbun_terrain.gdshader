@@ -135,6 +135,11 @@ void fragment() {
 	vec3 path = mix(grass, dirt_albedo(world_pos.xz, edge * 0.35), dirt_mask);
 	ALBEDO = mix(ALBEDO, path, ground_w);
 	ROUGHNESS = mix(ROUGHNESS, 1.0, ground_w);
+	// Screen-space AO darkens the sunlit ground too, not just its ambient light,
+	// so the ground darkens where a wall, trunk or rock stands on it. Where the
+	// grass grows only lightly: there the occluders are mostly the blades
+	// themselves, and close up their AO reads as dark holes in the meadow.
+	AO_LIGHT_AFFECT = mix(1.0, 0.25, clamp(grass_w * (1.0 - dirt_mask), 0.0, 1.0));
 	// Painted ground has no shine: a sky reflection at grazing angles reads as
 	// a milky haze over the far grass.
 	SPECULAR = mix(SPECULAR, 0.0, ground_w);

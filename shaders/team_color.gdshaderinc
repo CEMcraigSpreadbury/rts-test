@@ -151,6 +151,16 @@ vec3 soften_highlights(vec3 c) {
 	return c * mix(vec3(0.95, 0.93, 0.9), vec3(0.6, 0.6, 0.59), smoothstep(0.35, 0.9, light));
 }
 
+// A baked-lit building is drawn partly as emission and partly as albedo lit
+// by the ambient light, which screen-space AO darkens -- so the ground and the
+// building's own corners and wall feet shade it where they crowd it. The
+// albedo is scaled by AMBIENT_REF (map_base.tscn's ambient colour x energy) so
+// that, unoccluded, the two halves add back up to the baked colour.
+// The Compatibility renderer (web) has no SSAO and a different environment
+// (compat_lighting.gd), so it keeps the all-emission look.
+const float LIT_SHARE = 0.5;
+const vec3 AMBIENT_REF = vec3(0.62, 0.68, 0.72);
+
 // Writes the recolored texture out the same way the model's own material did,
 // so a team-colored building is lit identically to an untinted one.
 void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, out float ao) {
@@ -160,9 +170,16 @@ void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, 
 		// Albedo mirrors the emission only so light() below has something to
 		// subtract from under a shadow; AO = 0 keeps ambient light off it, so
 		// out of shadow the result is exactly the baked emission as before.
-		emission = compat_out(recolored * compat_in(emission_color.rgb) * emission_energy);
+		vec3 baked = recolored * compat_in(emission_color.rgb) * emission_energy;
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+		emission = compat_out(baked);
 		albedo = emission;
 		ao = 0.0;
+#else
+		emission = baked * (1.0 - LIT_SHARE);
+		albedo = baked * LIT_SHARE / AMBIENT_REF;
+		ao = 1.0;
+#endif
 	} else {
 		// Untextured models carry their colour in base_albedo alone (the
 		// sampler falls back to white), so it has to be recolored together
@@ -178,7 +195,14 @@ void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, 
 
 void light() {
 	if (texture_drives_emission) {
+		// The albedo is the lit share scaled by AMBIENT_REF (see above), so the
+		// shadow is scaled back up to take the same amount off as before.
+#if CURRENT_RENDERER == RENDERER_COMPATIBILITY
 		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, ATTENUATION, LIGHT_IS_DIRECTIONAL, sun_shadow_strength);
+#else
+		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, ATTENUATION, LIGHT_IS_DIRECTIONAL, sun_shadow_strength)
+				* AMBIENT_REF / LIT_SHARE;
+#endif
 	} else {
 		DIFFUSE_LIGHT += LIGHT_COLOR * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION / PI;
 	}
