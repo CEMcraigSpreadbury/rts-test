@@ -57,6 +57,9 @@ vec3 grass_patches(vec3 grass, vec2 xz, sampler2D noise) {
 	return mix(deep, sunlit, t);
 }
 
+// For the Binbun blades only (the bare terrain takes just grass_patches): the
+// broad blending plus faint clump crowns. Darker dabs here read as blotches
+// across the meadow, so the blades only ever lighten it a little.
 vec3 grass_clumps(vec3 grass, vec2 xz, sampler2D noise) {
 	grass = grass_patches(grass, xz, noise);
 	float h = clump_height(xz);

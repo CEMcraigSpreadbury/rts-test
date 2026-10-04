@@ -20,6 +20,8 @@ extends Node
 ##   --build    select a builder and open its build menu
 ##   --controls open the controls card
 ##   --zoom=N   camera distance (gameplay starts at 22, the wheel pulls out to 110)
+##   --nograss  hide the Binbun grass blades, as the Grass option does (not saved)
+##   --grass    show them even if the player's saved Grass option is off (not saved)
 ##   --art      the art-reference close-up: a Barracks and Archery Range set
 ##              down by the Town Center, villagers gathered, trees on the left
 ##              (the framing of the art-direction reference image)
@@ -47,6 +49,8 @@ func _ready() -> void:
 	var controls: bool = false
 	var art: bool = false
 	var zoom: float = -1.0
+	## -1 leaves the player's Grass option alone; 0 forces it off, 1 on.
+	var grass: int = -1
 	var show_node: String = ""
 	var ai_count: int = -1
 	var map: String = ""
@@ -76,6 +80,10 @@ func _ready() -> void:
 			controls = true
 		elif arg == "--art":
 			art = true
+		elif arg == "--nograss":
+			grass = 0
+		elif arg == "--grass":
+			grass = 1
 		elif arg.begins_with("--zoom="):
 			zoom = float(arg.trim_prefix("--zoom="))
 		elif arg == "--army":
@@ -132,6 +140,7 @@ func _ready() -> void:
 	director.controls = controls
 	director.art = art
 	director.zoom = zoom
+	director.grass = grass
 	director.show_node = show_node
 	director.ai_count = ai_count
 	director.present = present

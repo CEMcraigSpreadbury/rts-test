@@ -109,7 +109,10 @@ void fragment() {
 	grass_w = max(grass_w + dirt_w - stamped, 0.0);
 	dirt_w = stamped;
 	float noise_value = texture(noise_texture, world_pos.xz * noise_scale).r;
-	vec3 grass = grass_clumps(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, world_pos.xz, noise_texture);
+	// Only the broad colour blending here: the clump shapes are painted onto
+	// the Binbun blades, which soften them into tufts. On bare ground (grass
+	// off in Options, and always on the web build) they read as stamped ovals.
+	vec3 grass = grass_patches(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, world_pos.xz, noise_texture);
 
 	// Grass/dirt share of this pixel; rock and sand keep TerraBrush's blend.
 	float ground_w = clamp(grass_w + dirt_w, 0.0, 1.0);
@@ -120,12 +123,14 @@ void fragment() {
 			+ (texture(noise_texture, world_pos.xz * 1.6 + vec2(0.3, 0.8)).r - 0.5) * 0.3;
 	float d = dirt_share - 0.5 + wobble;
 	float dirt_mask = clamp(d * edge_sharpness + 0.5, 0.0, 1.0);
-	// A fringe of grass clumps spilling over the edge onto the dirt: in the
-	// band just inside it, wherever a painted clump (grass_clumps) covers.
-	float fringe = 1.0 - smoothstep(0.02, 0.1, d);
+	// A fringe of grass clumps spilling over the edge onto the dirt: only in
+	// the narrow band either side of the edge, and darkened only where it
+	// actually covers dirt -- out in open grass `d` is far below zero, and an
+	// unbounded fringe there stamped every clump shape across the meadow.
+	float fringe = smoothstep(-0.12, -0.03, d) * (1.0 - smoothstep(0.02, 0.1, d));
 	float overhang = fringe * step(clump_height(world_pos.xz * 1.7), 1.5);
+	grass *= mix(1.0, 0.85, overhang * dirt_mask);
 	dirt_mask *= 1.0 - overhang;
-	grass *= mix(1.0, 0.85, overhang);
 	float edge = 1.0 - smoothstep(0.0, edge_band, d);
 	vec3 path = mix(grass, dirt_albedo(world_pos.xz, edge * 0.35), dirt_mask);
 	ALBEDO = mix(ALBEDO, path, ground_w);

@@ -20,6 +20,8 @@ var controls: bool = false
 var art: bool = false
 ## -1 leaves the camera distance alone.
 var zoom: float = -1.0
+## -1 leaves the player's Grass option alone; 0 forces it off, 1 on.
+var grass: int = -1
 ## --art: how close the camera sits (RtsCamera.min_zoom is 8).
 const ART_ZOOM: float = 22.0
 var army: bool = false
@@ -177,6 +179,11 @@ func _run_match() -> void:
 
 	if time_of_day >= 0.0:
 		_set_time_of_day(main.get("day_night"))
+
+	if grass >= 0:
+		## Straight into the values, so the player's saved settings are untouched.
+		Settings.values[&"grass"] = grass == 1
+		main.fog_of_war._apply_grass_visibility()
 
 	if zoom > 0.0:
 		var zoom_rig: Node = main.get_node("CameraRig")
