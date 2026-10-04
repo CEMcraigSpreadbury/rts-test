@@ -45,6 +45,12 @@ own.
 Sides with no spawn point (`DEFENDERS`) are not charged upkeep, so scripted
 waves never starve and rout on the march.
 
+Everyone else eats: villagers 2 food a minute, soldiers 3 per population, and
+past 20 population every mouth costs 1% more per head, up to double
+(`RealmEconomy.growth_multiplier`). Starting food is sized for that: 300 in
+mission 1, 500 in missions 2 and 3, where the player opens with a Lord and
+twelve soldiers to feed.
+
 ## Quest pieces added for Realm
 
 - **SettlementsCondition**: counts settlements held right now. It can filter by
@@ -59,7 +65,9 @@ waves never starve and rout on the march.
 - **EliminateSlotCondition.main_bases_only**: "burn their Town Center",
   whatever else of theirs is still standing.
 - **HighlightUiAction** can also point at `unit_cards` (the regiment card
-  strip) and `speed_controls`.
+  strip), `speed_controls` and `day_clock`.
+- **ShowControlsAction** puts up the controls card. It takes its turn in the
+  dialogue queue, and the lines after it wait until it is closed.
 
 The quest tracker now sits under the single-player speed buttons instead of on
 top of them.
@@ -74,22 +82,25 @@ locked throughout. Every instruction line pauses the game until Continue is
 pressed.
 
 1. Look over your holding: move the view and zoom.
-2. Select your villagers.
+2. Select your villagers. Afterwards Edda shows the controls card
+   (`ShowControlsAction`).
 3. Bring in 50 wood. The idle-villager button is highlighted.
 4. Build a Mine on the marked gold. Building is unlocked here and the action
-   panel is highlighted.
+   panel is highlighted. A second line covers a site with nobody building it
+   (select it and press B, or right-click it with villagers).
 5. Bring in 30 gold.
 6. Build a Mill.
 7. Train two villagers.
 8. Build a Barracks. The Barracks is unlocked here.
-9. Have twelve soldiers.
+9. Have twelve soldiers. The stockpile is highlighted for the food rate.
 10. Form a regiment (N). The card strip is highlighted.
 11. Raise a Lord at the Town Center. The Crown sends 150 gold for him.
 12. Bring the regiment into the Lord's army (J).
 13. Take Brackenford (`Objective6`, a Human village down the slope west of
     the base). Afterwards the player is told to choose Occupy.
-14. Build a Granary in Brackenford's slot. The closing lines lead into
-    mission 2, then Victory.
+14. Build a Granary in Brackenford's slot. The closing lines point out the
+    day clock and speed buttons (both highlighted) and lead into mission 2,
+    then Victory.
 
 ### 2. Smoke over the Vale
 

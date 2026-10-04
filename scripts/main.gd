@@ -162,6 +162,10 @@ func play_placement_blocked_sound() -> void:
 const OPTIONS_MENU_SCENE: PackedScene = preload("res://scenes/options_menu.tscn")
 const MAIN_MENU_SCENE_PATH: String = "res://scenes/main_menu.tscn"
 var _options_menu: OptionsMenu
+## Every click and key on one card (see UiControlsCard).
+var controls_card: UiControlsCard
+## The card was opened from the pause menu, so closing it goes back there.
+var _controls_from_pause: bool = false
 
 var selected_units: Array[Unit] = []
 ## "cmd control" (single player, debug): select and command anyone's units —
@@ -550,6 +554,8 @@ func _ready() -> void:
 	Network.server_disconnected.connect(_on_network_server_disconnected)
 	_build_opponent_left_panel()
 	placement.setup()
+	## Before the fog's deferred material scan, which has to find its chunks.
+	GroundScatter.build(self)
 
 	pause_menu.visible = false
 	pause_menu.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -561,6 +567,27 @@ func _ready() -> void:
 	_options_menu.process_mode = Node.PROCESS_MODE_ALWAYS
 	_options_menu.closed.connect(_open_pause_menu)
 	ui_root.add_child(_options_menu)
+	var controls_button := UiButton.new()
+	controls_button.name = "ControlsButton"
+	controls_button.text = "Controls"
+	controls_button.pressed.connect(func():
+		pause_menu.visible = false
+		_controls_from_pause = true
+		controls_card.open())
+	var pause_options: Node = $UI/PauseMenu/Margin/VBox/OptionsButton
+	pause_options.add_sibling(controls_button)
+	pause_options.get_parent().move_child(controls_button, pause_options.get_index())
+	controls_card = UiControlsCard.new()
+	controls_card.closed.connect(func():
+		if _controls_from_pause:
+			_controls_from_pause = false
+			_open_pause_menu())
+	## Its own layer: HUD panels added to UI later would otherwise draw over it.
+	var controls_layer := CanvasLayer.new()
+	controls_layer.name = "ControlsLayer"
+	controls_layer.layer = 10
+	add_child(controls_layer)
+	controls_layer.add_child(controls_card)
 	var pause_listener := PauseEscapeListener.new()
 	pause_listener.main = self
 	add_child(pause_listener)
@@ -702,7 +729,7 @@ func _open_options_menu() -> void:
 	_options_menu.open()
 
 func _is_pause_menu_open() -> bool:
-	return pause_menu.visible or _options_menu.visible
+	return pause_menu.visible or _options_menu.visible or controls_card.visible
 
 func my_peer_id() -> int:
 	return multiplayer.get_unique_id()
@@ -1321,6 +1348,15 @@ func _final_scoreboard(winner_team: int) -> Array:
 ## Seconds of play, counted locally; stops while paused and once it's over.
 var _match_seconds: float = 0.0
 
+## A player's construction site with nobody building it or on the way gets
+## one chat line and a minimap ping after this long (host-side, game time).
+## Walls are left out: their pieces wait their turn in a builder's queue.
+const SITE_NUDGE_SECONDS: float = 10.0
+const SITE_NUDGE_POLL: float = 1.0
+## Host: instance id of an idle site -> how long it has stood idle.
+var _idle_site_seconds: Dictionary = {}
+var _site_nudge_timer: float = 0.0
+
 ## Scoreboard and time played, between the title and the buttons.
 var _summary_box: VBoxContainer = null
 var _scoreboard: GridContainer = null
@@ -1611,6 +1647,48 @@ func announce_point_captured(peer_id: int, letter: String) -> void:
 	for peer in _chat_recipients():
 		chat.send_line(peer, "%s captured %s." % ["You" if peer == peer_id else name_text, letter])
 
+func _tick_site_nudges(delta: float) -> void:
+	_site_nudge_timer += delta
+	if _site_nudge_timer < SITE_NUDGE_POLL:
+		return
+	var step: float = _site_nudge_timer
+	_site_nudge_timer = 0.0
+	## A builder walking over doesn't count on the site until it arrives.
+	var on_the_way: Dictionary = {}
+	for node in get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit != null and unit.status_command == Unit.Command.BUILD and is_instance_valid(unit.build_target):
+			on_the_way[unit.build_target.get_instance_id()] = true
+	var still_idle: Dictionary = {}
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var site := node as ProductionBuilding
+		if site == null or not site.is_under_construction or site.is_destroyed \
+				or site.synced_builder_count > 0 or site.has_meta(&"builder_nudged") \
+				or not Network.can_rpc_to(site.owner_peer_id) \
+				or site.building_name.begins_with("Wall") or site.building_name == "Gate":
+			continue
+		var id: int = site.get_instance_id()
+		if on_the_way.has(id):
+			continue
+		var idle: float = float(_idle_site_seconds.get(id, 0.0)) + step
+		if idle < SITE_NUDGE_SECONDS:
+			still_idle[id] = idle
+			continue
+		site.set_meta(&"builder_nudged", true)
+		alert_player(site.owner_peer_id, site.global_position, "Your %s has no builders. Select it and press %s." \
+				% [site.building_name, OS.get_keycode_string(SITE_BUILDERS_KEY)])
+	_idle_site_seconds = still_idle
+
+## Host: one chat line for `peer_id` alone, with a minimap ping where it happened.
+func alert_player(peer_id: int, at: Vector3, line: String) -> void:
+	if Network.can_rpc_to(peer_id):
+		_rpc_alert.rpc_id(peer_id, at, line)
+
+@rpc("authority", "call_local", "reliable")
+func _rpc_alert(at: Vector3, line: String) -> void:
+	minimap.show_ping(at)
+	chat.show_line(line)
+
 func _on_network_server_disconnected() -> void:
 	_show_opponent_left("Lost connection to host.")
 
@@ -1772,6 +1850,8 @@ func _process(delta: float) -> void:
 	_poll_formation_drag()
 	if not game_over:
 		_match_seconds += delta
+		if multiplayer.is_server():
+			_tick_site_nudges(delta)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_over or local_player_out:

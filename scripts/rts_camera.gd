@@ -78,6 +78,7 @@ func _ready() -> void:
 	_zoom_target = zoom_distance
 	pitch.rotation_degrees.x = -pitch_degrees
 	camera.fov = field_of_view
+	OutlinePass.attach(camera)
 	_apply_settings(&"")
 	Settings.changed.connect(_apply_settings)
 	_update_zoom()

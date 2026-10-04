@@ -109,9 +109,14 @@ func _on_start_pressed() -> void:
 	var info: ScenarioInfo = _campaign.missions[_selected]
 	if _selected >= _campaign.unlocked_count() or info.scene_path.is_empty():
 		return
+	launch(info, _difficulty.selected, _ruler.selected_ruler())
+
+## Starts a mission. Also used by the main menu's first-launch tutorial offer,
+## which skips this screen.
+static func launch(info: ScenarioInfo, difficulty: int, ruler_index: int) -> void:
 	Network.start_offline()
-	Network.campaign_difficulty = _difficulty.selected
+	Network.campaign_difficulty = difficulty
 	Network.current_scenario_id = info.id
-	Network.set_my_ruler(_ruler.selected_ruler())
+	Network.set_my_ruler(ruler_index)
 	Network.resolve_random_rulers()
 	SceneLoader.change_scene(info.scene_path)

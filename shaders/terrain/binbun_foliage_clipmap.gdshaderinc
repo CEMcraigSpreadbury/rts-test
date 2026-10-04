@@ -235,9 +235,15 @@ void calculateFoliageVertex(int instanceID, vec3 clipCentre, inout vec3 vertex, 
 	vec3 worldVertex = vec3(particlePosition.x, 0, particlePosition.z);
 	vec3 foliageZoneUV = calculateZoneUVResolution(worldVertex, false);
 
-	// Calculate the noise/random value with the zoneUV;
-	vec4 noiseTextureValue = texture(NoiseTexture, foliageZoneUV.xy);
-	vec3 noiseRandom = hash_noise_range(noiseTextureValue.rgb);
+	// Calculate the random offset for this blade.
+	// The noise texture is 1 px per metre but blades sit every few centimetres,
+	// so dozens of neighbours read the same texel, take the same offset and
+	// stay in a perfect grid. Seed from the blade's whole-number cell index
+	// instead: the hash below magnifies the smallest float difference, so it
+	// must only ever see values that come out identical as the clipmap follows
+	// the camera, or every blade jumps each time it steps.
+	vec2 cellIndex = mod(round(particlePosition.xz / cellWidth), vec2(251.0));
+	vec3 noiseRandom = hash_noise_range(vec3(cellIndex.x * 0.731, float(currentLODLevel) * 0.37, cellIndex.y * 0.593));
 	float noiseRandomXValue = mix(-RandomPlacementRange, RandomPlacementRange, noiseRandom.x);
 	float noiseRandomZValue = mix(-RandomPlacementRange, RandomPlacementRange, noiseRandom.z);
 

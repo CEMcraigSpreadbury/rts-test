@@ -334,6 +334,10 @@ func _find_resource_type_by_name(resource_name: String) -> ResourceType:
 			return resource_type
 	return null
 
+## A line for this screen only, from code already running on it.
+func show_line(line: String) -> void:
+	_rpc_display_chat(line)
+
 @rpc("authority", "call_local", "reliable")
 func _rpc_display_chat(line: String) -> void:
 	chat_lines.append(line)

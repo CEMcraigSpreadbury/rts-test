@@ -6,12 +6,17 @@ shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_disabled;
 
 #include "res://shaders/terrain/binbun_foliage_clipmap.gdshaderinc"
+#include "res://shaders/terrain/grass_clumps.gdshaderinc"
+#include "res://shaders/util/cloud_shade.gdshaderinc"
 #include "res://BinbunGrass/src/shader/util/dither.gdshaderinc"
 
 uniform bool billboard = true;
 // Per-blade size multiplier, picked evenly in this range — the demo's
 // MultiMesh blades span 0..2x. TerraBrush's own scale noise is ignored.
 uniform vec2 blade_scale_range = vec2(0.0, 2.0);
+// Height relative to width: below 1 the blades are wide, low clumps, so a
+// big blade still leaves unit sprites standing clear of the grass.
+uniform float blade_height = 1.0;
 // Blades in coarser LOD rings (wider spacing) grow by (spacing ratio)^this,
 // so the grass doesn't visibly thin out with distance.
 uniform float lod_size_compensation : hint_range(0.0, 1.0, 0.05) = 0.5;
@@ -81,6 +86,10 @@ float painted_dirt(vec3 terrain_pos) {
 }
 
 varying vec3 world_pos;
+// Where the blade is rooted: it takes the painted ground colour from there, so
+// a blade matches the ground it grows from and only shows as a ragged edge
+// where that colour changes.
+varying vec3 root_pos;
 varying flat int blade_index;
 varying flat float blade_random;
 
@@ -126,20 +135,28 @@ void vertex() {
 	bool blade_present = length(top - base) > 0.0001
 			&& max(ground_stamp((MODEL_MATRIX * vec4(base, 1.0)).xz), painted_dirt(base)) < dirt_cut;
 
-	vec3 rnd = hash_noise_range(grid_position) * 0.5 + 0.5;
+	// Seeded by the blade's whole-number cell index, never its float position:
+	// the hash magnifies the last bit of a float, and the grid's positions shift
+	// by that much every time the clipmap steps after the camera, which would
+	// give every blade a new size, rotation and texture each step (jitter).
+	vec2 cell_index = mod(round(grid_position.xz / cell_width), vec2(251.0));
+	float lod_level = round(log2(cell_width / InitialCellWidth));
+	vec3 seed = vec3(cell_index.x * 0.731, lod_level * 0.37, cell_index.y * 0.593);
+	vec3 rnd = hash_noise_range(seed) * 0.5 + 0.5;
 	blade_index = int(rnd.y * float(atlas_size * atlas_size));
 	blade_random = rnd.z;
 
-	float blade_scale = mix(blade_scale_range.x, blade_scale_range.y, hash_noise_range(grid_position + vec3(17.0)).x * 0.5 + 0.5);
+	float blade_scale = mix(blade_scale_range.x, blade_scale_range.y, hash_noise_range(seed + vec3(17.0)).x * 0.5 + 0.5);
 	blade_scale *= pow(cell_width / InitialCellWidth, lod_size_compensation);
 
-	vec3 offset = VERTEX * blade_scale;
+	vec3 offset = VERTEX * blade_scale * vec3(1.0, blade_height, 1.0);
 	if (billboard) {
 		offset = MAIN_CAM_INV_VIEW_MATRIX[0].xyz * offset.x + MAIN_CAM_INV_VIEW_MATRIX[1].xyz * offset.y;
 	} else {
 		offset = rotateY(rnd.x * TAU) * offset;
 	}
-	world_pos = (MODEL_MATRIX * vec4(base, 1.0)).xyz + offset;
+	root_pos = (MODEL_MATRIX * vec4(base, 1.0)).xyz;
+	world_pos = root_pos + offset;
 	if (blade_present) {
 		world_pos += wind(UV);
 	}
@@ -153,9 +170,12 @@ void vertex() {
 void fragment() {
 	float shape_value = texture(shape_atlas, atlas_uv(UV, blade_index, atlas_size)).r;
 
-	float noise_value = texture(noise_texture, world_pos.xz * noise_scale).r;
+	float noise_value = texture(noise_texture, root_pos.xz * noise_scale).r;
 	if (blade_random < random_variation) noise_value += 0.4;
-	ALBEDO = apply_fog(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, world_pos.xz, SPECULAR);
+	SPECULAR = 0.0;
+	// Tells the outline pass this is a grass blade (see outline.gdshader).
+	ROUGHNESS = 0.985;
+	ALBEDO = apply_fog(grass_clumps(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, root_pos.xz, noise_texture), world_pos.xz, SPECULAR);
 
 	float alpha = clamp((shape_value - alpha_cut_start) / (alpha_cut_end - alpha_cut_start), 0.0, 1.0);
 	if (alpha_mode == 0) {
@@ -171,7 +191,9 @@ void fragment() {
 
 // Binbun's unclamped wrap lighting, scaled by the light's colour/energy like
 // Godot's own lambert so it sits in maps lit for standard materials.
+#include "res://shaders/terrain/ground_light.gdshaderinc"
+
 void light() {
-	float ndotl = dot(LIGHT, NORMAL) * ATTENUATION;
-	DIFFUSE_LIGHT += ndotl * LIGHT_COLOR / PI;
+	float cloud = cloud_sun_block(root_pos, texture(noise_texture, root_pos.xz * 0.7).r);
+	ground_light(LIGHT, NORMAL, ATTENUATION, LIGHT_COLOR, LIGHT_IS_DIRECTIONAL, cloud, DIFFUSE_LIGHT);
 }

@@ -300,7 +300,7 @@ func _match_tick() -> void:
 		_begin_measuring()
 		print("")
 		print("  time    who        villagers army bodies  buildings points reach%s" % (
-				"   food farms hands upkeep" if MatchRules.realm() else ""))
+				"   food farms hands upkeep income" if MatchRules.realm() else ""))
 		_match_report()
 		return
 	if not _measuring:
@@ -342,8 +342,8 @@ func _match_report() -> void:
 			for node in get_tree().get_nodes_in_group(&"gatherables"):
 				if node is Gatherable and node.owner_peer_id == peer and node.display_name == "Farm":
 					farms += 1
-			line += "   %4d %5d %5d %5.0f%s" % [ai.stock(RealmEconomy.FOOD), farms, hands,
-					_main.realm_economy.food_per_minute(peer),
+			line += "   %4d %5d %5d %5.0f %6.0f%s" % [ai.stock(RealmEconomy.FOOD), farms, hands,
+					_main.realm_economy.food_per_minute(peer), _main.realm_economy.food_income_per_minute(peer),
 					" STARVING" if _main.realm_economy.is_starving(peer) else ""]
 		print(line)
 	if MatchRules.realm():

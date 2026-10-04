@@ -294,6 +294,13 @@ func _next_line() -> void:
 		return
 	_showing_line = true
 	var line: Dictionary = _queue.pop_front()
+	if String(line.get("kind", "")) == "controls":
+		_dialogue_panel.visible = false
+		main.controls_card.closed.connect(_next_line, CONNECT_ONE_SHOT)
+		main.controls_card.open()
+		_set_paused(Network.is_single_player())
+		_update_hold()
+		return
 	_dialogue_speaker.text = String(line.get("speaker", ""))
 	_dialogue_speaker.visible = _dialogue_speaker.text != ""
 	_dialogue_text.text = String(line.get("text", ""))
@@ -411,7 +418,7 @@ func is_presenting() -> bool:
 
 func _on_presentation(payload: Dictionary) -> void:
 	match String(payload.get("kind", "")):
-		"dialogue":
+		"dialogue", "controls":
 			_queue_line(payload)
 		"briefing":
 			_show_briefing(String(payload.get("title", "")), String(payload.get("text", "")))
@@ -450,7 +457,7 @@ func _highlight_target(element_name: String) -> Control:
 		"idle_button":
 			return main.get_node_or_null(^"UI/BottomBar/UtilityButtons/IdleButton")
 		"resources":
-			return main.get_node_or_null(^"UI/ResourceLabel")
+			return main.get_node_or_null(^"UI/Stockpile")
 		"research_button":
 			return main.get_node_or_null(PowerBar.RESEARCH_BUTTON_PATH)
 		"quest_tracker":
@@ -459,6 +466,8 @@ func _highlight_target(element_name: String) -> Control:
 			return main.hud.unit_cards if main.hud != null else null
 		"speed_controls":
 			return main.get_node_or_null(^"UI/SpeedControls")
+		"day_clock":
+			return main.get_node_or_null(^"UI/DayClock")
 	return null
 
 ## A pulsing outline laid over the element, following it each frame rather than

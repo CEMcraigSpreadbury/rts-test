@@ -31,6 +31,8 @@ var _add_ai_button: Button
 ## The campaign's mission list, built only when there is a campaign to show.
 var _campaign_menu: CampaignMenu = null
 var _credits: CreditsScreen
+## The first-launch "play the tutorial?" panel, or null once it has been answered.
+var _tutorial_offer: PanelContainer = null
 
 func _ready() -> void:
 	$Menu/SinglePlayerButton.pressed.connect(_on_single_player_pressed)
@@ -54,6 +56,7 @@ func _ready() -> void:
 	map_select.visible = false
 	options_menu.visible = false
 	options_menu.closed.connect(_on_options_closed)
+	_offer_tutorial()
 	UiDebugEditor.register_editable_root(self, "main_menu")
 
 ## The skirmish setup screen: map and victory rule on the left, player slots on
@@ -147,6 +150,52 @@ func _on_campaign_pressed() -> void:
 
 func _on_campaign_menu_closed() -> void:
 	_campaign_menu.get_parent().visible = false
+	menu.visible = true
+
+## --- First launch ---
+
+## Asked once, the first time the menu opens, unless the tutorial (the
+## campaign's first mission) has already been won. Either answer closes it for
+## good; the tutorial stays on the Campaign screen.
+func _offer_tutorial() -> void:
+	var campaign: Campaign = Campaign.current()
+	if campaign == null or campaign.missions.is_empty():
+		return
+	var tutorial: ScenarioInfo = campaign.missions[0]
+	if CampaignProgress.tutorial_offered() or CampaignProgress.is_completed(tutorial.id):
+		return
+
+	_tutorial_offer = PanelContainer.new()
+	_tutorial_offer.name = "TutorialOffer"
+	var shell := ModalShell.dress(_tutorial_offer, "Welcome", "New to the March?", 560)
+	shell.right.visible = false
+	var text := Label.new()
+	text.theme_type_variation = &"ProseLabel"
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.custom_minimum_size = Vector2(480, 0)
+	text.text = "The first campaign mission, %s, is a guided tutorial: gathering, building, raising an army and taking your first village. It is always there on the Campaign screen." % tutorial.scenario_name
+	shell.left.add_child(text)
+
+	var skip := UiButton.new()
+	skip.text = "Not Now"
+	skip.pressed.connect(_close_tutorial_offer)
+	shell.footer.add_child(skip)
+	var play := UiButton.new()
+	play.text = "Play Tutorial"
+	play.primary = true
+	play.pressed.connect(func():
+		_close_tutorial_offer()
+		CampaignMenu.launch(tutorial, Network.campaign_difficulty, 0))
+	shell.footer.add_child(play)
+
+	_centre_panel(_tutorial_offer)
+	_tutorial_offer.get_parent().visible = true
+	menu.visible = false
+
+func _close_tutorial_offer() -> void:
+	CampaignProgress.mark_tutorial_offered()
+	_tutorial_offer.get_parent().queue_free()
+	_tutorial_offer = null
 	menu.visible = true
 
 ## --- Credits ---

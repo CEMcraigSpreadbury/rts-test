@@ -42,7 +42,7 @@ amount = 300
 [sub_resource type="Resource" id="cost_3"]
 script = ExtResource("cost")
 resource_type = ExtResource("food")
-amount = 300
+amount = 500
 
 [sub_resource type="Resource" id="cost_4"]
 script = ExtResource("cost")
@@ -57,7 +57,7 @@ amount = 300
 [sub_resource type="Resource" id="cost_6"]
 script = ExtResource("cost")
 resource_type = ExtResource("food")
-amount = 200
+amount = 300
 
 [sub_resource type="Resource" id="a_spawn_7"]
 script = ExtResource("a_spawn")

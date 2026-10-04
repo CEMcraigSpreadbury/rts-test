@@ -34,7 +34,7 @@
 
 [sub_resource type="Gradient" id="Gradient_nf4t2"]
 offsets = PackedFloat32Array(0.166667, 0.5, 0.833333)
-colors = PackedColorArray(0.658824, 0.792157, 0.345098, 1, 0.458824, 0.654902, 0.262745, 1, 0.27451, 0.509804, 0.196078, 1)
+colors = PackedColorArray(0.59, 0.75, 0.39, 1, 0.53, 0.71, 0.36, 1, 0.45, 0.65, 0.32, 1)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_bcvhe"]
 gradient = SubResource("Gradient_nf4t2")
@@ -101,7 +101,7 @@ shader_parameter/pebble_density = null
 
 [sub_resource type="Gradient" id="Gradient_0hxdt"]
 offsets = PackedFloat32Array(0.166667, 0.5, 0.833333)
-colors = PackedColorArray(0.658824, 0.792157, 0.345098, 1, 0.458824, 0.654902, 0.262745, 1, 0.27451, 0.509804, 0.196078, 1)
+colors = PackedColorArray(0.59, 0.75, 0.39, 1, 0.53, 0.71, 0.36, 1, 0.45, 0.65, 0.32, 1)
 
 [sub_resource type="GradientTexture2D" id="GradientTexture2D_3dgtn"]
 gradient = SubResource("Gradient_0hxdt")
@@ -154,7 +154,8 @@ shader_parameter/ZonesSize = 0.0
 shader_parameter/Resolution = 0.0
 shader_parameter/NumberOfZones = 0.0
 shader_parameter/billboard = true
-shader_parameter/blade_scale_range = Vector2(0.4, 0.8)
+shader_parameter/blade_scale_range = Vector2(1.2, 2.4)
+shader_parameter/blade_height = 0.45
 shader_parameter/lod_size_compensation = 0.5
 shader_parameter/max_focus_distance = 60.0
 shader_parameter/shape_atlas = ExtResource("5_os7os")
@@ -174,7 +175,7 @@ shader_parameter/flutter_speed = 2.5
 shader_parameter/flutter_wavelength = 10.0
 shader_parameter/alpha_cut_start = 0.4
 shader_parameter/alpha_cut_end = 0.6
-shader_parameter/alpha_mode = 0
+shader_parameter/alpha_mode = 1
 shader_parameter/fog_enabled = false
 shader_parameter/fog_map_origin = Vector2(0, 0)
 shader_parameter/fog_map_size = Vector2(0, 0)

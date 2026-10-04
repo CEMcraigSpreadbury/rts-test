@@ -35,3 +35,17 @@ static func mark_completed(scenario_id: StringName, difficulty: int) -> void:
 static func clear() -> void:
 	_config = ConfigFile.new()
 	_config.save(PATH)
+
+## --- First launch ---
+
+const ONBOARDING_SECTION: String = "onboarding"
+
+## Whether the main menu has asked "play the tutorial?" yet. Asked once, ever,
+## whichever answer the player gave.
+static func tutorial_offered() -> bool:
+	return bool(_load().get_value(ONBOARDING_SECTION, "tutorial_offered", false))
+
+static func mark_tutorial_offered() -> void:
+	var config := _load()
+	config.set_value(ONBOARDING_SECTION, "tutorial_offered", true)
+	config.save(PATH)

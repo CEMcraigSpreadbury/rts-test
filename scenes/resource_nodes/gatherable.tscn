@@ -11,7 +11,7 @@
 script = ExtResource("1_script")
 display_name = "Tree"
 resource_type = ExtResource("2_wood")
-amount_remaining = 400
+amount_remaining = 100
 seek_replacement_when_depleted = true
 trunk_radius = 0.4
 on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_a"), ExtResource("fsfx_0"), ExtResource("fsfx_1")])

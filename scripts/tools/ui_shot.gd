@@ -18,6 +18,11 @@ extends Node
 ##   --realm    play the match as Realm (settlements, food, no houses)
 ##   --walls    with --look --realm: wall the settlement in, gates shut
 ##   --build    select a builder and open its build menu
+##   --controls open the controls card
+##   --zoom=N   camera distance (gameplay starts at 22, the wheel pulls out to 110)
+##   --art      the art-reference close-up: a Barracks and Archery Range set
+##              down by the Town Center, villagers gathered, trees on the left
+##              (the framing of the art-direction reference image)
 ##   --seed=N   RNG seed, default 12345; fixed so two runs frame the same view
 ##   --wait=N   seconds to let the match settle before the shot, default 10
 ##   --tod=F    time of day: 0..1 round a day and night from sunrise (night
@@ -39,6 +44,9 @@ func _ready() -> void:
 	var realm: bool = false
 	var walls: bool = false
 	var chat: bool = false
+	var controls: bool = false
+	var art: bool = false
+	var zoom: float = -1.0
 	var show_node: String = ""
 	var ai_count: int = -1
 	var map: String = ""
@@ -64,6 +72,12 @@ func _ready() -> void:
 			switch = true
 		elif arg == "--chat":
 			chat = true
+		elif arg == "--controls":
+			controls = true
+		elif arg == "--art":
+			art = true
+		elif arg.begins_with("--zoom="):
+			zoom = float(arg.trim_prefix("--zoom="))
 		elif arg == "--army":
 			army = true
 		elif arg == "--look":
@@ -115,6 +129,9 @@ func _ready() -> void:
 	director.queue = queue
 	director.switch = switch
 	director.chat = chat
+	director.controls = controls
+	director.art = art
+	director.zoom = zoom
 	director.show_node = show_node
 	director.ai_count = ai_count
 	director.present = present

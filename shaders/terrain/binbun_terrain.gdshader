@@ -10,6 +10,8 @@ render_mode cull_back, blend_mix, depth_draw_opaque;
 #define TERRABRUSH_ALBEDO_ONLY
 #endif
 #include "res://addons/terrabrush/Resources/Shaders/heightmap_clipmap_shader_include.gdshaderinc"
+#include "res://shaders/terrain/grass_clumps.gdshaderinc"
+#include "res://shaders/util/cloud_shade.gdshaderinc"
 
 group_uniforms FogOfWar;
 #include "res://shaders/terrain/binbun_fog.gdshaderinc"
@@ -24,15 +26,15 @@ uniform float noise_scale : hint_range(0.005, 0.2, 0.001) = 0.04;
 
 group_uniforms Paths;
 uniform int dirt_texture_index = 1;
-uniform vec3 dirt_dark : source_color = vec3(0.42, 0.30, 0.20);
-uniform vec3 dirt_light : source_color = vec3(0.54, 0.41, 0.28);
-uniform vec3 dirt_edge : source_color = vec3(0.30, 0.22, 0.13);
+uniform vec3 dirt_dark : source_color = vec3(0.52, 0.43, 0.33);
+uniform vec3 dirt_light : source_color = vec3(0.58, 0.48, 0.37);
+uniform vec3 dirt_edge : source_color = vec3(0.44, 0.36, 0.27);
 uniform vec3 pebble_color : source_color = vec3(0.70, 0.62, 0.50);
 // Sharpens the soft 1 px/m splat blend into a crisp edge, wobbled by noise.
-uniform float edge_sharpness : hint_range(1.0, 40.0, 0.5) = 7.0;
+uniform float edge_sharpness : hint_range(1.0, 40.0, 0.5) = 8.0;
 uniform float edge_wobble : hint_range(0.0, 1.0, 0.01) = 0.35;
-uniform float edge_band : hint_range(0.0, 0.5, 0.01) = 0.12;
-uniform float pebble_density : hint_range(0.0, 1.0, 0.01) = 0.05;
+uniform float edge_band : hint_range(0.0, 0.5, 0.01) = 0.2;
+uniform float pebble_density : hint_range(0.0, 1.0, 0.01) = 0.3;
 
 varying vec3 _worldVertex;
 varying vec3 _worldNormal;
@@ -54,12 +56,19 @@ float splat_weight(vec3 zone_vertex, int index) {
 }
 
 vec3 dirt_albedo(vec2 xz, float edge) {
-	float broad = texture(noise_texture, xz * 0.06).r;
-	float fine = texture(noise_texture, xz * 0.45 + vec2(0.37, 0.71)).r;
-	float tone = clamp(broad * 0.8 + fine * 0.25 - 0.05, 0.0, 1.0);
-	vec3 color = mix(dirt_dark, dirt_light, smoothstep(0.2, 0.9, tone));
+	float broad = texture(noise_texture, xz * 0.11).r;
+	float fine = texture(noise_texture, xz * 1.6 + vec2(0.37, 0.71)).r;
+	float tone = clamp(broad * 0.85 + fine * 0.15, 0.0, 1.0);
+	// Three flat painted tones rather than a smooth gradient.
+	float band = floor(smoothstep(0.2, 0.9, tone) * 2.999) / 2.0;
+	vec3 color = mix(dirt_dark, dirt_light, band);
 	float speck = texture(noise_texture, xz * 2.3 + vec2(0.13, 0.52)).r;
+	// Darker damp patches, then pebbles on top.
+	float damp = texture(noise_texture, xz * 0.3 + vec2(0.52, 0.11)).r;
+	color = mix(color, color * 0.92, smoothstep(0.6, 0.7, damp));
 	color = mix(color, pebble_color, step(1.0 - pebble_density * 0.35, speck) * 0.8);
+	// Fine dark grit.
+	color *= mix(1.0, 0.86, step(0.8, texture(noise_texture, xz * 3.7 + vec2(0.4, 0.9)).r));
 	return mix(color, dirt_edge, edge);
 }
 
@@ -100,24 +109,38 @@ void fragment() {
 	grass_w = max(grass_w + dirt_w - stamped, 0.0);
 	dirt_w = stamped;
 	float noise_value = texture(noise_texture, world_pos.xz * noise_scale).r;
-	vec3 grass = texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness;
+	vec3 grass = grass_clumps(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, world_pos.xz, noise_texture);
 
 	// Grass/dirt share of this pixel; rock and sand keep TerraBrush's blend.
 	float ground_w = clamp(grass_w + dirt_w, 0.0, 1.0);
 	float dirt_share = dirt_w / max(grass_w + dirt_w, 0.0001);
-	float wobble = (texture(noise_texture, world_pos.xz * 0.35).r - 0.5) * edge_wobble;
+	// Two scales of wobble: the coarse one shapes the clearing, the fine one
+	// breaks up the stair-steps of the 1 m splatmap.
+	float wobble = (texture(noise_texture, world_pos.xz * 0.35).r - 0.5) * edge_wobble
+			+ (texture(noise_texture, world_pos.xz * 1.6 + vec2(0.3, 0.8)).r - 0.5) * 0.3;
 	float d = dirt_share - 0.5 + wobble;
 	float dirt_mask = clamp(d * edge_sharpness + 0.5, 0.0, 1.0);
+	// A fringe of grass clumps spilling over the edge onto the dirt: in the
+	// band just inside it, wherever a painted clump (grass_clumps) covers.
+	float fringe = 1.0 - smoothstep(0.02, 0.1, d);
+	float overhang = fringe * step(clump_height(world_pos.xz * 1.7), 1.5);
+	dirt_mask *= 1.0 - overhang;
+	grass *= mix(1.0, 0.85, overhang);
 	float edge = 1.0 - smoothstep(0.0, edge_band, d);
-	vec3 path = mix(grass, dirt_albedo(world_pos.xz, edge * 0.7), dirt_mask);
+	vec3 path = mix(grass, dirt_albedo(world_pos.xz, edge * 0.35), dirt_mask);
 	ALBEDO = mix(ALBEDO, path, ground_w);
 	ROUGHNESS = mix(ROUGHNESS, 1.0, ground_w);
+	// Painted ground has no shine: a sky reflection at grazing angles reads as
+	// a milky haze over the far grass.
+	SPECULAR = mix(SPECULAR, 0.0, ground_w);
 	ALBEDO = apply_fog(ALBEDO, world_pos.xz, SPECULAR);
 }
 
 // Binbun's unclamped wrap lighting, scaled by the light's colour/energy like
 // Godot's own lambert so it sits in maps lit for standard materials.
+#include "res://shaders/terrain/ground_light.gdshaderinc"
+
 void light() {
-	float ndotl = dot(LIGHT, NORMAL) * ATTENUATION;
-	DIFFUSE_LIGHT += ndotl * LIGHT_COLOR / PI;
+	float cloud = cloud_sun_block(world_pos, texture(noise_texture, world_pos.xz * 0.7).r);
+	ground_light(LIGHT, NORMAL, ATTENUATION, LIGHT_COLOR, LIGHT_IS_DIRECTIONAL, cloud, DIFFUSE_LIGHT);
 }

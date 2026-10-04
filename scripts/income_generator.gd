@@ -29,5 +29,7 @@ func _physics_process(delta: float) -> void:
 		return
 	ResourceStockpile.add(_building.owner_peer_id, resource_type, amount)
 	var main := get_tree().current_scene
+	if main is Main and main.realm_economy != null:
+		main.realm_economy.note_income(_building.owner_peer_id, resource_type, amount)
 	if show_payouts and main is Main:
 		main.feedback.show_income_popup(_building, _building.owner_peer_id, [[amount, resource_type.display_color]])

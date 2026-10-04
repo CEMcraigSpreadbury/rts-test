@@ -92,8 +92,8 @@ var _info_resource_label: Label = null
 var _resource_totals: Dictionary = {}
 var _population_used: int = 0
 var _population_cap: int = 0
-## Realm only: what this player's army eats a minute (see RealmEconomy).
-var _food_upkeep: int = 0
+## Realm only: food brought in less food eaten, per minute (see RealmEconomy).
+var _food_net: int = 0
 ## The army's cards along the bottom of the screen.
 var unit_cards: UiUnitCardStrip
 
@@ -194,8 +194,8 @@ func _on_population_changed(used: int, cap: int) -> void:
 	_population_cap = cap
 	_update_resource_label()
 
-func _on_upkeep_changed(food_per_minute: int, _gold_per_minute: int, _starving: bool) -> void:
-	_food_upkeep = food_per_minute
+func _on_upkeep_changed(food_per_minute: int, _gold_per_minute: int, _starving: bool, food_income: int) -> void:
+	_food_net = food_income - food_per_minute
 	_update_resource_label()
 
 func _update_resource_label() -> void:
@@ -210,7 +210,7 @@ func _update_resource_label() -> void:
 		if resource_type == RealmEconomy.FOOD:
 			if realm:
 				var food := _stockpile_entry(resource_type, false)
-				food["rate"] = -_food_upkeep
+				food["rate"] = _food_net
 				entries.append(food)
 			continue
 		entries.append(_stockpile_entry(resource_type, false))

@@ -7,7 +7,7 @@ extends QuestAction
 ## Which piece of the HUD. Known names are the ones QuestUi can find; anything
 ## else is ignored.
 @export_enum("minimap", "action_panel", "info_panel", "idle_button",
-	"resources", "research_button", "quest_tracker", "unit_cards", "speed_controls")
+	"resources", "research_button", "quest_tracker", "unit_cards", "speed_controls", "day_clock")
 var element: String = "action_panel"
 ## Take the highlight off instead of putting one on.
 @export var clear: bool = false

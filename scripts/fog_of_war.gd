@@ -155,6 +155,9 @@ const FOGGED_SHADERS: Array[Shader] = [
 	preload("res://shaders/terrain/binbun_terrain.gdshader"),
 	preload("res://shaders/terrain/binbun_foliage.gdshader"),
 	preload("res://shaders/terrain/water.gdshader"),
+	preload("res://shaders/terrain/ground_scatter_rock.gdshader"),
+	preload("res://shaders/terrain/ground_scatter_pebble.gdshader"),
+	preload("res://shaders/terrain/ground_scatter_flower.gdshader"),
 ]
 var _grass_materials: Array[ShaderMaterial] = []
 ## Grass layers (painted grass_wind layers and TerraBrush's Binbun foliage),
@@ -216,7 +219,9 @@ func _find_fogged_materials(node: Node) -> void:
 			grass_material.set_shader_parameter("fog_tex", fog_texture)
 			grass_material.set_shader_parameter("fog_map_origin", map_origin)
 			grass_material.set_shader_parameter("fog_map_size", map_size)
-			_grass_materials.append(grass_material)
+			## Ground scatter shares one material across all its chunks.
+			if not grass_material in _grass_materials:
+				_grass_materials.append(grass_material)
 			if grass_material.shader in GRASS_SHADERS:
 				_grass_nodes.append(node)
 	elif node is GPUParticles3D:

@@ -1,10 +1,17 @@
 class_name RealmEconomy
 extends Node
-## The running costs of an army in a Realm match (see MatchRules.realm): every
-## soldier eats food, and the bigger ones (population 2 and up — cavalry,
-## mages, siege, monsters) draw gold wages as well. Villagers work the land
-## and cost nothing to keep. Charged by the host every UPKEEP_INTERVAL, with
-## fractions carried so a 1-food-a-minute soldier really does cost 1 a minute.
+## The running costs of a holding in a Realm match (see MatchRules.realm):
+## everyone eats -- villagers a little, soldiers more -- and the bigger soldiers
+## (population 2 and up: cavalry, mages, siege, monsters) draw gold wages as
+## well. Charged by the host every UPKEEP_INTERVAL, with fractions carried so
+## a 1-food-a-minute soldier really does cost 1 a minute.
+##
+## A holding costs more to keep the bigger it grows: past GROWTH_FREE_HEADS
+## of population, every mouth eats (and every wage costs) a little more --
+## see growth_multiplier.
+##
+## Also measures the food each side brings in (note_income), so the stockpile
+## can show what food really does a minute: income less upkeep.
 ##
 ## An army that can't be fed isn't killed by it: the side is marked starving
 ## (is_starving), which the morale system reads. Unpaid wages just leave the
@@ -15,15 +22,29 @@ extends Node
 ## Lives on every peer so the host can tell each player their own upkeep; all
 ## the accounting is host-only.
 
-## Local player's upkeep changed: whole units per minute, and whether they
-## can't meet it.
-signal upkeep_changed(food_per_minute: int, gold_per_minute: int, starving: bool)
+## Local player's upkeep changed: whole units per minute, whether they can't
+## meet it, and the food they have been bringing in a minute.
+signal upkeep_changed(food_per_minute: int, gold_per_minute: int, starving: bool, food_income_per_minute: int)
 
 const FOOD: ResourceType = preload("res://resources/food_resource_type.tres")
 const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 
 const UPKEEP_INTERVAL: float = 5.0
 const FOOD_PER_POPULATION: float = 3.0
+## What a villager eats a minute.
+const VILLAGER_FOOD: float = 2.0
+## Population a side can keep at the plain rates...
+const GROWTH_FREE_HEADS: int = 20
+## ...and how much dearer every mouth gets for each head beyond that...
+const GROWTH_PER_HEAD: float = 0.01
+## ...up to this many times the plain rates.
+const GROWTH_MAX: float = 2.0
+## Food income is averaged over this much game time, so one cart unloading
+## does not swing the shown rate.
+const INCOME_WINDOW: float = 120.0
+## ...but at the start of a match over no less than this, or the first cart
+## would read as a flood.
+const INCOME_MIN_SPAN: float = 60.0
 ## A unit this big or bigger draws wages as well as rations.
 const ELITE_POPULATION: int = 2
 const GOLD_PER_ELITE_POPULATION: float = 1.0
@@ -50,8 +71,12 @@ var _gold_carry: Dictionary = {}
 var _starving: Dictionary = {}
 ## peer_id -> Vector2(food, gold) per minute at the last charge. Host only.
 var _rates: Dictionary = {}
-## peer_id -> [food, gold, starving] as last sent, so only changes go out.
+## peer_id -> [food, gold, starving, income] as last sent, so only changes go out.
 var _last_sent: Dictionary = {}
+## Game seconds since the match began. Host only.
+var _clock: float = 0.0
+## peer_id -> [[time, amount], ...] food brought in within INCOME_WINDOW. Host only.
+var _food_income: Dictionary = {}
 
 func _ready() -> void:
 	set_physics_process(MatchRules.realm() and multiplayer.is_server())
@@ -64,19 +89,45 @@ func is_starving(peer_id: int) -> bool:
 func food_per_minute(peer_id: int) -> float:
 	return (_rates.get(peer_id, Vector2.ZERO) as Vector2).x
 
-## Food and gold a unit costs to keep, per minute. Villagers, summons, animals
-## and anything nobody owns cost nothing.
+## Host only: food this side brought in (carried home, a Granary's yield, a
+## hunt). Gifts, refunds and the starting purse are not income.
+func note_income(peer_id: int, type: ResourceType, amount: int) -> void:
+	if type != FOOD or amount <= 0 or not MatchRules.realm() or not multiplayer.is_server():
+		return
+	if not _food_income.has(peer_id):
+		_food_income[peer_id] = []
+	_food_income[peer_id].append([_clock, amount])
+
+## Host only: food brought in a minute, averaged over INCOME_WINDOW.
+func food_income_per_minute(peer_id: int) -> float:
+	var entries: Array = _food_income.get(peer_id, [])
+	while not entries.is_empty() and _clock - float(entries[0][0]) > INCOME_WINDOW:
+		entries.pop_front()
+	var total: int = 0
+	for entry in entries:
+		total += int(entry[1])
+	return total / clampf(_clock, INCOME_MIN_SPAN, INCOME_WINDOW) * 60.0
+
+## How much dearer a side's upkeep is for having `heads` population to keep.
+static func growth_multiplier(heads: int) -> float:
+	return minf(1.0 + GROWTH_PER_HEAD * maxi(heads - GROWTH_FREE_HEADS, 0), GROWTH_MAX)
+
+## Food and gold a unit costs to keep, per minute, before growth_multiplier.
+## Summons, animals, garrisons
+## and anything nobody owns cost nothing; villagers eat VILLAGER_FOOD.
 static func upkeep_of(unit: Unit) -> Vector2:
-	if unit.owner_peer_id <= 0 or unit.can_gather or unit.summoned or unit.hunt_meat > 0 \
-			or unit.has_meta(&"garrison"):
+	if unit.owner_peer_id <= 0 or unit.summoned or unit.hunt_meat > 0 or unit.has_meta(&"garrison"):
 		return Vector2.ZERO
 	if unit.status_activity == Unit.Activity.DEAD:
 		return Vector2.ZERO
+	if unit.can_gather:
+		return Vector2(VILLAGER_FOOD, 0.0)
 	var food: float = unit.population_cost * FOOD_PER_POPULATION
 	var gold: float = unit.population_cost * GOLD_PER_ELITE_POPULATION if unit.population_cost >= ELITE_POPULATION else 0.0
 	return Vector2(food, gold)
 
 func _physics_process(delta: float) -> void:
+	_clock += delta
 	_replenish_timer -= delta
 	if _replenish_timer <= 0.0:
 		_replenish_timer = REPLENISH_SECONDS
@@ -89,18 +140,26 @@ func _physics_process(delta: float) -> void:
 	var rates: Dictionary = {}
 	for peer_id in main.faction_by_peer:
 		rates[peer_id] = Vector2.ZERO
+	## peer_id -> population that eats.
+	var heads: Dictionary = {}
 	for node in get_tree().get_nodes_in_group(&"units"):
 		var unit := node as Unit
 		if unit == null or not rates.has(unit.owner_peer_id):
 			continue
-		rates[unit.owner_peer_id] += upkeep_of(unit)
+		var upkeep := upkeep_of(unit)
+		if upkeep == Vector2.ZERO:
+			continue
+		rates[unit.owner_peer_id] += upkeep
+		heads[unit.owner_peer_id] = int(heads.get(unit.owner_peer_id, 0)) + unit.population_cost
+	for peer_id in rates:
+		rates[peer_id] *= growth_multiplier(int(heads.get(peer_id, 0)))
 	_rates = rates
 	for peer_id in rates:
 		var rate: Vector2 = rates[peer_id]
 		var fed := _charge(peer_id, FOOD, rate.x, _food_carry)
 		_charge(peer_id, GOLD, rate.y, _gold_carry)
 		_starving[peer_id] = not fed
-		_send(peer_id, roundi(rate.x), roundi(rate.y), not fed)
+		_send(peer_id, roundi(rate.x), roundi(rate.y), not fed, roundi(food_income_per_minute(peer_id)))
 
 ## Takes one interval's worth of `per_minute` from the stockpile. False when
 ## there wasn't enough to cover it (what there was is still taken).
@@ -118,19 +177,19 @@ func _charge(peer_id: int, type: ResourceType, per_minute: float, carry: Diction
 		ResourceStockpile.spend(peer_id, [cost] as Array[ResourceCost])
 	return held >= whole
 
-func _send(peer_id: int, food: int, gold: int, starving: bool) -> void:
-	var state := [food, gold, starving]
+func _send(peer_id: int, food: int, gold: int, starving: bool, income: int) -> void:
+	var state := [food, gold, starving, income]
 	if _last_sent.get(peer_id) == state:
 		return
 	_last_sent[peer_id] = state
 	if peer_id == multiplayer.get_unique_id():
-		upkeep_changed.emit(food, gold, starving)
+		upkeep_changed.emit(food, gold, starving, income)
 	elif Network.can_rpc_to(peer_id):
-		_rpc_upkeep.rpc_id(peer_id, food, gold, starving)
+		_rpc_upkeep.rpc_id(peer_id, food, gold, starving, income)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_upkeep(food: int, gold: int, starving: bool) -> void:
-	upkeep_changed.emit(food, gold, starving)
+func _rpc_upkeep(food: int, gold: int, starving: bool, income: int) -> void:
+	upkeep_changed.emit(food, gold, starving, income)
 
 ## Gnolls strip the dead: food for every other side with a gnoll this close to
 ## a body.
@@ -151,6 +210,7 @@ func award_hunt(victim: Unit, attacker) -> void:
 			continue
 		fed[unit.owner_peer_id] = true
 		ResourceStockpile.add(unit.owner_peer_id, FOOD, SCAVENGE_FOOD)
+		note_income(unit.owner_peer_id, FOOD, SCAVENGE_FOOD)
 	if victim.hunt_meat <= 0:
 		return
 	if attacker == null or not is_instance_valid(attacker) or not "owner_peer_id" in attacker:
@@ -158,6 +218,7 @@ func award_hunt(victim: Unit, attacker) -> void:
 	var killer: int = attacker.owner_peer_id
 	if killer > 0:
 		ResourceStockpile.add(killer, FOOD, victim.hunt_meat * HUNT_FOOD_PER_MEAT)
+		note_income(killer, FOOD, victim.hunt_meat * HUNT_FOOD_PER_MEAT)
 
 func _replenish() -> void:
 	for id in main.regiments.keys():

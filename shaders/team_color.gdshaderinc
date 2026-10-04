@@ -132,17 +132,30 @@ vec3 apply_team_color(vec3 linear_rgb) {
 	float value_factor = mix(1.0, team_hsv.z / source_value, value_match);
 	vec3 tinted_hsv = vec3(
 		team_hsv.x,
-		clamp(team_hsv.y * saturation_scale * (hsv.y / source_saturation), 0.0, 1.0),
-		clamp(hsv.z * value_factor, 0.0, 1.0)
+		clamp(team_hsv.y * saturation_scale * 0.88 * (hsv.y / source_saturation), 0.0, 1.0),
+		// A little deeper than the painted blue, so roofs read as a strong colour.
+		clamp(hsv.z * value_factor * 0.72, 0.0, 1.0)
 	);
 	return mix(linear_rgb, srgb_to_linear(hsv_to_rgb(tinted_hsv)), mask);
+}
+
+// Highlights pulled down and warmed, so lit walls read as cream plaster under
+// the outline instead of blowing out; darker colours keep theirs.
+vec3 soften_highlights(vec3 c) {
+	float light = dot(c, vec3(0.2126, 0.7152, 0.0722));
+	// The brightest plaster loses some of its cream, reading off-white.
+	c = mix(c, vec3(light), 0.8 * smoothstep(0.45, 0.85, light));
+	// Faces turned from the sun cool toward blue-grey instead of picking up the
+	// grass green.
+	c *= mix(vec3(0.92, 0.96, 1.08), vec3(1.0), smoothstep(0.08, 0.3, light));
+	return c * mix(vec3(0.95, 0.93, 0.9), vec3(0.6, 0.6, 0.59), smoothstep(0.35, 0.9, light));
 }
 
 // Writes the recolored texture out the same way the model's own material did,
 // so a team-colored building is lit identically to an untinted one.
 void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, out float ao) {
 	texel.rgb = compat_in(texel.rgb);
-	vec3 recolored = apply_team_color(texel.rgb);
+	vec3 recolored = soften_highlights(apply_team_color(texel.rgb));
 	if (texture_drives_emission) {
 		// Albedo mirrors the emission only so light() below has something to
 		// subtract from under a shadow; AO = 0 keeps ambient light off it, so
@@ -154,7 +167,7 @@ void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, 
 		// Untextured models carry their colour in base_albedo alone (the
 		// sampler falls back to white), so it has to be recolored together
 		// with the texel or their team-blue parts never get tinted.
-		albedo = compat_out(apply_team_color(texel.rgb * compat_in(base_albedo.rgb)));
+		albedo = compat_out(soften_highlights(apply_team_color(texel.rgb * compat_in(base_albedo.rgb))));
 		emission = vec3(0.0);
 		ao = 1.0;
 	}

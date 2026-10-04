@@ -355,6 +355,10 @@ func _apply_team_color() -> void:
 			)
 			team_materials.append(team_material)
 			mesh_instance.set_surface_override_material(i, team_material)
+		## One outline id for every mesh of the building, so the ink line
+		## follows the whole building's silhouette (outline_mark.gdshaderinc).
+		if not untinted and OutlinePass.supported():
+			mesh_instance.set_instance_shader_parameter(&"outline_id", float(get_instance_id() % 9973) + 1.0)
 
 		## Re-tinting mid-construction (a half-built objective changing hands)
 		## has to leave the see-through version on the surface and hand the
@@ -943,6 +947,14 @@ func get_footprint_radius() -> float:
 		offset.y = 0.0
 		radius = maxf(radius, offset.length() + obstacle.radius)
 	return radius
+
+## Host: falls down by itself, as a Mine does when its deposit runs dry.
+func collapse() -> void:
+	if not is_multiplayer_authority() or is_destroyed:
+		return
+	current_health = 0
+	health_fraction = 0.0
+	_begin_destruction()
 
 func _begin_destruction() -> void:
 	is_destroyed = true

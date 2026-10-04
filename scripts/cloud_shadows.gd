@@ -18,10 +18,10 @@ extends Decal
 ## starting over. The decal is this much bigger on every side than cover_size.
 @export var drift_margin: float = 240.0
 ## World-space noise frequency: bigger = smaller clouds.
-@export var cloud_frequency: float = 0.06
+@export var cloud_frequency: float = 0.04
 ## Noise value (0-1) where ground turns from clear to shadowed: higher means
 ## less of the map under cloud.
-@export_range(0.0, 1.0) var cloud_threshold: float = 0.6
+@export_range(0.0, 1.0) var cloud_threshold: float = 0.64
 ## Half-width of the noise band over which a shadow's edge fades in.
 @export_range(0.0, 0.5) var edge_softness: float = 0.06
 ## How much a fully shadowed surface is darkened. Baked into the texture's
@@ -33,6 +33,15 @@ extends Decal
 @export var texture_size: int = 2048
 
 const FADE_TIME: float = 3.0
+## The ground (terrain, Binbun grass, GroundScatter) is moved onto this render
+## layer, which the decal skips: the ground shades itself from the same texture
+## (cloud_ground in util/cloud_shade.gdshaderinc), under its fog of war -- the
+## decal paints after a surface's albedo, so it showed through the fog.
+const GROUND_LAYER: int = 1 << 19
+const GROUND_SHADERS: Array[Shader] = [
+	preload("res://shaders/terrain/binbun_terrain.gdshader"),
+	preload("res://shaders/terrain/binbun_foliage.gdshader"),
+]
 const BOX_HEIGHT: float = 400.0
 
 var _origin: Vector3
@@ -47,6 +56,9 @@ func _ready() -> void:
 	lower_fade = 0.0
 	normal_fade = 0.0
 	albedo_mix = 1.0
+	cull_mask &= ~GROUND_LAYER
+	## After TerraBrush and GroundScatter have built their meshes.
+	_move_ground_off_decal.call_deferred(get_parent())
 	_origin = position
 	_drift = _drift_start()
 
@@ -72,6 +84,16 @@ func _ready() -> void:
 	## up the finished image rather than the empty placeholder.
 	await tex.changed
 	texture_albedo = tex
+
+
+func _move_ground_off_decal(node: Node) -> void:
+	var shape := node as GeometryInstance3D
+	if shape != null:
+		var material := shape.material_override as ShaderMaterial
+		if (material != null and material.shader in GROUND_SHADERS) or shape.get_parent() is GroundScatter:
+			shape.layers = GROUND_LAYER
+	for child in node.get_children(true):
+		_move_ground_off_decal(child)
 
 
 func _exit_tree() -> void:

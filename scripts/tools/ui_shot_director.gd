@@ -16,6 +16,12 @@ var single: bool = false
 var queue: bool = false
 var switch: bool = false
 var chat: bool = false
+var controls: bool = false
+var art: bool = false
+## -1 leaves the camera distance alone.
+var zoom: float = -1.0
+## --art: how close the camera sits (RtsCamera.min_zoom is 8).
+const ART_ZOOM: float = 22.0
 var army: bool = false
 var look: bool = false
 var walls: bool = false
@@ -105,6 +111,8 @@ func _run_match() -> void:
 	if town_centre != null and town_centre is Node3D:
 		main.focus_camera_on(town_centre.global_position)
 
+	if art and town_centre != null:
+		await _stage_art(main, town_centre)
 	if army and town_centre != null:
 		await _field_army(main, town_centre)
 	if look and town_centre != null:
@@ -161,12 +169,20 @@ func _run_match() -> void:
 		_present(main)
 		await _wait(0.6)
 
+	if controls:
+		main.controls_card.open()
 	if chat:
 		main.chat.send_line(main.my_peer_id(), "Ready when you are")
 		main.chat.open_chat_input()
 
 	if time_of_day >= 0.0:
 		_set_time_of_day(main.get("day_night"))
+
+	if zoom > 0.0:
+		var zoom_rig: Node = main.get_node("CameraRig")
+		zoom_rig.set("_zoom_target", zoom)
+		zoom_rig.set("zoom_distance", zoom)
+		zoom_rig.call("_update_zoom")
 
 	await _wait(1.5)
 	await _shoot()
@@ -224,6 +240,56 @@ func _select_building_then_units(main: Node, town_centre: Object) -> void:
 		await _wait(0.6)
 	main.call("_select_all_idle_villagers")
 	await _wait(0.5)
+
+## The reference's layout: trees on the left, the Town Center up on the right,
+## a Barracks and an Archery Range between them, the villagers in a knot in
+## front. The camera is turned so the nearest woodline falls on the left.
+func _stage_art(main: Node, town_centre: Node3D) -> void:
+	var tc: Vector3 = town_centre.global_position
+	var tree_at: Vector3 = Vector3.INF
+	for node in main.find_children("*", "StaticBody3D", true, false):
+		if node is Gatherable and (node as Gatherable).display_name == "Tree":
+			var at: Vector3 = (node as Node3D).global_position
+			if tree_at == Vector3.INF or at.distance_to(tc) < tree_at.distance_to(tc):
+				tree_at = at
+	if tree_at == Vector3.INF:
+		return
+	var right: Vector3 = Vector3(tc.x - tree_at.x, 0.0, tc.z - tree_at.z).normalized()
+	var rig: Node3D = main.get_node("CameraRig")
+	var yaw: Node3D = rig.get_node("Yaw")
+	yaw.rotation.y = atan2(-right.z, right.x)
+	## Camera forward on the ground, away from the viewer.
+	var forward: Vector3 = Vector3(-right.z, 0.0, right.x)
+	if forward.dot(-yaw.global_basis.z) < 0.0:
+		forward = -forward
+	var middle: Vector3 = tree_at.lerp(tc, 0.5)
+	var me: int = main.my_peer_id()
+	for spec in [["Barracks", -forward * 1.0 - right * 1.0], ["Archery Range", -forward * 4.5 + right * 3.5]]:
+		for type in main.my_faction().building_types:
+			if type.building_name == spec[0]:
+				main.building_spawner.spawn({
+					"scene_path": type.scene.resource_path,
+					"peer_id": me,
+					"position": middle + spec[1],
+					"tint": main.get_team_tint(me),
+				})
+	var villagers: Array = []
+	for node in main.get_tree().get_nodes_in_group(&"units"):
+		if node is Unit and node.owner_peer_id == me and node.can_gather:
+			villagers.append(node)
+	var knot: Vector3 = middle - forward * 5.0 - right * 1.5
+	var nav_map: RID = main.get_world_3d().navigation_map
+	for i in villagers.size():
+		var unit: Unit = villagers[i]
+		var offset := Vector3(cos(i * 2.4), 0.0, sin(i * 2.4)) * (0.6 + 0.45 * sqrt(float(i)))
+		unit.global_position = NavigationServer3D.map_get_closest_point(nav_map, knot + offset)
+	main.fog_of_war.reveal_all = true
+	main.focus_camera_on(middle - forward * 1.5)
+	rig.global_position.y = middle.y
+	rig.set("_zoom_target", ART_ZOOM)
+	rig.set("zoom_distance", ART_ZOOM)
+	rig.call("_update_zoom")
+	await _wait(2.0)
 
 ## Polls until the map scene is up, or gives up after ~8 seconds.
 func _await_map() -> Node:

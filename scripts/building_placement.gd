@@ -537,6 +537,13 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 				deposit.has_required_building = false
 				deposit.is_claimed = false
 			, CONNECT_ONE_SHOT)
+			## A Mine has nothing left to do once its gold is gone.
+			deposit.depleted.connect(func():
+				if is_instance_valid(building) and not building.is_destroyed:
+					main.alert_player(building.owner_peer_id, building.global_position,
+							"Your %s has run dry." % building.building_name)
+					building.collapse()
+			, CONNECT_ONE_SHOT)
 
 		_dispatch_builders_to(building, builder_paths, sender_id, append)
 	return spawned
