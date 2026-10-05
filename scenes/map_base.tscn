@@ -226,6 +226,7 @@ mouse_filter = 2
 
 [node name="InfoPanel" type="Control" parent="UI/BottomBar" unique_id=1790145163]
 layout_mode = 1
+anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
@@ -309,6 +310,7 @@ theme_override_constants/separation = 3
 
 [node name="ActionPanel" type="Control" parent="UI/BottomBar" unique_id=1264307044]
 layout_mode = 1
+anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 156.0
@@ -459,6 +461,7 @@ icon_alignment = 1
 
 [node name="ChatLog" type="RichTextLabel" parent="UI/BottomBar" unique_id=742747127]
 layout_mode = 1
+anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
@@ -475,6 +478,7 @@ fit_content = true
 [node name="ChatInput" type="LineEdit" parent="UI/BottomBar" unique_id=1666054379]
 visible = false
 layout_mode = 1
+anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0

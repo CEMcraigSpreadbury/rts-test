@@ -113,10 +113,10 @@ static func growth_multiplier(heads: int) -> float:
 	return minf(1.0 + GROWTH_PER_HEAD * maxi(heads - GROWTH_FREE_HEADS, 0), GROWTH_MAX)
 
 ## Food and gold a unit costs to keep, per minute, before growth_multiplier.
-## Summons, animals, garrisons
-## and anything nobody owns cost nothing; villagers eat VILLAGER_FOOD.
+## Summons, animals and anything nobody owns cost nothing; villagers eat
+## VILLAGER_FOOD.
 static func upkeep_of(unit: Unit) -> Vector2:
-	if unit.owner_peer_id <= 0 or unit.summoned or unit.hunt_meat > 0 or unit.has_meta(&"garrison"):
+	if unit.owner_peer_id <= 0 or unit.summoned or unit.hunt_meat > 0:
 		return Vector2.ZERO
 	if unit.status_activity == Unit.Activity.DEAD:
 		return Vector2.ZERO

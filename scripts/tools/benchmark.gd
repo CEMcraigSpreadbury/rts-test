@@ -351,7 +351,7 @@ func _match_report() -> void:
 		for node in get_tree().get_nodes_in_group(&"objectives"):
 			var objective := node as Objective
 			if objective != null and objective.is_settlement():
-				settlements += " %s:p%d/t%d/g%d" % [objective.letter, objective.owner_peer_id, objective.tier, objective._garrison.size()]
+				settlements += " %s:p%d/t%d" % [objective.letter, objective.owner_peer_id, objective.tier]
 		print("   settlements" + settlements)
 
 func _points_held(peer: int) -> int:

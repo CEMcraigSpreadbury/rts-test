@@ -57,6 +57,9 @@ var _info_last_queue_signature: String = ""
 ## is rebuilt when either stops matching.
 var _info_built_commandable: bool = false
 var _info_built_under_construction: bool = false
+## Whether its settlement was waiting on Occupy or Raze: choosing (or the
+## choice timing out) swaps that menu for the full one.
+var _info_built_awaiting_choice: bool = false
 ## item_name -> its producible button's queued-count badge; updated every
 ## frame in _refresh_building_info() from ProductionBuilding.synced_queue_counts.
 var _info_producible_badges: Dictionary = {}
@@ -384,14 +387,16 @@ func _producible_is_visible(building: ProductionBuilding, item: ProducibleItem) 
 		return false
 	if item.grants_unlock != &"" and UnitUnlocks.has(building.owner_peer_id, item.grants_unlock):
 		return false
-	if item.kind == ProducibleItem.Kind.SLOT:
-		return building.settlement != null and building.settlement.slot_open(item) \
-				and building.settlement.choice_peer != building.owner_peer_id
+	## A settlement just taken offers Occupy or Raze and nothing else, in its
+	## hall or any of its buildings, until one is chosen.
+	if building.settlement != null and building.settlement.awaiting_choice():
+		return item.kind == ProducibleItem.Kind.CHOICE and building.settlement.choice_peer == building.owner_peer_id
 	if item.kind == ProducibleItem.Kind.CHOICE:
-		return building.settlement != null and building.settlement.choice_peer == building.owner_peer_id
+		return false
+	if item.kind == ProducibleItem.Kind.SLOT:
+		return building.settlement != null and building.settlement.slot_open(item)
 	if item.kind == ProducibleItem.Kind.TIER:
-		return building.settlement != null and building.settlement.tier == item.tier_to - 1 \
-				and building.settlement.choice_peer != building.owner_peer_id
+		return building.settlement != null and building.settlement.tier == item.tier_to - 1
 	if item.kind == ProducibleItem.Kind.LEVEL:
 		return building.slot_level > 0 and item.level_to == building.slot_level + 1 \
 				and item.level_to <= building.slot_level_cap
@@ -534,6 +539,9 @@ func _show_item_art(icon: TextureRect, item: ProducibleItem) -> void:
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED if glyph else TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if glyph else CanvasItem.TEXTURE_FILTER_NEAREST
 	icon.self_modulate = CommandSlot.GLYPH_TINT if glyph else Color.WHITE
+
+static func _awaiting_choice(building: ProductionBuilding) -> bool:
+	return building.settlement != null and building.settlement.awaiting_choice()
 
 static func _is_settlement_hall(building: ProductionBuilding) -> bool:
 	return building != null and building.settlement != null and building.settlement.hall == building
@@ -694,6 +702,7 @@ func _build_building_info(building: ProductionBuilding) -> void:
 	_info_last_queue_size = -1
 	_info_last_queue_signature = ""
 	_info_built_commandable = main.can_command_building(building)
+	_info_built_awaiting_choice = _awaiting_choice(building)
 	_info_built_under_construction = building.is_under_construction
 
 	_info_progress_bar = _make_progress_bar_with_overlay()
@@ -753,7 +762,7 @@ func _refresh_building_info() -> void:
 	var building := main.selected_building
 	var shown_health: int = int(round(building.health_fraction * building.max_health))
 	portrait_health_label.text = "%d / %d" % [shown_health, building.max_health]
-	if _info_built_commandable != main.can_command_building(building):
+	if _info_built_commandable != main.can_command_building(building) 			or _info_built_awaiting_choice != _awaiting_choice(building):
 		## It changed hands (or finished being captured) while selected: the
 		## action panel's producibles belong to the new owner now, so the
 		## whole selection is rebuilt rather than just the info side.

@@ -51,9 +51,9 @@ const LEASH_MULTIPLIER: float = 2.5
 ## --- Settlement (Realm) ---
 ## In a Realm match (MatchRules.realm) a point is a settlement: it grows from
 ## Village to Town to City while its owner holds it in peace, more cottages go
-## up around it as it does, it pays more (and food) at each tier, and it keeps a
-## garrison of its own race that regrows after a fight. A Shrine stays a
-## Shrine. Outside Realm none of this runs and a point is a plain capture point.
+## up around it as it does, and it pays more at each tier. Its neutral
+## defenders return if it is left empty; once owned, it raises nobody by
+## itself. A Shrine stays a Shrine. Outside Realm none of this runs and a point is a plain capture point.
 enum Tier { VILLAGE, TOWN, CITY }
 ## Raising a settlement is bought at its hall (see _offer_slots): what Town and
 ## City cost, and how long the work takes.
@@ -72,9 +72,8 @@ const INCOME_POPUP_SECONDS: float = 5.0
 ## wood and food come from the buildings in its slots instead.
 const TIER_INCOME: Array[float] = [1.0, 1.5, 2.0]
 const TIER_HOUSES: Array[int] = [3, 6, 10]
-## The owner's garrison at each tier; a neutral settlement starts with
-## NEUTRAL_GARRISON guards for its tier (the scene's own plus copies of them).
-const TIER_GARRISON: Array[int] = [3, 6, 9]
+## A neutral settlement starts with NEUTRAL_GARRISON guards for its tier (the
+## scene's own plus copies of them).
 const NEUTRAL_GARRISON: Array[int] = [6, 9, 12]
 ## A settlement is taken by standing anywhere in it, cottages and slot
 ## buildings included, not on a small plate in the middle: its capture circle
@@ -82,7 +81,6 @@ const NEUTRAL_GARRISON: Array[int] = [6, 9, 12]
 const SETTLEMENT_CAPTURE_RADIUS: float = 12.0
 ## Its garrison spreads over the settlement to match.
 const SETTLEMENT_WANDER_RADIUS: float = 7.0
-const GARRISON_REGEN_SECONDS: float = 20.0
 ## Cottages stand in a ring outside the capture zone and inside the clearing
 ## the map generator levels for a settlement.
 const HOUSE_RING := Vector2(8.5, 11.0)
@@ -100,9 +98,6 @@ var tier: int = Tier.VILLAGE
 ## Host only: income paid since the last popup, by resource.
 var _income_shown: Dictionary = {}
 var _income_timer: float = 0.0
-## Host only: the owner's garrison units (untyped, as _guards).
-var _garrison: Array = []
-var _garrison_timer: float = 0.0
 var _houses: Array[Node3D] = []
 var _house_owner_tint: Color = Color.TRANSPARENT
 static var _house_mesh_body: BoxMesh = null
@@ -565,8 +560,6 @@ func _set_owner(new_owner: int) -> void:
 	_wood_fraction = 0.0
 	_income_shown.clear()
 	_income_timer = 0.0
-	_garrison.clear()
-	_garrison_timer = 0.0
 	for building in _slot_buildings:
 		if not is_instance_valid(building) or building.is_destroyed:
 			continue
@@ -648,33 +641,6 @@ func _tick_settlement(delta: float) -> void:
 	if _income_timer >= INCOME_POPUP_SECONDS:
 		_income_timer = 0.0
 		_show_income()
-	_garrison = _garrison.filter(func(u): return is_instance_valid(u) and u.status_activity != Unit.Activity.DEAD \
-			and u.owner_peer_id == owner_peer_id)
-	if _garrison.size() >= _garrison_cap() or _guard_roster.is_empty():
-		_garrison_timer = 0.0
-		return
-	_garrison_timer += delta
-	if _garrison_timer >= GARRISON_REGEN_SECONDS:
-		_garrison_timer = 0.0
-		_raise_garrison_man()
-
-## One more of this settlement's own people, for its owner: an ordinary unit
-## of theirs, standing at the settlement to be ordered like any other. Kept
-## free of upkeep (RealmEconomy), and counted against the settlement's cap
-## wherever he goes, so a settlement can't be milked for an army.
-func _raise_garrison_man() -> void:
-	var main := get_tree().current_scene
-	if not ("unit_spawner" in main):
-		return
-	var entry: Dictionary = _guard_roster[_garrison.size() % _guard_roster.size()]
-	var unit: Unit = main.unit_spawner.spawn({
-		"scene_path": entry.scene_path,
-		"peer_id": owner_peer_id,
-		"tint": main.get_team_tint(owner_peer_id),
-		"position": to_global(entry.position),
-	})
-	unit.set_meta(&"garrison", true)
-	_garrison.append(unit)
 
 ## A neutral settlement is held by a small regiment, not the scene's handful:
 ## copies of its guards in a ring, remembered so a respawn brings them all back.
@@ -1028,9 +994,9 @@ func place_slot(item: ProducibleItem) -> void:
 		"slot_kind": RealmRoster.kind_named(item.item_name),
 		"slot_level": 1,
 		"slot_level_cap": _level_cap(),
+		"settlement_path": String(get_path()),
 	}
 	var building: ProductionBuilding = main.building_spawner.spawn(data)
-	building.settlement = self
 	building.set_meta(&"slot_index", index)
 	building.set_meta(&"slot_name", item.item_name)
 	_slot_buildings.append(building)
@@ -1134,6 +1100,11 @@ func _rpc_choice(peer_id: int, is_razed: bool) -> void:
 	choice_peer = peer_id
 	razed = is_razed
 	_show_houses()
+
+## Just taken and not yet occupied or razed: its hall offers only the choice,
+## and nothing in it builds, trains or upgrades until that is made.
+func awaiting_choice() -> bool:
+	return is_settlement() and choice_peer > 0
 
 func can_choose(peer_id: int, queue: Array) -> bool:
 	if not is_settlement() or choice_peer <= 0 or choice_peer != peer_id:
@@ -1265,7 +1236,7 @@ func _show_income() -> void:
 ## --- Walls (Realm) ---
 ## Walls are one of a settlement's slot buildings: a ring of wall around the
 ## cottages with WALL_GATES gates in it, raised in one go when the item
-## finishes. A walled settlement keeps a bigger garrison. Its gates stand open
+## finishes. Its gates stand open
 ## until an enemy comes within DOOR_ALARM_RADIUS of the walls, then shut to
 ## everyone until the danger has gone — attackers have to batter a gate down
 ## (the AI's own breaching does this, see AiCombat._breach) or break the wall.
@@ -1273,7 +1244,6 @@ const WALLS: String = "Walls"
 const WALL_RADIUS: float = 13.5
 const WALL_SEGMENT: float = 2.0
 const WALL_GATES: int = 3
-const WALL_GARRISON_BONUS: int = 3
 const DOOR_ALARM_RADIUS: float = 15.0
 const DOOR_CHECK_SECONDS: float = 0.5
 const WALL_SEGMENT_SCENE: String = "res://scenes/buildings/wall_segment.tscn"
@@ -1285,12 +1255,6 @@ const UnitGrid = preload("res://scripts/unit_grid.gd")
 var _gates: Array = []
 var _doors_shut: bool = false
 var _door_timer: float = 0.0
-
-func has_walls() -> bool:
-	return slot_built.has(WALLS)
-
-func _garrison_cap() -> int:
-	return TIER_GARRISON[tier] + (WALL_GARRISON_BONUS if has_walls() else 0)
 
 ## Host only. Gates sit between the slot buildings' places, walls everywhere
 ## else round the ring that isn't already taken by something solid (a tree
@@ -1317,8 +1281,8 @@ func _build_walls() -> void:
 			"drop_in_delay": WALL_DROP_STAGGER * float(i),
 			"model_race": race_name,
 			"model_name": RaceModels.WALL_GATE if is_gate else RaceModels.WALL_SEGMENT,
+			"settlement_path": String(get_path()),
 		})
-		piece.settlement = self
 		piece.set_meta(&"wall_piece", true)
 		_slot_buildings.append(piece)
 		if is_gate:

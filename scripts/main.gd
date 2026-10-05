@@ -1129,6 +1129,9 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		## military one trains its settlement's people (see RealmRoster).
 		if data.has("building_name"):
 			building.building_name = data.building_name
+		## On every peer, so a client's menu knows which settlement it is in.
+		if data.has("settlement_path"):
+			building.settlement = get_node_or_null(NodePath(data.settlement_path)) as Objective
 		if data.has("slot_level"):
 			building.setup_slot(data.slot_race, data.slot_kind, data.slot_level, data.slot_level_cap)
 		elif data.has("model_race"):

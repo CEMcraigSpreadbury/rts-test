@@ -699,6 +699,8 @@ func can_raise_level(item: ProducibleItem, queue_now: Array) -> bool:
 func enqueue(item: ProducibleItem) -> bool:
 	if is_destroyed or is_under_construction or item == null:
 		return false
+	if settlement != null and settlement.awaiting_choice() and item.kind != ProducibleItem.Kind.CHOICE:
+		return false
 	if item.kind == ProducibleItem.Kind.SLOT and (settlement == null or not settlement.can_build_slot(item, queue)):
 		return false
 	if item.kind == ProducibleItem.Kind.CHOICE and (settlement == null or not settlement.can_choose(owner_peer_id, queue)):
