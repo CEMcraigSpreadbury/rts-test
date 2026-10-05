@@ -182,7 +182,7 @@ void fragment() {
 	// Sunlit tips: the top of each blade a touch lighter and warmer (UV.y runs
 	// 0 at the tip to 1 at the root); the base stays the ground's own colour.
 	vec3 tip_light = mix(vec3(1.0), vec3(1.16, 1.12, 0.9), smoothstep(0.45, 0.95, 1.0 - UV.y));
-	ALBEDO = apply_fog(grass_clumps(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, root_pos.xz, noise_texture) * tip_light, world_pos.xz, SPECULAR);
+	ALBEDO = apply_fog(grass_clumps(grass_grade(texture(color_gradient, vec2(noise_value, 0.0)).rgb) * brightness, root_pos.xz, noise_texture) * tip_light, world_pos.xz, SPECULAR);
 
 	float alpha = clamp((shape_value - alpha_cut_start) / (alpha_cut_end - alpha_cut_start), 0.0, 1.0);
 	if (alpha_mode == 0) {

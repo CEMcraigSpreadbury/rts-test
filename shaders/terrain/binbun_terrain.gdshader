@@ -112,7 +112,7 @@ void fragment() {
 	// Only the broad colour blending here: the clump shapes are painted onto
 	// the Binbun blades, which soften them into tufts. On bare ground (grass
 	// off in Options, and always on the web build) they read as stamped ovals.
-	vec3 grass = grass_patches(texture(color_gradient, vec2(noise_value, 0.0)).rgb * brightness, world_pos.xz, noise_texture);
+	vec3 grass = grass_patches(grass_grade(texture(color_gradient, vec2(noise_value, 0.0)).rgb) * brightness, world_pos.xz, noise_texture);
 
 	// Grass/dirt share of this pixel; rock and sand keep TerraBrush's blend.
 	float ground_w = clamp(grass_w + dirt_w, 0.0, 1.0);

@@ -37,17 +37,17 @@
 [ext_resource type="Texture2D" path="res://assets/ui/icons/hud/music.svg" id="hud_music"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-sky_top_color = Color(0.35, 0.5, 0.75, 1)
-sky_horizon_color = Color(0.75, 0.8, 0.85, 1)
+sky_top_color = Color(0.2, 0.4, 0.78, 1)
+sky_horizon_color = Color(0.6, 0.74, 0.9, 1)
 ground_bottom_color = Color(0.3, 0.28, 0.25, 1)
-ground_horizon_color = Color(0.75, 0.8, 0.85, 1)
+ground_horizon_color = Color(0.6, 0.74, 0.9, 1)
 
 [sub_resource type="Sky" id="Sky_1"]
 sky_material = SubResource("ProceduralSkyMaterial_1")
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 2
-background_energy_multiplier = 2.2
+background_energy_multiplier = 1.05
 sky = SubResource("Sky_1")
 ambient_light_source = 3
 ambient_light_color = Color(0.62, 0.68, 0.72, 1)
@@ -65,7 +65,7 @@ glow_strength = 0.2
 glow_bloom = 0.0
 glow_hdr_threshold = 1.4
 volumetric_fog_enabled = true
-volumetric_fog_density = 0.0
+volumetric_fog_density = 0.018
 volumetric_fog_albedo = Color(1, 1, 0.8392157, 1)
 volumetric_fog_anisotropy = 0.0
 volumetric_fog_length = 6.0

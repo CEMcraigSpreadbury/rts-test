@@ -6,6 +6,18 @@
 // meadow is calm colour, and the strong values belong to the shadows.
 const float CLUMP_FREQ = 0.33;
 
+// The overall grade every map's grass palette goes through: a step darker,
+// a touch less saturated and nudged towards olive, so the meadow sits back
+// behind the units instead of glowing lime.
+const float GRASS_VALUE = 0.7;
+const float GRASS_SATURATION = 0.85;
+const vec3 GRASS_WARMTH = vec3(1.04, 1.0, 0.9);
+
+vec3 grass_grade(vec3 c) {
+	float luma = dot(c, vec3(0.299, 0.587, 0.114));
+	return mix(vec3(luma), c, GRASS_SATURATION) * GRASS_VALUE * GRASS_WARMTH;
+}
+
 vec2 clump_hash(vec2 p) {
 	p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
 	return fract(sin(p) * 43758.5453);
