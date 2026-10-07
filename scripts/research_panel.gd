@@ -14,7 +14,7 @@ const TIERS: int = 4
 const TITLE_FONT_SIZE: int = 33
 const LINE_WIDTH: float = 3.3
 const LINE_OWNED_COLOR: Color = UiStyle.ACCENT
-const LINE_LOCKED_COLOR: Color = Color(0.7294, 0.5608, 0.3098, 0.35)
+const LINE_LOCKED_COLOR: Color = Color(1.0, 1.0, 1.0, 0.18)
 const UNAFFORDABLE_FONT_COLOR: Color = UiStyle.BAD
 ## An owned node keeps the gold (hover) frame with light gold text.
 const OWNED_FONT_COLOR: Color = UiStyle.ACCENT
@@ -42,7 +42,7 @@ var _buttons: Array[Button] = []
 ## cost_row: Control, cost: Label} -- what _refresh recolours.
 var _parts: Array[Dictionary] = []
 var _node_styles: Dictionary = {}
-var _owned_style: StyleBoxFlat
+var _owned_style: StyleBox
 
 ## Draws the requirement lines underneath the node buttons (its children).
 class TreeCanvas extends Control:
@@ -75,7 +75,9 @@ func _ready() -> void:
 	for side in ["left", "top", "right", "bottom"]:
 		margin.add_theme_constant_override("margin_" + side, 14)
 	add_child(margin)
-	add_child(UiCaps.new())
+	var body := UiPlasticBody.new()
+	body.fresh_backdrop = true
+	add_child(body)
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 13)
 	margin.add_child(vbox)

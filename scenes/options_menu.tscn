@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/options_menu.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ui/section_rule.gd" id="3_rule"]
-[ext_resource type="Script" path="res://scripts/ui/ui_caps.gd" id="4_caps"]
+[ext_resource type="Script" path="res://scripts/ui/ui_plastic_body.gd" id="4_caps"]
 [ext_resource type="Script" path="res://scripts/ui/vertical_rule.gd" id="5_vrule"]
 
 [node name="OptionsMenu" type="PanelContainer"]

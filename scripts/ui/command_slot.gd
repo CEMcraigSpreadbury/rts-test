@@ -2,8 +2,9 @@ class_name CommandSlot
 extends Button
 ## One cell of a command grid.
 ##
-## Anything with art shows it, with the hotkey as a small corner badge: pixel
-## art at 1x of its 32px source, or a command's glyph (UiGlyphs) tinted brass.
+## A plastic key in the player's colour (UiStyle.KEY). Anything with art shows
+## it, with the hotkey as a small corner badge: pixel art at 1x of its 32px
+## source, or a command's glyph (UiGlyphs) tinted near-white.
 ## Anything with neither falls back to its hotkey letter alone. No cost number
 ## either way: affordability is carried by colour, a red wash over the art, a
 ## red glyph or a red letter.
@@ -12,11 +13,12 @@ enum State { NORMAL, SELECTED, UNAFFORDABLE, LOCKED, EMPTY }
 
 ## Over the art of something the player cannot pay for yet.
 const UNAFFORDABLE_ICON_TINT := Color(1.0, 0.5, 0.45, 0.8)
-const BADGE_OUTLINE := Color(0.0706, 0.0510, 0.0353)
-const BADGE_OUTLINE_SIZE: int = 4
-## A glyph at rest: halfway between DIM and INK, so it reads beside pixel art
-## without outshining it. Hover, press and selection take it to ACCENT.
-const GLYPH_TINT := Color(0.8275, 0.7706, 0.6784)
+const BADGE_COLOUR := Color(1.0, 1.0, 1.0, 0.85)
+const BADGE_OUTLINE := Color(0.0, 0.0, 0.0, 0.4)
+const BADGE_OUTLINE_SIZE: int = 3
+## A glyph at rest: near-white on the key. Hover, press and selection take it
+## to ACCENT.
+const GLYPH_TINT := Color(0.93, 0.95, 0.97)
 ## Glyphs sit this far above centre, clear of the hotkey badge.
 const GLYPH_LIFT: float = 3.0
 
@@ -83,7 +85,7 @@ func setup_icon(texture: Texture2D, hotkey: String, display_name: String, costs:
 		_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_badge.add_theme_font_override("font", UiStyle.font_data_bold())
 		_badge.add_theme_font_size_override("font_size", UiStyle.SIZE_BADGE)
-		_badge.add_theme_color_override("font_color", UiStyle.DIM)
+		_badge.add_theme_color_override("font_color", BADGE_COLOUR)
 		## The badge sits on the art itself, and vanished against a bright roof.
 		_badge.add_theme_color_override("font_outline_color", BADGE_OUTLINE)
 		_badge.add_theme_constant_override("outline_size", BADGE_OUTLINE_SIZE)
@@ -123,28 +125,35 @@ func make_empty() -> void:
 		_icon.texture = null
 
 func _restyle() -> void:
-	var border := UiStyle.LINE
 	var letter_colour := UiStyle.INK
 	match state:
 		State.SELECTED:
-			border = UiStyle.ACCENT
 			letter_colour = UiStyle.ACCENT
 		State.UNAFFORDABLE:
 			letter_colour = UiStyle.BAD
 		State.LOCKED:
 			letter_colour = UiStyle.DIM
-		State.EMPTY:
-			pass
-	var normal := UiStyle.empty_slot_box() if state == State.EMPTY else UiStyle.slot_box(border)
-	add_theme_stylebox_override("normal", normal)
-	add_theme_stylebox_override("disabled", normal)
-	add_theme_stylebox_override("hover", normal if state == State.EMPTY else UiStyle.slot_box(UiStyle.LINE_STRONG))
-	add_theme_stylebox_override("pressed", normal if state == State.EMPTY else UiStyle.slot_box(UiStyle.ACCENT))
+	if state == State.EMPTY:
+		var socket := UiStyle.empty_slot_box()
+		for box_name in ["normal", "disabled", "hover", "pressed"]:
+			add_theme_stylebox_override(box_name, socket)
+	elif state == State.SELECTED:
+		var held := UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.SELECTED)
+		for box_name in ["normal", "disabled", "hover", "pressed"]:
+			add_theme_stylebox_override(box_name, held)
+	else:
+		## Something the player can't pay for yet is a greyed key, as the
+		## mockup's .key.no.
+		var at_rest := UiStyle.KeyState.DISABLED if state == State.UNAFFORDABLE else UiStyle.KeyState.NORMAL
+		add_theme_stylebox_override("normal", UiStyle.key_box(UiStyle.KEY, at_rest))
+		add_theme_stylebox_override("disabled", UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.DISABLED))
+		add_theme_stylebox_override("hover", UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.HOVER))
+		add_theme_stylebox_override("pressed", UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.PRESSED))
 	modulate = UiStyle.DISABLED_MODULATE if state == State.LOCKED else Color.WHITE
 	if _letter != null:
 		_letter.add_theme_color_override("font_color", letter_colour)
 	if _badge != null:
-		_badge.add_theme_color_override("font_color", UiStyle.DIM if state == State.NORMAL else letter_colour)
+		_badge.add_theme_color_override("font_color", BADGE_COLOUR if state == State.NORMAL else letter_colour)
 	if _icon != null:
 		_icon.modulate = UNAFFORDABLE_ICON_TINT if state == State.UNAFFORDABLE and not _glyph else Color.WHITE
 	queue_redraw()

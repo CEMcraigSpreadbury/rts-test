@@ -40,6 +40,7 @@ const SECTIONS: Array = [
 		["Park Ambiance", "klankbeeld, freesound.org"],
 	]],
 	["Fonts", [
+		["Fraunces", "The Fraunces Project Authors (SIL Open Font License 1.1)"],
 		["Marcellus SC", "Astigmatic (SIL Open Font License 1.1)"],
 		["Barlow Semi Condensed", "The Barlow Project Authors (SIL Open Font License 1.1)"],
 		["Spectral", "Production Type (SIL Open Font License 1.1)"],

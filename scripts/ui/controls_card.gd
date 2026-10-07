@@ -49,10 +49,9 @@ func _ready() -> void:
 	_shell = ModalShell.dress(panel, "Reference", "Controls", CARD_WIDTH)
 	## Near opaque: it is read over the busy HUD, which shows through the
 	## usual modal panel.
-	var box := panel.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
-	if box != null:
-		box.bg_color.a = 0.97
-		panel.add_theme_stylebox_override("panel", box)
+	for child in panel.get_children():
+		if child is UiPlasticBody:
+			child.opacity = 0.97
 
 	var close_button := UiButton.new()
 	close_button.text = "Close"

@@ -22,10 +22,10 @@ const DIALOGUE_WIDTH: float = 1020.0
 ## command grid instead.
 ## The band must be TALLER than the box it centres, or the box overflows it at
 ## both ends and reaches the command panel anyway -- a CenterContainer does
-## not clip. 220 clears the box (about 200 with its portrait) and the bottom
-## sits 268 up, leaving the selection panel at 248 a clear margin.
-const DIALOGUE_BAND_TOP: float = 488.0
-const DIALOGUE_BAND_BOTTOM: float = 268.0
+## not clip. 250 clears the box (about 230 with its portrait) and the bottom
+## sits 290 up, leaving the selection panel (264 up, plus its lip) a margin.
+const DIALOGUE_BAND_TOP: float = 540.0
+const DIALOGUE_BAND_BOTTOM: float = 290.0
 const BRIEFING_WIDTH: float = 720.0
 ## How long a finished objective stays on the tracker before dropping off.
 const COMPLETED_LINGER: float = 6.0
@@ -96,9 +96,9 @@ func _ready() -> void:
 	if main.scenario != null and main.scenario.briefing_text.strip_edges() != "":
 		_show_briefing(main.scenario.briefing_title, main.scenario.briefing_text)
 
-## The same brass panel every other module uses, with the inset the quest
-## panels want. Corner caps are added per panel by _add_caps().
-func _panel_style() -> StyleBoxFlat:
+## The same plastic panel every other module uses, with the inset the quest
+## panels want. Its body is drawn per panel by _add_body().
+func _panel_style() -> StyleBox:
 	var style := UiStyle.panel_box()
 	style.content_margin_left = UiStyle.SPACE_L
 	style.content_margin_right = UiStyle.SPACE_L
@@ -106,8 +106,11 @@ func _panel_style() -> StyleBoxFlat:
 	style.content_margin_bottom = UiStyle.SPACE_M
 	return style
 
-func _add_caps(panel: Control) -> void:
-	panel.add_child(UiCaps.new())
+## `over_hud`: the panel opens over the HUD (see UiPlasticBody.fresh_backdrop).
+func _add_body(panel: Control, over_hud: bool = false) -> void:
+	var body := UiPlasticBody.new()
+	body.fresh_backdrop = over_hud
+	panel.add_child(body)
 
 ## --- Tracker ---
 
@@ -128,12 +131,12 @@ func _build_tracker() -> void:
 	_tracker_panel.anchor_bottom = 0.0
 	_tracker_panel.offset_left = -(TRACKER_WIDTH + TRACKER_MARGIN)
 	_tracker_panel.offset_right = -TRACKER_MARGIN
-	## Under the row of the day clock and (in single player) the game-speed
-	## buttons, which share the corner.
-	var top: float = TRACKER_MARGIN + UiSpeedControls.BUTTON_SIZE.y + UiStyle.SPACE_S
+	## Under the top-right tray of the day clock and (in single player) the
+	## game-speed buttons, clear of its lip.
+	var top: float = UiMatchState.TOP + UiMatchState.HEIGHT + UiStyle.SPACE_L
 	_tracker_panel.offset_top = top
 	_tracker_panel.offset_bottom = top
-	_add_caps(_tracker_panel)
+	_add_body(_tracker_panel)
 	_tracker_box = VBoxContainer.new()
 	_tracker_box.add_theme_constant_override("separation", 7)
 	_tracker_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -206,7 +209,7 @@ func _build_dialogue() -> void:
 	_dialogue_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_dialogue_panel.custom_minimum_size = Vector2(DIALOGUE_WIDTH, 0.0)
 	band.add_child(_dialogue_panel)
-	_add_caps(_dialogue_panel)
+	_add_body(_dialogue_panel)
 
 	## The portrait and words sit in a row; the button goes under the whole box
 	## rather than inside that row, or it centres on the words alone and reads
@@ -335,7 +338,7 @@ func _portrait_for(line: Dictionary) -> Texture2D:
 func _build_briefing() -> void:
 	_briefing_shade = ColorRect.new()
 	## Warm rather than neutral black, matching the menus' scrim.
-	_briefing_shade.color = Color(0.055, 0.042, 0.032, 0.72)
+	_briefing_shade.color = Color(0.04, 0.05, 0.06, 0.72)
 	_briefing_shade.visible = false
 	_briefing_shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_briefing_shade)
@@ -357,7 +360,7 @@ func _build_briefing() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", UiStyle.SPACE_M)
 	_briefing_panel.add_child(column)
-	_add_caps(_briefing_panel)
+	_add_body(_briefing_panel, true)
 
 	_briefing_title = Label.new()
 	_briefing_title.theme_type_variation = &"TitleLabel"

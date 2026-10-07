@@ -1,7 +1,13 @@
 class_name UiStyle
 extends RefCounted
-## "Forged Brass" design tokens -- the single source of truth for every colour,
+## Toy-plastic design tokens -- the single source of truth for every colour,
 ## size and face in the game's UI. Nothing else declares a UI colour.
+##
+## The look: moulded plastic pieces from the same toy set as the battlefield.
+## Panels are smoked translucent plastic frosting the battle behind them
+## (UiPlasticBody), keys and buttons are solid plastic with a lip and a soft
+## shadow (UiPlasticBox), sockets are dips moulded into the panel. The living
+## mockup is https://claude.ai/artifact/TR29NUsZULdSuVvJZC5nvk.
 ##
 ## The theme resource is GENERATED from these values, it is not hand-authored:
 ##   godot --path . --headless --script res://scripts/tools/build_ui_theme.gd
@@ -11,41 +17,51 @@ extends RefCounted
 ## screen pixel at 1080p and matches the mockup 1:1.
 
 # ---------------------------------------------------------------- colour
-## Panel bodies. Translucent so the battle stays readable underneath.
-const SURFACE := Color(0.1176, 0.0902, 0.0667, 0.86)      # 1E1711
-## Raised faces: buttons, the lighter half of a control.
-const RAISED := Color(0.1725, 0.1333, 0.0980, 0.92)       # 2C2219
-## Recessed wells: command slots, stat tiles, text inputs.
-const SLOT := Color(0.0706, 0.0510, 0.0353, 0.78)         # 120D09
-## The one border weight in the whole UI.
-const LINE := Color(0.7294, 0.5608, 0.3098, 0.46)         # BA8F4F
-## Rules, corner caps, portrait frames -- brass that reads as brass.
-const LINE_STRONG := Color(0.8392, 0.6745, 0.4078, 0.85)  # D6AC68
+## The plastic every panel is moulded from ("Smoke").
+const TRAY := Color(0.1843, 0.2039, 0.2235)               # 2F3439
+## How opaque a panel's plastic is over the frosted battle behind it.
+const PANEL_OPACITY: float = 0.8
+## A panel body where something must draw one without UiPlasticBody.
+const SURFACE := Color(0.1843, 0.2039, 0.2235, 0.8)
+## Plain keys and buttons: the same plastic, solid.
+const RAISED := TRAY
+## The player's keys: command buttons, the primary button, the portrait.
+const KEY := Color(0.2392, 0.3725, 0.6588)                # 3D5FA8
+## Recessed sockets: command slots, stat tiles, text inputs, bar tracks.
+const SLOT := Color(0.0, 0.0, 0.0, 0.2)
+## Hairlines: dividers and quiet outlines.
+const LINE := Color(1.0, 1.0, 1.0, 0.1)
+## A hovered or emphasised outline.
+const LINE_STRONG := Color(1.0, 1.0, 1.0, 0.3)
 ## Primary text.
-const INK := Color(0.9412, 0.8980, 0.8196)                # F0E5D1
+const INK := Color(0.9333, 0.9412, 0.9255)                # EEF0EC
 ## Labels, hotkey badges, timestamps.
-const DIM := Color(0.7137, 0.6431, 0.5373)                # B6A489
-## Spent only on selection, progress, the active tab and primary buttons.
-const ACCENT := Color(0.8510, 0.6745, 0.3294)             # D9AC54
+const DIM := Color(0.6627, 0.6902, 0.7020)                # A9B0B3
+## Spent only on selection, progress, the active tab.
+const ACCENT := Color(0.9098, 0.7765, 0.4157)             # E8C66A
 ## Text that sits on top of ACCENT.
-const ACCENT_INK := Color(0.1412, 0.1020, 0.0627)         # 241A10
-const GOOD := Color(0.5608, 0.7490, 0.3843)               # 8FBF62
-const BAD := Color(0.8118, 0.3804, 0.2667)                # CF6144
+const ACCENT_INK := Color(0.1686, 0.1412, 0.0627)         # 2B2410
+const GOOD := Color(0.5255, 0.7176, 0.3961)               # 86B765
+const BAD := Color(0.8784, 0.4392, 0.3608)                # E0705C
+## A destructive button's plastic (Surrender, Quit).
+const DANGER := Color(0.6627, 0.2667, 0.2039)             # A94434
 ## Wavering morale (a routing one uses BAD).
 const WAVER := Color(0.8902, 0.5255, 0.2275)              # E3863A
-## Tooltips are the one OPAQUE surface: they must stay readable over whatever
-## they cover, and a translucent one let the text behind bleed through.
-const TOOLTIP_BG := Color(0.1725, 0.1333, 0.0980, 1.0)    # 2C2219
+## Tooltips are near-opaque: they must stay readable over whatever they cover.
+const TOOLTIP_BG := Color(0.1843, 0.2039, 0.2235, 0.96)
 ## Disabled controls keep their shape and lose their contrast.
 const DISABLED_MODULATE := Color(1.0, 1.0, 1.0, 0.34)
 
 # ---------------------------------------------------------------- metrics
-const RADIUS: int = 2
-const RADIUS_SLOT: int = 1
+## Panels.
+const RADIUS: int = 16
+## Keys, buttons, tooltips.
+const RADIUS_KEY: int = 12
+## Sockets and bar tracks.
+const RADIUS_SLOT: int = 10
 const BORDER: int = 1
-## The one ornament in the system: a brass L in two opposite corners.
-const CAP_LENGTH: int = 11
-const CAP_WIDTH: int = 2
+## The moulded lip under a panel and under a key.
+const LIP: int = 3
 
 const SPACE_XS: int = 4
 const SPACE_S: int = 8
@@ -56,7 +72,7 @@ const SPACE_XL: int = 22
 const SCREEN_MARGIN: int = 24
 
 # ---------------------------------------------------------------- type
-const FONT_DISPLAY_PATH: String = "res://assets/fonts/MarcellusSC-Regular.ttf"
+const FONT_DISPLAY_PATH: String = "res://assets/fonts/Fraunces-Variable.ttf"
 const FONT_DATA_PATH: String = "res://assets/fonts/BarlowSemiCondensed-SemiBold.ttf"
 const FONT_DATA_BOLD_PATH: String = "res://assets/fonts/BarlowSemiCondensed-Bold.ttf"
 const FONT_PROSE_PATH: String = "res://assets/fonts/Spectral-Regular.ttf"
@@ -69,19 +85,23 @@ const SIZE_BODY: int = 17
 const SIZE_TOOLTIP_NAME: int = 19
 const SIZE_BUTTON: int = 20
 const SIZE_VALUE: int = 21
+## The stockpile totals, the HUD's biggest numbers.
+const SIZE_STOCK: int = 26
 const SIZE_NAME: int = 22
+## The selection panel's name line.
+const SIZE_SELECTION_NAME: int = 28
 const SIZE_SLOT_LETTER: int = 25
 const SIZE_CLOCK: int = 26
 const SIZE_MODAL_TITLE: int = 34
 const SIZE_GAME_TITLE: int = 62
 
 # ---------------------------------------------------------------- control sizes
-const SLOT_CMD: int = 50
-const SLOT_QUEUE: int = 40
-const SLOT_TOOL: int = 40
+const SLOT_CMD: int = 52
+const SLOT_QUEUE: int = 44
+const SLOT_TOOL: int = 44
 const SLOT_POINT: int = 30
-const PORTRAIT: int = 104
-const MINIMAP: int = 236
+const PORTRAIT: int = 120
+const MINIMAP: int = 264
 ## Pixel art renders at 1x or 2x of its 32px source and never in between --
 ## anything else smears it however it is filtered.
 const ICON_1X: int = 32
@@ -97,12 +117,14 @@ const GLYPH_NODE: int = 40
 const GLYPH_PORTRAIT: int = 64
 const GLYPH_TAB: int = 28
 const GLYPH_TOOL: int = 22
-const GLYPH_STOCK: int = 19
+const GLYPH_STOCK: int = 28
 const GLYPH_TIP: int = 15
-const GLYPH_POINT: int = 26
+const GLYPH_POINT: int = 22
 
 ## The selection panel never changes size, whatever is selected.
-const SEL_PANEL_SIZE := Vector2(646, 214)
+const SEL_PANEL_SIZE := Vector2(702, 238)
+## Gaps in the command grid and the queue row.
+const SLOT_GAP: int = 8
 ## Command grid is a fixed 9 x 2; a sparse menu pads with empties.
 const CMD_COLUMNS: int = 9
 const CMD_ROWS: int = 2
@@ -110,14 +132,23 @@ const CMD_ROWS: int = 2
 # ---------------------------------------------------------------- fonts, lazily
 ## Loaded on demand, never in a static initialiser -- those run before autoloads
 ## are ready and have broken this project's scripts at compile time before.
-static var _display: FontFile
+static var _display: FontVariation
 static var _data: FontFile
 static var _data_bold: FontFile
 static var _prose: FontFile
 
-static func font_display() -> FontFile:
+## Fraunces is a variable font: SemiBold, at the soft end of its SOFT axis
+## (rounded terminals that sit with the plastic), cut for display sizes.
+static func font_display() -> Font:
 	if _display == null:
-		_display = load(FONT_DISPLAY_PATH)
+		var ts := TextServerManager.get_primary_interface()
+		_display = FontVariation.new()
+		_display.base_font = load(FONT_DISPLAY_PATH)
+		_display.variation_opentype = {
+			ts.name_to_tag("wght"): 600,
+			ts.name_to_tag("SOFT"): 100,
+			ts.name_to_tag("opsz"): 48,
+		}
 	return _display
 
 static func font_data() -> FontFile:
@@ -146,33 +177,93 @@ static func flat(bg: Color, border: Color, radius: int, border_width: int = BORD
 	box.set_corner_radius_all(radius)
 	return box
 
-## A panel body. Content margins are the caller's business, because a docked
-## module and a modal want different insets from the same material.
-static func panel_box() -> StyleBoxFlat:
-	return flat(SURFACE, LINE, RADIUS)
-
-## A recessed well. Pass ACCENT for a selected slot, BAD for an unaffordable one.
-static func slot_box(border: Color = LINE) -> StyleBoxFlat:
-	return flat(SLOT, border, RADIUS_SLOT)
-
-## An empty slot in a fixed grid: present, obviously not a control.
-static func empty_slot_box() -> StyleBoxFlat:
-	return flat(Color(0.0706, 0.0510, 0.0353, 0.42), Color(0.7294, 0.5608, 0.3098, 0.18), RADIUS_SLOT)
-
-static func button_box(border: Color = LINE, bg: Color = RAISED) -> StyleBoxFlat:
-	var box := flat(bg, border, RADIUS)
-	box.content_margin_left = SPACE_XL
-	box.content_margin_right = SPACE_XL
-	box.content_margin_top = 11
-	box.content_margin_bottom = 11
+## A panel body for code that can't add a UiPlasticBody (a theme Panel used
+## bare): the translucent plastic and its lip, without the frosting or the
+## drop shadow (which a stylebox would paint under the translucent face).
+## Content margins are the caller's business, because a docked module and a
+## modal want different insets from the same material.
+static func panel_box() -> UiPlasticBox:
+	var box := UiPlasticBox.new()
+	box.base = SURFACE
+	box.radius = RADIUS
+	box.lip = LIP
+	box.lip_darken = 0.4
+	box.shadow_alpha = 0.0
+	box.hi = 0.09
+	box.lo = 0.05
+	box.rim = 0.3
 	return box
 
-static func tooltip_box() -> StyleBoxFlat:
-	var box := flat(TOOLTIP_BG, LINE_STRONG, RADIUS)
-	box.content_margin_left = SPACE_L
-	box.content_margin_right = SPACE_L
-	box.content_margin_top = 11
-	box.content_margin_bottom = 11
+enum KeyState { NORMAL, HOVER, PRESSED, SELECTED, DISABLED }
+
+## A solid plastic key in `base` (KEY for the player's own, RAISED for a plain
+## one, DANGER for a destructive one).
+static func key_box(base: Color = RAISED, state: KeyState = KeyState.NORMAL) -> UiPlasticBox:
+	var box := UiPlasticBox.new()
+	box.radius = RADIUS_KEY
+	box.lip = LIP
+	box.base = base
+	match state:
+		KeyState.HOVER:
+			box.base = base.lightened(0.08)
+		KeyState.PRESSED:
+			box.pressed = true
+		KeyState.SELECTED:
+			box.pressed = true
+			box.ring = ACCENT
+		KeyState.DISABLED:
+			var grey := base.get_luminance()
+			box.base = base.lerp(Color(grey, grey, grey), 0.85)
+			box.shadow_alpha = 0.2
+	return box
+
+## A team colour as UI plastic: the game's team colours are tuned to read on
+## the battlefield and come out loud on a key, so they are muted a step.
+static func plastic(tint: Color) -> Color:
+	var grey := tint.get_luminance()
+	return tint.lerp(Color(grey, grey, grey), 0.25).darkened(0.2)
+
+## A key sized as a text button: the padding around its label.
+static func button_box(base: Color = RAISED, state: KeyState = KeyState.NORMAL) -> UiPlasticBox:
+	var box := key_box(base, state)
+	box.content_margin_left = 28
+	box.content_margin_right = 28
+	box.content_margin_top = 12
+	box.content_margin_bottom = 14
+	return box
+
+## A recessed socket. Pass ACCENT for a selected one, BAD for an unaffordable
+## one; LINE (the default) leaves it unoutlined.
+static func slot_box(border: Color = LINE) -> UiPlasticBox:
+	var box := UiPlasticBox.new()
+	box.kind = UiPlasticBox.Kind.WELL
+	box.base = SLOT
+	box.radius = RADIUS_SLOT
+	if border != LINE:
+		box.ring = border
+	return box
+
+## An empty socket in a fixed grid: present, obviously not a control.
+static func empty_slot_box() -> UiPlasticBox:
+	var box := slot_box()
+	box.base = Color(0, 0, 0, 0.12)
+	return box
+
+static func tooltip_box() -> UiPlasticBox:
+	var box := UiPlasticBox.new()
+	box.base = TOOLTIP_BG
+	box.radius = RADIUS_KEY
+	box.lip = 2
+	box.lip_darken = 0.4
+	box.shadow_alpha = 0.35
+	box.shadow_size = 12
+	box.hi = 0.09
+	box.lo = 0.05
+	box.rim = 0.3
+	box.content_margin_left = 18
+	box.content_margin_right = 18
+	box.content_margin_top = 14
+	box.content_margin_bottom = 16
 	return box
 
 static func empty_box(margin: int = 0) -> StyleBoxEmpty:
@@ -184,18 +275,6 @@ static func empty_box(margin: int = 0) -> StyleBoxEmpty:
 	return box
 
 # ---------------------------------------------------------------- helpers
-## Draws the brass L caps on the top-left and bottom-right of a rect. Every
-## panel in the game carries these; the user checks for them.
-static func draw_corner_caps(canvas: CanvasItem, rect: Rect2, colour: Color = LINE_STRONG) -> void:
-	var w := float(CAP_WIDTH)
-	var l := float(CAP_LENGTH)
-	var tl := rect.position
-	canvas.draw_rect(Rect2(tl, Vector2(l, w)), colour)
-	canvas.draw_rect(Rect2(tl, Vector2(w, l)), colour)
-	var br := rect.position + rect.size
-	canvas.draw_rect(Rect2(br - Vector2(l, w), Vector2(l, w)), colour)
-	canvas.draw_rect(Rect2(br - Vector2(w, l), Vector2(w, l)), colour)
-
 ## Applies the pixel-art rule to a texture rect: integer scale, no filtering.
 static func make_pixel_crisp(node: CanvasItem) -> void:
 	node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

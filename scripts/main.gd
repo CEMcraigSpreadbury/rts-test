@@ -589,6 +589,8 @@ func _ready() -> void:
 	var controls_button := UiButton.new()
 	controls_button.name = "ControlsButton"
 	controls_button.text = "Controls"
+	controls_button.custom_minimum_size.y = 58
+	controls_button.add_theme_font_size_override("font_size", 23)
 	controls_button.pressed.connect(func():
 		pause_menu.visible = false
 		_controls_from_pause = true
@@ -1455,6 +1457,8 @@ var _rematch_button: Button = null
 func _build_rematch_button() -> void:
 	_rematch_button = UiButton.new()
 	_rematch_button.text = "Rematch"
+	_rematch_button.custom_minimum_size.y = 58
+	_rematch_button.add_theme_font_size_override("font_size", 23)
 	_rematch_button.visible = false
 	_rematch_button.pressed.connect(_start_rematch)
 	var return_button: Button = $UI/GameOverPanel/Margin/VBox/ReturnButton
@@ -1535,7 +1539,7 @@ var _game_over_tween: Tween = null
 
 func _build_game_over_backdrop() -> void:
 	_game_over_backdrop = ColorRect.new()
-	_game_over_backdrop.color = Color(0.02, 0.01, 0.0, 0.6)
+	_game_over_backdrop.color = Color(0.02, 0.03, 0.04, 0.6)
 	_game_over_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_game_over_backdrop.visible = false
 	game_over_panel.add_sibling(_game_over_backdrop)

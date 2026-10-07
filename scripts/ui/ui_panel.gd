@@ -1,14 +1,13 @@
 class_name UiPanel
 extends Control
-## A Forged Brass panel body: translucent surface, one hairline border, and the
-## brass L cap in the top-left and bottom-right corners that every panel in the
-## game carries.
+## A moulded-plastic panel: smoked translucent plastic frosting the battle
+## behind it, drawn by a UiPlasticBody child.
 ##
 ## Put content in `panel.content`, NOT in the panel itself. The panel is a plain
 ## Control rather than a MarginContainer on purpose: a MarginContainer lays out
 ## its internal children too, so a background layer added with INTERNAL_MODE
 ## still gets squashed into the content rect. Keeping the panel a Control and
-## drawing the material in _draw() avoids that entirely.
+## letting UiPlasticBody draw the material behind it avoids that entirely.
 
 ## The inset between the panel edge and its content on each side.
 var inset: int = UiStyle.SPACE_L:
@@ -16,13 +15,6 @@ var inset: int = UiStyle.SPACE_L:
 		inset = value
 		_insets = {"left": value, "top": value, "right": value, "bottom": value}
 		_apply_insets()
-
-## Set false for a panel that should not carry the corner caps. Nothing in the
-## game does yet -- the tooltip is a popup, not a UiPanel.
-var show_caps: bool = true:
-	set(value):
-		show_caps = value
-		queue_redraw()
 
 ## Created on first access, so the same script can dress a scene node whose
 ## children are already laid out at explicit offsets (the HUD modules) as well
@@ -41,10 +33,12 @@ var content: MarginContainer:
 var _content: MarginContainer
 var _insets := {"left": UiStyle.SPACE_L, "top": UiStyle.SPACE_L,
 		"right": UiStyle.SPACE_L, "bottom": UiStyle.SPACE_L}
-var _box: StyleBoxFlat
+var _body: UiPlasticBody
 
 func _init() -> void:
-	_box = UiStyle.panel_box()
+	_body = UiPlasticBody.new()
+	_body.name = "PlasticBody"
+	add_child(_body, false, Node.INTERNAL_MODE_FRONT)
 
 func _apply_insets() -> void:
 	if _content == null:
@@ -57,13 +51,3 @@ func _apply_insets() -> void:
 func set_insets(left: int, top: int, right: int, bottom: int) -> void:
 	_insets = {"left": left, "top": top, "right": right, "bottom": bottom}
 	_apply_insets()
-
-func _draw() -> void:
-	var rect := Rect2(Vector2.ZERO, size)
-	draw_style_box(_box, rect)
-	if show_caps:
-		UiStyle.draw_corner_caps(self, rect)
-
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_RESIZED:
-		queue_redraw()

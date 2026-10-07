@@ -19,9 +19,9 @@ extends UiPanel
 ## selected. Clicking one selects him and his army; double-clicking looks at
 ## him. The strip itself always shows every regiment.
 
-const STRIP_LEFT: float = 694.0
-const STRIP_WIDTH: float = 870.0
-const STRIP_BOTTOM: float = 24.0
+const STRIP_LEFT: float = 750.0
+const STRIP_WIDTH: float = 798.0
+const STRIP_BOTTOM: float = 26.0
 ## Room above the cards for the bracket a Lord will draw over his regiments.
 const PAD_TOP: float = 20.0
 const PAD_SIDE: float = 12.0
@@ -265,7 +265,7 @@ func _refresh_tabs() -> void:
 		(tab["level"] as UiTextLine).set_text(str(lord.lord_level))
 		root.add_theme_stylebox_override("panel", UiStyle.slot_box(UiStyle.ACCENT if lord.selected else UiStyle.LINE))
 
-## A brass bracket over each Lord's run of cards.
+## A bracket over each Lord's run of cards.
 func _place_brackets(groups: Array, xs: Array[float], drawn: int) -> void:
 	var spans: Dictionary = {}
 	for i in drawn:
@@ -361,7 +361,7 @@ func _show_group(card: Dictionary, group: Dictionary, well: Texture2D) -> void:
 			(card["figure"] as TextureRect).modulate = ROUTED_WELL
 	spirit.color = morale_colour
 	count.label.add_theme_color_override("font_color", count_colour)
-	(card["root"] as Panel).add_theme_stylebox_override("panel", UiStyle.flat(UiStyle.SLOT, border, 1, width))
+	(card["root"] as Panel).add_theme_stylebox_override("panel", UiStyle.flat(UiStyle.SLOT, border, 4, width))
 	_pulse(card, state)
 
 ## Wavering breathes slowly, routing flashes: on the morale bar only.

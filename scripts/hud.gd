@@ -19,6 +19,8 @@ const SELECTION_PORTRAIT_COLUMNS: int = 9
 const SELECTION_PORTRAIT_LIMIT: int = 9
 const RESOURCE_TICK_RATE: float = 6.0
 const RESOURCE_TICK_MIN_SPEED: float = 12.0
+## The selected unit's face on its portrait key: 3x its 32px art.
+const PORTRAIT_ART: float = 96.0
 @onready var stockpile: StockpileBar = main.get_node(^"UI/Stockpile")
 @onready var info_panel_divider: Control = main.get_node(^"UI/BottomBar/InfoPanel/Margin/VBox/TitleDivider")
 @onready var info_panel_name_label: Label = main.get_node(^"UI/BottomBar/InfoPanel/Margin/VBox/BuildingNameLabel")
@@ -88,6 +90,7 @@ var _ability_buttons: Array[Dictionary] = []
 ## replicated hold_position every frame rather than the click itself.
 var _hold_button: Button = null
 const COOLDOWN_SWEEP_SHADER: Shader = preload("res://shaders/cooldown_sweep.gdshader")
+var _empty_queue_box: StyleBox = UiStyle.empty_slot_box()
 var _info_resource_label: Label = null
 
 ## resource_label shows every resource total plus population on one line;
@@ -117,17 +120,15 @@ func setup() -> void:
 	## An unlock is granted at one building and opens buttons on another, so
 	## the selected building's own item_completed never fires for it.
 	UnitUnlocks.unlocks_changed.connect(_on_unlocks_changed)
-	portrait_frame.add_theme_stylebox_override("panel",
-			UiStyle.slot_box(UiStyle.LINE_STRONG))
+	portrait_frame.add_theme_stylebox_override("panel", UiStyle.key_box(UiStyle.KEY))
+	main.get_node(^"UI/BottomBar/MinimapFrame/MinimapWell").add_theme_stylebox_override(
+			"panel", UiStyle.slot_box())
 	unit_cards = UiUnitCardStrip.new()
 	unit_cards.setup(main)
 	main.get_node(^"UI").add_child(unit_cards)
-	var speed_controls := UiSpeedControls.new()
-	speed_controls.setup(main)
-	main.get_node(^"UI").add_child(speed_controls)
-	var day_clock := UiDayClock.new()
-	day_clock.setup(main, speed_controls)
-	main.get_node(^"UI").add_child(day_clock)
+	var match_state := UiMatchState.new()
+	match_state.setup(main)
+	main.get_node(^"UI").add_child(match_state)
 	_populate_construction_buttons()
 
 func _on_unlocks_changed() -> void:
@@ -580,7 +581,6 @@ func close_build_submenu() -> void:
 ## on screen with nothing selected — only its contents come and go.
 func _show_info_header() -> void:
 	info_panel_name_label.visible = true
-	info_panel_divider.visible = true
 
 func _clear_info_header() -> void:
 	info_panel_name_label.visible = false
@@ -595,15 +595,19 @@ func _clear_info_header() -> void:
 func _update_portrait(tint: Color, health_text: String, head: Texture2D = null, glyph: StringName = &"") -> void:
 	portrait_frame.visible = true
 	portrait_health_label.visible = true
-	## A wash rather than a fill: the well stays dark so the sprite on top of it
-	## reads, and the team colour is still legible around it.
-	portrait_rect.color = Color(tint.r, tint.g, tint.b, 0.22)
+	## A raised key in the owner's own colour, the face or glyph on it.
+	portrait_frame.add_theme_stylebox_override("panel", UiStyle.key_box(UiStyle.plastic(tint)))
 	if _portrait_head == null:
 		_portrait_head = TextureRect.new()
 		_portrait_head.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		_portrait_head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		portrait_rect.add_child(_portrait_head)
-		_portrait_head.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		## 3x the 32px pixel art, centred: an integer multiple stays crisp.
+		_portrait_head.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		_portrait_head.offset_left = -PORTRAIT_ART * 0.5
+		_portrait_head.offset_right = PORTRAIT_ART * 0.5
+		_portrait_head.offset_top = -PORTRAIT_ART * 0.5
+		_portrait_head.offset_bottom = PORTRAIT_ART * 0.5
 	var drawn: Texture2D = UiGlyphs.texture(glyph, UiStyle.GLYPH_PORTRAIT) if glyph != &"" else null
 	if drawn != null:
 		_portrait_head.texture = drawn
@@ -657,9 +661,9 @@ func _building_icon(building_name: String) -> Texture2D:
 
 ## A tray portrait slot: the command-slot well, washed with the unit's team
 ## colour so sides stay tellable apart without hiding the sprite.
-func _tray_slot_box(tint: Color, border: Color = UiStyle.LINE) -> StyleBoxFlat:
+func _tray_slot_box(tint: Color, border: Color = UiStyle.LINE) -> StyleBox:
 	var box := UiStyle.slot_box(border)
-	box.bg_color = Color(tint.r, tint.g, tint.b, 0.30).blend(UiStyle.SLOT)
+	box.base = Color(tint.r, tint.g, tint.b, 0.30).blend(UiStyle.SLOT)
 	return box
 
 func _flat_bar_stylebox(color: Color) -> StyleBoxFlat:
@@ -676,7 +680,7 @@ func _flat_bar_stylebox(color: Color) -> StyleBoxFlat:
 ## both come from the tokens, so it matches every other bar in the game.
 func _make_progress_bar_with_overlay() -> ProgressBar:
 	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(0.0, 30.0)
+	bar.custom_minimum_size = Vector2(0.0, 26.0)
 	bar.max_value = 1.0
 	bar.step = 0.0
 	bar.show_percentage = false
@@ -688,7 +692,7 @@ func _make_progress_bar_with_overlay() -> ProgressBar:
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	overlay.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	overlay.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	overlay.add_theme_font_size_override("font_size", 20)
+	overlay.add_theme_font_size_override("font_size", 17)
 	bar.add_child(overlay)
 	return bar
 
@@ -730,7 +734,7 @@ func _build_building_info(building: ProductionBuilding) -> void:
 	if _is_settlement_hall(building):
 		return
 	_info_slot_row = HBoxContainer.new()
-	_info_slot_row.add_theme_constant_override("separation", 6)
+	_info_slot_row.add_theme_constant_override("separation", UiStyle.SLOT_GAP)
 	## Fixed height, always present, always the same number of slots -- nothing
 	## below it may move when the queue changes.
 	_info_slot_row.custom_minimum_size = Vector2(0, UiStyle.SLOT_QUEUE)
@@ -828,13 +832,14 @@ func _style_queue_slots(filled: int, building: ProductionBuilding) -> void:
 		var icon := slot.get_node_or_null("Icon") as TextureRect
 		if icon != null:
 			_show_item_art(icon, _producible_item(building, item_name) if occupied else null)
-		var normal := UiStyle.slot_box() if occupied else UiStyle.empty_slot_box()
+		## A queued item is a key (click to cancel); the rest are sockets.
+		var normal: StyleBox = UiStyle.key_box(UiStyle.KEY) if occupied else _empty_queue_box
 		slot.add_theme_stylebox_override("normal", normal)
 		slot.add_theme_stylebox_override("disabled", normal)
 		slot.add_theme_stylebox_override("hover",
-				UiStyle.slot_box(UiStyle.LINE_STRONG) if occupied else normal)
+				UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.HOVER) if occupied else normal)
 		slot.add_theme_stylebox_override("pressed",
-				UiStyle.slot_box(UiStyle.ACCENT) if occupied else normal)
+				UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.PRESSED) if occupied else normal)
 
 ## Counts are totalled over a double-click group, since that's where the
 ## clicks went.

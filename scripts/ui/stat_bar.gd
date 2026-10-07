@@ -13,7 +13,7 @@ var fill_color: Color = UiStyle.GOOD:
 		fill_color = value
 		queue_redraw()
 
-var _track: StyleBoxFlat
+var _track: StyleBox
 
 func _init() -> void:
 	_track = UiStyle.slot_box()
@@ -25,9 +25,12 @@ func _draw() -> void:
 	draw_style_box(_track, rect)
 	if ratio <= 0.0:
 		return
-	var inner := rect.grow(-float(UiStyle.BORDER))
+	var inner := rect.grow(-2.0)
 	inner.size.x *= ratio
-	draw_rect(inner, fill_color)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = fill_color
+	fill.set_corner_radius_all(int(inner.size.y * 0.5))
+	draw_style_box(fill, inner)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:

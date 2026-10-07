@@ -26,7 +26,7 @@
 [ext_resource type="Script" path="res://scripts/ui/stockpile_bar.gd" id="32_stockpile"]
 [ext_resource type="Script" path="res://scripts/ui/ui_panel.gd" id="33_uipanel"]
 [ext_resource type="Script" path="res://scripts/ui/section_rule.gd" id="34_rule"]
-[ext_resource type="Script" path="res://scripts/ui/ui_caps.gd" id="35_caps"]
+[ext_resource type="Script" path="res://scripts/ui/ui_plastic_body.gd" id="35_caps"]
 [ext_resource type="Script" path="res://scripts/ui/ui_button.gd" id="36_uibutton"]
 [ext_resource type="Shader" uid="uid://3jy7355quai3" path="res://shaders/ambient_dust.gdshader" id="ambient_dust_shader"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/hud/idle_villagers.svg" id="hud_idle_villagers"]
@@ -201,7 +201,7 @@ color = Color(0.3, 0.8, 1, 0.25)
 offset_left = 24.0
 offset_top = 22.0
 offset_right = 620.0
-offset_bottom = 92.0
+offset_bottom = 86.0
 size_flags_horizontal = 0
 size_flags_vertical = 0
 script = ExtResource("32_stockpile")
@@ -229,19 +229,19 @@ anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = -248.0
-offset_right = 670.0
-offset_bottom = -24.0
+offset_top = -264.0
+offset_right = 726.0
+offset_bottom = -26.0
 grow_vertical = 0
 script = ExtResource("33_uipanel")
 
 [node name="PortraitFrame" type="Panel" parent="UI/BottomBar/InfoPanel" unique_id=434533756]
 visible = false
 layout_mode = 0
-offset_left = 14.0
-offset_top = 14.0
-offset_right = 118.0
-offset_bottom = 118.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 136.0
+offset_bottom = 136.0
 mouse_filter = 2
 
 [node name="Portrait" type="ColorRect" parent="UI/BottomBar/InfoPanel/PortraitFrame" unique_id=1144832001]
@@ -256,27 +256,27 @@ offset_bottom = -1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-color = Color(0.0706, 0.051, 0.0353, 1)
+color = Color(0, 0, 0, 0)
 
 [node name="PortraitHealthLabel" type="Label" parent="UI/BottomBar/InfoPanel" unique_id=1344886619]
 visible = false
 layout_mode = 0
-offset_left = 14.0
-offset_top = 122.0
-offset_right = 118.0
-offset_bottom = 146.0
+offset_left = 16.0
+offset_top = 146.0
+offset_right = 136.0
+offset_bottom = 170.0
 theme_type_variation = &"ValueLabel"
-theme_override_colors/font_color = Color(0.5608, 0.749, 0.3843, 1)
-theme_override_font_sizes/font_size = 17
+theme_override_colors/font_color = Color(0.5255, 0.7176, 0.3961, 1)
+theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
 
 [node name="Margin" type="Control" parent="UI/BottomBar/InfoPanel" unique_id=2083440396]
 clip_contents = true
 layout_mode = 0
-offset_left = 132.0
+offset_left = 154.0
 offset_top = 14.0
-offset_right = 632.0
-offset_bottom = 88.0
+offset_right = 686.0
+offset_bottom = 102.0
 mouse_filter = 2
 
 [node name="VBox" type="VBoxContainer" parent="UI/BottomBar/InfoPanel/Margin" unique_id=763120765]
@@ -293,6 +293,7 @@ mouse_filter = 2
 visible = false
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
+theme_override_font_sizes/font_size = 28
 text = "Building"
 
 [node name="TitleDivider" type="Control" parent="UI/BottomBar/InfoPanel/Margin/VBox" unique_id=1771542111]
@@ -312,10 +313,10 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = 156.0
-offset_top = -156.0
-offset_right = 656.0
-offset_bottom = -51.0
+offset_left = 178.0
+offset_top = -154.0
+offset_right = 710.0
+offset_bottom = -42.0
 grow_vertical = 0
 
 [node name="Margin" type="MarginContainer" parent="UI/BottomBar/ActionPanel" unique_id=1171046271]
@@ -332,8 +333,8 @@ layout_mode = 2
 [node name="Grid" type="GridContainer" parent="UI/BottomBar/ActionPanel/Margin/VBox" unique_id=242851631]
 layout_mode = 2
 size_flags_horizontal = 0
-theme_override_constants/h_separation = 5
-theme_override_constants/v_separation = 5
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
 columns = 9
 
 [node name="MinimapFrame" type="Control" parent="UI/BottomBar" unique_id=1354559317]
@@ -343,13 +344,26 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -286.0
-offset_top = -286.0
+offset_left = -288.0
+offset_top = -290.0
 offset_right = -24.0
-offset_bottom = -24.0
+offset_bottom = -26.0
 grow_horizontal = 0
 grow_vertical = 0
 script = ExtResource("33_uipanel")
+
+[node name="MinimapWell" type="Panel" parent="UI/BottomBar/MinimapFrame"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
 [node name="Minimap" type="Control" parent="UI/BottomBar/MinimapFrame" unique_id=860019162]
 clip_contents = true
@@ -357,10 +371,10 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 13.0
-offset_top = 13.0
-offset_right = -13.0
-offset_bottom = -13.0
+offset_left = 17.0
+offset_top = 17.0
+offset_right = -17.0
+offset_bottom = -17.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("26_vqeq8")
@@ -372,89 +386,89 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -334.0
-offset_top = -284.0
-offset_right = -294.0
-offset_bottom = -24.0
+offset_left = -348.0
+offset_top = -320.0
+offset_right = -304.0
+offset_bottom = -26.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_constants/separation = 4
+theme_override_constants/separation = 6
 alignment = 2
 
 [node name="ResearchButton" type="Button" parent="UI/BottomBar/UtilityButtons"]
-custom_minimum_size = Vector2(40, 40)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Research"
 theme_type_variation = &"SquareButton"
-theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_normal_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_focus_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
 icon_alignment = 1
 
 [node name="MusicButton" type="Button" parent="UI/BottomBar/UtilityButtons"]
-custom_minimum_size = Vector2(40, 40)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Music"
 theme_type_variation = &"SquareButton"
-theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_normal_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_focus_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
 icon = ExtResource("hud_music")
 icon_alignment = 1
 
 [node name="IdleButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=605278022]
-custom_minimum_size = Vector2(40, 40)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Idle Villagers"
 theme_type_variation = &"SquareButton"
-theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_normal_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_focus_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
 icon = ExtResource("hud_idle_villagers")
 icon_alignment = 1
 
 [node name="FormationBoxButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=609675057]
-custom_minimum_size = Vector2(40, 40)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Box Formation"
 theme_type_variation = &"SquareButton"
-theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_normal_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_focus_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
 icon = ExtResource("hud_formation_box")
 icon_alignment = 1
 
 [node name="FormationLineButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=2084477781]
-custom_minimum_size = Vector2(40, 40)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Line Formation"
 theme_type_variation = &"SquareButton"
-theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_normal_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_focus_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
 icon = ExtResource("hud_formation_line")
 icon_alignment = 1
 
 [node name="FormationLooseButton" type="Button" parent="UI/BottomBar/UtilityButtons" unique_id=1775017322]
-custom_minimum_size = Vector2(40, 40)
+custom_minimum_size = Vector2(44, 44)
 layout_mode = 2
 tooltip_text = "Loose Formation"
 theme_type_variation = &"SquareButton"
-theme_override_colors/icon_normal_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_focus_color = Color(0.7137, 0.6431, 0.5373, 1)
-theme_override_colors/icon_hover_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
-theme_override_colors/icon_hover_pressed_color = Color(0.851, 0.6745, 0.3294, 1)
+theme_override_colors/icon_normal_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_focus_color = Color(0.9333, 0.9412, 0.9255, 1)
+theme_override_colors/icon_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/icon_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
+theme_override_colors/icon_hover_pressed_color = Color(0.9098, 0.7765, 0.4157, 1)
 icon = ExtResource("hud_formation_loose")
 icon_alignment = 1
 
@@ -464,9 +478,9 @@ anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = -350.0
+offset_top = -290.0
 offset_right = 584.0
-offset_bottom = -350.0
+offset_bottom = -290.0
 grow_vertical = 0
 mouse_filter = 2
 theme_override_colors/default_color = Color(0.9412, 0.898, 0.8196, 1)
@@ -481,9 +495,9 @@ anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 24.0
-offset_top = -342.0
+offset_top = -334.0
 offset_right = 584.0
-offset_bottom = -304.0
+offset_bottom = -296.0
 grow_vertical = 0
 placeholder_text = "Enter to send"
 
@@ -494,10 +508,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -280.0
-offset_top = -95.0
-offset_right = 280.0
-offset_bottom = 95.0
+offset_left = -240.0
+offset_top = -110.0
+offset_right = 240.0
+offset_bottom = 110.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_type_variation = &"ModalPanel"
@@ -511,6 +525,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("35_caps")
+fresh_backdrop = true
 
 [node name="Margin" type="MarginContainer" parent="UI/GameOverPanel" unique_id=2129327244]
 layout_mode = 2
@@ -523,8 +538,9 @@ alignment = 1
 [node name="ResultLabel" type="Label" parent="UI/GameOverPanel/Margin/VBox" unique_id=1328889564]
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 44
 text = "Game Over"
+horizontal_alignment = 1
 
 [node name="TitleDivider" type="Control" parent="UI/GameOverPanel/Margin/VBox" unique_id=842270089]
 custom_minimum_size = Vector2(0, 1)
@@ -534,7 +550,9 @@ mouse_filter = 2
 script = ExtResource("34_rule")
 
 [node name="ReturnButton" type="Button" parent="UI/GameOverPanel/Margin/VBox" unique_id=304735568]
+custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
+theme_override_font_sizes/font_size = 23
 text = "Return to Main Menu"
 script = ExtResource("36_uibutton")
 primary = true
@@ -546,10 +564,10 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -215.0
-offset_top = -174.0
-offset_right = 215.0
-offset_bottom = 174.0
+offset_left = -240.0
+offset_top = -200.0
+offset_right = 240.0
+offset_bottom = 200.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_type_variation = &"ModalPanel"
@@ -563,45 +581,54 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("35_caps")
+fresh_backdrop = true
 
 [node name="Margin" type="MarginContainer" parent="UI/PauseMenu" unique_id=1401837801]
 layout_mode = 2
 
 [node name="VBox" type="VBoxContainer" parent="UI/PauseMenu/Margin" unique_id=1401837802]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 14
 alignment = 1
 
 [node name="Title" type="Label" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837803]
 layout_mode = 2
 theme_type_variation = &"TitleLabel"
-theme_override_font_sizes/font_size = 34
+theme_override_font_sizes/font_size = 44
 text = "Paused"
-
-[node name="TitleDivider" type="Control" parent="UI/PauseMenu/Margin/VBox" unique_id=770555220]
-custom_minimum_size = Vector2(0, 1)
-layout_mode = 2
-size_flags_horizontal = 3
-mouse_filter = 2
-script = ExtResource("34_rule")
+horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="UI/PauseMenu/Margin/VBox"]
-custom_minimum_size = Vector2(0, 10)
+custom_minimum_size = Vector2(0, 6)
 layout_mode = 2
 mouse_filter = 2
 
 [node name="ResumeButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837816]
+custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
+theme_override_font_sizes/font_size = 23
 text = "Resume"
 script = ExtResource("36_uibutton")
 primary = true
 
 [node name="OptionsButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837818]
+custom_minimum_size = Vector2(0, 58)
 layout_mode = 2
+theme_override_font_sizes/font_size = 23
 text = "Options"
 script = ExtResource("36_uibutton")
 
-[node name="LeaveButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837817]
+[node name="LeaveSeam" type="Control" parent="UI/PauseMenu/Margin/VBox"]
+custom_minimum_size = Vector2(0, 2)
 layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+script = ExtResource("34_rule")
+
+[node name="LeaveButton" type="Button" parent="UI/PauseMenu/Margin/VBox" unique_id=1401837817]
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+theme_override_font_sizes/font_size = 23
 text = "Leave Match"
 script = ExtResource("36_uibutton")
+danger = true

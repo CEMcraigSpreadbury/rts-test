@@ -28,7 +28,9 @@ static func dress(panel: PanelContainer, eyebrow: String, title: String,
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", UiStyle.SPACE_S)
 	panel.add_child(column)
-	panel.add_child(UiCaps.new())
+	var plastic := UiPlasticBody.new()
+	plastic.fresh_backdrop = true
+	panel.add_child(plastic)
 
 	var eyebrow_line := UiTextLine.make(eyebrow.to_upper(), &"CaptionLabel",
 			UiStyle.SIZE_LABEL, UiStyle.ACCENT)

@@ -7,18 +7,27 @@ extends PanelContainer
 ## A resource shows its glyph (UiGlyphs, in the resource's own colour) beside
 ## its amount, as the mockup drew it; anything without a glyph shows its name.
 
-const CELL_GAP: int = 13
-const GLYPH_GAP: int = 7
+const CELL_GAP: int = 14
+const GLYPH_GAP: int = 6
+const INSET_X: int = 12
+const INSET_Y: int = 10
 const RATE_GAP: int = 5
 
 var _row: HBoxContainer
 var _cells: Dictionary = {}
 
 func _init() -> void:
+	var inset := UiStyle.empty_box()
+	inset.content_margin_left = INSET_X
+	inset.content_margin_right = INSET_X
+	inset.content_margin_top = INSET_Y
+	inset.content_margin_bottom = INSET_Y
+	add_theme_stylebox_override(&"panel", inset)
 	_row = HBoxContainer.new()
 	_row.add_theme_constant_override("separation", 0)
+	_row.custom_minimum_size.y = 44
 	add_child(_row)
-	add_child(UiCaps.new())
+	add_child(UiPlasticBody.new())
 
 ## `entries` is an ordered array of {name: String, amount: int, flash: bool,
 ## accent: bool}, an optional `glyph` and its `tint`, plus an optional `rate` (a per-minute change shown after the
@@ -73,10 +82,17 @@ func _make_cell(display_name: String, glyph: StringName, tint: Color) -> Diction
 	var root := HBoxContainer.new()
 	root.add_theme_constant_override("separation", 0)
 
-	var divider := Panel.new()
-	divider.custom_minimum_size = Vector2(UiStyle.BORDER, 0)
-	divider.add_theme_stylebox_override("panel",
-		UiStyle.flat(UiStyle.LINE, UiStyle.LINE, 0, 0))
+	## A seam moulded into the plastic: a dark line catching light on one side,
+	## stopping short of the tray's edges.
+	var divider := MarginContainer.new()
+	divider.add_theme_constant_override("margin_top", 6)
+	divider.add_theme_constant_override("margin_bottom", 6)
+	var seam := Panel.new()
+	seam.custom_minimum_size = Vector2(2, 0)
+	var seam_box := UiStyle.flat(UiStyle.SLOT, Color(1, 1, 1, 0.12), 0, 0)
+	seam_box.border_width_right = 1
+	seam.add_theme_stylebox_override("panel", seam_box)
+	divider.add_child(seam)
 	root.add_child(divider)
 
 	var row := HBoxContainer.new()
@@ -98,10 +114,10 @@ func _make_cell(display_name: String, glyph: StringName, tint: Color) -> Diction
 	var value_row := HBoxContainer.new()
 	value_row.add_theme_constant_override("separation", RATE_GAP)
 	row.add_child(value_row)
-	var value := UiTextLine.make("0", &"ValueLabel", UiStyle.SIZE_VALUE, UiStyle.INK)
+	var value := UiTextLine.make("0", &"ValueLabel", UiStyle.SIZE_STOCK, UiStyle.INK)
 	value_row.add_child(value)
-	var rate := UiTextLine.make("", &"ValueLabel", UiStyle.SIZE_LABEL, UiStyle.BAD)
-	rate.size_flags_vertical = Control.SIZE_SHRINK_END
+	var rate := UiTextLine.make("", &"ValueLabel", 17, UiStyle.BAD)
+	rate.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	rate.visible = false
 	value_row.add_child(rate)
 

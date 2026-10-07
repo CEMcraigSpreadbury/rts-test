@@ -15,25 +15,24 @@ extends Control
 ## frame rather than with containers, since the shake is a per-bar offset.
 
 
-const PANEL_BG_COLOR: Color = UiStyle.SURFACE
-const PANEL_BORDER_COLOR: Color = UiStyle.LINE
-const PANEL_PADDING: Vector2 = Vector2(13.3, 10.0)
-const SLOT_SIZE: float = 46.7
-const SLOT_GAP: float = 5.0
-## How far the owner-colour fill sits inside the slot's frame.
-const SLOT_INSET: float = 7.5
-const SLOT_STRIP_HEIGHT: float = 5.0
+const PANEL_PADDING: Vector2 = Vector2(20.0, 12.0)
+## Each point is a round plastic token: moulded in its owner's colour once
+## held, a socket while nobody holds it.
+const SLOT_SIZE: float = 40.0
+const SLOT_GAP: float = 8.0
+## How far the capture strip sits inside the token.
+const SLOT_INSET: float = 9.0
+const SLOT_STRIP_HEIGHT: float = 4.0
 ## Glyphs sit this far above centre, clear of the flag strip.
 const GLYPH_LIFT: float = 2.0
 ## Bars share the slot row's width between them, but never shrink below this
 ## (the panel widens instead) so a score still fits inside.
 const BAR_MIN_WIDTH: float = 106.7
-const BAR_HEIGHT: float = 23.3
-const BAR_GAP: float = 6.7
-const BAR_FONT_SIZE: int = 18
-const BAR_BG_COLOR: Color = UiStyle.SLOT
-const SECTION_GAP: float = 6.7
-const TOP_MARGIN: float = 6.7
+const BAR_HEIGHT: float = 18.0
+const BAR_GAP: float = 8.0
+const BAR_FONT_SIZE: int = 15
+const SECTION_GAP: float = 12.0
+const TOP_MARGIN: float = 22.0
 const NEAR_VICTORY_FRACTION: float = 0.85
 ## Shake amplitude in pixels, ramping from the first to the second as the
 ## leader goes from NEAR_VICTORY_FRACTION to the target itself.
@@ -65,14 +64,9 @@ var _near_victory_warned: Dictionary = {}
 func _ready() -> void:
 	name = "ConquestHud"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = PANEL_BG_COLOR
-	style.border_color = PANEL_BORDER_COLOR
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(4)
 	_panel = Panel.new()
-	_panel.add_theme_stylebox_override("panel", style)
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(UiPlasticBody.new())
 	add_child(_panel)
 
 func _process(_delta: float) -> void:
@@ -115,7 +109,7 @@ func _sync_nodes(objectives: Array, teams: Array) -> void:
 
 func _make_slot() -> Dictionary:
 	var frame := Panel.new()
-	frame.add_theme_stylebox_override("panel", UiStyle.slot_box())
+	frame.add_theme_stylebox_override("panel", _token_box(Color(0, 0, 0, 0)))
 	frame.size = Vector2(SLOT_SIZE, SLOT_SIZE)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(frame)
@@ -157,21 +151,19 @@ func _make_bar() -> Dictionary:
 	bar.step = 0.0
 	bar.size = Vector2(BAR_MIN_WIDTH, BAR_HEIGHT)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var background := StyleBoxFlat.new()
-	background.bg_color = BAR_BG_COLOR
-	background.border_color = PANEL_BORDER_COLOR.darkened(0.3)
-	background.set_border_width_all(1)
-	background.set_corner_radius_all(2)
+	var background := UiStyle.slot_box()
+	background.radius = int(BAR_HEIGHT / 2.0)
 	var fill := StyleBoxFlat.new()
-	fill.set_corner_radius_all(2)
+	fill.set_corner_radius_all(int(BAR_HEIGHT / 2.0) - 2)
 	bar.add_theme_stylebox_override("background", background)
 	bar.add_theme_stylebox_override("fill", fill)
 	var label := Label.new()
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", BAR_FONT_SIZE)
-	label.add_theme_constant_override("outline_size", 5)
-	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	label.add_theme_font_override("font", UiStyle.font_data_bold())
+	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.add_child(label)
 	add_child(bar)
@@ -190,24 +182,22 @@ func _layout(objectives: Array, teams: Array) -> void:
 	position = Vector2((get_viewport_rect().size.x - size.x) * 0.5, TOP_MARGIN)
 	_panel.size = size
 
-	var me := main.my_peer_id()
 	var pulse: float = 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * TAU * 1.5)
-	## A point an ally holds counts as held by your side.
 	var x: float = PANEL_PADDING.x + (content_width - slots_width) * 0.5
 	for o in objectives:
 		var slot: Dictionary = _slots[o]
 		var frame: Panel = slot.frame
 		frame.position = Vector2(x, PANEL_PADDING.y)
-		## Held by your side reads as brass, anything else as the plain hairline.
-		var held_by_us: bool = o.owner_peer_id > 0 and me > 0 and Teams.is_friendly(me, o.owner_peer_id)
-		frame.add_theme_stylebox_override("panel",
-				UiStyle.slot_box(UiStyle.ACCENT if held_by_us else UiStyle.LINE))
-		(slot.fill as ColorRect).color = Color(o.owner_tint(), OWNER_FILL_ALPHA) if o.owner_peer_id > 0 else NEUTRAL_FILL_COLOR
+		var owner_colour: Color = o.owner_tint() if o.owner_peer_id > 0 else Color(0, 0, 0, 0)
+		if slot.get("shown_owner", Color(-1, -1, -1)) != owner_colour:
+			slot.shown_owner = owner_colour
+			frame.add_theme_stylebox_override("panel", _token_box(owner_colour))
+		(slot.fill as ColorRect).color = NEUTRAL_FILL_COLOR
 		var glyph: TextureRect = slot.glyph
 		var glyph_texture: Texture2D = UiGlyphs.texture(o.glyph(), UiStyle.GLYPH_POINT)
 		if glyph.texture != glyph_texture:
 			glyph.texture = glyph_texture
-		glyph.self_modulate = UiStyle.INK if o.owner_peer_id > 0 else UiStyle.DIM
+		glyph.self_modulate = Color.WHITE if o.owner_peer_id > 0 else UiStyle.DIM
 		var moving: bool = not o.is_flag_at_rest()
 		(slot.strip_bg as ColorRect).visible = moving
 		var strip: ColorRect = slot.strip
@@ -247,6 +237,24 @@ func _layout(objectives: Array, teams: Array) -> void:
 		label.size = bar.size
 		label.text = str(score)
 		bar_x += bar_width + BAR_GAP
+
+## A token moulded in `owner` (raised), or an empty socket when `owner` is
+## clear. Cached per colour: the layout asks every frame.
+var _token_boxes: Dictionary = {}
+
+func _token_box(owner: Color) -> StyleBox:
+	if not _token_boxes.has(owner):
+		var box: UiPlasticBox
+		if owner.a > 0.0:
+			box = UiStyle.key_box(UiStyle.plastic(owner))
+			box.lip = 2
+			box.shadow_size = 4
+			box.shadow_y = 3
+		else:
+			box = UiStyle.slot_box()
+		box.radius = int(SLOT_SIZE * 0.5)
+		_token_boxes[owner] = box
+	return _token_boxes[owner]
 
 func _leader_score() -> int:
 	var best := -1

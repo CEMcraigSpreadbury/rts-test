@@ -50,7 +50,7 @@ func _labels(theme: Theme) -> void:
 	## panel, and white text over sunlit grass is unreadable. A RichTextLabel has
 	## its own background stylebox, so it carries its own card and fades with the
 	## label when the log times out.
-	var log_card := UiStyle.flat(Color(0.1176, 0.0902, 0.0667, 0.72), Color(0.7294, 0.5608, 0.3098, 0.3), UiStyle.RADIUS_SLOT)
+	var log_card := UiStyle.flat(Color(UiStyle.TRAY, 0.72), UiStyle.LINE, UiStyle.RADIUS_SLOT, 0)
 	log_card.content_margin_left = UiStyle.SPACE_M
 	log_card.content_margin_right = UiStyle.SPACE_M
 	log_card.content_margin_top = UiStyle.SPACE_S
@@ -86,25 +86,26 @@ func _buttons(theme: Theme) -> void:
 	theme.set_font("font", "Button", UiStyle.font_display())
 	theme.set_font_size("font_size", "Button", UiStyle.SIZE_BUTTON)
 	theme.set_color("font_color", "Button", UiStyle.INK)
-	theme.set_color("font_hover_color", "Button", UiStyle.ACCENT)
-	theme.set_color("font_pressed_color", "Button", UiStyle.ACCENT)
+	theme.set_color("font_hover_color", "Button", UiStyle.INK)
+	theme.set_color("font_pressed_color", "Button", UiStyle.INK)
+	theme.set_color("font_hover_pressed_color", "Button", UiStyle.INK)
 	theme.set_color("font_focus_color", "Button", UiStyle.INK)
-	theme.set_color("font_disabled_color", "Button", Color(UiStyle.DIM, 0.42))
+	theme.set_color("font_disabled_color", "Button", Color(UiStyle.DIM, 0.6))
 	theme.set_stylebox("normal", "Button", UiStyle.button_box())
-	theme.set_stylebox("hover", "Button", UiStyle.button_box(UiStyle.LINE_STRONG))
-	theme.set_stylebox("pressed", "Button", UiStyle.button_box(UiStyle.ACCENT))
-	theme.set_stylebox("focus", "Button", UiStyle.button_box(UiStyle.LINE_STRONG))
-	theme.set_stylebox("disabled", "Button", UiStyle.button_box(Color(UiStyle.LINE, 0.22)))
+	theme.set_stylebox("hover", "Button", UiStyle.button_box(UiStyle.RAISED, UiStyle.KeyState.HOVER))
+	theme.set_stylebox("pressed", "Button", UiStyle.button_box(UiStyle.RAISED, UiStyle.KeyState.PRESSED))
+	theme.set_stylebox("focus", "Button", _focus_ring(UiStyle.RADIUS_KEY))
+	theme.set_stylebox("disabled", "Button", UiStyle.button_box(UiStyle.RAISED, UiStyle.KeyState.DISABLED))
 
 	## Main-menu navigation: text on the ground with an accent bar, not a plate.
 	## The menu is a list of destinations, and five stacked plates read as a form.
 	theme.set_type_variation("NavButton", "Button")
 	theme.set_font("font", "NavButton", UiStyle.font_display())
 	theme.set_font_size("font_size", "NavButton", UiStyle.SIZE_CLOCK)
-	theme.set_color("font_color", "NavButton", UiStyle.DIM)
-	theme.set_color("font_hover_color", "NavButton", UiStyle.ACCENT)
-	theme.set_color("font_pressed_color", "NavButton", UiStyle.ACCENT)
-	theme.set_color("font_focus_color", "NavButton", UiStyle.ACCENT)
+	theme.set_color("font_color", "NavButton", UiStyle.INK)
+	theme.set_color("font_hover_color", "NavButton", UiStyle.INK)
+	theme.set_color("font_pressed_color", "NavButton", UiStyle.INK)
+	theme.set_color("font_focus_color", "NavButton", UiStyle.INK)
 	var nav_idle := UiStyle.empty_box()
 	nav_idle.content_margin_left = UiStyle.SPACE_XL
 	nav_idle.content_margin_right = UiStyle.SPACE_L
@@ -112,14 +113,19 @@ func _buttons(theme: Theme) -> void:
 	nav_idle.content_margin_bottom = 9
 	theme.set_stylebox("normal", "NavButton", nav_idle)
 	theme.set_stylebox("disabled", "NavButton", nav_idle)
-	var nav_active := UiStyle.flat(Color(0.1176, 0.0902, 0.0667, 0.55), UiStyle.ACCENT, 0, 0)
-	nav_active.border_width_left = 3
-	nav_active.content_margin_left = UiStyle.SPACE_XL - 3
+	## Hovered, the line lifts into a plastic key.
+	var nav_active := UiStyle.key_box(UiStyle.RAISED)
+	nav_active.content_margin_left = UiStyle.SPACE_XL
 	nav_active.content_margin_right = UiStyle.SPACE_L
 	nav_active.content_margin_top = 9
 	nav_active.content_margin_bottom = 9
 	theme.set_stylebox("hover", "NavButton", nav_active)
-	theme.set_stylebox("pressed", "NavButton", nav_active)
+	var nav_down := UiStyle.key_box(UiStyle.RAISED, UiStyle.KeyState.PRESSED)
+	nav_down.content_margin_left = UiStyle.SPACE_XL
+	nav_down.content_margin_right = UiStyle.SPACE_L
+	nav_down.content_margin_top = 9
+	nav_down.content_margin_bottom = 9
+	theme.set_stylebox("pressed", "NavButton", nav_down)
 	theme.set_stylebox("focus", "NavButton", nav_active)
 
 	## A vertical rail entry (the options screen's category list). Same idea as
@@ -140,27 +146,34 @@ func _buttons(theme: Theme) -> void:
 	theme.set_stylebox("normal", "RailButton", rail_idle)
 	theme.set_stylebox("hover", "RailButton", rail_idle)
 	theme.set_stylebox("disabled", "RailButton", rail_idle)
-	var rail_active := UiStyle.flat(Color(0.0706, 0.0510, 0.0353, 0.5), UiStyle.ACCENT, 0, 0)
-	rail_active.border_width_left = 3
-	rail_active.content_margin_left = UiStyle.SPACE_M - 3
+	## The open category sits sunk in a socket.
+	var rail_active := UiStyle.slot_box()
+	rail_active.content_margin_left = UiStyle.SPACE_M
 	rail_active.content_margin_right = UiStyle.SPACE_M
 	rail_active.content_margin_top = 9
 	rail_active.content_margin_bottom = 9
 	theme.set_stylebox("pressed", "RailButton", rail_active)
 	theme.set_stylebox("focus", "RailButton", rail_active)
 
-	## The square utility buttons beside the minimap: a slot, not a plate.
+	## The square utility buttons beside the minimap: small plain plastic keys.
 	theme.set_type_variation("SquareButton", "Button")
 	theme.set_font("font", "SquareButton", UiStyle.font_data_bold())
 	theme.set_font_size("font_size", "SquareButton", UiStyle.SIZE_BODY)
-	theme.set_color("font_color", "SquareButton", UiStyle.DIM)
-	theme.set_color("font_hover_color", "SquareButton", UiStyle.ACCENT)
+	theme.set_color("font_color", "SquareButton", UiStyle.INK)
+	theme.set_color("font_hover_color", "SquareButton", UiStyle.INK)
 	theme.set_color("font_pressed_color", "SquareButton", UiStyle.ACCENT)
-	theme.set_stylebox("normal", "SquareButton", UiStyle.slot_box())
-	theme.set_stylebox("hover", "SquareButton", UiStyle.slot_box(UiStyle.LINE_STRONG))
-	theme.set_stylebox("pressed", "SquareButton", UiStyle.slot_box(UiStyle.ACCENT))
-	theme.set_stylebox("focus", "SquareButton", UiStyle.slot_box(UiStyle.LINE_STRONG))
-	theme.set_stylebox("disabled", "SquareButton", UiStyle.slot_box(Color(UiStyle.LINE, 0.22)))
+	theme.set_stylebox("normal", "SquareButton", UiStyle.key_box())
+	theme.set_stylebox("hover", "SquareButton", UiStyle.key_box(UiStyle.RAISED, UiStyle.KeyState.HOVER))
+	theme.set_stylebox("pressed", "SquareButton", UiStyle.key_box(UiStyle.RAISED, UiStyle.KeyState.PRESSED))
+	theme.set_stylebox("focus", "SquareButton", _focus_ring(UiStyle.RADIUS_KEY))
+	theme.set_stylebox("disabled", "SquareButton", UiStyle.key_box(UiStyle.RAISED, UiStyle.KeyState.DISABLED))
+
+## Drawn over a focused control: a ring only, so the key under it still shows.
+func _focus_ring(radius: int) -> StyleBoxFlat:
+	var ring := UiStyle.flat(Color(0, 0, 0, 0), Color(UiStyle.ACCENT, 0.8), radius + 3, 2)
+	ring.draw_center = false
+	ring.set_expand_margin_all(3)
+	return ring
 
 func _panels(theme: Theme) -> void:
 	var panel := UiStyle.panel_box()
@@ -172,15 +185,15 @@ func _panels(theme: Theme) -> void:
 	theme.set_stylebox("panel", "PanelContainer", panel)
 
 	var modal := UiStyle.panel_box()
-	modal.content_margin_left = 32
-	modal.content_margin_right = 32
-	modal.content_margin_top = 30
-	modal.content_margin_bottom = 28
+	modal.content_margin_left = 40
+	modal.content_margin_right = 40
+	modal.content_margin_top = 34
+	modal.content_margin_bottom = 40
 	theme.set_type_variation("ModalPanel", "PanelContainer")
 	theme.set_stylebox("panel", "ModalPanel", modal)
 
 	theme.set_stylebox("panel", "PopupPanel", UiStyle.tooltip_box())
-	## Godot wraps a custom tooltip in this, so the popup carries the brass
+	## Godot wraps a custom tooltip in this, so the popup carries the plastic
 	## surface and UiTooltip only has to supply the words.
 	theme.set_stylebox("panel", "TooltipPanel", UiStyle.tooltip_box())
 	theme.set_color("font_color", "TooltipLabel", UiStyle.INK)
@@ -215,10 +228,21 @@ func _inputs(theme: Theme) -> void:
 	theme.set_font("font", "PopupMenu", UiStyle.font_data())
 	theme.set_font_size("font_size", "PopupMenu", UiStyle.SIZE_BODY)
 
-	var grabber := UiStyle.flat(UiStyle.ACCENT, UiStyle.ACCENT, 8)
-	theme.set_stylebox("grabber_area", "HSlider", grabber)
-	theme.set_stylebox("grabber_area_highlight", "HSlider", grabber)
-	theme.set_stylebox("slider", "HSlider", UiStyle.flat(UiStyle.SLOT, UiStyle.LINE, 4))
+	## A sunk track, the filled part in the player's plastic, and a round
+	## plastic knob.
+	var track := UiStyle.slot_box()
+	track.radius = 6
+	track.content_margin_top = 6
+	track.content_margin_bottom = 6
+	theme.set_stylebox("slider", "HSlider", track)
+	var filled := UiStyle.flat(UiStyle.KEY, UiStyle.KEY, 6, 0)
+	filled.content_margin_top = 6
+	filled.content_margin_bottom = 6
+	theme.set_stylebox("grabber_area", "HSlider", filled)
+	theme.set_stylebox("grabber_area_highlight", "HSlider", filled)
+	theme.set_icon("grabber", "HSlider", _knob_texture(UiStyle.RAISED))
+	theme.set_icon("grabber_highlight", "HSlider", _knob_texture(UiStyle.RAISED.lightened(0.1)))
+	theme.set_icon("grabber_disabled", "HSlider", _knob_texture(UiStyle.RAISED.darkened(0.2)))
 
 func _containers(theme: Theme) -> void:
 	theme.set_constant("separation", "HBoxContainer", UiStyle.SPACE_S)
@@ -245,23 +269,68 @@ func _lists(theme: Theme) -> void:
 	theme.set_stylebox("tab_selected", "TabContainer", UiStyle.flat(UiStyle.SURFACE, UiStyle.LINE_STRONG, UiStyle.RADIUS))
 	theme.set_stylebox("tab_unselected", "TabContainer", UiStyle.flat(UiStyle.SLOT, UiStyle.LINE, UiStyle.RADIUS))
 
-## Checkbox art is GENERATED from the tokens rather than cut from the tilesheet:
-## the sheet's gold glyphs were the last bitmap in the options screen and read as
-## tiny diamonds next to brass wells. A bordered well with an accent block in it
-## is unambiguous and needs no art.
+## Checkbox and toggle art is GENERATED from the tokens: a pill sunk into the
+## plastic with a round plastic knob in it, left when off, right and over the
+## player's colour when on (the mockup's toggle).
+const TOGGLE_SIZE := Vector2i(56, 30)
+const KNOB_INSET: int = 3
+
+## Coverage of a rounded rect at pixel centre p, antialiased over a pixel.
+static func _round_rect_cover(p: Vector2, rect: Rect2, radius: float) -> float:
+	var half := rect.size * 0.5
+	var q := (p - rect.get_center()).abs() - half + Vector2(radius, radius)
+	var d := Vector2(maxf(q.x, 0.0), maxf(q.y, 0.0)).length() + minf(maxf(q.x, q.y), 0.0) - radius
+	return clampf(0.5 - d, 0.0, 1.0)
+
+static func _blend(image: Image, x: int, y: int, colour: Color, cover: float) -> void:
+	if cover <= 0.0:
+		return
+	var under := image.get_pixel(x, y)
+	var a := colour.a * cover
+	var out_a := a + under.a * (1.0 - a)
+	if out_a <= 0.0:
+		return
+	var rgb := (Color(colour.r, colour.g, colour.b) * a + Color(under.r, under.g, under.b) * under.a * (1.0 - a)) / out_a
+	image.set_pixel(x, y, Color(rgb.r, rgb.g, rgb.b, out_a))
+
+## A round plastic knob: lip, face lighter at the top, a highlight.
+static func _paint_knob(image: Image, centre: Vector2, radius: float, base: Color) -> void:
+	for y in image.get_height():
+		for x in image.get_width():
+			var p := Vector2(x + 0.5, y + 0.5)
+			var lip := clampf(radius + 0.5 - p.distance_to(centre + Vector2(0, 2)), 0.0, 1.0)
+			_blend(image, x, y, base.darkened(0.45), lip)
+			var face := clampf(radius + 0.5 - p.distance_to(centre), 0.0, 1.0)
+			var t := clampf((p.y - (centre.y - radius)) / (radius * 2.0), 0.0, 1.0)
+			_blend(image, x, y, base.lightened(0.14).lerp(base.darkened(0.1), t), face)
+			var rim := clampf(radius + 0.5 - p.distance_to(centre + Vector2(0, 1)), 0.0, 1.0)
+			_blend(image, x, y, Color(1, 1, 1, 0.3), face * (1.0 - rim))
+
+func _knob_texture(base: Color) -> ImageTexture:
+	var image := Image.create(28, 30, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	_paint_knob(image, Vector2(14, 13), 12.0, base)
+	return ImageTexture.create_from_image(image)
+
 func _check_texture(checked: bool) -> ImageTexture:
-	var size := 22
-	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	image.fill(UiStyle.SLOT)
-	for i in size:
-		image.set_pixel(i, 0, UiStyle.LINE)
-		image.set_pixel(i, size - 1, UiStyle.LINE)
-		image.set_pixel(0, i, UiStyle.LINE)
-		image.set_pixel(size - 1, i, UiStyle.LINE)
-	if checked:
-		for y in range(5, size - 5):
-			for x in range(5, size - 5):
-				image.set_pixel(x, y, UiStyle.ACCENT)
+	var image := Image.create(TOGGLE_SIZE.x, TOGGLE_SIZE.y, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var pill := Rect2(Vector2.ZERO, Vector2(TOGGLE_SIZE))
+	var radius: float = TOGGLE_SIZE.y * 0.5
+	var track: Color = UiStyle.KEY.lerp(UiStyle.TRAY, 0.35) if checked else Color(0, 0, 0, 0.32)
+	for y in image.get_height():
+		for x in image.get_width():
+			var p := Vector2(x + 0.5, y + 0.5)
+			var cover := _round_rect_cover(p, pill, radius)
+			_blend(image, x, y, track, cover)
+			## Shade under the top edge, light along the bottom: it is sunk.
+			var below := _round_rect_cover(p, Rect2(pill.position + Vector2(0, 2), pill.size), radius)
+			_blend(image, x, y, Color(0, 0, 0, 0.18), cover * (1.0 - below))
+			var above := _round_rect_cover(p, Rect2(pill.position - Vector2(0, 1), pill.size), radius)
+			_blend(image, x, y, Color(1, 1, 1, 0.16), cover * (1.0 - above))
+	var knob_r: float = radius - KNOB_INSET
+	var knob_x: float = TOGGLE_SIZE.x - radius if checked else radius
+	_paint_knob(image, Vector2(knob_x, radius - 1.0), knob_r, UiStyle.RAISED.lightened(0.12))
 	return ImageTexture.create_from_image(image)
 
 func _checks(theme: Theme) -> void:
@@ -280,4 +349,4 @@ func _checks(theme: Theme) -> void:
 		theme.set_font("font", type, UiStyle.font_data())
 		theme.set_font_size("font_size", type, UiStyle.SIZE_BODY)
 		theme.set_color("font_color", type, UiStyle.INK)
-		theme.set_color("font_hover_color", type, UiStyle.ACCENT)
+		theme.set_color("font_hover_color", type, UiStyle.INK)

@@ -8,10 +8,10 @@ const TERRAIN_COLOR: Color = Color(0.22, 0.32, 0.19, 1.0)
 ## Per-map terrain picture (water, sand, rock, grass by height) saved by
 ## MapGenerator; maps without one draw flat TERRAIN_COLOR instead.
 @export var terrain_texture: Texture2D
-const OWN_OUTLINE_COLOR: Color = Color(0.9412, 0.8980, 0.8196, 0.9)
+const OWN_OUTLINE_COLOR: Color = Color(0.9333, 0.9412, 0.9255, 0.9)
 const UNIT_DOT_RADIUS: float = 4.2
 const BUILDING_DOT_RADIUS: float = 6.7
-const FRUSTUM_COLOR: Color = Color(0.8392, 0.6745, 0.4078, 0.75)
+const FRUSTUM_COLOR: Color = Color(1.0, 1.0, 1.0, 0.75)
 const PING_COLOR: Color = UiStyle.ACCENT
 const PING_DURATION: float = 3.0
 const ATTACK_PING_COLOR: Color = UiStyle.BAD

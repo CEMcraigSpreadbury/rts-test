@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/lobby.gd" id="1_script"]
 
-[ext_resource type="Script" path="res://scripts/ui/ui_caps.gd" id="9_caps"]
+[ext_resource type="Script" path="res://scripts/ui/ui_plastic_body.gd" id="9_caps"]
 [ext_resource type="Script" path="res://scripts/ui/section_rule.gd" id="10_rule"]
 
 [node name="Lobby" type="Control"]
