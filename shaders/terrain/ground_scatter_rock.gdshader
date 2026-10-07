@@ -3,6 +3,7 @@ shader_type spatial;
 render_mode cull_back;
 
 #include "res://shaders/terrain/ground_scatter.gdshaderinc"
+#include "res://shaders/util/plastic_light.gdshaderinc"
 
 void vertex() {
 	scatter_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -13,6 +14,12 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = scatter_albedo(COLOR.rgb, SPECULAR);
-	ROUGHNESS = 0.8;
+	// The plastic finish every model shares (plastic_light.gdshaderinc); fog
+	// takes the shine away with the specular.
+	float specular = PLASTIC_SPECULAR;
+	ALBEDO = scatter_albedo(COLOR.rgb, specular);
+	SPECULAR = specular;
+	ROUGHNESS = PLASTIC_ROUGHNESS;
+	CLEARCOAT = PLASTIC_CLEARCOAT * specular / PLASTIC_SPECULAR;
+	CLEARCOAT_ROUGHNESS = PLASTIC_CLEARCOAT_ROUGHNESS;
 }

@@ -167,16 +167,16 @@ func is_settlement_map() -> bool:
 @export_group("Decoration")
 @export_range(0, 300) var props_per_player: int = 40
 @export var prop_scenes: Array[PackedScene] = [
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/bush_1.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/bush_2.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/bush_3.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/bush_4.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/log_2.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/log_4.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/trunk_2.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/trunk_3.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/stick_1.glb"),
-	preload("res://assets/art/AmiPolyGon_Forest_Free_Pack/AmiPolyGon_Forest_Free_Pack/GLB/stick_2.glb"),
+	preload("res://assets/art/Props/bush_1.glb"),
+	preload("res://assets/art/Props/bush_2.glb"),
+	preload("res://assets/art/Props/bush_3.glb"),
+	preload("res://assets/art/Props/bush_4.glb"),
+	preload("res://assets/art/Props/log_1.glb"),
+	preload("res://assets/art/Props/log_2.glb"),
+	preload("res://assets/art/Props/stump_1.glb"),
+	preload("res://assets/art/Props/stump_2.glb"),
+	preload("res://assets/art/Props/stick_1.glb"),
+	preload("res://assets/art/Props/stick_2.glb"),
 ]
 @export_range(1.5, 8.0, 0.1) var border_tree_spacing: float = 2.4
 @export var border_tree_scenes: Array[PackedScene] = [

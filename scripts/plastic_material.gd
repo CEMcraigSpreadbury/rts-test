@@ -1,22 +1,19 @@
 class_name PlasticMaterial
 extends RefCounted
-## Gives a model's plain imported materials (rocks, gold deposits, scenery
-## props) the moulded-plastic finish every model shares: a satin roughness and
-## a thin clear coat, as tree_wind_lit.gdshader gives the trees and
-## shaders/util/plastic_light.gdshaderinc gives the buildings. Kept in step
-## with the constants there.
+## Puts a model's plain imported materials (rocks, gold deposits, the farm
+## field, scenery props) on shaders/plastic_prop.gdshader: the moulded-plastic
+## finish every model shares, at the buildings' gloss
+## (shaders/util/plastic_light.gdshaderinc), plus the per-instance `tint` the
+## farm field grows its crop with.
 ##
 ## Run after BakedLightingMaterial.apply_to, so baked surfaces are already on
 ## their own shader (which carries the finish itself) and are left alone.
 ## Tree models are skipped: TreeWind builds theirs from the source materials.
 
-const ROUGHNESS: float = 0.5
-const SPECULAR: float = 0.5
-const CLEARCOAT: float = 0.25
-const CLEARCOAT_ROUGHNESS: float = 0.35
+const SHADER: Shader = preload("res://shaders/plastic_prop.gdshader")
 
 ## One material per source material, shared by every instance so repeated
-## props still batch.
+## props still batch; the tint is per instance, so sharing doesn't stop it.
 static var _cache: Dictionary = {}
 
 static func apply_to(node: Node) -> void:
@@ -26,25 +23,26 @@ static func apply_to(node: Node) -> void:
 		var mesh_instance: MeshInstance3D = node
 		var surface_count: int = mesh_instance.mesh.get_surface_count() if mesh_instance.mesh else 0
 		for i in surface_count:
-			var plastic: Material = _plastic_for(mesh_instance.get_active_material(i))
+			var coloured: bool = (mesh_instance.mesh.surface_get_format(i) & Mesh.ARRAY_FORMAT_COLOR) != 0
+			var plastic: Material = _plastic_for(mesh_instance.get_active_material(i), coloured)
 			if plastic:
 				mesh_instance.set_surface_override_material(i, plastic)
 	for child in node.get_children():
 		apply_to(child)
 
-static func _plastic_for(source: Material) -> Material:
+static func _plastic_for(source: Material, coloured: bool) -> Material:
 	var standard := source as StandardMaterial3D
-	if standard == null or standard.has_meta(&"plastic"):
+	if standard == null:
 		return null
-	if _cache.has(standard):
-		return _cache[standard]
-	var plastic: StandardMaterial3D = standard.duplicate()
-	plastic.metallic = 0.0
-	plastic.roughness = ROUGHNESS
-	plastic.metallic_specular = SPECULAR
-	plastic.clearcoat_enabled = true
-	plastic.clearcoat = CLEARCOAT
-	plastic.clearcoat_roughness = CLEARCOAT_ROUGHNESS
-	plastic.set_meta(&"plastic", true)
-	_cache[standard] = plastic
+	var key: Array = [standard, coloured]
+	if _cache.has(key):
+		return _cache[key]
+	var plastic := ShaderMaterial.new()
+	plastic.shader = SHADER
+	plastic.set_shader_parameter(&"albedo_texture", standard.albedo_texture)
+	plastic.set_shader_parameter(&"albedo_color", standard.albedo_color)
+	plastic.set_shader_parameter(&"use_vertex_color", standard.vertex_color_use_as_albedo or coloured)
+	## Leaf materials (the toy bushes') take the pines' softer finish.
+	plastic.set_shader_parameter(&"foliage", standard.resource_name.begins_with("Leaf"))
+	_cache[key] = plastic
 	return plastic

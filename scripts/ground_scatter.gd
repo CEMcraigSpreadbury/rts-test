@@ -32,7 +32,9 @@ const HIDE_ON_DIRT: float = 0.0
 const ALWAYS: float = 0.5
 const ONLY_ON_DIRT: float = 1.0
 
-const ROCK_COLOURS: Array[Color] = [Color(0.42, 0.42, 0.42), Color(0.37, 0.38, 0.39), Color(0.46, 0.45, 0.43)]
+## Warm sandy greys, as the buildings' stone; warmer than they look, since the
+## glossy finish picks up the blue sky.
+const ROCK_COLOURS: Array[Color] = [Color(0.6, 0.53, 0.45), Color(0.52, 0.47, 0.41), Color(0.66, 0.6, 0.51)]
 const FLOWER_COLOURS: Array[Color] = [Color(0.88, 0.88, 0.86), Color(0.88, 0.88, 0.84), Color(0.92, 0.82, 0.45)]
 
 var _rng := RandomNumberGenerator.new()
@@ -194,22 +196,34 @@ static func _height_at(heights: Image, px: float, pz: float) -> float:
 	var bottom: float = lerpf(heights.get_pixel(x0, z1).r, heights.get_pixel(x1, z1).r, fx)
 	return lerpf(top, bottom, fz)
 
-## A lumpy low-poly stone, flat shaded, a little sunk into the ground.
+## A chunky toy stone: a rounded block with broad, nearly flat faces (as the
+## gold deposit's boulders), a little lumpy, smooth shaded so it takes the
+## plastic shine, and a little sunk into the ground.
 func _rock_mesh(variant: int) -> Mesh:
 	var sphere := SphereMesh.new()
-	sphere.radial_segments = 8 + variant
-	sphere.rings = 5
-	sphere.radius = 0.42
-	sphere.height = 0.56
+	## Enough rings and segments for the rounded corners to read.
+	sphere.radial_segments = 12
+	sphere.rings = 8
+	sphere.radius = 1.0
+	sphere.height = 2.0
 	var arrays: Array = sphere.get_mesh_arrays()
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var noise := FastNoiseLite.new()
 	noise.seed = SEED + variant * 31
-	noise.frequency = 6.0
+	## Broad lumps rather than fine facets.
+	noise.frequency = 1.4
+	## Half-extents per variant (x, y, z): chunky enough to stand clear of the
+	## grass blades, and each a different shape.
+	var extents: Vector3 = [Vector3(0.5, 0.36, 0.42), Vector3(0.44, 0.4, 0.5), Vector3(0.56, 0.3, 0.46)][variant % 3]
+	var twist: float = variant * 0.7
 	for i in vertices.size():
-		var v: Vector3 = vertices[i]
+		var u: Vector3 = vertices[i].normalized()
+		## A superellipsoid: |x|^4 + |y|^4 + |z|^4 = 1 is a cube with rounded
+		## edges, so the faces come out broad and nearly flat.
+		var s: float = pow(pow(absf(u.x), 4.0) + pow(absf(u.y), 4.0) + pow(absf(u.z), 4.0), -0.25)
+		var v: Vector3 = (u * s * extents).rotated(Vector3.UP, twist)
 		## Keyed on position, so the seam vertices a sphere duplicates move together.
-		var bump: float = 1.0 + noise.get_noise_3dv(v) * 0.14
+		var bump: float = 1.0 + noise.get_noise_3dv(vertices[i]) * 0.12
 		v *= bump
 		## Flat-bottomed and only just sunk, so it stands clear of the grass blades.
 		v.y = maxf(v.y, -0.02) - 0.02
@@ -222,7 +236,8 @@ func _rock_mesh(variant: int) -> Mesh:
 		## Lighter on top, as if sunlit and weathered.
 		var light: float = clampf(0.62 + v.y * 2.2, 0.5, 1.12)
 		tool.set_color(Color(light, light, light).srgb_to_linear())
-		tool.set_smooth_group(-1)
+		## One smooth group: normals average across the shared positions.
+		tool.set_smooth_group(0)
 		tool.add_vertex(v)
 	tool.generate_normals()
 	return tool.commit()

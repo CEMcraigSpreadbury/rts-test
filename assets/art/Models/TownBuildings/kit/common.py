@@ -26,8 +26,12 @@ COLOURS = {
 	'LogEnd': (0.692, 0.42, 0.171), 'Cloth': (0.828, 0.787, 0.674), 'Apple': (0.604, 0.033, 0.02),
 	'Greens': (0.1, 0.319, 0.051), 'Antler': (0.748, 0.638, 0.42), 'BloodRed': (0.342, 0.01, 0.01),
 	'Horn': (0.711, 0.604, 0.42), 'Orb': (0.89, 0.033, 0.02),
+	'Soil': (0.147, 0.068, 0.027), 'Wheat': (0.848, 0.507, 0.064), 'WheatDark': (0.638, 0.296, 0.027),
+	'GoldDeep': (0.711, 0.233, 0.01),
+	# The deposit's rocks, warmed like the stone.
+	'RockA': (0.33, 0.305, 0.275), 'RockB': (0.21, 0.19, 0.17), 'RockC': (0.43, 0.41, 0.375),
 }
-GLOSSY = ('Gold', 'Iron', 'IronDark', 'Orb', 'Arcane')
+GLOSSY = ('Gold', 'GoldDeep', 'Iron', 'IronDark', 'Orb', 'Arcane')
 
 MATS = {}
 PARTS = []
