@@ -922,19 +922,28 @@ func update_rally_marker() -> void:
 ## over any one man — a regiment is the thing being marked, and a flag pinned
 ## to the officer reads as his rather than theirs.
 ##
-## A standard is a small card, the same as the regiment's unit card in the HUD:
-## the owner's team colour as a gradient with the block's unit sprite in front.
+## A standard is a round plastic token on a peg, from the same toy set as the
+## HUD's conquest tokens: a disc in the owner's plastic with the block's unit
+## sprite on it, a morale ring round it (green, wavering orange, routing red),
+## a gold ring outside that while the block is selected, and the men left
+## beside it. It is see-through, and more so the closer the camera, so the
+## block under it always shows (see _banner_alpha).
 ## Worked out locally on every peer from replicated state (regiment_id,
 ## team_tint, the unit scene's sprite sheet), so nobody needs the host's
 ## regiment records to draw the right standard in the right place.
 const REGIMENT_BANNER_HEIGHT: float = 2.6
-const REGIMENT_BANNER_PIXEL_SIZE: float = 0.03
+## The token textures are TOKEN_SIZE square, drawn at 4x the sprite so the
+## disc's edge stays smooth under linear filtering.
+const REGIMENT_BANNER_PIXEL_SIZE: float = 0.0125
 ## Zoomed out past the default a standard grows (and rides higher) so it
 ## stays readable over a big map: by the zoom ratio to this power, which keeps
 ## it a little smaller on screen the further out you are, never less than
 ## full size.
 const REGIMENT_BANNER_ZOOM_EXPONENT: float = 0.8
-const REGIMENT_BANNER_ALPHA: float = 0.95
+## How opaque a standard is at the default zoom and further out, and at the
+## closest zoom; in between it eases from one to the other.
+const REGIMENT_BANNER_ALPHA: float = 0.68
+const REGIMENT_BANNER_ALPHA_NEAR: float = 0.25
 ## Draw order against the other see-through things on the same ground. Two
 ## transparent surfaces sort by distance to the camera unless one is given
 ## priority, which put a unit's selection ring in front of a standard flying
@@ -950,24 +959,37 @@ const BLOCK_BANNER_MIN_MEN: int = 4
 const REGIMENT_BANNER_RESURVEY: float = 0.2
 ## How quickly a standard catches up with its block.
 const REGIMENT_BANNER_FOLLOW: float = 6.0
-## The sprite is drawn at 2x from a box this many source pixels square round
-## the figure, like the HUD's portraits; a figure too big for it stays at 1x.
+## The figure is cut from a box this many source pixels square round it, then
+## scaled up by a whole number to fill the disc; a figure too big for the box
+## is taken whole.
 const REGIMENT_BANNER_FIGURE: int = 16
-## Gradient ends, relative to the team colour: lit at the top, deep at the foot.
-const REGIMENT_BANNER_TOP_LIGHTEN: float = 0.15
-const REGIMENT_BANNER_FOOT_DARKEN: float = 0.6
-## A standard over a block that is mostly wavering, or mostly running.
-const REGIMENT_BANNER_WAVER_TINT: Color = Color(1.0, 0.62, 0.3)
-const REGIMENT_BANNER_ROUT_TINT: Color = Color(1.0, 0.36, 0.3)
+## Token geometry, in texture pixels: the circle's centre, the disc, the
+## morale ring, the selection ring, and the peg under the disc.
+const TOKEN_SIZE: int = 128
+const TOKEN_CENTRE := Vector2(64.0, 60.0)
+const TOKEN_DISC_RADIUS: float = 38.0
+const TOKEN_LIP: float = 4.0
+const TOKEN_RING_INNER: float = 44.0
+const TOKEN_RING_OUTER: float = 51.0
+const TOKEN_SELECT_INNER: float = 54.0
+const TOKEN_SELECT_OUTER: float = 58.0
+const TOKEN_PEG_WIDTH: float = 7.0
+## The morale ring is cached in this many steps rather than redrawn per value.
+const TOKEN_RING_STEPS: int = 12
+const TOKEN_RING_EMPTY := Color(0.0, 0.0, 0.0, 0.45)
+## Where the men-left count sits, in texture pixels from the circle's centre.
+const TOKEN_COUNT_OFFSET := Vector2(44.0, -36.0)
 
 var _regiment_banners: Dictionary = {}
 var _regiment_targets: Dictionary = {}
 ## Standard id -> the men under it as of the last survey (see banner_units_at).
 var _regiment_members: Dictionary = {}
 var _regiment_resurvey_timer: float = 0.0
-## Built standards, keyed by sprite sheet + team colour, so a new regiment of a
-## type already on the field costs nothing.
+## Built tokens, keyed by sprite sheet + team colour, so a new regiment of a
+## type already on the field costs nothing; and morale rings, keyed by step,
+## state and selection.
 var _banner_textures: Dictionary = {}
+var _ring_textures: Dictionary = {}
 
 func update_regiment_banners(delta: float) -> void:
 	_regiment_resurvey_timer -= delta
@@ -977,10 +999,27 @@ func update_regiment_banners(delta: float) -> void:
 	var weight: float = minf(1.0, REGIMENT_BANNER_FOLLOW * delta)
 	var scale: float = _banner_zoom_scale()
 	var lift := Vector3(0.0, REGIMENT_BANNER_HEIGHT * scale, 0.0)
+	var alpha: float = _banner_alpha()
 	for id in _regiment_banners:
 		var sprite: Sprite3D = _regiment_banners[id]
 		sprite.pixel_size = REGIMENT_BANNER_PIXEL_SIZE * scale
 		sprite.global_position = sprite.global_position.lerp(_regiment_targets[id] + lift, weight)
+		sprite.modulate.a = alpha
+		var ring: Sprite3D = sprite.get_meta(&"ring")
+		ring.pixel_size = sprite.pixel_size
+		ring.modulate.a = alpha
+		var count: Label3D = sprite.get_meta(&"count")
+		count.pixel_size = sprite.pixel_size
+		count.modulate.a = minf(1.0, alpha + 0.2)
+		count.outline_modulate.a = alpha
+
+## See-through always, and more so as the camera closes in, when the men under
+## the standard are big enough to matter more than the standard itself.
+func _banner_alpha() -> float:
+	var zoom: float = main.camera_rig.zoom_distance if main != null and main.camera_rig != null else RtsCamera.DEFAULT_ZOOM
+	var near: float = main.camera_rig.min_zoom if main != null and main.camera_rig != null else 8.0
+	return lerpf(REGIMENT_BANNER_ALPHA_NEAR, REGIMENT_BANNER_ALPHA,
+			smoothstep(near, RtsCamera.DEFAULT_ZOOM, zoom))
 
 func _banner_zoom_scale() -> float:
 	var zoom: float = main.camera_rig.zoom_distance if main != null and main.camera_rig != null else RtsCamera.DEFAULT_ZOOM
@@ -1024,6 +1063,9 @@ func _resurvey_regiments() -> void:
 	var tallies: Dictionary = {}
 	## regiment id -> [wavering, running]
 	var shaken: Dictionary = {}
+	## regiment id -> summed morale (0..1 a man), and whether any man is selected.
+	var spirit: Dictionary = {}
+	var chosen: Dictionary = {}
 	_regiment_members.clear()
 	for node in get_tree().get_nodes_in_group(&"units"):
 		var unit := node as Unit
@@ -1038,6 +1080,9 @@ func _resurvey_regiments() -> void:
 		if not _regiment_members.has(id):
 			_regiment_members[id] = []
 		_regiment_members[id].append(unit)
+		spirit[id] = float(spirit.get(id, 0.0)) + float(unit.morale_level) / float(Morale.LEVELS)
+		if unit.selected:
+			chosen[id] = true
 		if unit.morale_state != Morale.State.STEADY:
 			var tally_state: Array = shaken.get(id, [0, 0])
 			tally_state[1 if unit.is_routing() else 0] += 1
@@ -1070,12 +1115,17 @@ func _resurvey_regiments() -> void:
 		sprite.texture = _banner_texture(bearer) if bearer != null else null
 		sprite.visible = sprite.texture != null
 		var state: Array = shaken.get(id, [0, 0])
-		var tint := Color.WHITE
+		var mood: int = Morale.State.STEADY
 		if state[1] * 2 > counts[id]:
-			tint = REGIMENT_BANNER_ROUT_TINT
+			mood = Morale.State.ROUTING
 		elif (state[0] + state[1]) * 2 > counts[id]:
-			tint = REGIMENT_BANNER_WAVER_TINT
-		sprite.modulate = Color(tint, REGIMENT_BANNER_ALPHA)
+			mood = Morale.State.WAVERING
+		var ring: Sprite3D = sprite.get_meta(&"ring")
+		ring.texture = _ring_texture(float(spirit.get(id, 0.0)) / float(counts[id]), mood, chosen.has(id))
+		ring.visible = sprite.visible
+		var count: Label3D = sprite.get_meta(&"count")
+		count.text = str(counts[id])
+		count.visible = sprite.visible
 
 ## The men under the standard drawn at `screen_pos` (the nearest one, if
 ## standards overlap), or empty. A standard is picked by its drawn square, so
@@ -1106,18 +1156,44 @@ func banner_units_at(screen_pos: Vector2) -> Array[Unit]:
 			found.append(unit)
 	return found
 
+## The token, with its morale ring and men-left count as children (kept in
+## its metadata as "ring" and "count").
 func _make_regiment_banner() -> Sprite3D:
+	var sprite := _token_sprite(REGIMENT_BANNER_PRIORITY)
+	add_child(sprite)
+	var ring := _token_sprite(REGIMENT_BANNER_PRIORITY + 1)
+	sprite.add_child(ring)
+	sprite.set_meta(&"ring", ring)
+	var count := Label3D.new()
+	count.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	count.no_depth_test = true
+	count.shaded = false
+	count.render_priority = REGIMENT_BANNER_PRIORITY + 2
+	count.outline_render_priority = REGIMENT_BANNER_PRIORITY + 1
+	count.font = UiStyle.font_data_bold()
+	count.font_size = 34
+	count.outline_size = 14
+	count.modulate = UiStyle.INK
+	count.outline_modulate = UiStyle.TRAY
+	count.offset = TOKEN_COUNT_OFFSET
+	count.pixel_size = REGIMENT_BANNER_PIXEL_SIZE
+	sprite.add_child(count)
+	sprite.set_meta(&"count", count)
+	return sprite
+
+func _token_sprite(priority: int) -> Sprite3D:
 	var sprite := Sprite3D.new()
 	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	sprite.shaded = false
-	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.pixel_size = REGIMENT_BANNER_PIXEL_SIZE
-	sprite.render_priority = REGIMENT_BANNER_PRIORITY
+	sprite.render_priority = priority
 	sprite.no_depth_test = true
-	## Blended rather than alpha-scissored: the standard is deliberately a
-	## little see-through so it never hides the block underneath it.
+	## The circle's centre, not the texture's, sits on the standard's point.
+	sprite.offset = Vector2(TOKEN_SIZE * 0.5 - TOKEN_CENTRE.x, TOKEN_CENTRE.y - TOKEN_SIZE * 0.5)
+	## Blended rather than alpha-scissored: the standard is deliberately
+	## see-through so it never hides the block underneath it.
 	sprite.modulate = Color(1.0, 1.0, 1.0, REGIMENT_BANNER_ALPHA)
-	add_child(sprite)
 	return sprite
 
 ## A man of the kind most of a block is made of; null for a block of officers.
@@ -1136,29 +1212,86 @@ func _banner_texture(bearer: Unit) -> Texture2D:
 	var cached: Texture2D = _banner_textures.get(key)
 	if cached != null:
 		return cached
+	var image := Image.create_empty(TOKEN_SIZE, TOKEN_SIZE, false, Image.FORMAT_RGBA8)
+	var plastic: Color = UiStyle.plastic(bearer.team_tint)
+	var hi: Color = plastic.lightened(0.18)
+	var lo: Color = plastic.darkened(0.14)
+	var lip: Color = plastic.darkened(0.48)
+	var peg_top := TOKEN_CENTRE.y + TOKEN_DISC_RADIUS - 4.0
+	for y in TOKEN_SIZE:
+		for x in TOKEN_SIZE:
+			var p := Vector2(x + 0.5, y + 0.5)
+			var out := Color(0, 0, 0, 0)
+			## The peg, grey plastic, from under the disc to the foot.
+			var peg_x: float = absf(p.x - TOKEN_CENTRE.x)
+			if p.y > peg_top:
+				var cover := clampf(TOKEN_PEG_WIDTH * 0.5 + 0.5 - peg_x, 0.0, 1.0)
+				var shade: float = 0.5 + 0.5 * (p.x - TOKEN_CENTRE.x) / TOKEN_PEG_WIDTH
+				out = _over(out, Color(0.79, 0.8, 0.82).lerp(Color(0.42, 0.44, 0.46), shade), cover)
+			var to_lip := p.distance_to(TOKEN_CENTRE + Vector2(0.0, TOKEN_LIP))
+			out = _over(out, lip, clampf(TOKEN_DISC_RADIUS + 0.5 - to_lip, 0.0, 1.0))
+			var d := p.distance_to(TOKEN_CENTRE)
+			var disc := clampf(TOKEN_DISC_RADIUS + 0.5 - d, 0.0, 1.0)
+			var t: float = clampf((p.y - (TOKEN_CENTRE.y - TOKEN_DISC_RADIUS)) / (TOKEN_DISC_RADIUS * 2.0), 0.0, 1.0)
+			var face: Color = hi.lerp(plastic, t / 0.3) if t < 0.3 else plastic.lerp(lo, (t - 0.3) / 0.7)
+			out = _over(out, face, disc)
+			## Light along the top edge of the face.
+			var below := clampf(TOKEN_DISC_RADIUS + 0.5 - p.distance_to(TOKEN_CENTRE + Vector2(0.0, 2.0)), 0.0, 1.0)
+			out = _over(out, Color(1, 1, 1, 0.4), disc * (1.0 - below))
+			image.set_pixel(x, y, out)
 	var figure := _banner_figure(bearer)
-	## One pixel of border and one of air round the figure.
-	var size := figure.get_size() + Vector2i(4, 4)
-	var image := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
-	var top: Color = bearer.team_tint.lightened(REGIMENT_BANNER_TOP_LIGHTEN)
-	var foot: Color = bearer.team_tint.darkened(REGIMENT_BANNER_FOOT_DARKEN)
-	for y in size.y:
-		var row: Color = top.lerp(foot, float(y) / float(size.y - 1))
-		row.a = 1.0
-		image.fill_rect(Rect2i(0, y, size.x, 1), row)
-	var border := UiStyle.LINE_STRONG
-	border.a = 1.0
-	image.fill_rect(Rect2i(0, 0, size.x, 1), border)
-	image.fill_rect(Rect2i(0, size.y - 1, size.x, 1), border)
-	image.fill_rect(Rect2i(0, 0, 1, size.y), border)
-	image.fill_rect(Rect2i(size.x - 1, 0, 1, size.y), border)
-	image.blend_rect(figure, Rect2i(Vector2i.ZERO, figure.get_size()), Vector2i(2, 2))
+	var at := Vector2i(TOKEN_CENTRE) - figure.get_size() / 2 + Vector2i(0, 2)
+	image.blend_rect(figure, Rect2i(Vector2i.ZERO, figure.get_size()), at)
+	image.generate_mipmaps()
 	var texture := ImageTexture.create_from_image(image)
 	_banner_textures[key] = texture
 	return texture
 
+## The ring round a token: `fraction` of it in the morale colour, clockwise from
+## the top, the rest dark; and the gold selection ring outside it.
+func _ring_texture(fraction: float, mood: int, selected: bool) -> Texture2D:
+	var step: int = clampi(int(round(fraction * TOKEN_RING_STEPS)), 0, TOKEN_RING_STEPS)
+	var key := "%d|%d|%s" % [step, mood, selected]
+	var cached: Texture2D = _ring_textures.get(key)
+	if cached != null:
+		return cached
+	var colour: Color = UiStyle.GOOD
+	if mood == Morale.State.ROUTING:
+		colour = UiStyle.BAD
+	elif mood == Morale.State.WAVERING:
+		colour = UiStyle.WAVER
+	var filled: float = TAU * float(step) / float(TOKEN_RING_STEPS)
+	var image := Image.create_empty(TOKEN_SIZE, TOKEN_SIZE, false, Image.FORMAT_RGBA8)
+	for y in TOKEN_SIZE:
+		for x in TOKEN_SIZE:
+			var p := Vector2(x + 0.5, y + 0.5) - TOKEN_CENTRE
+			var d := p.length()
+			var out := Color(0, 0, 0, 0)
+			var band := clampf(minf(d - TOKEN_RING_INNER + 0.5, TOKEN_RING_OUTER + 0.5 - d), 0.0, 1.0)
+			if band > 0.0:
+				## Angle clockwise from straight up.
+				var angle: float = fposmod(atan2(p.x, -p.y), TAU)
+				out = _over(out, colour if angle < filled else TOKEN_RING_EMPTY, band)
+			if selected:
+				var outer := clampf(minf(d - TOKEN_SELECT_INNER + 0.5, TOKEN_SELECT_OUTER + 0.5 - d), 0.0, 1.0)
+				out = _over(out, UiStyle.ACCENT, outer)
+			image.set_pixel(x, y, out)
+	image.generate_mipmaps()
+	var texture := ImageTexture.create_from_image(image)
+	_ring_textures[key] = texture
+	return texture
+
+## `colour` over `under` at `cover`, straight alpha.
+static func _over(under: Color, colour: Color, cover: float) -> Color:
+	var a: float = colour.a * cover
+	if a <= 0.0:
+		return under
+	var out_a: float = a + under.a * (1.0 - a)
+	var rgb: Color = (Color(colour.r, colour.g, colour.b) * a + Color(under.r, under.g, under.b) * under.a * (1.0 - a)) / out_a
+	return Color(rgb.r, rgb.g, rgb.b, out_a)
+
 ## The first idle frame of the bearer's sheet, cropped round the figure and
-## doubled when it fits, so it reads at the same scale as the HUD portraits.
+## scaled up by a whole number to fill the token's disc and stay crisp.
 func _banner_figure(bearer: Unit) -> Image:
 	var sheet := bearer.sprite_sheet.get_image()
 	if sheet.is_compressed():
@@ -1168,12 +1301,18 @@ func _banner_figure(bearer: Unit) -> Image:
 	var frame := sheet.get_region(Rect2i(Vector2i(0, bearer.idle_row * cell.y), cell))
 	var used := frame.get_used_rect()
 	var box := REGIMENT_BANNER_FIGURE
-	if used.size.x > box or used.size.y > box or used.size == Vector2i.ZERO:
+	if used.size == Vector2i.ZERO:
 		return frame
-	var centre := used.get_center()
-	var origin := Vector2i(clampi(centre.x - box / 2, 0, cell.x - box), clampi(centre.y - box / 2, 0, cell.y - box))
-	var figure := frame.get_region(Rect2i(origin, Vector2i(box, box)))
-	figure.resize(box * 2, box * 2, Image.INTERPOLATE_NEAREST)
+	var figure: Image
+	if used.size.x > box or used.size.y > box:
+		figure = frame.get_region(used)
+	else:
+		var centre := used.get_center()
+		var origin := Vector2i(clampi(centre.x - box / 2, 0, cell.x - box), clampi(centre.y - box / 2, 0, cell.y - box))
+		figure = frame.get_region(Rect2i(origin, Vector2i(box, box)))
+	## The biggest whole-number scale that fits the disc.
+	var fit: int = maxi(1, int(TOKEN_DISC_RADIUS * 1.6) / maxi(figure.get_width(), figure.get_height()))
+	figure.resize(figure.get_width() * fit, figure.get_height() * fit, Image.INTERPOLATE_NEAREST)
 	return figure
 
 func _ensure_rally_marker() -> void:
