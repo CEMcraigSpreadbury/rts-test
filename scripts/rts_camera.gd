@@ -74,6 +74,17 @@ var _drag_anchor: Vector3 = Vector3.ZERO
 var _pan_velocity: Vector3 = Vector3.ZERO
 var _shake_trauma: float = 0.0
 var _lens: CanvasLayer
+## The near blur fitted to the ground (_update_zoom), and the share of it kept
+## after _update_focus pulls it in to clear whatever stands in the sharp band.
+var _ground_near_start: float = 0.0
+var _ground_near_transition: float = 0.01
+var _near_pull: float = 1.0
+const FOCUS_PROBE_ROWS: int = 3
+const FOCUS_PROBE_COLUMNS: int = 5
+## The near blur starts this share of the way to the nearest probe hit.
+const FOCUS_NEAR_MARGIN: float = 0.85
+const FOCUS_PULL_IN: float = 12.0
+const FOCUS_LET_GO: float = 3.0
 
 func _ready() -> void:
 	_zoom_target = zoom_distance
@@ -195,6 +206,7 @@ func _process(scaled_delta: float) -> void:
 	var delta := _real_delta(scaled_delta)
 	_update_shake(delta)
 	_update_zoom_smoothing(delta)
+	_update_focus(delta)
 
 	var input_dir := Vector2.ZERO
 
@@ -350,9 +362,44 @@ func _update_zoom() -> void:
 	if attributes:
 		var far_start := _ground_depth_at(focus_band_top)
 		var far_full := _ground_depth_at(maxf(focus_band_top - focus_ramp, 0.0))
-		var near_start := _ground_depth_at(focus_band_bottom)
 		var near_full := _ground_depth_at(minf(focus_band_bottom + focus_ramp, 1.0))
+		_ground_near_start = _ground_depth_at(focus_band_bottom)
+		_ground_near_transition = maxf(_ground_near_start - near_full, 0.01)
 		attributes.dof_blur_far_distance = far_start
 		attributes.dof_blur_far_transition = maxf(far_full - far_start, 0.01)
-		attributes.dof_blur_near_distance = near_start
-		attributes.dof_blur_near_transition = maxf(near_start - near_full, 0.01)
+		_apply_near_focus()
+
+## The ground-fitted near blur would catch anything standing up out of the
+## ground — a building's roof in the middle of the view is far closer to the
+## lens than the ground behind it. A grid of rays through the sharp band finds
+## the nearest thing actually there, and the near blur is pulled in to clear it.
+func _update_focus(delta: float) -> void:
+	if not (camera.attributes is CameraAttributesPractical):
+		return
+	var nearest := INF
+	var space := get_world_3d().direct_space_state
+	var view_size := get_viewport().get_visible_rect().size
+	var forward := -camera.global_basis.z
+	for row in FOCUS_PROBE_ROWS:
+		var y := lerpf(focus_band_top, focus_band_bottom, (float(row) + 0.5) / FOCUS_PROBE_ROWS)
+		for column in FOCUS_PROBE_COLUMNS:
+			var x := lerpf(0.25, 0.75, (float(column) + 0.5) / FOCUS_PROBE_COLUMNS)
+			var screen := Vector2(x, y) * view_size
+			var origin := camera.project_ray_origin(screen)
+			var query := PhysicsRayQueryParameters3D.create(origin, origin + camera.project_ray_normal(screen) * camera.far, GROUND_RAY_MASK)
+			var hit := space.intersect_ray(query)
+			if not hit.is_empty():
+				nearest = minf(nearest, (hit.position - origin).dot(forward))
+	var target := 1.0
+	if nearest < INF and _ground_near_start > 0.0:
+		target = clampf(nearest * FOCUS_NEAR_MARGIN / _ground_near_start, 0.05, 1.0)
+	## Pulls in quickly so a building never sits blurred, lets go gently.
+	var rate := FOCUS_PULL_IN if target < _near_pull else FOCUS_LET_GO
+	_near_pull = lerpf(_near_pull, target, 1.0 - exp(-rate * delta))
+	_apply_near_focus()
+
+func _apply_near_focus() -> void:
+	var attributes := camera.attributes as CameraAttributesPractical
+	if attributes:
+		attributes.dof_blur_near_distance = _ground_near_start * _near_pull
+		attributes.dof_blur_near_transition = maxf(_ground_near_transition * _near_pull, 0.01)
