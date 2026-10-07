@@ -27,8 +27,10 @@ const FADE_DURATION: float = 25.0
 ## sunset, so the day can be seen passing; it used to sit still all day and
 ## change only in the fade. Only its height moves: its bearing follows the
 ## camera (light_follow_camera_yaw.gd) so sprites stay lit from the front.
-## Degrees above the horizon; noon is the map's own authored height.
-const MORNING_SUN_HEIGHT: float = 40.0
+## Degrees above the horizon; noon is the map's own authored height (46: a
+## soft golden sun from the side, so shadows reach out across the ground like a
+## diorama's, but high enough that the grass blades don't rake into a carpet).
+const MORNING_SUN_HEIGHT: float = 38.0
 const EVENING_SUN_HEIGHT: float = 30.0
 ## Shares of the day spent climbing, and where it starts to sink.
 const MORNING_END: float = 0.3
@@ -49,7 +51,8 @@ const TIME_OF_DAY_STEP: float = 0.5
 
 ## Moonlight: the sun keeps its direction and picks up a cool cast instead.
 const MOON_COLOR: Color = Color(0.5, 0.63, 1.0)
-const NIGHT_SUN_ENERGY_SCALE: float = 0.34
+## Of the day's sun energy (1.5), keeping the moonlit ground about where it was.
+const NIGHT_SUN_ENERGY_SCALE: float = 0.29
 const NIGHT_FILL_ENERGY_SCALE: float = 0.7
 const NIGHT_AMBIENT_ENERGY_SCALE: float = 0.55
 ## The sky is the brightest thing on screen by far, so it has to come down
@@ -61,8 +64,10 @@ const NIGHT_GROUND_BOTTOM: Color = Color(0.02, 0.03, 0.06, 1.0)
 const NIGHT_GROUND_HORIZON: Color = Color(0.08, 0.11, 0.2, 1.0)
 ## The god rays go from warm dust to cold haze.
 const NIGHT_FOG_ALBEDO: Color = Color(0.6, 0.7, 1.0, 1.0)
-## Colour drains out of what little there is to see at night.
+## Colour drains out of what little there is to see at night, and the day's
+## punchy contrast eases off so the shade doesn't sink to black.
 const NIGHT_SATURATION_SCALE: float = 0.85
+const NIGHT_CONTRAST_SCALE: float = 0.98
 
 ## Unit sprites get their own moonlight added back on top, so they stay
 ## readable against dark ground without a real light per unit. Read by
@@ -101,6 +106,7 @@ var _day_ground_bottom: Color
 var _day_ground_horizon: Color
 var _day_fog_albedo: Color
 var _day_saturation: float = 1.0
+var _day_contrast: float = 1.0
 
 ## Called from Main._ready(), once the map's lights and environment exist.
 func setup() -> void:
@@ -127,6 +133,7 @@ func setup() -> void:
 		_day_sky_energy = _environment.background_energy_multiplier
 		_day_fog_albedo = _environment.volumetric_fog_albedo
 		_day_saturation = _environment.adjustment_saturation
+		_day_contrast = _environment.adjustment_contrast
 	if _sky_material:
 		_day_sky_top = _sky_material.sky_top_color
 		_day_sky_horizon = _sky_material.sky_horizon_color
@@ -244,6 +251,7 @@ func refresh_lighting() -> void:
 			## Its flat stand-in haze is lit by nothing, so it dims with the sun.
 			_environment.fog_light_color = CompatLighting.FOG_COLOR.lerp(NIGHT_FOG_ALBEDO * NIGHT_SUN_ENERGY_SCALE, t)
 		_environment.adjustment_saturation = _day_saturation * lerpf(1.0, NIGHT_SATURATION_SCALE, t)
+		_environment.adjustment_contrast = _day_contrast * lerpf(1.0, NIGHT_CONTRAST_SCALE, t)
 	if _sky_material:
 		_set_sky(&"sky_top_color", _day_sky_top.lerp(NIGHT_SKY_TOP, t))
 		_set_sky(&"sky_horizon_color", _day_sky_horizon.lerp(EVENING_SKY_HORIZON, warmth * EVENING_SKY_WARMTH).lerp(NIGHT_SKY_HORIZON, t))

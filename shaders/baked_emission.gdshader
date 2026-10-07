@@ -5,14 +5,11 @@ shader_type spatial;
 // treatment through team_color.gdshader instead.
 // cull_disabled matches the doubleSided flag those GLBs ship with.
 render_mode cull_disabled;
-// Marks it for the ink outline (OutlinePass, shaders/post/outline.gdshader).
-stencil_mode write, compare_always, 2;
 
 #include "res://shaders/util/baked_sun_shadow.gdshaderinc"
 #include "res://shaders/util/tree_wind.gdshaderinc"
 #include "res://shaders/util/cloud_shade.gdshaderinc"
 #include "res://shaders/util/compat_color.gdshaderinc"
-#include "res://shaders/util/outline_mark.gdshaderinc"
 
 uniform sampler2D source_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec4 emission_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
@@ -22,10 +19,7 @@ uniform float sun_shadow_strength : hint_range(0.0, 1.0) = 0.5;
 // its crop going from bare soil to green to ripe (see farm_field.gd).
 instance uniform vec3 tint : source_color = vec3(1.0);
 
-varying flat float v_outline_roughness;
-
 void vertex() {
-	v_outline_roughness = outline_roughness_for(MODEL_MATRIX[3].xyz, float(INSTANCE_ID));
 	VERTEX += tree_wind(VERTEX, MODEL_MATRIX, NODE_POSITION_WORLD, TIME);
 }
 
@@ -34,7 +28,7 @@ void fragment() {
 	EMISSION = baked * cloud_shade((INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
 	ALBEDO = baked;
 	AO = 0.0;
-	ROUGHNESS = v_outline_roughness;
+	ROUGHNESS = 0.8;
 }
 
 void light() {

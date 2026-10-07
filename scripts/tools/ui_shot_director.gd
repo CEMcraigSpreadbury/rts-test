@@ -34,6 +34,7 @@ var ai_count: int = -1
 var present: String = ""
 ## -1 leaves the clock alone; 0..1 is a point round the day and night.
 var time_of_day: float = -1.0
+var stage: String = ""
 
 func _ready() -> void:
 	_run.call_deferred()
@@ -190,6 +191,9 @@ func _run_match() -> void:
 		zoom_rig.set("_zoom_target", zoom)
 		zoom_rig.set("zoom_distance", zoom)
 		zoom_rig.call("_update_zoom")
+
+	if not stage.is_empty():
+		await load(stage).new().stage(main)
 
 	await _wait(1.5)
 	await _shoot()

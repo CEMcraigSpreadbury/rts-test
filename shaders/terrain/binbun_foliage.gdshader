@@ -177,8 +177,6 @@ void fragment() {
 	// patches across the meadow. The ground under them carries the contact
 	// shading round walls and rocks.
 	AO_LIGHT_AFFECT = 0.0;
-	// Tells the outline pass this is a grass blade (see outline.gdshader).
-	ROUGHNESS = 0.985;
 	// Sunlit tips: the top of each blade a touch lighter and warmer (UV.y runs
 	// 0 at the tip to 1 at the root); the base stays the ground's own colour.
 	vec3 tip_light = mix(vec3(1.0), vec3(1.16, 1.12, 0.9), smoothstep(0.45, 0.95, 1.0 - UV.y));

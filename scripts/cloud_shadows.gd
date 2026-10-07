@@ -20,14 +20,16 @@ extends Decal
 ## World-space noise frequency: bigger = smaller clouds.
 @export var cloud_frequency: float = 0.04
 ## Noise value (0-1) where ground turns from clear to shadowed: higher means
-## less of the map under cloud.
-@export_range(0.0, 1.0) var cloud_threshold: float = 0.64
+## less of the map under cloud. 0.76 leaves about 5% of it under cloud: the
+## odd passing shadow rather than blotches all over the field.
+@export_range(0.0, 1.0) var cloud_threshold: float = 0.76
 ## Half-width of the noise band over which a shadow's edge fades in.
 @export_range(0.0, 0.5) var edge_softness: float = 0.06
 ## How much a fully shadowed surface is darkened. Baked into the texture's
 ## alpha rather than albedo_mix, whose falloff is so steep below 1.0 that
-## 0.5 barely shows at all.
-@export_range(0.0, 1.0) var strength: float = 0.8
+## 0.5 barely shows at all. Light, so a cloud reads as thin shade, never as
+## a dark pool. Kept in step with CLOUD_STRENGTH in util/cloud_shade.gdshaderinc.
+@export_range(0.0, 1.0) var strength: float = 0.35
 ## World units/second the clouds drift along world X/Z.
 @export var scroll_speed: Vector2 = Vector2(0.55, -0.1)
 @export var texture_size: int = 2048

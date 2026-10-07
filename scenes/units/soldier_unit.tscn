@@ -5,6 +5,9 @@
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="PackedScene" uid="uid://pln15pd2elf5" path="res://assets/art/Models/Units/Soldier.glb" id="6_figure"]
+[ext_resource type="PackedScene" uid="uid://bdl4ha28awj2v" path="res://assets/art/Models/Units/Soldier_LOD1.glb" id="7_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://nbc1mhws67dt" path="res://assets/art/Models/Units/palettes/aldmere.png" id="8_figure_palette"]
 
 
 [sub_resource type="Resource" id="ResourceCost_soldier_wood"]
@@ -36,3 +39,6 @@ aggro_range = 7.0
 armor_class = 1
 damage_type = 5
 unit_category = 1
+figure_model = ExtResource("6_figure")
+figure_model_lod1 = ExtResource("7_figure_lod1")
+figure_palette = ExtResource("8_figure_palette")

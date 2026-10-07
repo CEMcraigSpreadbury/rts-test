@@ -6,6 +6,9 @@
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="4_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="5_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="6_gold"]
+[ext_resource type="PackedScene" uid="uid://bryi1s4ko6gew" path="res://assets/art/Models/Units/Archer.glb" id="7_figure"]
+[ext_resource type="PackedScene" uid="uid://bqkxd74hcs0y6" path="res://assets/art/Models/Units/Archer_LOD1.glb" id="8_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://nbc1mhws67dt" path="res://assets/art/Models/Units/palettes/aldmere.png" id="9_figure_palette"]
 
 
 [sub_resource type="Resource" id="ResourceCost_archer_wood"]
@@ -40,3 +43,7 @@ projectile_speed = 16.0
 damage_type = 3
 armor_class = 3
 unit_category = 2
+figure_model = ExtResource("7_figure")
+figure_model_lod1 = ExtResource("8_figure_lod1")
+figure_palette = ExtResource("9_figure_palette")
+figure_motion = 1

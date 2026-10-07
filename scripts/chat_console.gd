@@ -234,6 +234,11 @@ func _execute_debug_command(sender_id: int, args_string: String, cursor_pos: Vec
 			var night: bool = not main.day_night.is_night if day_arg.is_empty() else day_arg == "off"
 			main.day_night.set_night(night)
 			_rpc_display_chat.rpc_id(sender_id, "[debug] day %s" % ("off" if night else "on"))
+		"figures":
+			## Units that have a 3D figure drawn as it or as their sprite, on
+			## this machine only (see Unit.set_figures).
+			Unit.set_figures(not Unit.figures_on, get_tree())
+			_rpc_display_chat.rpc_id(sender_id, "[debug] figures %s" % ("on" if Unit.figures_on else "off"))
 		"help":
 			_rpc_display_chat.rpc_id(sender_id, "[debug] commands: cmd add <resource> <amount>, cmd spawn <unit|monster> [count][e], cmd speed <multiplier>, cmd perf, cmd navgrid, cmd formations, cmd control, cmd rain [on|off], cmd day [on|off]")
 		_:

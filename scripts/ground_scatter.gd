@@ -1,7 +1,7 @@
 class_name GroundScatter
 extends Node3D
-## Small things on the grass that make it read as a meadow: grey rocks (with
-## the ink outline), white and yellow flowers, and pebbles on the dirt. Purely
+## Small things on the grass that make it read as a meadow: grey rocks, white
+## and yellow flowers, and pebbles on the dirt. Purely
 ## visual and local to each peer, placed once at load from the terrain's own
 ## splatmap (grass only, never on dirt, rock or sand) with a fixed seed so a
 ## map always looks the same.

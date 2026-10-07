@@ -22,11 +22,15 @@ extends Node
 ##   --zoom=N   camera distance (gameplay starts at 22, the wheel pulls out to 110)
 ##   --nograss  hide the Binbun grass blades, as the Grass option does (not saved)
 ##   --grass    show them even if the player's saved Grass option is off (not saved)
+##   --sprites  draw units that have a 3D figure as their sprites instead, for
+##              comparison (as `cmd figures` does; read by Unit.figures_on)
 ##   --art      the art-reference close-up: a Barracks and Archery Range set
 ##              down by the Town Center, villagers gathered, trees on the left
 ##              (the framing of the art-direction reference image)
 ##   --seed=N   RNG seed, default 12345; fixed so two runs frame the same view
 ##   --wait=N   seconds to let the match settle before the shot, default 10
+##   --stage=P  after the match settles, await P.new().stage(main) (a script
+##              with `func stage(main: Node) -> void`) to set up the shot
 ##   --tod=F    time of day: 0..1 round a day and night from sunrise (night
 ##              starts at DayNight.day_share(), about 0.71)
 
@@ -58,6 +62,7 @@ func _ready() -> void:
 	var rng_seed: int = 12345
 	var wait: float = 10.0
 	var time_of_day: float = -1.0
+	var stage: String = ""
 
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--out="):
@@ -106,6 +111,8 @@ func _ready() -> void:
 			rng_seed = int(arg.trim_prefix("--seed="))
 		elif arg.begins_with("--wait="):
 			wait = float(arg.trim_prefix("--wait="))
+		elif arg.begins_with("--stage="):
+			stage = arg.trim_prefix("--stage=")
 		elif arg.begins_with("--tod="):
 			time_of_day = float(arg.trim_prefix("--tod="))
 
@@ -145,6 +152,7 @@ func _ready() -> void:
 	director.ai_count = ai_count
 	director.present = present
 	director.time_of_day = time_of_day
+	director.stage = stage
 	get_tree().root.add_child.call_deferred(director)
 
 	var target: String = scene if not scene.is_empty() else (map if not map.is_empty() else MAP_PATH)

@@ -5,6 +5,9 @@
 [ext_resource type="Script" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="PackedScene" uid="uid://cq67m667g7xyl" path="res://assets/art/Models/Units/Cavalier.glb" id="6_figure"]
+[ext_resource type="PackedScene" uid="uid://cflafa0btvfn2" path="res://assets/art/Models/Units/Cavalier_LOD1.glb" id="7_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://nbc1mhws67dt" path="res://assets/art/Models/Units/palettes/aldmere.png" id="8_figure_palette"]
 
 
 [sub_resource type="Resource" id="ResourceCost_cavalier_wood"]
@@ -43,4 +46,9 @@ vision_range = 12.0
 damage_type = 2
 unit_category = 3
 can_charge = true
+figure_model = ExtResource("6_figure")
+figure_model_lod1 = ExtResource("7_figure_lod1")
+figure_palette = ExtResource("8_figure_palette")
+figure_motion = 2
+figure_top = 1.4
 armor_class = 4

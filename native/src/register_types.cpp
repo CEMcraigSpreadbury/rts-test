@@ -4,6 +4,7 @@
 #include <godot_cpp/godot.hpp>
 
 #include "army_sim.h"
+#include "figure_batcher.h"
 #include "sprite_batcher.h"
 
 using namespace godot;
@@ -14,6 +15,7 @@ static void army_initialize_module(ModuleInitializationLevel p_level) {
 	}
 	GDREGISTER_CLASS(ArmySim);
 	GDREGISTER_CLASS(SpriteBatcher);
+	GDREGISTER_CLASS(FigureBatcher);
 }
 
 static void army_uninitialize_module(ModuleInitializationLevel p_level) {

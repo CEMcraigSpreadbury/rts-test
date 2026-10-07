@@ -18,25 +18,29 @@ float cloud_shade(vec3 world_pos) {
 	return 1.0 - texture(cloud_shadow_tex, uv).a * cloud_shadow_strength;
 }
 
+// The texture's alpha peaks at CloudShadows.strength; kept in step with it.
+const float CLOUD_STRENGTH = 0.35;
+
 // The ground (terrain, grass blades, scatter) is kept out of the decal and
 // shades itself with this instead, so its fog of war covers the clouds too:
-// a cool shade that keeps about half the light. Multiplies linear albedo; the
-// texture's alpha peaks at CloudShadows.strength (0.8), which this is sized for.
+// a cool shade, mixed in by the texture's alpha. Multiplies linear albedo.
 const vec3 CLOUD_GROUND_MUL = vec3(0.12, 0.26, 0.7);
 
 // `jitter` (0..1 noise at grass-tuft scale) breaks the shadow's edge into a
 // crisp serrated line, as painted shade falls across grass, rather than a soft
 // airbrushed gradient.
-// How much cloud shade falls here, 0..0.8, with that serrated edge.
+// How much of the cloud's cover falls here, 0..1, with that serrated edge.
 float cloud_ground_amount(vec3 world_pos, float jitter) {
-	float shade = (1.0 - cloud_shade(world_pos)) / 0.8;
-	return smoothstep(0.42, 0.58, shade + (jitter - 0.5) * 0.35) * 0.8;
+	float cover = (1.0 - cloud_shade(world_pos)) / CLOUD_STRENGTH;
+	return smoothstep(0.42, 0.58, cover + (jitter - 0.5) * 0.35);
 }
 
 // How much of the sun a cloud blocks on the ground, 0..1, for ground_light().
-// A little light gets through even the thickest cloud.
+// Thin cloud: half the sun gets through even the thickest of it, which darkens
+// the ground about as much as the decal darkens what stands on it.
+const float CLOUD_SUN_BLOCK = 0.5;
 float cloud_sun_block(vec3 world_pos, float jitter) {
-	return cloud_ground_amount(world_pos, jitter) / 0.8 * 0.9;
+	return cloud_ground_amount(world_pos, jitter) * CLOUD_SUN_BLOCK;
 }
 
 vec3 cloud_ground(vec3 world_pos) {

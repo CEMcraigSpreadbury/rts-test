@@ -5,17 +5,8 @@ shader_type spatial;
 // finished building still renders in the opaque pass, where it sorts against
 // the world correctly and costs nothing extra.
 render_mode cull_disabled, blend_mix, depth_draw_opaque;
-// Marks it for the ink outline (OutlinePass, shaders/post/outline.gdshader).
-stencil_mode write, compare_always, 2;
 
 #include "res://shaders/team_color.gdshaderinc"
-#include "res://shaders/util/outline_mark.gdshaderinc"
-
-varying flat float v_outline_roughness;
-
-void vertex() {
-	v_outline_roughness = outline_roughness_for(MODEL_MATRIX[3].xyz, float(INSTANCE_ID));
-}
 
 uniform float construction_alpha : hint_range(0.0, 1.0) = 0.45;
 
@@ -33,6 +24,6 @@ void fragment() {
 	EMISSION = emission * foot * cloud_shade(world);
 	AO = ao;
 	METALLIC = metallic_value;
-	ROUGHNESS = v_outline_roughness;
+	ROUGHNESS = 0.8;
 	ALPHA = texel.a * construction_alpha;
 }

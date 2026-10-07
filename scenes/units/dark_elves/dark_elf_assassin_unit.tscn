@@ -7,6 +7,9 @@
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/venom.png" id="icon_abilities_venom"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfAssassin.glb" id="f1_figure"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfAssassin_LOD1.glb" id="f2_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://cm6k61pmsxyb1" path="res://assets/art/Models/Units/palettes/dark_elves.png" id="f3_figure_palette"]
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost")
 resource_type = ExtResource("4_gold")
@@ -48,4 +51,7 @@ vision_range = 13
 armor_class = 0
 damage_type = 5
 unit_category = 0
+figure_model = ExtResource("f1_figure")
+figure_model_lod1 = ExtResource("f2_figure_lod1")
+figure_palette = ExtResource("f3_figure_palette")
 on_hit_ability = SubResource("Ability_on_hit")

@@ -334,6 +334,10 @@ var sprite_batcher: SpriteBatcher
 ## The match's batcher, for units to register their sprites with; null
 ## between matches, or with batching off (for comparison runs).
 static var sprite_batcher_current: SpriteBatcher = null
+## Draws every unit that has a 3D figure, one MultiMesh per figure (every
+## peer has one); Unit.figure_model opts a unit type in.
+var figure_batcher: FigureBatcher
+static var figure_batcher_current: FigureBatcher = null
 static var batch_unit_sprites: bool = true
 var feedback: WorldFeedback
 var hud: Hud
@@ -411,6 +415,8 @@ func _exit_tree() -> void:
 	get_tree().physics_interpolation = false
 	if sprite_batcher_current == sprite_batcher:
 		sprite_batcher_current = null
+	if figure_batcher_current == figure_batcher:
+		figure_batcher_current = null
 
 ## Hiding the cloud decal also zeroes the cloud_shadow_strength global, so
 ## the emission-baked models stop darkening too (see CloudShadows).
@@ -626,6 +632,13 @@ func _add_components() -> void:
 	sprite_batcher.set_drawing(batch_unit_sprites)
 	add_child(sprite_batcher)
 	sprite_batcher_current = sprite_batcher
+	figure_batcher = FigureBatcher.new()
+	figure_batcher.name = "FigureBatcher"
+	figure_batcher.set_material_factory(FigureMaterials.build)
+	## Nothing to draw without a renderer, so no poses worked out either.
+	figure_batcher.set_drawing(DisplayServer.get_name() != "headless")
+	add_child(figure_batcher)
+	figure_batcher_current = figure_batcher
 	var dust := DustPool.new()
 	dust.name = "DustPool"
 	add_child(dust)
@@ -2571,8 +2584,9 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 	_report_selection()
 
 ## What is under `screen_pos`. Units have no physics body: they are found by
-## their sprites as last drawn (SpriteBatcher.pick), and win over whatever the
-## physics ray meets further off. Masking out UNIT_PICK_LAYER leaves them out.
+## their sprites or figures as last drawn (SpriteBatcher.pick,
+## FigureBatcher.pick), and win over whatever the physics ray meets further
+## off. Masking out UNIT_PICK_LAYER leaves them out.
 func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionary:
 	var space_state := get_world_3d().direct_space_state
 	var from := camera.project_ray_origin(screen_pos)
@@ -2590,6 +2604,10 @@ func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionar
 		return hit
 	var basis := camera.global_transform.basis
 	var unit_hit: Dictionary = sprite_batcher.pick(from, dir, basis.x, basis.y)
+	if figure_batcher != null:
+		var figure_hit: Dictionary = figure_batcher.pick(from, dir)
+		if not figure_hit.is_empty() and (unit_hit.is_empty() or float(figure_hit.distance) < float(unit_hit.distance)):
+			unit_hit = figure_hit
 	if unit_hit.is_empty():
 		return hit
 	if not hit.is_empty() and from.distance_to(hit.position) < float(unit_hit.distance):

@@ -50,11 +50,11 @@ background_mode = 2
 background_energy_multiplier = 1.05
 sky = SubResource("Sky_1")
 ambient_light_source = 3
-ambient_light_color = Color(0.62, 0.68, 0.72, 1)
+ambient_light_color = Color(0.56, 0.64, 0.8, 1)
 ambient_light_sky_contribution = 0.0
 ambient_light_energy = 1.0
 tonemap_mode = 3
-tonemap_exposure = 0.8
+tonemap_exposure = 0.78
 ssao_enabled = true
 ssao_radius = 1.0
 ssao_intensity = 6.0
@@ -73,8 +73,8 @@ volumetric_fog_ambient_inject = 0.05
 volumetric_fog_sky_affect = 0.0
 adjustment_enabled = true
 adjustment_brightness = 1.05
-adjustment_contrast = 1.08
-adjustment_saturation = 1.03
+adjustment_contrast = 1.12
+adjustment_saturation = 0.96
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_dust"]
 render_priority = 0
@@ -131,19 +131,20 @@ ambience_sounds = Array[AudioStream]([ExtResource("19_5lcou")])
 environment = SubResource("Environment_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=620721382]
-transform = Transform3D(-0.60680544, -0.6088908, 0.51092005, -4.031998e-09, 0.6427878, 0.76604426, -0.7948505, 0.4648399, -0.39004737, 0, 12, 0)
-light_color = Color(1, 0.93, 0.8, 1)
-light_energy = 1.35
+transform = Transform3D(-0.60680544, -0.5717676, 0.55214955, 0, 0.69465837, 0.7193398, -0.7948505, 0.4364993, -0.42152248, 0, 12, 0)
+light_color = Color(1, 0.88, 0.68, 1)
+light_energy = 1.5
 shadow_enabled = true
+shadow_blur = 2.0
 directional_shadow_pancake_size = 0.0
 script = ExtResource("20_dtl52")
 camera_yaw_path = NodePath("../CameraRig/Yaw")
-yaw_offset_degrees = 55.0
+yaw_offset_degrees = 65.0
 
 [node name="FillLight" type="DirectionalLight3D" parent="." unique_id=1505165951]
 transform = Transform3D(-0.70710677, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.70710677, 0.45451945, -0.5416752, 0, 8, 0)
-light_color = Color(0.45, 0.65, 0.95, 1)
-light_energy = 0.45
+light_color = Color(0.4, 0.6, 1, 1)
+light_energy = 0.35
 light_volumetric_fog_energy = 1.5
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1365774680]

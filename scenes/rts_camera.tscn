@@ -14,8 +14,9 @@ dof_blur_amount = 0.08
 [node name="CameraRig" type="Node3D" unique_id=102834305]
 script = ExtResource("1_script")
 max_zoom = 45.0
-focus_band_top = 0.3
-focus_band_bottom = 0.7
+focus_band_top = 0.33
+focus_band_bottom = 0.72
+focus_ramp = 0.17
 
 [node name="Yaw" type="Node3D" parent="." unique_id=1896002052]
 

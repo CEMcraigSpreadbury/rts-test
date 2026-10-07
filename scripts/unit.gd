@@ -268,7 +268,8 @@ const _ENEMY_TINT_STRENGTH: float = 0.35
 ## army.
 func _resting_modulate() -> Color:
 	var base := Color.WHITE
-	if owner_peer_id != multiplayer.get_unique_id():
+	## A figure wears its team colour on its helmet and shield instead.
+	if owner_peer_id != multiplayer.get_unique_id() and not _drawn_as_figure:
 		base = Color.WHITE.lerp(team_tint, _ENEMY_TINT_STRENGTH)
 	if _status_tint_until_ms > GameClock.msec():
 		base *= Color.WHITE.lerp(_status_tint, _STATUS_TINT_STRENGTH)
@@ -287,6 +288,8 @@ func _update_team_tint_visual() -> void:
 			sprite.material_overlay = UnitSilhouetteMaterial.build(_current_sheet(), team_tint)
 		if Main.sprite_batcher_current != null:
 			Main.sprite_batcher_current.set_team_color(sprite, team_tint)
+		if Main.figure_batcher_current != null:
+			Main.figure_batcher_current.set_team_color(self, team_tint)
 	if crew_sprite:
 		crew_sprite.modulate = sprite.modulate
 		if not _death_playing:
@@ -457,6 +460,27 @@ func _play_sprite_pop() -> void:
 @export var crew_death_frame_count: int = 4
 ## How far behind the main sprite, along the screen's horizontal, the crew stands.
 @export var crew_offset: float = 0.7
+
+@export_group("Figure")
+## The 3D figure this unit is drawn as instead of its sprite (a GLB the kit in
+## assets/art/Models/Units builds), and the cheaper one it switches to far
+## from the camera. No figure: drawn as its sprite. The sprite still runs,
+## hidden, and FigureBatcher poses the figure from it.
+@export var figure_model: PackedScene
+@export var figure_model_lod1: PackedScene
+## Its palette (assets/art/Models/Units/palettes); none paints it Aldmere's.
+@export var figure_palette: Texture2D
+## How the figure moves for what it carries (FigureBatcher's Motion): melee
+## swings, or a bow drawn and loosed on the shot's beat.
+@export_enum("Melee", "Bow", "Mounted") var figure_motion: int = 0
+## Where the figure's head is, for its health bar and stun stars, when the
+## top of its mesh is something else (a lance's tip). 0: the mesh's top.
+@export var figure_top: float = 0.0
+## The figures it changes into for a work role ("build", "wood", "gold"; see
+## _set_work_role): the villager's hammer, axe and pick. Each role's far
+## figure is under the same key in figure_role_models_lod1.
+@export var figure_role_models: Dictionary[StringName, PackedScene] = {}
+@export var figure_role_models_lod1: Dictionary[StringName, PackedScene] = {}
 
 @export_group("Gathering")
 @export var can_gather: bool = true
@@ -978,7 +1002,7 @@ func _ensure_stun_stars() -> void:
 		_stun_star_mesh.size = Vector2(0.13, 0.13)
 		_stun_star_mesh.material = material
 	_stun_stars = Node3D.new()
-	_stun_stars.position = Vector3(0, STUN_STAR_HEIGHT, 0)
+	_stun_stars.position = Vector3(0, _stun_star_height(), 0)
 	for i in STUN_STAR_COUNT:
 		var star := MeshInstance3D.new()
 		star.mesh = _stun_star_mesh
@@ -1523,9 +1547,6 @@ func sim_swing(target: Unit) -> void:
 		return
 	sim_target = target
 	attack_target = target
-	var to_target := target.global_position - global_position
-	if Vector2(to_target.x, to_target.z).length_squared() > 0.0001:
-		rotation.y = atan2(to_target.x, to_target.z)
 	var effective_cooldown := _effective_cooldown()
 	_land_swing(effective_cooldown, false)
 	## A shot leaves on the draw, some ticks later (_tick_pending_shots).
@@ -1603,9 +1624,10 @@ func _ready() -> void:
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, animations)
 		sprite.play("idle")
 		sprite.animation_changed.connect(_on_sprite_animation_changed)
-		## Drawn with every other unit of its sheet (SpriteBatcher), not by itself.
-		if Main.sprite_batcher_current != null:
-			Main.sprite_batcher_current.add_sprite(sprite, team_tint)
+		_sprite_ring_mesh = selection_ring.mesh
+		_sprite_health_bar_y = health_bar.position.y
+		_take_villager_figure()
+		_attach_drawing()
 	if crew_sprite_sheet:
 		_build_crew_sprite()
 	sprite.animation_finished.connect(_on_attack_animation_finished)
@@ -1627,6 +1649,10 @@ func _ready() -> void:
 ## Paired with _exit_tree rather than _ready, so a unit moved to another
 ## parent (Main._adopt_scenario_entities) leaves the sim and comes back.
 func _enter_tree() -> void:
+	## Back into the batchers after a move to another parent; the first time,
+	## _ready does it.
+	if is_node_ready() and sprite_sheet and not _death_playing:
+		_attach_drawing()
 	if sim_id < 0 and ArmyBridge.current != null:
 		sim_id = ArmyBridge.current.register_unit(self)
 	## A client may learn the id before the unit is in the tree.
@@ -1638,6 +1664,9 @@ func _exit_tree() -> void:
 		Main.sprite_batcher_current.remove_sprite(sprite)
 		if crew_sprite != null:
 			Main.sprite_batcher_current.remove_sprite(crew_sprite)
+	## A dying figure stays behind as a corpse (see FigureBatcher).
+	if Main.figure_batcher_current != null:
+		Main.figure_batcher_current.remove_figure(self)
 	if net_id >= 0:
 		ArmyNet.unregister(self)
 	if sim_id >= 0 and ArmyBridge.current != null:
@@ -3093,10 +3122,132 @@ func _process_visuals(delta: float) -> void:
 		return
 	var forward := Vector3(sin(rotation.y), 0.0, cos(rotation.y))
 	var screen_dot: float = forward.dot(cam_right)
-	if absf(screen_dot) > FLIP_DOT_THRESHOLD:
+	if absf(screen_dot) > FLIP_DOT_THRESHOLD and not _drawn_as_figure:
 		sprite.flip_h = screen_dot < 0.0
 	if crew_sprite:
 		_update_crew_sprite(cam_right)
+
+## --- Drawing: sprite or figure ---
+
+## `cmd figures` (and ui_shot's --sprites): whether units that have a figure
+## are drawn as it, for comparing against their sprites. Per machine.
+static var figures_on: bool = not OS.get_cmdline_user_args().has("--sprites")
+## Figure models -> the mesh inside, read out of the GLB's scene once.
+static var _figure_meshes: Dictionary = {}
+## Ring radius (rounded to a centimetre) -> its mesh.
+static var _figure_rings: Dictionary = {}
+## A figure's selection ring is about 0.85 m across (the sprite's is 1.25 m,
+## which crowds a block of figures), and its health bar and stun stars sit
+## this far over its head.
+const FIGURE_RING_INNER: float = 0.405
+const FIGURE_RING_OUTER: float = 0.43
+const FIGURE_HEAD_ROOM: float = 0.35
+const FIGURE_STAR_ROOM: float = 0.15
+
+var _drawn_as_figure: bool = false
+var _sprite_ring_mesh: Mesh = null
+var _sprite_health_bar_y: float = 0.0
+
+## Every unit that has a figure drawn as it, or (off) as its sprite.
+static func set_figures(on: bool, tree: SceneTree) -> void:
+	figures_on = on
+	for node in tree.get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit != null and unit.figure_model != null and unit.sprite_sheet != null \
+				and unit.is_node_ready() and not unit._death_playing:
+			unit._attach_drawing()
+			unit._update_team_tint_visual()
+
+static func figure_mesh(model: PackedScene) -> Mesh:
+	if model == null:
+		return null
+	if not _figure_meshes.has(model):
+		var root: Node = model.instantiate()
+		var found: Array[Node] = root.find_children("*", "MeshInstance3D", true, false)
+		_figure_meshes[model] = (found[0] as MeshInstance3D).mesh if not found.is_empty() else null
+		root.free()
+	return _figure_meshes[model]
+
+func is_drawn_as_figure() -> bool:
+	return _drawn_as_figure
+
+## How tall its figure stands, to the head (0 with none; see figure_top).
+func figure_height() -> float:
+	if figure_top > 0.0:
+		return figure_top
+	var mesh := figure_mesh(figure_model)
+	return mesh.get_aabb().end.y if mesh != null else 0.0
+
+## Drawn with every other unit of its sheet (SpriteBatcher), or of its figure
+## (FigureBatcher), not by itself.
+func _attach_drawing() -> void:
+	var as_figure: bool = figures_on and figure_model != null and Main.figure_batcher_current != null \
+			and figure_mesh(figure_model) != null
+	if as_figure:
+		if Main.sprite_batcher_current != null:
+			Main.sprite_batcher_current.remove_sprite(sprite)
+		sprite.visible = false
+		var mesh: Mesh = figure_mesh(figure_model)
+		var lod1: Mesh = figure_mesh(figure_model_lod1) if figure_model_lod1 != null else mesh
+		Main.figure_batcher_current.add_figure(self, sprite, mesh, lod1, figure_palette, team_tint,
+				_sprite_base_position, _sprite_base_scale, move_speed)
+		Main.figure_batcher_current.set_figure_motion(self, figure_motion)
+		for role in figure_role_models:
+			var role_mesh: Mesh = figure_mesh(figure_role_models[role])
+			var role_far: Mesh = figure_mesh(figure_role_models_lod1.get(role))
+			if role_mesh != null:
+				Main.figure_batcher_current.set_figure_variant(self, role, role_mesh, role_far if role_far != null else role_mesh)
+	else:
+		if Main.figure_batcher_current != null:
+			Main.figure_batcher_current.remove_figure(self, false)
+		if Main.sprite_batcher_current != null:
+			Main.sprite_batcher_current.add_sprite(sprite, team_tint)
+			sprite.visible = not Main.sprite_batcher_current.is_drawing()
+	_drawn_as_figure = as_figure
+	_fit_overlays_to_drawing()
+
+## The villager is the base unit scene every other unit type inherits from,
+## so its figure can't be set there (they would all inherit it): a unit
+## instanced from that scene itself, with no figure of its own, takes these.
+const VILLAGER_SCENE: String = "res://scenes/units/unit.tscn"
+const VILLAGER_FIGURE: String = "res://assets/art/Models/Units/Villager%s.glb"
+const VILLAGER_ROLES: Array[StringName] = [&"build", &"wood", &"gold"]
+
+func _take_villager_figure() -> void:
+	if figure_model != null or scene_file_path != VILLAGER_SCENE:
+		return
+	figure_model = load(VILLAGER_FIGURE % "")
+	figure_model_lod1 = load(VILLAGER_FIGURE % "_LOD1")
+	for role in VILLAGER_ROLES:
+		figure_role_models[role] = load(VILLAGER_FIGURE % ("_" + role))
+		figure_role_models_lod1[role] = load(VILLAGER_FIGURE % ("_%s_LOD1" % role))
+
+## The selection ring, health bar and stun stars, sized to what it is drawn as.
+func _fit_overlays_to_drawing() -> void:
+	if _drawn_as_figure:
+		selection_ring.mesh = _figure_ring_for(figure_mesh(figure_model))
+		health_bar.position.y = figure_height() + FIGURE_HEAD_ROOM
+	else:
+		if _sprite_ring_mesh != null:
+			selection_ring.mesh = _sprite_ring_mesh
+		health_bar.position.y = _sprite_health_bar_y
+	if _stun_stars:
+		_stun_stars.position.y = _stun_star_height()
+
+## A ring round the figure's footprint: about 0.85 m across a man on foot,
+## wider round a horse.
+static func _figure_ring_for(mesh: Mesh) -> TorusMesh:
+	var size: Vector3 = mesh.get_aabb().size if mesh != null else Vector3.ONE * 0.6
+	var radius: float = snappedf(clampf(0.45 * maxf(size.x, size.z) + 0.13, FIGURE_RING_INNER, 0.7), 0.01)
+	if not _figure_rings.has(radius):
+		var ring := TorusMesh.new()
+		ring.inner_radius = radius
+		ring.outer_radius = radius + (FIGURE_RING_OUTER - FIGURE_RING_INNER)
+		_figure_rings[radius] = ring
+	return _figure_rings[radius]
+
+func _stun_star_height() -> float:
+	return figure_height() + FIGURE_STAR_ROOM if _drawn_as_figure else STUN_STAR_HEIGHT
 
 func _build_crew_sprite() -> void:
 	crew_sprite = AnimatedSprite3D.new()
@@ -3687,6 +3838,13 @@ func _effective_cooldown() -> float:
 ## attack loop's way; a man fighting from his block's place gets his next one
 ## from the sim instead.
 func _land_swing(effective_cooldown: float, retarget: bool) -> void:
+	## Square on to what it strikes: a figure shows its yaw, and a unit's first
+	## blow (hitting back at someone behind it, say) can come before its turn
+	## toward the target has caught up.
+	if is_instance_valid(attack_target):
+		var to_target := attack_target.global_position - global_position
+		if Vector2(to_target.x, to_target.z).length_squared() > 0.0001:
+			rotation.y = atan2(to_target.x, to_target.z)
 	attack_timer = 0.0
 	_last_swing_ms = GameClock.msec()
 	_play_attack_swing()

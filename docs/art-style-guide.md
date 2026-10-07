@@ -7,15 +7,14 @@ so you can find it in the code.
 
 ## The look in one line
 
-Chunky low-poly buildings and trees with a thin ink silhouette, outlined
-pixel-art units, and painterly ground in calm broad colour, all under clear
-midday light.
+Chunky low-poly buildings and trees, chibi 3D unit figures, and painterly
+ground in calm broad colour, all under clear midday light.
 
 The two target images are in `docs/art-reference/`:
 
 | Image | What it is for |
 |---|---|
-| `reference-close.png` | The overall look: buildings, trees, outlines, rocks and flowers, close up. |
+| `reference-close.png` | The overall look: buildings, trees, rocks and flowers, close up. |
 | `reference-grass.png` | The grass and ground in particular: colour blending, tufts, shadows. |
 
 Both are painted close-ups. Players mostly see the game from further out, at
@@ -29,11 +28,9 @@ close up.
    blended colour. Detail and contrast belong to buildings, trees, units and
    shadows. If the ground starts to look like camouflage, noise or carpet,
    there is too much going on in it.
-2. **One ink line, around the outside.** 3D objects get a thin dark outline
-   around their silhouette as the camera sees it, and nowhere else.
-3. **Units stay pixel art.** Units are outlined pixel sprites. There will be
-   no 3D units.
-4. **Bright midday.** The look is judged at midday (`--tod=0.3`): clean light,
+2. **Units are diorama figures.** Rigid low-poly chibi figures that hop,
+   lean and topple (no skeletal animation). See `docs/unit-figures.md`.
+3. **Bright midday.** The look is judged at midday (`--tod=0.3`): clean light,
    no haze, no bloom.
 
 ## Palette
@@ -49,35 +46,10 @@ Values are what a screenshot of the reference measures at midday, as sRGB
 | Plaster walls | off-white, lit side about 220-240 | Never pure white, never yellow cream. |
 | Roofs | the team colour, mid value | Value x0.72, saturation x0.88 (`team_color.gdshaderinc`). |
 | Rocks | warm mid-grey, about 0.37-0.46 | `GroundScatter.ROCK_COLOURS`. |
-| Ink line | (0.17, 0.10, 0.06) | A very dark warm brown, not black. |
 
 Grass colour comes from the gradient on each map's terrain and foliage
 materials: `(0.59, 0.75, 0.39) / (0.53, 0.71, 0.36) / (0.45, 0.65, 0.32)`. All
 three maps use the same values; keep them in step.
-
-## Outlines
-
-Implemented in `shaders/post/outline.gdshader`, a full-screen pass added to the
-camera by `OutlinePass`.
-
-- **Silhouette only.** Each outlined object writes its own id
-  (`shaders/util/outline_mark.gdshaderinc`). A line is drawn only where the
-  object meets something else, so there are no lines on roof tiles, creases or
-  inner edges. A building shares one id across all its meshes; trees, rocks and
-  deposits take one from their position.
-- **Thin, and thinner further away.** 1.6 px at 1080p, thinning to 1 px and
-  fading to 35% strength past view depth 30.
-- **Not where things touch the ground.** Against terrain or grass, the line
-  appears only where the object rises more than 0.1-0.3 m above the ground
-  beside it. Roof edges against the field behind are lined; the feet of walls,
-  trunks and rocks are not.
-- **What gets one:** buildings, trees, gold deposits and rocks. Grass, terrain,
-  pebbles, flowers and units never do.
-- **To outline a new object:** its material writes stencil 2 and an outline id
-  into ROUGHNESS. For shader materials, copy the `stencil_mode write,
-  compare_always, 2;` line and the `v_outline_roughness` varying from
-  `team_color.gdshader`. For a `StandardMaterial3D`, call `OutlinePass.mark()`.
-  Stencil 1 is already taken by the unit silhouette system, so don't use it.
 
 ## Ground
 
@@ -121,10 +93,10 @@ blades are in `binbun_foliage.gdshader`. Both share
 `scripts/ground_scatter.gd` places scatter from each map's splatmap when the
 map loads.
 
-- **Rocks:** sparse (1 per 80 m²), outlined, warm grey.
+- **Rocks:** sparse (1 per 80 m²), warm grey.
 - **Daisies:** white or yellow with yellow centres, small loose clusters
   (1 per 12 m²). They always face the camera, so they never read as slivers.
-- **Pebbles:** on paths and on dirt under buildings only, with no outline.
+- **Pebbles:** on paths and on dirt under buildings only.
 - **No static 3D grass tufts.** They don't move with the wind and look out of
   place.
 - Anything under a building or field is hidden by the ground stamp texture.
@@ -164,19 +136,19 @@ The environment is in `scenes/map_base.tscn`.
 - Use the team colour shader (`team_color.gdshader`), which recolours only the
   team-blue parts of the texture. Lit plaster is softened toward off-white
   (`soften_highlights()`), and walls darken slightly toward their foot.
-- Tree models and their shading are fixed. Trees get outlines and shadows; the
+- Tree models and their shading are fixed. Trees get shadows; the
   models themselves are not restyled.
 - New building models should match the existing chunky, low-poly, hand-painted
   look of the Town Centre.
 
 ## Units
 
-- Outlined pixel sprites, using the "Outline" versions of the Minifolks
-  sheets. Unoutlined sprites were tried and rejected.
+- 3D diorama figures built by the Blender kit. The rules, the build command
+  and the roster status are in `docs/unit-figures.md`.
+- Unit types without a figure yet still draw their pixel sprite.
 - No blob shadows under units.
-- A unit on the field shows as its sprite: in the portrait, the selection tray,
-  regiment cards and banners. A unit offered as a command shows its icon: on
-  training buttons, in queue slots and on Lord tabs.
+- Portraits, the selection tray, regiment cards and banners still show the
+  sprites until the portrait step is done.
 
 ## Icons and UI
 
@@ -210,7 +182,7 @@ Then check:
 - fog of war still hides everything unexplored;
 - night (`--tod=0.85`) still reads;
 - the web look, using desktop `--rendering-method gl_compatibility`. The web
-  build has no outlines, ambient occlusion, cloud decal or grass, and has its
+  build has no ambient occlusion, cloud decal or grass, and has its
   own lighting in `scripts/compat_lighting.gd`.
 
 ## Tried and rejected
@@ -219,8 +191,10 @@ These have all been tried. Don't bring them back without a new reason.
 
 - 3D units, unoutlined unit sprites, blob shadows under units.
 - Painted, AI-generated or model-rendered button icons.
-- Thick or black outlines, outlines on roof tiles and creases, outlines where
-  objects meet the ground.
+- Ink outlines on 3D objects, in any form: they work against the diorama feel.
+  The last version (a thin dark-brown silhouette line drawn by a full-screen
+  pass) was removed; thick, black, roof-tile and ground-contact lines were
+  rejected before that.
 - Darker clump dabs or tuft patches in the grass, in any form.
 - Many rocks, static 3D grass tufts.
 - Blades with dark roots (they read as fur), dithered blade alpha,

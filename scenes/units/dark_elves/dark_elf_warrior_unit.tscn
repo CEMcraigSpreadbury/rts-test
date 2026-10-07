@@ -4,6 +4,9 @@
 [ext_resource type="Texture2D" path="res://assets/art/MiniDarkElves/Outline/MiniDarkElfWarrior-Sheet.png" id="2_sheet"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfWarrior.glb" id="5_figure"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfWarrior_LOD1.glb" id="6_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://cm6k61pmsxyb1" path="res://assets/art/Models/Units/palettes/dark_elves.png" id="7_figure_palette"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost")
@@ -36,3 +39,6 @@ vision_range = 12
 armor_class = 1
 damage_type = 5
 unit_category = 0
+figure_model = ExtResource("5_figure")
+figure_model_lod1 = ExtResource("6_figure_lod1")
+figure_palette = ExtResource("7_figure_palette")

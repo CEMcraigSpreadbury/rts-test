@@ -5,6 +5,9 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfRider.glb" id="90_figure"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfRider_LOD1.glb" id="91_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://cm6k61pmsxyb1" path="res://assets/art/Models/Units/palettes/dark_elves.png" id="92_figure_palette"]
 
 [sub_resource type="Resource" id="ResourceCost_wood"]
 script = ExtResource("3_cost")
@@ -43,3 +46,8 @@ armor_class = 4
 damage_type = 2
 unit_category = 3
 can_charge = true
+figure_model = ExtResource("90_figure")
+figure_model_lod1 = ExtResource("91_figure_lod1")
+figure_palette = ExtResource("92_figure_palette")
+figure_motion = 2
+figure_top = 1.4

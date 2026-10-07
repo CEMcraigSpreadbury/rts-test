@@ -159,7 +159,7 @@ vec3 soften_highlights(vec3 c) {
 // The Compatibility renderer (web) has no SSAO and a different environment
 // (compat_lighting.gd), so it keeps the all-emission look.
 const float LIT_SHARE = 0.5;
-const vec3 AMBIENT_REF = vec3(0.62, 0.68, 0.72);
+const vec3 AMBIENT_REF = vec3(0.56, 0.64, 0.8);
 
 // Writes the recolored texture out the same way the model's own material did,
 // so a team-colored building is lit identically to an untinted one.

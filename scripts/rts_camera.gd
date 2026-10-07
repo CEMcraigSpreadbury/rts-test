@@ -73,12 +73,13 @@ var _dragging: bool = false
 var _drag_anchor: Vector3 = Vector3.ZERO
 var _pan_velocity: Vector3 = Vector3.ZERO
 var _shake_trauma: float = 0.0
+var _lens: CanvasLayer
 
 func _ready() -> void:
 	_zoom_target = zoom_distance
 	pitch.rotation_degrees.x = -pitch_degrees
 	camera.fov = field_of_view
-	OutlinePass.attach(camera)
+	_lens = LensPass.attach(camera)
 	_apply_settings(&"")
 	Settings.changed.connect(_apply_settings)
 	_update_zoom()
@@ -94,6 +95,7 @@ func _apply_settings(_key: StringName) -> void:
 		var dof: bool = Settings.get_value(&"depth_of_field")
 		attributes.dof_blur_near_enabled = dof
 		attributes.dof_blur_far_enabled = dof
+		LensPass.set_blur(_lens, dof)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
