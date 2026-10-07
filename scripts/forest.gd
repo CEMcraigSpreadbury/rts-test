@@ -398,6 +398,7 @@ func _parts_for(path: String) -> Array:
 	if scene != null:
 		var model: Node3D = scene.instantiate()
 		BakedLightingMaterial.apply_to(model)
+		PlasticMaterial.apply_to(model)
 		TreeWind.apply_to_trees_in(model)
 		_collect_parts(model, Transform3D.IDENTITY, parts, true)
 		model.free()

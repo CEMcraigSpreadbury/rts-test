@@ -25,8 +25,8 @@ const FADE_DURATION: float = 25.0
 
 ## The sun climbs through the morning, holds, then sinks and warms toward
 ## sunset, so the day can be seen passing; it used to sit still all day and
-## change only in the fade. Only its height moves: its bearing follows the
-## camera (light_follow_camera_yaw.gd) so sprites stay lit from the front.
+## change only in the fade. Only its height moves: its bearing is fixed in the
+## world (from the upper left at the starting view), as a lamp over a diorama.
 ## Degrees above the horizon; noon is the map's own authored height (46: a
 ## soft golden sun from the side, so shadows reach out across the ground like a
 ## diorama's, but high enough that the grass blades don't rake into a carpet).

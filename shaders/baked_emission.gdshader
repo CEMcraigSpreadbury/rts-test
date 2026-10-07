@@ -10,6 +10,7 @@ render_mode cull_disabled;
 #include "res://shaders/util/tree_wind.gdshaderinc"
 #include "res://shaders/util/cloud_shade.gdshaderinc"
 #include "res://shaders/util/compat_color.gdshaderinc"
+#include "res://shaders/util/plastic_light.gdshaderinc"
 
 uniform sampler2D source_texture : source_color, filter_linear_mipmap, repeat_enable;
 uniform vec4 emission_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
@@ -28,9 +29,13 @@ void fragment() {
 	EMISSION = baked * cloud_shade((INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz);
 	ALBEDO = baked;
 	AO = 0.0;
-	ROUGHNESS = 0.8;
+	ROUGHNESS = PLASTIC_ROUGHNESS;
+	SPECULAR = PLASTIC_SPECULAR;
+	CLEARCOAT = PLASTIC_CLEARCOAT;
+	CLEARCOAT_ROUGHNESS = PLASTIC_CLEARCOAT_ROUGHNESS;
 }
 
 void light() {
 	DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, ATTENUATION, LIGHT_IS_DIRECTIONAL, sun_shadow_strength);
+	SPECULAR_LIGHT += plastic_specular(NORMAL, LIGHT, VIEW, LIGHT_COLOR, ATTENUATION, SPECULAR_AMOUNT);
 }

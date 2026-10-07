@@ -64,6 +64,11 @@ void fragment() {
 	emission += vec3(flash * 0.6);
 	ALBEDO = compat_out(albedo);
 	EMISSION = compat_out(emission);
-	ROUGHNESS = mix(0.85, 0.32, shine);
-	SPECULAR = mix(0.25, 0.65, shine);
+	// Painted plastic in the satin finish every model shares, so the sun leaves
+	// a soft glint on helmets, heads and shoulders; steel tighter still.
+	ROUGHNESS = mix(0.5, 0.25, shine);
+	SPECULAR = mix(0.5, 0.8, shine);
+	// The thin clear coat every model shares (plastic_light.gdshaderinc).
+	CLEARCOAT = 0.25;
+	CLEARCOAT_ROUGHNESS = 0.35;
 }

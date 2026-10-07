@@ -19,7 +19,6 @@
 [ext_resource type="AudioStream" uid="uid://bbbqruyuvt1mg" path="res://assets/sfx/Music/End/Triumphant March.mp3" id="17_nafme"]
 [ext_resource type="Script" uid="uid://fwe5mgixubk0" path="res://scripts/ambience_player.gd" id="18_1uxtg"]
 [ext_resource type="AudioStream" uid="uid://dl6usc5kn2487" path="res://assets/sfx/Ambient Sounds/Forest Ambience.mp3" id="19_5lcou"]
-[ext_resource type="Script" uid="uid://dkkfp75r2127e" path="res://scripts/light_follow_camera_yaw.gd" id="20_dtl52"]
 [ext_resource type="Script" path="res://scripts/cloud_shadows.gd" id="21_lsodw"]
 [ext_resource type="PackedScene" uid="uid://fjbl5xhrvk7l" path="res://scenes/rts_camera.tscn" id="22_80dis"]
 [ext_resource type="Script" uid="uid://cg120bgdg4euh" path="res://scripts/fog_of_war.gd" id="23_fvor6"]
@@ -60,10 +59,11 @@ ssao_radius = 1.0
 ssao_intensity = 6.0
 ssao_power = 2.0
 ssao_detail = 0.0
-glow_enabled = false
-glow_strength = 0.2
+glow_enabled = true
+glow_intensity = 0.35
+glow_strength = 0.8
 glow_bloom = 0.0
-glow_hdr_threshold = 1.4
+glow_hdr_threshold = 1.1
 volumetric_fog_enabled = true
 volumetric_fog_density = 0.018
 volumetric_fog_albedo = Color(1, 1, 0.8392157, 1)
@@ -74,7 +74,7 @@ volumetric_fog_sky_affect = 0.0
 adjustment_enabled = true
 adjustment_brightness = 1.05
 adjustment_contrast = 1.12
-adjustment_saturation = 0.96
+adjustment_saturation = 1.04
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_dust"]
 render_priority = 0
@@ -131,20 +131,18 @@ ambience_sounds = Array[AudioStream]([ExtResource("19_5lcou")])
 environment = SubResource("Environment_1")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=620721382]
-transform = Transform3D(-0.60680544, -0.5717676, 0.55214955, 0, 0.69465837, 0.7193398, -0.7948505, 0.4364993, -0.42152248, 0, 12, 0)
+transform = Transform3D(0.17365, 0.70841, -0.68411, 0, 0.69466, 0.71934, 0.98481, -0.12491, 0.12063, 0, 12, 0)
 light_color = Color(1, 0.88, 0.68, 1)
 light_energy = 1.5
 shadow_enabled = true
 shadow_blur = 2.0
 directional_shadow_pancake_size = 0.0
-script = ExtResource("20_dtl52")
-camera_yaw_path = NodePath("../CameraRig/Yaw")
-yaw_offset_degrees = 65.0
 
 [node name="FillLight" type="DirectionalLight3D" parent="." unique_id=1505165951]
 transform = Transform3D(-0.70710677, -0.45451945, 0.5416752, 0, 0.76604444, 0.6427876, -0.70710677, 0.45451945, -0.5416752, 0, 8, 0)
 light_color = Color(0.4, 0.6, 1, 1)
 light_energy = 0.35
+light_specular = 0.25
 light_volumetric_fog_energy = 1.5
 
 [node name="NavigationRegion3D" type="NavigationRegion3D" parent="." unique_id=1365774680]

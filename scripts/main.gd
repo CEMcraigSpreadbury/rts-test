@@ -476,6 +476,7 @@ func _ready() -> void:
 				scenery.remove_child(child)
 				child.free()
 		BakedLightingMaterial.apply_to(scenery)
+		PlasticMaterial.apply_to(scenery)
 		TreeWind.apply_to_trees_in(scenery)
 	_apply_clouds_setting(&"clouds")
 	Settings.changed.connect(_apply_clouds_setting)

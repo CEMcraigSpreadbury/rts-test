@@ -192,6 +192,7 @@ void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, 
 
 #include "res://shaders/util/baked_sun_shadow.gdshaderinc"
 #include "res://shaders/util/cloud_shade.gdshaderinc"
+#include "res://shaders/util/plastic_light.gdshaderinc"
 
 void light() {
 	if (texture_drives_emission) {
@@ -206,4 +207,6 @@ void light() {
 	} else {
 		DIFFUSE_LIGHT += LIGHT_COLOR * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION / PI;
 	}
+	// The same moulded-plastic shine as everything else (plastic_light.gdshaderinc).
+	SPECULAR_LIGHT += plastic_specular(NORMAL, LIGHT, VIEW, LIGHT_COLOR, ATTENUATION, SPECULAR_AMOUNT);
 }

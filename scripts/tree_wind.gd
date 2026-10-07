@@ -37,16 +37,20 @@ static func _apply(node: Node) -> void:
 		if mesh_instance.mesh:
 			var height: float = maxf(mesh_instance.mesh.get_aabb().end.y, 0.01)
 			for i in mesh_instance.mesh.get_surface_count():
-				var windy: Material = _windy_for(mesh_instance.get_active_material(i), height)
+				var coloured: bool = (mesh_instance.mesh.surface_get_format(i) & Mesh.ARRAY_FORMAT_COLOR) != 0
+				var windy: Material = _windy_for(mesh_instance.get_active_material(i), height, coloured)
 				if windy:
 					mesh_instance.set_surface_override_material(i, windy)
 	for child in node.get_children():
 		_apply(child)
 
-static func _windy_for(source: Material, height: float) -> Material:
+## `coloured`: the surface carries vertex colours. The toy pines shade with
+## them, and the glTF importer doesn't reliably flag every material that should
+## use them, so a coloured surface always does.
+static func _windy_for(source: Material, height: float, coloured: bool = false) -> Material:
 	if source == null or source.has_meta(&"tree_wind"):
 		return null
-	var key: Array = [source, snappedf(height, 0.01)]
+	var key: Array = [source, snappedf(height, 0.01), coloured]
 	if _cache.has(key):
 		return _cache[key]
 	var material: ShaderMaterial
@@ -59,7 +63,7 @@ static func _windy_for(source: Material, height: float) -> Material:
 		material.shader = LIT_SHADER
 		material.set_shader_parameter("albedo_texture", standard.albedo_texture)
 		material.set_shader_parameter("albedo_color", standard.albedo_color)
-		material.set_shader_parameter("use_vertex_color", standard.vertex_color_use_as_albedo)
+		material.set_shader_parameter("use_vertex_color", standard.vertex_color_use_as_albedo or coloured)
 		material.set_shader_parameter("roughness", standard.roughness)
 		material.set_shader_parameter("metallic", standard.metallic)
 	else:

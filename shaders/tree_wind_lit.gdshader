@@ -6,11 +6,17 @@ render_mode cull_disabled;
 
 #include "res://shaders/util/tree_wind.gdshaderinc"
 
-uniform sampler2D albedo_texture : source_color, filter_linear_mipmap, repeat_enable;
+// White when unset: the toy trees are plain colour, no texture.
+uniform sampler2D albedo_texture : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform vec4 albedo_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform bool use_vertex_color = false;
 uniform float roughness : hint_range(0.0, 1.0) = 1.0;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
+// A moulded-plastic toy's satin shine: a thin clear coat over the colour, so
+// the sun leaves a soft highlight on top without the tree turning glossy.
+uniform float specular : hint_range(0.0, 1.0) = 0.5;
+uniform float clearcoat : hint_range(0.0, 1.0) = 0.25;
+uniform float clearcoat_roughness : hint_range(0.0, 1.0) = 0.35;
 
 void vertex() {
 	VERTEX += tree_wind(VERTEX, MODEL_MATRIX, NODE_POSITION_WORLD, TIME);
@@ -22,6 +28,9 @@ void fragment() {
 		albedo *= COLOR.rgb;
 	}
 	ALBEDO = albedo;
-	ROUGHNESS = 0.8;
+	ROUGHNESS = roughness;
+	SPECULAR = specular;
+	CLEARCOAT = clearcoat;
+	CLEARCOAT_ROUGHNESS = clearcoat_roughness;
 	METALLIC = metallic;
 }

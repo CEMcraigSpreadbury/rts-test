@@ -24,6 +24,7 @@ void fragment() {
 	EMISSION = emission * foot * cloud_shade(world);
 	AO = ao;
 	METALLIC = metallic_value;
-	ROUGHNESS = 0.8;
+	ROUGHNESS = PLASTIC_ROUGHNESS;
+	SPECULAR = PLASTIC_SPECULAR;
 	ALPHA = texel.a * construction_alpha;
 }
