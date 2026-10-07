@@ -84,7 +84,15 @@ cloud_shadow_strength={
 "type": "float",
 "value": 0.0
 }
+cloud_sun_dir={
+"type": "vec3",
+"value": Vector3(0, 1, 0)
+}
 unit_night_lift={
+"type": "float",
+"value": 0.0
+}
+rain_wetness={
 "type": "float",
 "value": 0.0
 }

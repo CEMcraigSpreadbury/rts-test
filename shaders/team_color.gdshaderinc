@@ -191,22 +191,30 @@ void write_team_colored_surface(vec4 texel, out vec3 albedo, out vec3 emission, 
 }
 
 #include "res://shaders/util/baked_sun_shadow.gdshaderinc"
-#include "res://shaders/util/cloud_shade.gdshaderinc"
 #include "res://shaders/util/plastic_light.gdshaderinc"
+#include "res://shaders/util/cloud_shade.gdshaderinc"
+#include "res://shaders/util/wetness.gdshaderinc"
+
+// World position for the cloud shade in light(); each shader's vertex() sets it.
+varying vec3 cloud_world;
 
 void light() {
+	// A passing cloud takes the sun as a shadow would (cloud_shade.gdshaderinc).
+	float sun = min(ATTENUATION, cloud_light(cloud_world, LIGHT, INV_VIEW_MATRIX, LIGHT_IS_DIRECTIONAL));
 	if (texture_drives_emission) {
 		// The albedo is the lit share scaled by AMBIENT_REF (see above), so the
 		// shadow is scaled back up to take the same amount off as before.
 #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
-		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, ATTENUATION, LIGHT_IS_DIRECTIONAL, sun_shadow_strength);
+		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, sun, LIGHT_IS_DIRECTIONAL, sun_shadow_strength);
 #else
-		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, ATTENUATION, LIGHT_IS_DIRECTIONAL, sun_shadow_strength)
+		DIFFUSE_LIGHT -= baked_sun_shadow(NORMAL, LIGHT, sun, LIGHT_IS_DIRECTIONAL, sun_shadow_strength)
 				* AMBIENT_REF / LIT_SHARE;
 #endif
 	} else {
-		DIFFUSE_LIGHT += LIGHT_COLOR * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION / PI;
+		DIFFUSE_LIGHT += LIGHT_COLOR * max(dot(NORMAL, LIGHT), 0.0) * sun / PI;
 	}
 	// The same moulded-plastic shine as everything else (plastic_light.gdshaderinc).
-	SPECULAR_LIGHT += plastic_specular(NORMAL, LIGHT, VIEW, LIGHT_COLOR, ATTENUATION, SPECULAR_AMOUNT);
+	SPECULAR_LIGHT += plastic_specular(NORMAL, LIGHT, VIEW, LIGHT_COLOR, sun, SPECULAR_AMOUNT);
+	// Rain's glint on top (wetness.gdshaderinc).
+	SPECULAR_LIGHT += wet_specular(NORMAL, LIGHT, VIEW, LIGHT_COLOR, sun, wet_facing(NORMAL, INV_VIEW_MATRIX));
 }

@@ -418,8 +418,8 @@ func _exit_tree() -> void:
 	if figure_batcher_current == figure_batcher:
 		figure_batcher_current = null
 
-## Hiding the cloud decal also zeroes the cloud_shadow_strength global, so
-## the emission-baked models stop darkening too (see CloudShadows).
+## Hiding the clouds zeroes the cloud_shadow_strength global, so nothing
+## shades itself under them any more (see CloudShadows).
 func _apply_clouds_setting(key: StringName) -> void:
 	if key != &"clouds":
 		return

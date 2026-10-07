@@ -46,3 +46,35 @@ float cloud_sun_block(vec3 world_pos, float jitter) {
 vec3 cloud_ground(vec3 world_pos) {
 	return mix(vec3(1.0), CLOUD_GROUND_MUL, 1.0 - cloud_shade(world_pos));
 }
+
+// What stands on the ground loses the sun under a cloud too, the same shape
+// with a plain soft edge. More of it than the ground, which keeps a cool fill
+// in its shade (ground_light.gdshaderinc) that models don't get.
+const float CLOUD_MODEL_BLOCK = 0.9;
+float cloud_model_block(vec3 world_pos) {
+	return cloud_ground_amount(world_pos, 0.5) * CLOUD_MODEL_BLOCK;
+}
+
+// Toward the sun, in world space (CloudShadows writes it from the sun).
+global uniform vec3 cloud_sun_dir;
+
+// For a light() of its own: what's left of this light's ATTENUATION-style
+// strength under a cloud. Only the sun is clouded; the fill light (also
+// directional, shadowless) passes untouched.
+float cloud_light(vec3 world_pos, vec3 view_light, mat4 inv_view, bool directional) {
+	if (!directional || dot((inv_view * vec4(view_light, 0.0)).xyz, cloud_sun_dir) < 0.99) {
+		return 1.0;
+	}
+	return 1.0 - cloud_model_block(world_pos);
+}
+
+// For shaders that leave lighting to Godot (trees, figures): albedo darkened
+// by the sun's share of a sunlit face, on faces turned to the sun.
+const float CLOUD_SUN_SHARE = 0.6;
+float cloud_albedo_shade(vec3 world_pos, vec3 world_normal) {
+	if (cloud_shadow_strength <= 0.0) {
+		return 1.0;
+	}
+	float facing = smoothstep(0.0, 0.35, dot(world_normal, cloud_sun_dir));
+	return 1.0 - cloud_model_block(world_pos) * CLOUD_SUN_SHARE * facing;
+}

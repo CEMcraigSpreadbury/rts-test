@@ -5,6 +5,8 @@ shader_type spatial;
 render_mode cull_disabled;
 
 #include "res://shaders/util/tree_wind.gdshaderinc"
+#include "res://shaders/util/wetness.gdshaderinc"
+#include "res://shaders/util/cloud_shade.gdshaderinc"
 
 // White when unset: the toy trees are plain colour, no texture.
 uniform sampler2D albedo_texture : source_color, hint_default_white, filter_linear_mipmap, repeat_enable;
@@ -27,10 +29,17 @@ void fragment() {
 	if (use_vertex_color) {
 		albedo *= COLOR.rgb;
 	}
-	ALBEDO = albedo;
-	ROUGHNESS = roughness;
-	SPECULAR = specular;
-	CLEARCOAT = clearcoat;
-	CLEARCOAT_ROUGHNESS = clearcoat_roughness;
+	// Darker and glossier in the rain (wetness.gdshaderinc).
+	vec3 world_normal = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float wet = wet_amount(world_normal, world);
+	// Shaded under a passing cloud (cloud_shade.gdshaderinc).
+	float cloud = cloud_albedo_shade(world, world_normal);
+	ALBEDO = albedo * wet_darken(wet) * cloud;
+	EMISSION = wet_sheen(NORMAL, VIEW, wet);
+	ROUGHNESS = wet_roughness(roughness, wet);
+	SPECULAR = specular * cloud;
+	CLEARCOAT = wet_clearcoat(clearcoat, wet);
+	CLEARCOAT_ROUGHNESS = wet_clearcoat_roughness(clearcoat_roughness, wet);
 	METALLIC = metallic;
 }

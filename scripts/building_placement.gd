@@ -78,6 +78,18 @@ const WALL_CORNER_ANGLE_THRESHOLD: float = 0.28
 ## Hard cap on segments per single drag — keeps one drag's RPC payload and
 ## cost bounded even if a player drags all the way across the map.
 const WALL_MAX_SEGMENTS: int = 80
+## An owned wall piece the drag was started from (see _wall_find_snap): the
+## run carries on out of its open end instead of from wherever the click
+## landed. The pieces that touch it leave it out of their overlap and
+## flatness checks, which would otherwise read it as an obstacle.
+var _wall_anchor: ProductionBuilding = null
+## The way the anchor's wall runs out of the snapped end, so a run that turns
+## there gets a corner post; zero for a corner post, which needs none.
+var _wall_anchor_dir: Vector3 = Vector3.ZERO
+## How close to an open wall end a click has to land to start from it.
+const WALL_SNAP_RADIUS: float = 1.5
+## Two wall ends this close together are joined, so neither is open.
+const WALL_JOIN_TOLERANCE: float = 0.4
 
 ## --- Gate tool (placing_type.is_gate_tool) ---
 ## The owned wall segment/corner currently under the mouse that the gate
@@ -276,7 +288,8 @@ func _update_placement_ghost() -> void:
 ## its edge (straight-down raycasts, not just the single cursor ray) so a
 ## building can't have a flat center while an edge overhangs a nearby
 ## slope/cliff or straddles a level change undetected.
-func _footprint_is_flat(center: Vector3, radius: float) -> bool:
+## `exclude`: bodies the rays pass through (a wall piece a new one joins).
+func _footprint_is_flat(center: Vector3, radius: float, exclude: Array[RID] = []) -> bool:
 	var space_state := get_world_3d().direct_space_state
 	for i in FOOTPRINT_SAMPLE_COUNT + 1:
 		var offset := Vector3.ZERO
@@ -287,6 +300,7 @@ func _footprint_is_flat(center: Vector3, radius: float) -> bool:
 		var query := PhysicsRayQueryParameters3D.create(
 			sample_xz + Vector3(0.0, 5.0, 0.0), sample_xz - Vector3(0.0, 5.0, 0.0)
 		)
+		query.exclude = exclude
 		var result := space_state.intersect_ray(query)
 		if result.is_empty():
 			return false
@@ -367,13 +381,14 @@ func _has_nearby_host(pos: Vector3, building_type: BuildingType, peer_id: int) -
 			return true
 	return false
 
-func _is_placement_valid(pos: Vector3, radius: float) -> bool:
+func _is_placement_valid(pos: Vector3, radius: float, exclude: Array[RID] = []) -> bool:
 	var space_state := get_world_3d().direct_space_state
 	var shape := SphereShape3D.new()
 	shape.radius = radius
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = shape
 	query.transform = Transform3D(Basis(), pos)
+	query.exclude = exclude
 	query.collide_with_bodies = true
 	query.collide_with_areas = false
 	for result in space_state.intersect_shape(query, 8):
@@ -678,8 +693,69 @@ func _begin_wall_drag() -> void:
 	if result.is_empty():
 		return
 	_wall_dragging = true
-	_wall_drag_points = [result.position]
+	var start: Vector3 = result.position
+	var snap := _wall_find_snap(start, placing_type, main.my_peer_id())
+	_wall_anchor = snap.get("anchor")
+	_wall_anchor_dir = snap.get("direction", Vector3.ZERO)
+	if _wall_anchor:
+		start = snap["point"]
+	_wall_drag_points = [start]
 	_rebuild_wall_ghost()
+
+## The open wall end nearest `pos` within WALL_SNAP_RADIUS, among `peer_id`'s
+## own wall pieces (built or still going up): {anchor, point, direction}, or
+## empty when there is none. A segment or gate has an end at either side; a
+## corner post's whole self is one, open to any number of runs.
+func _wall_find_snap(pos: Vector3, building_type: BuildingType, peer_id: int) -> Dictionary:
+	var ends: Array[Dictionary] = []
+	for node in get_tree().get_nodes_in_group("buildings"):
+		var piece := node as ProductionBuilding
+		if piece == null or piece.is_destroyed or piece.owner_peer_id != peer_id \
+				or piece.role != ProductionBuilding.Role.WALL:
+			continue
+		ends.append_array(_wall_piece_ends(piece, building_type))
+	var best: Dictionary = {}
+	var best_dist: float = WALL_SNAP_RADIUS
+	for end in ends:
+		var dist: float = _flat_distance(end["point"], pos)
+		if dist > best_dist:
+			continue
+		## A segment end another piece already joins is closed.
+		if end["direction"] != Vector3.ZERO and _wall_end_joined(end, ends):
+			continue
+		best_dist = dist
+		best = end
+	return best
+
+func _wall_piece_ends(piece: ProductionBuilding, building_type: BuildingType) -> Array[Dictionary]:
+	var centre := piece.global_position
+	if _matches_scene(piece, building_type.wall_corner_scene):
+		return [{"anchor": piece, "point": centre, "direction": Vector3.ZERO}]
+	var along := piece.global_basis.x
+	along.y = 0.0
+	along = along.normalized()
+	var half: float = building_type.wall_segment_length * 0.5
+	return [
+		{"anchor": piece, "point": centre + along * half, "direction": along},
+		{"anchor": piece, "point": centre - along * half, "direction": -along},
+	]
+
+func _wall_end_joined(end: Dictionary, ends: Array[Dictionary]) -> bool:
+	for other in ends:
+		if other["anchor"] != end["anchor"] and _flat_distance(other["point"], end["point"]) < WALL_JOIN_TOLERANCE:
+			return true
+	return false
+
+func _flat_distance(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+## The bodies a piece at `pos` leaves out of its checks: the anchor the run
+## starts from, for the pieces that touch it -- the first segment (half a
+## segment out) and a corner post on the joint itself.
+func _wall_anchor_exclude(anchor: ProductionBuilding, snap_point: Vector3, pos: Vector3, segment_length: float) -> Array[RID]:
+	if anchor == null or not is_instance_valid(anchor) or _flat_distance(pos, snap_point) > segment_length * 0.5 + 0.05:
+		return []
+	return [anchor.get_rid()]
 
 func _update_wall_drag() -> void:
 	if not _wall_dragging:
@@ -877,6 +953,7 @@ func _wall_compute_pieces() -> Array[Dictionary]:
 	## covered (a hairpin or a literal backtrack), which _is_placement_valid
 	## alone can't catch since stripped ghosts carry no collision shape.
 	var segment_positions: Array[Vector3] = []
+	var seg_len: float = placing_type.wall_segment_length
 	for i in pts.size() - 1:
 		var a: Vector3 = pts[i]
 		var b: Vector3 = pts[i + 1]
@@ -886,22 +963,25 @@ func _wall_compute_pieces() -> Array[Dictionary]:
 			continue
 		dir = dir.normalized()
 		var mid := (a + b) * 0.5
-		var valid: bool = _footprint_is_flat(mid, WALL_SEGMENT_FOOTPRINT_RADIUS) \
-				and _is_placement_valid(mid, WALL_SEGMENT_FOOTPRINT_RADIUS) \
+		var exclude := _wall_anchor_exclude(_wall_anchor, pts[0], mid, seg_len)
+		var valid: bool = _footprint_is_flat(mid, WALL_SEGMENT_FOOTPRINT_RADIUS, exclude) \
+				and _is_placement_valid(mid, WALL_SEGMENT_FOOTPRINT_RADIUS, exclude) \
 				and not _wall_overlaps_own_run(segment_positions, mid, WALL_SEGMENT_FOOTPRINT_RADIUS)
 		segment_positions.append(mid)
 		pieces.append({"kind": "segment", "position": mid, "direction": dir, "valid": valid})
 
-		if i > 0 and placing_type.wall_corner_scene:
-			var prev_dir: Vector3 = pts[i] - pts[i - 1]
+		if placing_type.wall_corner_scene:
+			## The first segment turns against the wall it was snapped onto.
+			var prev_dir: Vector3 = pts[i] - pts[i - 1] if i > 0 else _wall_anchor_dir if _wall_anchor else Vector3.ZERO
 			prev_dir.y = 0.0
 			if prev_dir.length() > 0.001:
 				prev_dir = prev_dir.normalized()
 				if prev_dir.angle_to(dir) > WALL_CORNER_ANGLE_THRESHOLD:
 					var bisector := prev_dir + dir
 					bisector = bisector.normalized() if bisector.length() > 0.001 else dir
-					var corner_valid: bool = _footprint_is_flat(pts[i], WALL_CORNER_FOOTPRINT_RADIUS) \
-							and _is_placement_valid(pts[i], WALL_CORNER_FOOTPRINT_RADIUS)
+					var corner_exclude := _wall_anchor_exclude(_wall_anchor, pts[0], pts[i], seg_len)
+					var corner_valid: bool = _footprint_is_flat(pts[i], WALL_CORNER_FOOTPRINT_RADIUS, corner_exclude) \
+							and _is_placement_valid(pts[i], WALL_CORNER_FOOTPRINT_RADIUS, corner_exclude)
 					pieces.append({"kind": "corner", "position": pts[i], "direction": bisector, "valid": corner_valid})
 	return pieces
 
@@ -1040,7 +1120,8 @@ func _confirm_wall_placement() -> void:
 		kinds.append(piece["kind"])
 	if _pending_builder_paths.is_empty():
 		_take_nearest_builders(positions[0])
-	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths)
+	var anchor_path: NodePath = _wall_anchor.get_path() if is_instance_valid(_wall_anchor) else NodePath()
+	_rpc_request_build_wall.rpc_id(1, type_index, positions, directions, kinds, _pending_builder_paths, anchor_path)
 	AudioUtils.play_random(main.command_audio_player, main.on_building_placed_sound_effects)
 	## Last piece rather than the first: that is where the drag ended, so it is
 	## where the player is actually looking when the line pops.
@@ -1059,6 +1140,8 @@ func _confirm_wall_placement() -> void:
 func _cancel_wall_drag() -> void:
 	_wall_dragging = false
 	_wall_drag_points.clear()
+	_wall_anchor = null
+	_wall_anchor_dir = Vector3.ZERO
 	for ghost in _wall_ghosts:
 		if is_instance_valid(ghost):
 			ghost.queue_free()
@@ -1067,7 +1150,7 @@ func _cancel_wall_drag() -> void:
 		_wall_drag_label.visible = false
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directions: Array[Vector3], kinds: Array[String], builder_paths: Array[NodePath]) -> void:
+func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directions: Array[Vector3], kinds: Array[String], builder_paths: Array[NodePath], anchor_path: NodePath) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
@@ -1093,6 +1176,21 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 	## Any single invalid piece rejects the whole run instead of silently
 	## building the rest, so what the player saw as "valid" is exactly what
 	## either does or doesn't appear.
+	## A run continued off an existing wall: only honoured for the sender's own
+	## open wall end at the very start of the run, re-found here rather than
+	## taken on trust, so it can't be used to build through anything else.
+	var anchor: ProductionBuilding = null
+	var snap_point := Vector3.ZERO
+	## The first piece is always the run's first segment (a corner on the
+	## joint comes after it; see _wall_compute_pieces).
+	var claimed := get_node_or_null(anchor_path) as ProductionBuilding if not anchor_path.is_empty() else null
+	if claimed and kinds[0] == "segment":
+		var run_start: Vector3 = positions[0] - directions[0].normalized() * building_type.wall_segment_length * 0.5
+		var snap := _wall_find_snap(run_start, building_type, sender_id)
+		if snap.get("anchor") == claimed and _flat_distance(snap["point"], run_start) < 0.1:
+			anchor = claimed
+			snap_point = snap["point"]
+
 	var totals: Dictionary = {}
 	var sanitized_dirs: Array[Vector3] = []
 	var segment_positions: Array[Vector3] = []
@@ -1103,7 +1201,8 @@ func _rpc_request_build_wall(type_index: int, positions: Array[Vector3], directi
 		if kind == "corner" and building_type.wall_corner_scene == null:
 			return
 		var radius: float = WALL_SEGMENT_FOOTPRINT_RADIUS if kind == "segment" else WALL_CORNER_FOOTPRINT_RADIUS
-		if not _footprint_is_flat(positions[i], radius) or not _is_placement_valid(positions[i], radius):
+		var exclude := _wall_anchor_exclude(anchor, snap_point, positions[i], building_type.wall_segment_length)
+		if not _footprint_is_flat(positions[i], radius, exclude) or not _is_placement_valid(positions[i], radius, exclude):
 			return
 		## A client's ghost only ever sends a normalized, horizontal direction
 		## (see _wall_compute_pieces) — never trust that blindly, since this

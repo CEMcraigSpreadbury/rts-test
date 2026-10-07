@@ -16,6 +16,8 @@ shader_type spatial;
 //   .z hit flash 0..1                .w shown 0..1, negative when dying
 
 #include "res://shaders/unit_figure.gdshaderinc"
+#include "res://shaders/util/wetness.gdshaderinc"
+#include "res://shaders/util/cloud_shade.gdshaderinc"
 
 uniform sampler2D palette : source_color, filter_linear, repeat_disable;
 // palette.py TEAM_V: where the team rows start, from the image's top.
@@ -29,7 +31,7 @@ uniform float team_saturation = 0.88;
 
 // Night: a little cool light back onto the figure, as unit_night_lift.gdshader
 // gives the sprites (DayNight writes the global once a frame).
-global uniform float unit_night_lift;
+// (unit_night_lift is declared in wetness.gdshaderinc.)
 uniform vec4 lift_color : source_color = vec4(0.55, 0.68, 1.0, 1.0);
 uniform float lift_strength = 0.35;
 uniform float flash_strength = 0.7;
@@ -55,8 +57,14 @@ void fragment() {
 	float ao = COLOR.r;
 	float shine = COLOR.g;
 	// The status tint multiplies as the sprites' modulate does.
-	vec3 albedo = colour * ao * figure_unpack_rgb(v_custom.y);
-	vec3 emission = albedo * lift_color.rgb * lift_strength * unit_night_lift;
+	// Darker and glossier in the rain (wetness.gdshaderinc).
+	vec3 world_normal = (INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
+	vec3 world = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float wet = wet_amount(world_normal, world);
+	// Shaded under a passing cloud (cloud_shade.gdshaderinc).
+	float cloud = cloud_albedo_shade(world, world_normal);
+	vec3 albedo = colour * ao * figure_unpack_rgb(v_custom.y) * wet_darken(wet) * cloud;
+	vec3 emission = albedo * lift_color.rgb * lift_strength * unit_night_lift + wet_sheen(NORMAL, VIEW, wet);
 	// The hit flash washes it toward white, short of a white blob: a solid
 	// figure has far more pixels than a sprite to flash.
 	float flash = clamp(v_custom.z, 0.0, 1.0) * flash_strength;
@@ -66,9 +74,9 @@ void fragment() {
 	EMISSION = compat_out(emission);
 	// Painted plastic in the satin finish every model shares, so the sun leaves
 	// a soft glint on helmets, heads and shoulders; steel tighter still.
-	ROUGHNESS = mix(0.5, 0.25, shine);
-	SPECULAR = mix(0.5, 0.8, shine);
+	ROUGHNESS = wet_roughness(mix(0.5, 0.25, shine), wet);
+	SPECULAR = mix(0.5, 0.8, shine) * cloud;
 	// The thin clear coat every model shares (plastic_light.gdshaderinc).
-	CLEARCOAT = 0.25;
-	CLEARCOAT_ROUGHNESS = 0.35;
+	CLEARCOAT = wet_clearcoat(0.25, wet);
+	CLEARCOAT_ROUGHNESS = wet_clearcoat_roughness(0.35, wet);
 }

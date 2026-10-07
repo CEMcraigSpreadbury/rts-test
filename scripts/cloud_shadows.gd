@@ -1,15 +1,15 @@
 class_name CloudShadows
 extends Decal
-## Slow-drifting cloud shadows. These used to be a noise plane high above the
-## map that cast real shadows through the sun, but the sun's shadow cascades
-## cut a plane that large off in hard lines that moved with the camera. This
-## decal darkens whatever sits under it instead: terrain, grass, trees,
-## buildings and unit sprites alike.
+## Slow-drifting cloud shadows: a noise texture laid over the map and drifted
+## with the wind. Nothing draws it; every lit surface reads it through the
+## cloud_shadow_* shader globals and takes the sun away where a cloud covers it
+## (see util/cloud_shade.gdshaderinc) -- the ground, buildings, trees and
+## figures alike, so a unit walking into a cloud's shade darkens with the
+## grass under it.
 ##
-## Emission-baked models (see baked_emission.gdshader, team_color.gdshaderinc)
-## ignore albedo, so they read the same texture through the cloud_shadow_*
-## shader globals and darken themselves by the same amount
-## (see util/cloud_shade.gdshaderinc).
+## A real shadow-casting plane can't give this: the sun's shadow map makes its
+## shade all-or-nothing, and a moving edge steps a shadow texel at a time.
+## The Decal is only a node to hang this on; it is given no texture.
 
 ## Width of the square of ground the clouds must always cover, centered on
 ## this node.
@@ -20,35 +20,26 @@ extends Decal
 ## World-space noise frequency: bigger = smaller clouds.
 @export var cloud_frequency: float = 0.04
 ## Noise value (0-1) where ground turns from clear to shadowed: higher means
-## less of the map under cloud. 0.76 leaves about 5% of it under cloud: the
-## odd passing shadow rather than blotches all over the field.
-@export_range(0.0, 1.0) var cloud_threshold: float = 0.76
+## less of the map under cloud. 0.7 leaves a few clouds in any view, never
+## blotches all over the field.
+@export_range(0.0, 1.0) var cloud_threshold: float = 0.7
 ## Half-width of the noise band over which a shadow's edge fades in.
 @export_range(0.0, 0.5) var edge_softness: float = 0.06
-## How much a fully shadowed surface is darkened. Baked into the texture's
-## alpha rather than albedo_mix, whose falloff is so steep below 1.0 that
-## 0.5 barely shows at all. Light, so a cloud reads as thin shade, never as
-## a dark pool. Kept in step with CLOUD_STRENGTH in util/cloud_shade.gdshaderinc.
+## The texture's alpha under a full cloud. Kept in step with CLOUD_STRENGTH
+## in util/cloud_shade.gdshaderinc, which divides it back out.
 @export_range(0.0, 1.0) var strength: float = 0.35
 ## World units/second the clouds drift along world X/Z.
 @export var scroll_speed: Vector2 = Vector2(0.55, -0.1)
 @export var texture_size: int = 2048
 
 const FADE_TIME: float = 3.0
-## The ground (terrain, Binbun grass, GroundScatter) is moved onto this render
-## layer, which the decal skips: the ground shades itself from the same texture
-## (cloud_ground in util/cloud_shade.gdshaderinc), under its fog of war -- the
-## decal paints after a surface's albedo, so it showed through the fog.
-const GROUND_LAYER: int = 1 << 19
-const GROUND_SHADERS: Array[Shader] = [
-	preload("res://shaders/terrain/binbun_terrain.gdshader"),
-	preload("res://shaders/terrain/binbun_foliage.gdshader"),
-]
 const BOX_HEIGHT: float = 400.0
 
 var _origin: Vector3
 var _drift: Vector2
 var _fading: bool = false
+var _ready_tex: bool = false
+var _sun: DirectionalLight3D
 
 
 func _ready() -> void:
@@ -57,10 +48,7 @@ func _ready() -> void:
 	upper_fade = 0.0
 	lower_fade = 0.0
 	normal_fade = 0.0
-	albedo_mix = 1.0
-	cull_mask &= ~GROUND_LAYER
-	## After TerraBrush and GroundScatter have built their meshes.
-	_move_ground_off_decal.call_deferred(get_parent())
+	_sun = get_parent().get_node_or_null(^"DirectionalLight3D") as DirectionalLight3D
 	_origin = position
 	_drift = _drift_start()
 
@@ -82,20 +70,9 @@ func _ready() -> void:
 	tex.noise = noise
 	tex.color_ramp = ramp
 	RenderingServer.global_shader_parameter_set(&"cloud_shadow_tex", tex)
-	## Generated on a thread; assigned once it's done so the decal atlas picks
-	## up the finished image rather than the empty placeholder.
+	## Generated on a thread; the shade waits for the finished image.
 	await tex.changed
-	texture_albedo = tex
-
-
-func _move_ground_off_decal(node: Node) -> void:
-	var shape := node as GeometryInstance3D
-	if shape != null:
-		var material := shape.material_override as ShaderMaterial
-		if (material != null and material.shader in GROUND_SHADERS) or shape.get_parent() is GroundScatter:
-			shape.layers = GROUND_LAYER
-	for child in node.get_children(true):
-		_move_ground_off_decal(child)
+	_ready_tex = true
 
 
 func _exit_tree() -> void:
@@ -108,7 +85,9 @@ func _process(delta: float) -> void:
 		_restart_drift()
 	position = _origin + Vector3(_drift.x, 0.0, _drift.y)
 
-	var shown: bool = is_visible_in_tree() and texture_albedo != null
+	if _sun:
+		RenderingServer.global_shader_parameter_set(&"cloud_sun_dir", _sun.global_basis.z)
+	var shown: bool = is_visible_in_tree() and _ready_tex
 	RenderingServer.global_shader_parameter_set(&"cloud_shadow_rect",
 			Vector4(position.x - size.x * 0.5, position.z - size.z * 0.5, size.x, size.z))
 	RenderingServer.global_shader_parameter_set(&"cloud_shadow_strength",

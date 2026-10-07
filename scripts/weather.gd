@@ -50,6 +50,13 @@ const DROP_SIZE: Vector2 = Vector2(0.025, 0.7)
 const DROP_COLOR: Color = Color(0.78, 0.84, 0.92, 0.35)
 const DROP_SHADER: Shader = preload("res://shaders/rain_drop.gdshader")
 
+## Seconds for the models to soak through once a shower is in full flow, and
+## to dry out again after it stops; the rain_wetness shader global follows
+## (see shaders/util/wetness.gdshaderinc).
+const SOAK_TIME: float = 20.0
+const DRY_TIME: float = 75.0
+const WETNESS_GLOBAL: StringName = &"rain_wetness"
+
 ## The rain's sound is the ambience's (see ambience_player.gd), which turns
 ## to its rainy loops while is_raining.
 
@@ -62,6 +69,7 @@ var sun_energy_scale: float = 1.0
 
 var _particles: GPUParticles3D
 var _intensity: float = 0.0
+var _wetness: float = 0.0
 var _fade_tween: Tween
 
 ## Called from Main._ready(), once the camera rig and lights exist.
@@ -72,6 +80,7 @@ func setup() -> void:
 		_time_to_change = randf_range(DRY_DURATION_MIN, DRY_DURATION_MAX)
 
 func _process(delta: float) -> void:
+	_update_wetness(delta)
 	if _particles.visible:
 		## Only the emission band is moved; the drops themselves are in world
 		## space (see local_coords), so the camera travels through the rain.
@@ -81,6 +90,17 @@ func _process(delta: float) -> void:
 	_time_to_change -= delta
 	if _time_to_change <= 0.0:
 		set_raining(not is_raining)
+
+func _update_wetness(delta: float) -> void:
+	var wetness: float = move_toward(_wetness, _intensity,
+			delta / (SOAK_TIME if _intensity > _wetness else DRY_TIME))
+	if wetness != _wetness:
+		_wetness = wetness
+		RenderingServer.global_shader_parameter_set(WETNESS_GLOBAL, _wetness)
+
+## Shader globals outlive the match, so the menu's models never come up wet.
+func _exit_tree() -> void:
+	RenderingServer.global_shader_parameter_set(WETNESS_GLOBAL, 0.0)
 
 ## Host only. Also restarts the countdown, so a shower started by "cmd rain"
 ## runs a normal length before clearing up by itself.
