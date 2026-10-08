@@ -2,6 +2,9 @@
 
 [ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
 [ext_resource type="Texture2D" path="res://assets/art/MinifolksForestAnimals/Outline/MiniDeer2.png" id="2_sheet"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DeerAnimal.glb" id="5_figure"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DeerAnimal_LOD1.glb" id="6_figure_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/animals.png" id="7_figure_palette"]
 
 
 [node name="Deer" unique_id=1900000001 instance=ExtResource("1_unit")]
@@ -30,3 +33,8 @@ armor_class = 0
 damage_type = 0
 hunt_meat = 12
 can_fight = false
+figure_model = ExtResource("5_figure")
+figure_model_lod1 = ExtResource("6_figure_lod1")
+figure_palette = ExtResource("7_figure_palette")
+figure_motion = 2
+figure_top = 0.95

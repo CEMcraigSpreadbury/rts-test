@@ -642,6 +642,7 @@ func _add_components() -> void:
 	figure_batcher.set_drawing(DisplayServer.get_name() != "headless")
 	add_child(figure_batcher)
 	figure_batcher_current = figure_batcher
+	figure_batcher.stomped.connect(_on_figure_stomped)
 	var dust := DustPool.new()
 	dust.name = "DustPool"
 	add_child(dust)
@@ -4058,3 +4059,23 @@ func set_rally_point_as(sender_id: int, building_path: NodePath, world_pos: Vect
 	building.rally_point = world_pos
 	building.rally_target_path = target_path
 	building.has_rally_point = true
+
+
+## A stomping monster's landing jolts the camera (RtsCamera.shake_at, which
+## skips anything out of frame and keeps the strongest jolt, so a herd never
+## stacks): STOMP_SHAKE within STOMP_SHAKE_NEAR of the camera, fading to
+## nothing at STOMP_SHAKE_FAR. FigureBatcher sends only the nearest a frame.
+const STOMP_SHAKE: float = 0.85
+const STOMP_SHAKE_NEAR: float = 35.0
+const STOMP_SHAKE_FAR: float = 80.0
+
+func _on_figure_stomped(world_pos: Vector3) -> void:
+	if camera_rig == null or not camera_rig.has_method("shake_at"):
+		return
+	var cam: Camera3D = get_viewport().get_camera_3d()
+	if cam == null:
+		return
+	var d: float = cam.global_position.distance_to(world_pos)
+	var amount: float = STOMP_SHAKE * (1.0 - clampf((d - STOMP_SHAKE_NEAR) / (STOMP_SHAKE_FAR - STOMP_SHAKE_NEAR), 0.0, 1.0))
+	if amount > 0.01:
+		camera_rig.shake_at(world_pos, amount)

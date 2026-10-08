@@ -1047,7 +1047,7 @@ func _update_health_bar_visual() -> void:
 	if not health_bar:
 		return
 	var fraction: float = clampf(health_fraction, 0.0, 1.0)
-	health_bar.visible = fraction < 0.999 and not is_destroyed
+	health_bar.visible = Unit.SHOW_HEALTH_BARS and fraction < 0.999 and not is_destroyed
 	if fraction == _shown_health_fraction:
 		return
 	_shown_health_fraction = fraction

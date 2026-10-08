@@ -5,6 +5,9 @@
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="5_gold"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/BeastmanRaider.glb" id="20_figure"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/BeastmanRaider_LOD1.glb" id="21_figure_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/beastmen.png" id="22_figure_palette"]
 
 [sub_resource type="Resource" id="ResourceCost_wolf_wood"]
 script = ExtResource("3_cost_script")
@@ -39,3 +42,7 @@ damage_type = 2
 armor_class = 4
 unit_category = 3
 can_charge = true
+figure_model = ExtResource("20_figure")
+figure_model_lod1 = ExtResource("21_figure_lod1")
+figure_palette = ExtResource("22_figure_palette")
+figure_top = 0.78

@@ -2,6 +2,8 @@ extends Node3D
 class_name Unit
 
 const SpriteSheetFrames = preload("res://scripts/sprite_sheet_frames.gd")
+## Floating world-space health bars over units and buildings. Off for now.
+const SHOW_HEALTH_BARS := false
 const WOOD_RESOURCE: ResourceType = preload("res://resources/wood_resource_type.tres")
 const GOLD_RESOURCE: ResourceType = preload("res://resources/gold_resource_type.tres")
 ## [row, frame count] of each clip on the Minifolks work sheets (Blacksmith,
@@ -471,8 +473,10 @@ func _play_sprite_pop() -> void:
 ## Its palette (assets/art/Models/Units/palettes); none paints it Aldmere's.
 @export var figure_palette: Texture2D
 ## How the figure moves for what it carries (FigureBatcher's Motion): melee
-## swings, or a bow drawn and loosed on the shot's beat.
-@export_enum("Melee", "Bow", "Mounted") var figure_motion: int = 0
+## swings, or a bow drawn and loosed on the shot's beat. Stomp (monsters):
+## heavy steps with a pause on the ground, the camera jolting as it lands.
+## Roll (siege engines): rumbles on its wheels, kicks back as it fires.
+@export_enum("Melee", "Bow", "Mounted", "Stomp", "Roll") var figure_motion: int = 0
 ## Where the figure's head is, for its health bar and stun stars, when the
 ## top of its mesh is something else (a lance's tip). 0: the mesh's top.
 @export var figure_top: float = 0.0
@@ -3141,6 +3145,7 @@ static var _figure_rings: Dictionary = {}
 ## this far over its head.
 const FIGURE_RING_INNER: float = 0.405
 const FIGURE_RING_OUTER: float = 0.43
+const FIGURE_RING_MAX: float = 3.0
 const FIGURE_HEAD_ROOM: float = 0.35
 const FIGURE_STAR_ROOM: float = 0.15
 
@@ -3204,6 +3209,7 @@ func _attach_drawing() -> void:
 			Main.sprite_batcher_current.add_sprite(sprite, team_tint)
 			sprite.visible = not Main.sprite_batcher_current.is_drawing()
 	_drawn_as_figure = as_figure
+	_attach_crew_drawing()
 	_fit_overlays_to_drawing()
 
 ## The villager is the base unit scene every other unit type inherits from,
@@ -3235,10 +3241,10 @@ func _fit_overlays_to_drawing() -> void:
 		_stun_stars.position.y = _stun_star_height()
 
 ## A ring round the figure's footprint: about 0.85 m across a man on foot,
-## wider round a horse.
+## wider round a horse, wider still round a beast or monster.
 static func _figure_ring_for(mesh: Mesh) -> TorusMesh:
 	var size: Vector3 = mesh.get_aabb().size if mesh != null else Vector3.ONE * 0.6
-	var radius: float = snappedf(clampf(0.45 * maxf(size.x, size.z) + 0.13, FIGURE_RING_INNER, 0.7), 0.01)
+	var radius: float = snappedf(clampf(0.45 * maxf(size.x, size.z) + 0.13, FIGURE_RING_INNER, FIGURE_RING_MAX), 0.01)
 	if not _figure_rings.has(radius):
 		var ring := TorusMesh.new()
 		ring.inner_radius = radius
@@ -3264,8 +3270,18 @@ func _build_crew_sprite() -> void:
 	})
 	sprite.add_child(crew_sprite)
 	crew_sprite.play("idle")
+	_attach_crew_drawing()
+
+## A figure carries its own crew (a siege engine's crewman is on its model),
+## so the crew sprite is only drawn beside a unit drawn as its sprite.
+func _attach_crew_drawing() -> void:
+	if crew_sprite == null:
+		return
 	if Main.sprite_batcher_current != null:
-		Main.sprite_batcher_current.add_sprite(crew_sprite, team_tint)
+		Main.sprite_batcher_current.remove_sprite(crew_sprite)
+		if not _drawn_as_figure:
+			Main.sprite_batcher_current.add_sprite(crew_sprite, team_tint)
+	crew_sprite.visible = not _drawn_as_figure and (Main.sprite_batcher_current == null 			or not Main.sprite_batcher_current.is_drawing())
 
 ## Keeps the crew behind the machine from this peer's own camera (so, like the
 ## flip itself, worked out locally every frame), mirroring its facing, hit
@@ -3328,7 +3344,7 @@ func _update_health_bar_visual() -> void:
 	if not health_bar:
 		return
 	var fraction: float = clampf(float(status_current_health) / float(maxi(max_health, 1)), 0.0, 1.0)
-	health_bar.visible = fraction < 0.999 and status_activity != Activity.DEAD
+	health_bar.visible = SHOW_HEALTH_BARS and fraction < 0.999 and status_activity != Activity.DEAD
 	if fraction == _shown_health_fraction:
 		return
 	_shown_health_fraction = fraction

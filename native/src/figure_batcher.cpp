@@ -56,9 +56,13 @@ constexpr float kCorpseHold = 2.5f;
 constexpr float kCorpseFade = 2.0f;
 constexpr float kCorpseSink = 0.45f;
 // Picking: how near a figure's upright axis a click must pass to find it,
-// at least, and at most (a horse is longer than it is wide).
+// at least, and at most (a horse is longer than it is wide). A figure bigger
+// than a horse (a beast, a monster) may reach kPickRadiusBig of its larger
+// footprint side instead, up to kPickRadiusHuge.
 constexpr float kPickRadius = 0.3f;
 constexpr float kPickRadiusMax = 0.5f;
+constexpr float kPickRadiusBig = 0.3f;
+constexpr float kPickRadiusHuge = 2.5f;
 // Galloping: strides a second at full speed, how far it rocks nose to tail,
 // how high it bobs. Striking: how far it rears, then lunges.
 constexpr float kGallopsPerSecond = 2.4f;
@@ -66,10 +70,37 @@ constexpr float kGallopRock = 0.11f;
 constexpr float kGallopBob = 0.05f;
 constexpr float kMountRear = 0.22f;
 constexpr float kMountLunge = 0.16f;
+// Stomping (monsters): stomps a second at full speed (slower when slower),
+// the share of each spent in the air (the rest is the pause on the ground),
+// how high it lifts, how far it tips nose up then down over the air, how it
+// stretches in the air and squashes as it lands.
+constexpr float kStompsPerSecond = 1.1f;
+constexpr float kStompAir = 0.55f;
+constexpr float kStompHeight = 0.22f;
+constexpr float kStompRear = 0.07f;
+constexpr float kStompStretch = 0.03f;
+constexpr float kStompSquash = 0.09f;
+// Rolling (siege engines): rumbles a second at full speed, the bob, nose
+// rock and side sway on the wheels; the shot's kick back (metres, and nose
+// up) and how long it takes to settle as a share of what is left of the
+// clip; how far it tips over when it dies and how far it is lifted as it
+// goes (it is wide).
+constexpr float kRollRumblesPerSecond = 2.6f;
+constexpr float kRollBob = 0.018f;
+constexpr float kRollRock = 0.014f;
+constexpr float kRollSway = 0.012f;
+constexpr float kRollRecoil = 0.30f;
+constexpr float kRollRecoilPitch = 0.07f;
+constexpr float kRollToppleAngle = 1.2f;
+constexpr float kRollToppleLift = 0.55f;
 // Frustum test radii round a figure's middle: drawn, and casting a shadow
 // into view.
+// At least; a figure whose bounds reach further from its middle gets that
+// (plus its height twice over for a long evening shadow).
 constexpr float kViewRadius = 1.0f;
 constexpr float kShadowRadius = 5.0f;
+// Figures taller than this keep their near mesh proportionally further out.
+constexpr float kLodHeight = 2.0f;
 // Unit.SHOT_RELEASE_LEAD_FRAMES: the shot leaves this many frames before an
 // attack clip ends.
 constexpr float kReleaseLeadFrames = 2.0f;
@@ -120,6 +151,9 @@ void FigureBatcher::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_drawing"), &FigureBatcher::is_drawing);
 	ClassDB::bind_method(D_METHOD("pick", "from", "dir"), &FigureBatcher::pick);
 	ClassDB::bind_method(D_METHOD("get_drawn_counts"), &FigureBatcher::get_drawn_counts);
+	// A stomping figure in view landed (the nearest to the camera, at most
+	// one a frame).
+	ADD_SIGNAL(MethodInfo("stomped", PropertyInfo(Variant::VECTOR3, "position")));
 }
 
 FigureBatcher::FigureBatcher() {
@@ -157,7 +191,18 @@ int FigureBatcher::type_for(const Ref<Mesh> &mesh, const Ref<Mesh> &lod1, const 
 	t.palette = palette;
 	t.height = mesh->get_aabb().get_end().y;
 	const Vector3 extent = mesh->get_aabb().get_size();
-	t.pick_radius = Math::clamp(0.35f * std::max(extent.x, extent.z), kPickRadius, kPickRadiusMax);
+	const float footprint = std::max(extent.x, extent.z);
+	const float pick_max = Math::clamp(kPickRadiusBig * footprint, kPickRadiusMax, kPickRadiusHuge);
+	t.pick_radius = Math::clamp(0.35f * footprint, kPickRadius, pick_max);
+	// Middle is drawn at half the height over the unit's origin (see
+	// _process); the furthest corner of the bounds from there.
+	const AABB box = mesh->get_aabb();
+	const Vector3 middle(0.0f, t.height * 0.5f, 0.0f);
+	float reach = 0.0f;
+	for (int i = 0; i < 8; ++i) reach = std::max(reach, (box.get_endpoint(i) - middle).length());
+	t.view_radius = std::max(kViewRadius, reach);
+	t.shadow_radius = std::max(kShadowRadius, reach + 2.0f * t.height);
+	t.lod_scale = std::max(1.0f, t.height / kLodHeight);
 	Ref<Material> material;
 	if (factory_.is_valid()) material = factory_.call(mesh, palette);
 	make_batch(t.near_batch, t.mesh, material, GeometryInstance3D::SHADOW_CASTING_SETTING_OFF);
@@ -333,6 +378,8 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 	// a figure drawing a bow keeps its feet instead.
 	const bool drawing_bow = e.motion == MOTION_BOW && e.clip == CLIP_ATTACK;
 	if (drawing_bow) offset.z *= 0.2f;
+	// A siege engine keeps its wheels on the ground (it kicks back by itself).
+	if (e.motion == MOTION_ROLL && e.clip == CLIP_ATTACK) offset.z = 0.0f;
 	const Vector3 sprite_scale = sprite->get_scale();
 	Vector3 squash(sprite_scale.x / e.rest_scale.x, sprite_scale.y / e.rest_scale.y, sprite_scale.z / e.rest_scale.z);
 
@@ -349,8 +396,52 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 	if (walking && e.hop_phase == 0.0f) {
 		e.hop_phase = -e.phase * kMaxStagger * kPi;
 	}
-	const bool mounted = e.motion == MOTION_MOUNTED;
-	if (walking || e.hop_phase > 0.0f || e.hop_phase < 0.0f) {
+	const bool stomper = e.motion == MOTION_STOMP;
+	const bool roller = e.motion == MOTION_ROLL;
+	const bool mounted = e.motion == MOTION_MOUNTED || stomper;
+	e.landed = false;
+	e.hold = 0.0f;
+	if (stomper && (walking || e.stomp > 0.0f)) {
+		const float pace = kStompsPerSecond * Math::clamp(e.speed / e.walk_speed, 0.45f, 1.15f);
+		// From standing it lifts straight away.
+		if (e.stomp <= 0.0f) e.stomp = 1e-4f;
+		const float before = e.stomp;
+		e.stomp += step * pace;
+		if (!e.dying && std::floor(before - kStompAir) != std::floor(e.stomp - kStompAir)) e.landed = true;
+		const float u = e.stomp - std::floor(e.stomp);
+		// Stopped: finish the stomp in the air and the squash after it.
+		if (!walking && u >= kStompAir + (1.0f - kStompAir) * 0.5f) {
+			e.stomp = 0.0f;
+		} else {
+			if (u < kStompAir) {
+				const float a = u / kStompAir;
+				const float s = std::sin(kPi * a);
+				hop += kStompHeight * s;
+				pitch += -kStompRear * std::sin(2.0f * kPi * a);
+				stretch *= 1.0f + kStompStretch * s;
+			} else {
+				const float g = (u - kStompAir) / (1.0f - kStompAir);
+				stretch *= 1.0f - kStompSquash * (1.0f - smooth(0.0f, 0.45f, g)) - 0.03f * smooth(0.7f, 1.0f, g);
+				pitch += 0.04f * (1.0f - smooth(0.0f, 0.5f, g));
+			}
+			// The unit moves on steadily; the figure covers a stride in the
+			// air and holds still on the ground. Where it should be, less
+			// where the unit is, centred over the cycle, in seconds of its
+			// velocity (see _process).
+			const float travelled = u < kStompAir ? smooth(0.0f, 1.0f, u / kStompAir) : 1.0f;
+			e.hold = (travelled - u - 0.5f * (1.0f - kStompAir)) / pace * e.walk_amount;
+		}
+	}
+	if (roller) {
+		// On its wheels: a quick small rumble while it moves, no hop.
+		const float amp = Math::clamp(e.speed / e.walk_speed, 0.3f, 1.1f) * e.walk_amount;
+		const float a = (e.clock * kRollRumblesPerSecond + e.phase) * 2.0f * kPi;
+		hop += kRollBob * amp * (0.5f + 0.5f * std::sin(a * 2.0f));
+		pitch += kRollRock * amp * std::sin(a + 0.7f);
+		roll += kRollSway * amp * std::sin(a * 0.5f);
+		e.hop_phase = 0.0f;
+	}
+	if (!stomper && !roller && (walking || e.hop_phase > 0.0f || e.hop_phase < 0.0f)) {
 		const float before = e.hop_phase;
 		// A gallop's stride quickens with the horse's pace.
 		const float pace = mounted ? kGallopsPerSecond * Math::clamp(e.speed / e.walk_speed, 0.45f, 1.15f)
@@ -377,11 +468,11 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 		const float land = std::pow(1.0f - lift, 6.0f);
 		stretch *= 1.0f + (kHopStretch * lift - kLandSquash * land) * amp;
 	}
-	pitch += (mounted ? 0.03f : kWalkLean) * e.walk_amount;
+	if (!roller) pitch += (mounted ? 0.03f : kWalkLean) * e.walk_amount;
 
 	// Standing: sway, breathe, and now and then a tiny hop.
 	const float still = 1.0f - e.walk_amount;
-	if (!e.dying && (e.clip == CLIP_IDLE || e.clip == CLIP_OTHER)) {
+	if (!e.dying && !roller && (e.clip == CLIP_IDLE || e.clip == CLIP_OTHER)) {
 		roll += kIdleSway * std::sin(e.clock * 1.6f + e.phase * 6.283f) * still;
 		stretch *= 1.0f + kIdleBreath * std::sin(e.clock * 2.2f + e.phase * 4.0f) * still;
 		if (e.clock >= e.next_idle_hop && still >= 1.0f) {
@@ -399,6 +490,17 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 
 	switch (e.clip) {
 		case CLIP_ATTACK: {
+			if (roller) {
+				// Still until the shot leaves, then a sharp kick back, nose
+				// up, easing home over the rest of the clip.
+				const float after = Math::clamp((t - release) / std::max(1.0f - release, 0.05f), 0.0f, 1.0f);
+				const float kick = t < release ? 0.0f
+						: smooth(0.0f, 0.12f, after) * (1.0f - smooth(0.12f, 1.0f, after));
+				offset.z -= kRollRecoil * kick;
+				pitch -= kRollRecoilPitch * kick;
+				hop += 0.02f * kick;
+				break;
+			}
 			if (mounted) {
 				// Rear up, then lunge forward through the blow.
 				const float rear = smooth(0.0f, 0.25f, t) * (1.0f - smooth(0.25f, 0.45f, t));
@@ -447,7 +549,7 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 	}
 
 	// Shoved (lunge, recoil): lean the way it is pushed.
-	if (!e.dying && !drawing_bow) {
+	if (!e.dying && !drawing_bow && !roller) {
 		pitch += Math::clamp(offset.z * kShoveLean, -0.3f, 0.4f);
 		roll += Math::clamp(-offset.x * kShoveLean, -0.3f, 0.3f);
 	}
@@ -462,14 +564,14 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 		if (!e.topple_locked && (flat.length() > 0.03f || e.death_age > 0.15f)) {
 			Vector3 away = flat.length() > 0.03f ? flat.normalized() : Vector3(0, 0, -1);
 			// A horse goes over on its side, whichever side the blow came from.
-			if (mounted) away = Vector3(away.x >= 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f);
+			if (mounted || roller) away = Vector3(away.x >= 0.0f ? 1.0f : -1.0f, 0.0f, 0.0f);
 			e.topple_axis = Vector3(0, 1, 0).cross(away).normalized();
 			e.topple_locked = true;
 		}
 		const float k = std::min(e.death_age / kToppleTime, 1.0f);
-		const float fall = (1.0f - (1.0f - k) * (1.0f - k)) * kToppleAngle;
+		const float fall = (1.0f - (1.0f - k) * (1.0f - k)) * (roller ? kRollToppleAngle : kToppleAngle);
 		basis = Basis(e.topple_axis, fall) * basis;
-		lift = std::sin(fall) * kToppleLift * (mounted ? 1.8f : 1.0f);
+		lift = std::sin(fall) * (roller ? kRollToppleLift : kToppleLift * (mounted ? 1.8f : 1.0f));
 	}
 	const float xz = 1.0f / std::sqrt(std::max(stretch, 0.2f));
 	basis = basis * Basis::from_scale(Vector3(squash.x * xz, squash.y * stretch, squash.z * xz));
@@ -571,6 +673,8 @@ void FigureBatcher::_process(double delta) {
 		return true;
 	};
 
+	float stomp_distance = 1e31f;
+	Vector3 stomp_at;
 	for (size_t i = 0; i < entries_.size();) {
 		Entry &e = entries_[i];
 		Node3D *unit = Object::cast_to<Node3D>(ObjectDB::get_instance(e.unit));
@@ -587,10 +691,13 @@ void FigureBatcher::_process(double delta) {
 			const Vector3 moved = unit_xf.origin - e.last_position;
 			const float speed = Vector3(moved.x, 0.0f, moved.z).length() / dt;
 			e.speed += (speed - e.speed) * std::min(1.0f, dt * 10.0f);
+			const Vector3 velocity(moved.x / dt, 0.0f, moved.z / dt);
+			e.velocity += (velocity - e.velocity) * std::min(1.0f, dt * 8.0f);
 		}
 		e.last_position = unit_xf.origin;
 		e.has_last_position = true;
-		const Transform3D world = unit_xf * pose(e, sprite, dt);
+		Transform3D world = unit_xf * pose(e, sprite, dt);
+		world.origin += e.velocity * e.hold;
 		e.last_world = world;
 		// Hidden by fog of war (or by the unit itself): not drawn, not picked.
 		e.was_drawn = unit->is_visible_in_tree();
@@ -602,11 +709,17 @@ void FigureBatcher::_process(double delta) {
 		const float custom[4] = { e.team_packed, pack_rgb(sprite->get_modulate()),
 			Math::clamp(std::max(sprite->get_modulate().r, std::max(sprite->get_modulate().g, sprite->get_modulate().b)) - 1.0f, 0.0f, 1.0f),
 			e.dying ? -1.0f : 1.0f };
-		if (cast_shadows_ && in_view(middle, kShadowRadius)) write(type.shadow_batch, world, custom);
-		if (!in_view(middle, kViewRadius)) continue;
-		const bool far = camera != nullptr && eye.distance_to(world.origin) > lod_distance_;
+		if (cast_shadows_ && in_view(middle, type.shadow_radius)) write(type.shadow_batch, world, custom);
+		if (!in_view(middle, type.view_radius)) continue;
+		const float eye_distance = camera != nullptr ? eye.distance_to(world.origin) : 0.0f;
+		if (e.landed && camera != nullptr && eye_distance < stomp_distance) {
+			stomp_distance = eye_distance;
+			stomp_at = world.origin;
+		}
+		const bool far = camera != nullptr && eye_distance > lod_distance_ * type.lod_scale;
 		write(far ? type.far_batch : type.near_batch, world, custom);
 	}
+	if (stomp_distance < 1e30f) emit_signal("stomped", stomp_at);
 
 	for (size_t i = 0; i < corpses_.size();) {
 		Corpse &c = corpses_[i];
@@ -624,9 +737,9 @@ void FigureBatcher::_process(double delta) {
 		Type &type = types_[size_t(c.type)];
 		const float custom[4] = { c.team_packed, pack_rgb(Color(1, 1, 1)), 0.0f, -std::max(1.0f - k, 0.001f) };
 		const Vector3 middle = world.origin + Vector3(0.0f, 0.3f, 0.0f);
-		if (cast_shadows_ && k < 0.5f && in_view(middle, kShadowRadius)) write(type.shadow_batch, world, custom);
-		if (!in_view(middle, kViewRadius)) continue;
-		const bool far = camera != nullptr && eye.distance_to(world.origin) > lod_distance_;
+		if (cast_shadows_ && k < 0.5f && in_view(middle, type.shadow_radius)) write(type.shadow_batch, world, custom);
+		if (!in_view(middle, type.view_radius)) continue;
+		const bool far = camera != nullptr && eye.distance_to(world.origin) > lod_distance_ * type.lod_scale;
 		write(far ? type.far_batch : type.near_batch, world, custom);
 	}
 

@@ -370,3 +370,151 @@ def mount_spines(lod, g):
 		geo.merge(bm, geo.tube([p, p + d * length * 0.5, p + d * length], [0.026, 0.016, 0.0], seg(lod, 5, 4),
 				row("mane"), sharp=40, cap_start=row("mane"), flatten=0.5, up=(1.0, 0.0, 0.0)))
 	return bm
+
+
+# --- sorceress and spellstealer ---------------------------------------------
+
+def thorn_tiara(b, lod):
+	"""The Sorceress's crown: a silver circlet with a violet gem at the brow
+	and five tall black-violet spires, silver-edged, fanned up and out over
+	the front of the head, the middle one tallest."""
+	bm = geo.new_bm()
+	z = b.brow_z - 0.010
+	sy = 0.95
+	segs = seg(lod, 16, 10)
+	geo.merge(bm, geo.lathe([(0.172, z - 0.012), (0.178, z + 0.002), (0.176, z + 0.022), (0.168, z + 0.030)], segs,
+			row("trim"), sharp=40, sy=sy))
+	for k, h in ((-2, 0.120), (-1, 0.170), (0, 0.235), (1, 0.170), (2, 0.120)):
+		theta = -math.pi / 2.0 + k * 0.50
+		out = Vector((math.cos(theta), math.sin(theta) * sy, 0.0))
+		w = 0.036 if k == 0 else 0.030
+		spire = geo.plate([(-w, 0.0), (w, 0.0), (w * 0.45, h * 0.55), (0.0, h), (-w * 0.45, h * 0.55)], 0.018,
+				row("plate_dark"), side=row("steel"), sharp=FLAT)
+		up = Vector((0.0, 0.0, 1.0)) + out * (0.30 + 0.10 * abs(k))
+		geo.transform(spire, geo.orient(Vector((0.0, 0.0, z + 0.010)) + out * 0.172, out, up))
+		geo.merge(bm, spire)
+		if k == 0 or lod == 0:
+			r = 0.024 if k == 0 else 0.012
+			gem = geo.disc(r, r * 1.25, seg(lod, 8, 5), row("arcane"), dome=r * 0.45, depth=0.004)
+			geo.merge(bm, gem, geo.frame(Vector((0.0, 0.0, z + 0.018 + (0.012 if k == 0 else 0.0)))
+					+ out * 0.184, out, (0.0, 0.0, 1.0)))
+	geo.translate(bm, (b.head_centre.x, b.head_centre.y + 0.004, 0.0))
+	return bm
+
+
+def venom_staff(b, lod, below=0.32):
+	"""A tall black staff banded in silver, its head three silver claws
+	curling up round a big venom-green orb."""
+	axis = Vector(b.pole_axis).normalized()
+	fist = b.r_fist
+	foot = fist - axis * below
+	top = fist + axis * 0.74
+	bm = geo.tube([foot, top], [0.022, 0.026], seg(lod, 6, 5), row("plate_dark"), sharp=40,
+			cap_start=row("steel"))
+	for t in (0.05, 0.55):
+		p = fist + axis * t
+		geo.merge(bm, geo.lathe([(0.032, -0.020), (0.036, 0.0), (0.032, 0.020)], seg(lod, 6, 5), row("trim"),
+				sharp=40, phase=0.0), geo.frame(p, axis))
+	geo.merge(bm, geo.lathe([(0.026, -0.030), (0.046, -0.004), (0.040, 0.016), (0.026, 0.024)], seg(lod, 8, 5),
+			row("steel"), sharp=40, phase=0.0), geo.frame(top, axis))
+	side = axis.cross(Vector((1.0, 0.0, 0.0))).normalized()
+	other = axis.cross(side).normalized()
+	for k in range(3):
+		a = math.radians(90.0 + 120.0 * k)
+		out = side * math.cos(a) + other * math.sin(a)
+		pts = [top + out * 0.030, top + out * 0.095 + axis * 0.060, top + out * 0.085 + axis * 0.160,
+				top + out * 0.030 + axis * 0.235]
+		geo.merge(bm, geo.tube(pts, [0.022, 0.020, 0.014, 0.0], seg(lod, 6, 4), row("steel"), sharp=40,
+				cap_start=row("steel")))
+	orb = geo.ellipsoid(0.072, 0.072, 0.072, seg(lod, 10, 6), seg(lod, 6, 4), row("crystal"), sharp=SMOOTH)
+	geo.translate(orb, top + axis * 0.120)
+	geo.merge(bm, orb)
+	return bm
+
+
+def crescent_circlet(b, lod):
+	"""The Spellstealer's crown: a silver circlet with a big violet gem at
+	the brow and two great silver crescent horns sweeping up from the
+	temples and curling in over the head, like a horned moon."""
+	bm = geo.new_bm()
+	z = b.brow_z - 0.010
+	sy = 0.95
+	geo.merge(bm, geo.lathe([(0.172, z - 0.012), (0.178, z + 0.002), (0.176, z + 0.022), (0.168, z + 0.030)],
+			seg(lod, 16, 10), row("steel"), sharp=40, sy=sy))
+	for side in (-1.0, 1.0):
+		pts = [Vector((side * 0.160, -0.060, z + 0.010)), Vector((side * 0.215, -0.050, z + 0.090)),
+				Vector((side * 0.225, -0.030, z + 0.190)), Vector((side * 0.180, -0.010, z + 0.275)),
+				Vector((side * 0.105, 0.0, z + 0.320))]
+		geo.merge(bm, geo.tube(pts, [0.026, 0.034, 0.030, 0.018, 0.0], seg(lod, 7, 5), row("steel"), sharp=40,
+				cap_start=row("steel"), flatten=0.6, up=(0.0, 1.0, 0.0)))
+	gem = geo.lathe([(0.034, 0.0), (0.030, 0.012), (0.0, 0.026)], seg(lod, 8, 5), row("arcane"), sharp=40,
+			cap_start=row("trim"))
+	geo.merge(bm, gem, geo.frame(Vector((0.0, -0.176 * sy, z + 0.014)), (0.0, -1.0, 0.10), (0.0, 0.0, 1.0)))
+	geo.translate(bm, (b.head_centre.x, b.head_centre.y + 0.004, 0.0))
+	return bm
+
+
+def high_collar(b, lod):
+	"""A tall flared black-violet collar standing up behind the head, open
+	at the front, lined in violet and edged in silver."""
+	n = b.neck_z
+	prof = [(0.110, n - 0.040), (0.128, n + 0.010), (0.168, n + 0.090), (0.215, n + 0.165)]
+
+	def warp(theta, r, zz):
+		back = max(0.0, math.sin(theta))
+		if zz > n + 0.05:
+			zz += 0.050 * back * (zz - n) / 0.165
+		return (r * math.cos(theta), r * math.sin(theta) * 0.90 + 0.020, zz)
+
+	shell = geo.lathe(prof, seg(lod, 16, 10), row("plate_dark"), sharp=40, warp=warp)
+	geo.delete_faces(shell, lambda f: f.calc_center_median().y < -0.030)
+	bm = geo.new_bm()
+	geo.merge(bm, shell)
+	geo.merge(bm, geo.flipped(shell, row("arcane"), inset=0.006))
+	return bm
+
+
+def siphon_orb(b, lod):
+	"""A big violet orb of stolen magic held up on the left palm, cupped in
+	three silver claws and circled by two tilted silver rings."""
+	bm = geo.new_bm()
+	centre = b.l_fist + Vector((0.010, -0.040, 0.120))
+	geo.merge(bm, geo.ellipsoid(0.092, 0.092, 0.092, seg(lod, 10, 6), seg(lod, 6, 4), row("arcane"), sharp=SMOOTH),
+			Matrix.Translation(centre))
+	for k in range(3):
+		a = math.radians(-90.0 + 120.0 * k)
+		out = Vector((math.cos(a), math.sin(a), 0.0))
+		root = b.l_fist + Vector((0.0, 0.0, 0.020))
+		pts = [root + out * 0.020, root + out * 0.085 + Vector((0.0, 0.0, 0.040)),
+				centre + out * 0.090 + Vector((0.0, 0.0, 0.020)), centre + out * 0.050 + Vector((0.0, 0.0, 0.075))]
+		geo.merge(bm, geo.tube(pts, [0.016, 0.016, 0.011, 0.0], seg(lod, 5, 4), row("steel"), sharp=40,
+				cap_start=row("steel")))
+	for tilt in ((0.55, 0.0, 1.0), (-0.55, 0.30, 1.0)):
+		ring = geo.lathe([(0.122, -0.010), (0.129, 0.0), (0.122, 0.010), (0.115, 0.0)], seg(lod, 16, 10),
+				row("steel"), sharp=40)
+		geo.merge(bm, ring, geo.frame(centre, tilt))
+	return bm
+
+
+def hook_wand(b, lod):
+	"""A short black rod up in the right fist, crowned with a big silver
+	crescent hook (edge down, parts.edge_down) and a violet gem."""
+	bm = geo.lathe([(0.0, -0.090), (0.020, -0.085), (0.020, 0.260), (0.0, 0.265)], seg(lod, 6, 4),
+			row("plate_dark"), sharp=40, phase=0.0)
+	geo.merge(bm, geo.tube([(0.0, 0.0, -0.085), (0.0, 0.0, -0.110), (0.0, 0.0, -0.140)], [0.028, 0.022, 0.0],
+			seg(lod, 6, 4), row("steel"), sharp=40, cap_start=row("steel")))
+	top = 0.250
+	cx, cz = 0.010, top + 0.110
+	outer, inner = [], []
+	steps = seg(lod, 11, 7)
+	for i in range(steps):
+		a = math.radians(-100.0 + 250.0 * i / (steps - 1))
+		outer.append((cx + math.cos(a) * 0.130, cz + math.sin(a) * 0.130))
+		inner.append((cx - 0.035 + math.cos(a) * 0.088, cz + 0.020 + math.sin(a) * 0.088))
+	edge = outer + list(reversed(inner[1:-1]))
+	geo.merge(bm, geo.plate(edge, 0.024, row("blade"), side=row("steel"), sharp=FLAT))
+	gem = geo.ellipsoid(0.032, 0.020, 0.032, seg(lod, 7, 5), 3, row("arcane"), sharp=40)
+	geo.translate(gem, (0.0, 0.0, top + 0.010))
+	geo.merge(bm, gem)
+	geo.transform(bm, geo.frame(b.r_fist, b.sword_axis, parts.edge_down(b.sword_axis)))
+	return bm

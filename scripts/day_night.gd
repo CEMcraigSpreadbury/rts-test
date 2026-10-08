@@ -9,9 +9,9 @@ extends Node
 ## same moment (see SceneLoader.start_match) and starts at midday, so there's
 ## no state to catch a late joiner up on.
 ##
-## Nothing here animates per frame: a single tween drives one 0..1 value, the
-## sun's height and warmth follow the clock in half-second steps, and everything
-## the time of day touches is re-derived from those (see refresh_lighting).
+## Only the sun's aim moves every frame: a single tween drives one 0..1 value,
+## the light's warmth follows the clock in half-second steps, and everything
+## else the time of day touches is re-derived from those (see refresh_lighting).
 ## Rain dims the sun on top of that, so both go through refresh_lighting rather than
 ## writing to the light themselves.
 
@@ -25,8 +25,12 @@ const FADE_DURATION: float = 25.0
 
 ## The sun climbs through the morning, holds, then sinks and warms toward
 ## sunset, so the day can be seen passing; it used to sit still all day and
-## change only in the fade. Only its height moves: its bearing is fixed in the
-## world (from the upper left at the starting view), as a lamp over a diorama.
+## change only in the fade. Its bearing swings too, rising in the west and
+## setting in the east by way of the south, so it always shines from the
+## viewer's side of the starting view and the models keep their highlights.
+## Light yaw in degrees: -90 shines from the west, 0 the south, 90 the east.
+const DAWN_SUN_YAW: float = -90.0
+const DUSK_SUN_YAW: float = 90.0
 ## Degrees above the horizon; noon is the map's own authored height (46: a
 ## soft golden sun from the side, so shadows reach out across the ground like a
 ## diorama's, but high enough that the grass blades don't rake into a carpet).
@@ -49,7 +53,7 @@ const EVENING_SKY_WARMTH: float = 0.6
 ## changed sky re-renders its radiance.
 const TIME_OF_DAY_STEP: float = 0.5
 
-## Moonlight: the sun keeps its direction and picks up a cool cast instead.
+## Moonlight: the sun picks up a cool cast instead.
 const MOON_COLOR: Color = Color(0.5, 0.63, 1.0)
 ## Of the day's sun energy (1.5), keeping the moonlit ground about where it was.
 const NIGHT_SUN_ENERGY_SCALE: float = 0.29
@@ -146,6 +150,8 @@ func setup() -> void:
 func _process(delta: float) -> void:
 	_phase_elapsed += delta
 	_time_of_day_timer -= delta
+	## The sun turns every frame: in half-second steps its shadows visibly tick.
+	_aim_sun()
 	if _time_of_day_timer <= 0.0:
 		_time_of_day_timer = TIME_OF_DAY_STEP
 		refresh_lighting()
@@ -213,6 +219,14 @@ func _sun_height() -> float:
 		return _noon_sun_height
 	return lerpf(_noon_sun_height, EVENING_SUN_HEIGHT, smoothstep(AFTERNOON_END, 1.0, p))
 
+## The light's yaw. At night the moon swings back the way the sun came, so
+## dawn begins in the west again.
+func _sun_yaw() -> float:
+	var p: float = phase_progress()
+	if is_night:
+		return lerpf(DUSK_SUN_YAW, DAWN_SUN_YAW, p)
+	return lerpf(DAWN_SUN_YAW, DUSK_SUN_YAW, p)
+
 ## 0 = the authored daylight, 1 = full sunset colour. Fades out with the light
 ## as night falls, so nothing jumps when the fade starts.
 func _warmth() -> float:
@@ -234,7 +248,7 @@ func refresh_lighting() -> void:
 	if _sun:
 		_sun.light_color = _day_sun_color.lerp(EVENING_SUN_COLOR, warmth).lerp(MOON_COLOR, t)
 		var height: float = _sun_height()
-		_sun.rotation_degrees.x = -height
+		_aim_sun()
 		var low_sun: float = sin(deg_to_rad(_noon_sun_height)) / sin(deg_to_rad(height))
 		var rain_scale: float = main.weather.sun_energy_scale if main and main.weather else 1.0
 		_sun.light_energy = _day_sun_energy * lerpf(1.0, low_sun, SUN_HEIGHT_COMPENSATION) \
@@ -259,6 +273,10 @@ func refresh_lighting() -> void:
 		_set_sky(&"ground_horizon_color", _day_ground_horizon.lerp(NIGHT_GROUND_HORIZON, t))
 	## One write for every unit on the map, however many there are.
 	RenderingServer.global_shader_parameter_set(UNIT_NIGHT_LIFT, t)
+
+func _aim_sun() -> void:
+	if _sun:
+		_sun.rotation_degrees = Vector3(-_sun_height(), _sun_yaw(), 0.0)
 
 ## Only real changes reach the sky: the lighting is refreshed all day long, and
 ## a changed sky re-renders its radiance.

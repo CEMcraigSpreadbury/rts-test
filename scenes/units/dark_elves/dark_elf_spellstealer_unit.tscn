@@ -6,6 +6,10 @@
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_magic_ball.tscn" id="6_projectile"]
 
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfSpellstealer.glb" id="f1_figure"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkElfSpellstealer_LOD1.glb" id="f2_figure_lod1"]
+[ext_resource type="Texture2D" uid="uid://cm6k61pmsxyb1" path="res://assets/art/Models/Units/palettes/dark_elves.png" id="f3_figure_palette"]
+
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost")
 resource_type = ExtResource("4_gold")
@@ -38,5 +42,10 @@ armor_class = 3
 damage_type = 4
 unit_category = 0
 strips_buffs = true
+figure_model = ExtResource("f1_figure")
+figure_model_lod1 = ExtResource("f2_figure_lod1")
+figure_palette = ExtResource("f3_figure_palette")
+figure_motion = 1
+figure_top = 1.0
 projectile_speed = 13.00
 projectile_scene = ExtResource("6_projectile")

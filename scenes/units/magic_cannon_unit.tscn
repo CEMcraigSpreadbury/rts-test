@@ -7,6 +7,9 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="5_wood"]
 [ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="6_gold"]
 [ext_resource type="Texture2D" uid="uid://bbj5n41bsjn40" path="res://assets/art/MinifolksHumans/Outline/MiniSwordMan.png" id="7_crew"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/MagicCannon.glb" id="fig_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/MagicCannon_LOD1.glb" id="fig_model_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/siege.png" id="fig_palette"]
 
 
 [sub_resource type="Resource" id="ResourceCost_cannon_wood"]
@@ -57,3 +60,8 @@ projectile_scene = ExtResource("3_projectile")
 projectile_speed = 12.0
 damage_type = 4
 armor_class = 5
+figure_model = ExtResource("fig_model")
+figure_model_lod1 = ExtResource("fig_model_lod1")
+figure_palette = ExtResource("fig_palette")
+figure_motion = 4
+figure_top = 2.6

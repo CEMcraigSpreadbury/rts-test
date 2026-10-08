@@ -11,6 +11,9 @@
 [ext_resource type="Texture2D" uid="uid://byop0v10sww6m" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_explosion"]
 [ext_resource type="Texture2D" uid="uid://bqxlsfqck1qhh" path="res://assets/art/MiniBigMonsters/Fire3-Sheet.png" id="fx_fire3"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/plague_breath.png" id="icon_abilities_plague_breath"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/SkeletonDragon.glb" id="fig_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/SkeletonDragon_LOD1.glb" id="fig_model_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/monsters.png" id="fig_palette"]
 
 [sub_resource type="Resource" id="ResourceCost_skeleton_dragon_gold"]
 script = ExtResource("3_cost_script")
@@ -112,6 +115,11 @@ aggro_range = 9.0
 armor_class = 6
 vision_range = 13.0
 abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_skeleton_dragon")])
+figure_model = ExtResource("fig_model")
+figure_model_lod1 = ExtResource("fig_model_lod1")
+figure_palette = ExtResource("fig_palette")
+figure_motion = 3
+figure_top = 3.3
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.25, 0, 0, 0, 1.25, 0, 0, 0, 1.25, 0, 0.805, 0)

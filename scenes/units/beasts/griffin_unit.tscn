@@ -6,6 +6,9 @@
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Griffin.glb" id="fig_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Griffin_LOD1.glb" id="fig_model_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/aldmere.png" id="fig_palette"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost_script")
@@ -51,6 +54,11 @@ armor_class = 6
 unit_category = 3
 can_charge = true
 vision_range = 15
+figure_model = ExtResource("fig_model")
+figure_model_lod1 = ExtResource("fig_model_lod1")
+figure_palette = ExtResource("fig_palette")
+figure_motion = 2
+figure_top = 1.6
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.3, 0, 0, 0, 1.3, 0, 0, 0, 1.3, 0, 0.816, 0)

@@ -6,6 +6,9 @@
 [ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/WindTiger.glb" id="fig_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/WindTiger_LOD1.glb" id="fig_model_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/dark_elves.png" id="fig_palette"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/MiniWindBlades-Sheet.png" id="fx_0"]
@@ -99,6 +102,11 @@ unit_category = 3
 can_charge = true
 vision_range = 13
 abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_main")])
+figure_model = ExtResource("fig_model")
+figure_model_lod1 = ExtResource("fig_model_lod1")
+figure_palette = ExtResource("fig_palette")
+figure_motion = 2
+figure_top = 1.55
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.35, 0, 0, 0, 1.35, 0, 0, 0, 1.35, 0, 0.848, 0)

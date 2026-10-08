@@ -196,7 +196,8 @@ func _update_shake(delta: float) -> void:
 	if _shake_trauma <= 0.0:
 		return
 	_shake_trauma = maxf(_shake_trauma - delta / SHAKE_DURATION, 0.0)
-	var strength: float = _shake_trauma * _shake_trauma * SHAKE_MAX_OFFSET
+	## Grows with zoom past max_zoom so a jolt still reads when pulled out.
+	var strength: float = _shake_trauma * _shake_trauma * SHAKE_MAX_OFFSET * maxf(1.0, zoom_distance / max_zoom)
 	camera.position.x = randf_range(-strength, strength)
 	camera.position.y = randf_range(-strength, strength)
 

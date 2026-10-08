@@ -16,6 +16,9 @@ knight's caparison).
 """
 from mathutils import Matrix, Vector
 
+import animals
+import beasts
+import beastmen
 import clothes
 import dark_elf
 import gear
@@ -24,8 +27,11 @@ import gnoll
 import headgear
 import horse
 import hyena
+import monsters
 import parts
 import poses
+import siege
+import star_wanderers
 
 
 def _head(b, lod, on_head, hair="hair"):
@@ -404,6 +410,263 @@ def dark_elf_guard(lod, base=False):
 	return _assemble(b, pieces, lod, base)
 
 
+def dark_elf_sorceress(lod, base=False):
+	"""Dark Elf Sorceress: a crown of five tall silver-edged black spires
+	over long white hair, a black-violet robe with the team's colour at the
+	hem and down its front, a pointed gorget, a tall black staff whose
+	silver claws hold a big venom-green orb."""
+	b = poses.staff(parts.Body())
+	pieces = _dark_elf_head(b, lod, [headgear.hair_cap(b, 1), dark_elf.thorn_tiara(b, lod)])
+	pieces += [clothes.robe(b, lod, cloth="cloth"), clothes.robe_trim(b, lod, "team_cloth"),
+			clothes.wide_sleeves(b, lod, "cloth"), dark_elf.gorget(b, lod), dark_elf.venom_staff(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def dark_elf_spellstealer(lod, base=False):
+	"""Dark Elf Spellstealer: a silver circlet with great crescent horns, a
+	tall flared black collar lined in violet, the team's tabard, a big
+	violet orb of stolen magic cupped in silver claws and ringed in silver
+	on the raised left palm, a silver crescent-hook wand in the right."""
+	b = parts.Body()
+	staff_pose = poses.staff(parts.Body())
+	for joint in ("l_elbow", "l_wrist", "l_fist"):
+		setattr(b, joint, getattr(staff_pose, joint).copy())
+	torso = parts.tunic(b, lod)
+	pieces = _dark_elf_head(b, lod, [headgear.hair_cap(b, 1), dark_elf.crescent_circlet(b, lod)])
+	pieces += [parts.boots(b, lod), parts.legs(b, lod), torso, parts.skirt(b, lod)] + _team_body(b, lod)
+	pieces += [parts.belt(b, lod), dark_elf.high_collar(b, lod), parts.arms(b, lod), dark_elf.siphon_orb(b, lod),
+			dark_elf.hook_wand(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+# --- beastmen ---------------------------------------------------------------
+
+def _beast_head(b, lod, on_head=()):
+	"""The bear head: muzzle, eyes and round ears, tipped back together."""
+	head = beastmen.head(b, lod)
+	pieces = [head, beastmen.face(b, lod, head), beastmen.muzzle(b, lod), beastmen.ears(b, lod)] + list(on_head)
+	for piece in pieces:
+		geo.transform(piece, b.head_matrix())
+	return pieces
+
+
+def beastman_warrior(lod, base=False):
+	"""Beastman Warrior: a brown bear with a tan muzzle, a dark
+	leather bandolier, steel bracers and one big spiked steel pauldron, the
+	team's loincloth, and a huge bearded crescent axe raised."""
+	b = poses.sword_only(parts.Body())
+	torso = beastmen.torso(b, lod)
+	arms = gnoll.recolour(gnoll.arms(b, lod), "leather", "steel")
+	pieces = _beast_head(b, lod)
+	pieces += [gnoll.legs(b, lod), torso, beastmen.bandolier(b, lod, torso),
+			gnoll.loincloth(b, lod), gnoll.recolour(gnoll.belt(b, lod), "bone", "steel"), beastmen.stub_tail(b, lod),
+			arms, beastmen.shoulder(b, lod), beastmen.pauldron(b, lod), beastmen.bear_axe(b, lod),
+			beastmen.sash(b, lod, grow=1.04)]
+	return _assemble(b, pieces, lod, base)
+
+
+def _tilt(b, pieces):
+	for piece in pieces:
+		geo.transform(piece, b.head_matrix())
+	return pieces
+
+
+def beastman_raider(lod, base=False):
+	"""Beastman Raider: a squat, wide, hunched boar in slate-grey bristle,
+	a black crest from brow to hump, curling tusks and a brass snout ring,
+	the team's scarf streaming from the nape and its loincloth, and a huge
+	broad scimitar thrust forward."""
+	b = beastmen.BoarBody()
+	torso = beastmen.boar_torso(b, lod)
+	head = beastmen.boar_head(b, lod)
+	pieces = _tilt(b, [head, beastmen.face(b, lod, head, eye_x=0.090, eye_dz=0.040, blush_x=0.140),
+			beastmen.boar_snout(b, lod), beastmen.boar_ears(b, lod), beastmen.boar_head_crest(b, lod)])
+	pieces += [beastmen.boar_legs(b, lod), torso, beastmen.boar_back_crest(b, lod, torso), gnoll.loincloth(b, lod),
+			gnoll.belt(b, lod), beastmen.arms(b, lod, k=1.18)]
+	for piece in pieces:
+		beastmen.species(piece, beastmen.BOAR)
+	pieces += [beastmen.neckerchief(b, lod), beastmen.scimitar(b, lod, size=1.12)]
+	return _assemble(b, pieces, lod, base)
+
+
+def beastman_druid(lod, base=False):
+	"""Beastman Druid: a tall, slender, long-legged stag in golden fawn,
+	big level ears and great pale antlers, a knee-length moss robe with a
+	leaf mantle, the team's sash across it and at the leaf-cut hem, and a
+	vine-wound crook staff curling over a glowing jade orb."""
+	b = beastmen.StagBody()
+	robe = beastmen.stag_robe(b, lod)
+	head = beastmen.stag_head(b, lod)
+	pieces = _tilt(b, [head, beastmen.face(b, lod, head, eye_x=0.068, eye_dz=0.022, blush_x=0.104),
+			beastmen.stag_muzzle(b, lod), beastmen.stag_ears(b, lod), beastmen.fawn_spots(b, lod, head),
+			beastmen.antlers(b, lod)])
+	sleeves = gnoll.recolour(clothes.wide_sleeves(b, lod, "robe"), "skin", "fur_dark")
+	pieces += [beastmen.stag_legs(b, lod), beastmen.stag_neck(b, lod), sleeves]
+	for piece in pieces:
+		beastmen.species(piece, beastmen.STAG)
+	pieces += [robe, gnoll.belt(b, lod), beastmen.strap(b, lod, robe, width=0.064), beastmen.leaf_collar(b, lod),
+			beastmen.druid_staff(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def beastman_panda_warrior(lod, base=False):
+	"""Beastman Panda Warrior: a huge round heavyweight panda, a white
+	ball with black legs, arms, shoulder yoke, ears and eye patches, under a broad
+	steel war hat; the team's wide obi and loincloth, a gong shield in the
+	team's colour on the left arm and a long guandao stood upright, its
+	tassel in the team's colour."""
+	b = beastmen.PandaBody()
+	torso = beastmen.panda_torso(b, lod)
+	head = beastmen.panda_head(b, lod)
+	pieces = _tilt(b, [head, beastmen.panda_face(b, lod, head), beastmen.panda_muzzle(b, lod),
+			beastmen.panda_ears(b, lod), beastmen.jingasa(b, lod)])
+	arms = gnoll.recolour(beastmen.arms(b, lod, k=1.26, bracer="fur"), "fur", "fur_dark")
+	pieces += [beastmen.panda_legs(b, lod), torso, beastmen.panda_tail(b, lod), arms]
+	for piece in pieces:
+		beastmen.species(piece, beastmen.PANDA)
+	w = b.waist_z
+	pieces += [gnoll.loincloth(b, lod), beastmen.sash(b, lod, z0=w - 0.030, z1=w + 0.066, knot_side=-1.0),
+			beastmen.guandao(b, lod), beastmen.gong_shield(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def beastman_wolf_pathfinder(lod, base=False):
+	"""Beastman Wolf Pathfinder: a lean, rangy grey wolf on long
+	digitigrade legs, leaning forward, a long snout, tall ears and a cream
+	ruff, a long bushy tail; a leather jerkin, the team's mantle with its
+	hood thrown back and its loincloth, a crossbow levelled and a bolt
+	quiver at the hip."""
+	b = beastmen.WolfBody()
+	torso = beastmen.wolf_torso(b, lod)
+	head = beastmen.wolf_head(b, lod)
+	pieces = _tilt(b, [head, beastmen.face(b, lod, head, eye_x=0.062, eye_dz=0.020, blush_x=0.098),
+			beastmen.wolf_muzzle(b, lod), beastmen.wolf_brow(b, lod), beastmen.wolf_ears(b, lod),
+			beastmen.cheek_ruff(b, lod)])
+	pieces += [beastmen.wolf_legs(b, lod), beastmen.wolf_neck(b, lod), torso, beastmen.wolf_tail(b, lod),
+			beastmen.arms(b, lod, k=0.86, bracer="leather")]
+	for piece in pieces:
+		beastmen.species(piece, beastmen.WOLF)
+	pieces += [gnoll.loincloth(b, lod), gnoll.belt(b, lod), beastmen.ranger_mantle(b, lod), gear.crossbow(b, lod),
+			beastmen.bolt_quiver(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+# --- star wanderers ---------------------------------------------------------
+
+def _star_head(b, lod, on_head=(), fin_height=1.0, fin_spread=1.0):
+	"""The bald sky-blue head, the shared eyes with a brow star and star
+	freckles, the two tall fins, and what it wears, tipped back together."""
+	head = star_wanderers.head(b, lod)
+	pieces = [head, star_wanderers.star_face(b, lod, head), star_wanderers.fins(b, lod, fin_height, fin_spread)] + list(on_head)
+	return _tilt(b, pieces)
+
+
+def star_warrior(lod, base=False):
+	"""Star Warrior: athletic and top-heavy, a pearl porcelain cuirass with
+	a cyan star over a midnight suit, gold-rimmed porcelain pauldrons, the
+	team's chunky scarf streaming back and its loincloth, a huge crescent
+	blade in each fist held low: a gold sun crescent and a violet moon."""
+	b = star_wanderers.WarriorBody()
+	pieces = _star_head(b, lod)
+	# The loincloth stands off the suit's flare at the hem, which otherwise
+	# pokes through the middle of the flap as a dark spot.
+	pieces += [star_wanderers.warrior_legs(b, lod), star_wanderers.warrior_torso(b, lod),
+			gnoll.loincloth(b, lod, out=0.016),
+			star_wanderers.warrior_belt(b, lod), star_wanderers.cowl_scarf(b, lod),
+			gear.grow(parts.pauldrons(b, lod, "steel", "brass"), (0.0, 0.0, b.shoulder_z), 1.12),
+			star_wanderers.arms(b, lod),
+			star_wanderers.crescent_blade(b, lod, b.r_fist, -1.0, "arcane", "steel", size=0.86),
+			star_wanderers.crescent_blade(b, lod, b.l_fist, 1.0, "fruit", "brass", sun=True, size=0.86)]
+	return _assemble(b, pieces, lod, base)
+
+
+def star_priestess(lod, base=False):
+	"""Star Priestess: tall and slender, floating; a long white robe
+	hovering over a crystal point, its wide hem and a stole in the team's
+	colour, a porcelain mantle cut in gold star points, a gold star crown
+	and a halo behind the head, a gold staff holding a violet orb in a
+	ring of star points."""
+	b = star_wanderers.PriestessBody()
+	pieces = _star_head(b, lod, [star_wanderers.star_crown(b, lod)], fin_height=0.85)
+	robe = star_wanderers.floating_robe(b, lod)
+	pieces += [robe, star_wanderers.stole(b, lod, robe), clothes.wide_sleeves(b, lod, "robe"),
+			star_wanderers.star_mantle(b, lod), star_wanderers.star_staff(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def star_hunter(lod, base=False):
+	"""Star Hunter: light, low and crouched forward on wide bent legs, a
+	cyan crystal visor across the eyes, the team's deep hood-scarf drawn
+	up (the fins standing through it) over a dagged capelet, the team's
+	front flap, a crystal crossbow levelled: a violet moon crescent for a
+	prod and a glowing cyan bolt."""
+	b = star_wanderers.HunterBody()
+	head = star_wanderers.head(b, lod)
+	visor = star_wanderers.crystal_visor(b, lod, head)
+	surface = geo.new_bm()
+	geo.merge(surface, head)
+	geo.merge(surface, visor)
+	on_head = _tilt(b, [head, visor, star_wanderers.star_face(b, lod, surface), star_wanderers.fins(b, lod, 0.95),
+			star_wanderers.hunter_hood(b, lod)])
+	for piece in on_head:
+		geo.translate(piece, b.head_shift())
+	pieces = on_head + [star_wanderers.hunter_legs(b, lod), star_wanderers.hunter_torso(b, lod),
+			star_wanderers._lean(b, star_wanderers.warrior_belt(b, lod)), gnoll.loincloth(b, lod, back=False, out=0.016),
+			star_wanderers.hunter_scarf(b, lod),
+			star_wanderers._lean(b, gear.grow(parts.pauldrons(b, lod, "steel", "brass"), (0.0, 0.0, b.shoulder_z), 0.80)),
+			star_wanderers.arms(b, lod, k=0.92), star_wanderers.star_crossbow(b, lod),
+			star_wanderers.star_quiver(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def star_spearman(lod, base=False):
+	"""Star Spearman: lanky and long-limbed, a narrow midnight suit under a
+	porcelain gorget, the team's long tabard to the knees and its long cape,
+	a tall spear with a gold moon crescent and a violet crystal point, a
+	small gold buckler under a big violet star."""
+	b = star_wanderers.SpearmanBody()
+	pieces = _star_head(b, lod, fin_height=1.12)
+	pieces += [star_wanderers.spearman_legs(b, lod), star_wanderers.spearman_torso(b, lod),
+			star_wanderers.spearman_tabard(b, lod), star_wanderers.warrior_belt(b, lod),
+			clothes.cape(b, lod, collar=None),
+			gear.grow(parts.pauldrons(b, lod, "steel", "brass"), (0.0, 0.0, b.shoulder_z), 0.82),
+			star_wanderers.arms(b, lod, k=0.84), star_wanderers.crescent_spear(b, lod),
+			star_wanderers.star_buckler(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def star_knight(lod, base=False):
+	"""Star Knight: tall and straight-sided, porcelain head to toe; a
+	crested helm with the team's arched crest (the fins standing through
+	it), a gold keel down the cuirass, big porcelain pauldrons, the team's
+	full surcoat skirt under a gold belt, a long violet crystal sword raised
+	out to the right and a tall gold kite shield with a team face."""
+	b = star_wanderers.KnightBody()
+	pieces = _star_head(b, lod, [star_wanderers.crested_helm(b, lod)], fin_height=1.05)
+	pieces += [star_wanderers.knight_legs(b, lod), star_wanderers.knight_torso(b, lod),
+			star_wanderers.knight_skirt(b, lod),
+			gear.grow(parts.pauldrons(b, lod, "steel", "brass"), (0.0, 0.0, b.shoulder_z), 1.22),
+			star_wanderers.arms(b, lod, bracer="steel", k=1.05), star_wanderers.crystal_longsword(b, lod),
+			star_wanderers.kite_shield(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def star_paladin(lod, base=False):
+	"""Star Paladin: the biggest, a huge porcelain barrel on short thick
+	legs set wide, the head sunk between great gold pauldrons, the fins
+	swept out like horns, a long white beard, the team's broad tabard edged
+	in gold with a gold star on its skirt, a small halo of floating stars,
+	a huge gold star hammer upright and a gold star lantern in the left hand."""
+	b = star_wanderers.PaladinBody()
+	pieces = _star_head(b, lod, [headgear.beard(b, lod, long=True, row_name="hair"),
+			star_wanderers.star_circlet(b, lod)], fin_height=0.80, fin_spread=2.0)
+	pieces += [star_wanderers.paladin_legs(b, lod), star_wanderers.paladin_torso(b, lod),
+			star_wanderers.warrior_belt(b, lod), star_wanderers.paladin_tabard(b, lod),
+			gear.grow(parts.pauldrons(b, lod, "brass", "steel"), (0.0, 0.0, b.shoulder_z), 1.50),
+			star_wanderers.arms(b, lod, k=1.32), star_wanderers.star_hammer(b, lod), star_wanderers.star_lantern(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
 # --- mounted ----------------------------------------------------------------
 
 ## How far a rider's standing-space figure is raised to sit in the saddle.
@@ -462,11 +725,212 @@ def dark_elf_rider(lod, base=False):
 	return _assemble(b, pieces, lod, base)
 
 
+def star_rider(lod, base=False):
+	"""Star Rider: a light rider (porcelain gorget, gold pauldrons, the
+	team's scarf and front flap) with an upright crescent spear and the
+	team's pennant, on a comet fox: a silver-lavender fox-deer with star specks,
+	tall cyan-lined ears, a crystal horn, a white ruff, crystal hooves and a
+	comet tail, a porcelain peytral and the team's dagged saddle cloth."""
+	b = poses.rider_lance(parts.Body())
+	pieces = _star_head(b, lod)
+	pieces += [star_wanderers.spearman_torso(b, lod), gnoll.loincloth(b, lod, back=False, out=0.016),
+			star_wanderers.warrior_belt(b, lod), star_wanderers.cowl_scarf(b, lod),
+			gear.grow(parts.pauldrons(b, lod, "brass", "steel"), (0.0, 0.0, b.shoulder_z), 0.92),
+			star_wanderers.arms(b, lod), star_wanderers.rider_spear(b, lod)]
+	for piece in pieces:
+		geo.translate(piece, RIDER_LIFT)
+	for joint in ("l_fist", "l_wrist", "l_elbow", "r_fist", "r_wrist", "r_elbow"):
+		setattr(b, joint, getattr(b, joint) + RIDER_LIFT)
+	legs = horse.rider_legs(b, lod)
+	star_wanderers._recolour(legs, "boot", "steel")
+	pieces += [star_wanderers.steed(b, lod), star_wanderers.steed_barding(b, lod), star_wanderers.steed_cloth(b, lod),
+			star_wanderers.steed_reins(b, lod), legs]
+	return _assemble(b, pieces, lod, base)
+
+
+# --- wild animals -------------------------------------------------------------
+
+def bear_animal(lod, base=False):
+	"""Bear: a wild dark-chocolate bear on all fours (see animals.py)."""
+	b = parts.Body()
+	return _assemble(b, [animals.bear(b, lod)], lod, base)
+
+
+def boar_animal(lod, base=False):
+	"""Boar: a small wedge-shaped wild boar, tusks and a black crest."""
+	b = parts.Body()
+	return _assemble(b, [animals.boar(b, lod)], lod, base)
+
+
+def deer_animal(lod, base=False):
+	"""Deer: a slender russet roe buck, short antlers, cream rump."""
+	b = parts.Body()
+	return _assemble(b, [animals.deer(b, lod)], lod, base)
+
+
+# --- bestiary beasts ---------------------------------------------------------
+
+def griffin(lod, base=False):
+	"""Griffin (Aldmere): an eagle-headed lion with raised wings, the team's
+	saddle cloth and breast collar (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.griffin(b, lod)], lod, base)
+
+
+def sand_worm(lod, base=False):
+	"""Sand Worm (Gnolls): a segmented worm rearing from its coil, a ringed
+	maw, the team's collar and a gnoll war banner (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.sand_worm(b, lod)], lod, base)
+
+
+def manticore(lod, base=False):
+	"""Manticore (Aldmere): a maned lion with bat wings and a scorpion tail,
+	the team's saddle cloth and tail wraps (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.manticore(b, lod)], lod, base)
+
+
+def kitsune(lod, base=False):
+	"""Kitsune (Dark Elves): a silver fox with a fan of foxfire tails, the
+	team's collar, bib and saddle cloth (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.kitsune(b, lod)], lod, base)
+
+
+def wind_tiger(lod, base=False):
+	"""Wind Tiger (Dark Elves): a heavy striped white tiger in mint wind
+	gusts, the team's collar, scarf and saddle cloth (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.wind_tiger(b, lod)], lod, base)
+
+
+def skeleton_dragon(lod, base=False):
+	"""Skeleton Dragon, the Bestiary drake (Gnolls): bone, torn hide wings,
+	a green soul fire, the team's blanket and horn rags (see beasts.py).
+	The monster of the same name will be its own, bigger figure."""
+	b = parts.Body()
+	return _assemble(b, [beasts.skeleton_dragon(b, lod)], lod, base)
+
+
+def dragon(lod, base=False):
+	"""Dragon (Star Wanderers): a heavy saffron-gold sun dragon with
+	midnight star-specked wings, porcelain horns and spikes, a floating
+	gold sun ring, the team's saddle cloth and collar (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.sun_dragon(b, lod)], lod, base)
+
+
+def lightning_dragon(lod, base=False):
+	"""Lightning Dragon (Star Wanderers): a long storm-blue eastern serpent
+	rising in an S, cyan lightning-bolt fins, gold antlers, a crackling
+	pearl, the team's neck and coil bands and scarf (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.lightning_dragon(b, lod)], lod, base)
+
+
+# --- monsters ------------------------------------------------------------------
+
+def black_dragon(lod, base=False):
+	"""Black Dragon (monster, any race at the Shrine): a hulking charcoal
+	dragon reared on its forelegs, ember belly, oxblood wings, the team's
+	saddle cloth, collar and horn rags (see monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.black_dragon(b, lod)], lod, base)
+
+
+def hydra(lod, base=False):
+	"""Hydra (monster): a squat sea-teal body, five long necks fanning up to
+	crested heads with angry brows, team bands on the necks and the team's
+	saddle cloth (see monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.hydra(b, lod)], lod, base)
+
+
+def skeleton_dragon_monster(lod, base=False):
+	"""Skeleton Dragon (monster): a great reared bone dragon round a jade soul
+	fire, torn wings, the team's caparison, war banner, collar and horn rags
+	(see monsters.py). Bigger than the Bestiary drake, SkeletonDragonBeast."""
+	b = parts.Body()
+	return _assemble(b, [monsters.skeleton_dragon(b, lod)], lod, base)
+
+
+def giant_bear(lod, base=False):
+	"""Giant Bear (monster): a colossal chestnut war-bear on all fours, an
+	iron war cap, plates and chain, the team's caparison, war-howdah with
+	shields, banner and breast collar (see monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.giant_bear(b, lod)], lod, base)
+
+
+def yeti(lod, base=False):
+	"""Yeti (monster): a towering hunched white ape with a blue-grey face,
+	ice crystals and icicles, a frozen boulder club, the team's kilt, sash
+	and club rag (see monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.yeti(b, lod)], lod, base)
+
+
+def orc_mutant(lod, base=False):
+	"""Orc Mutant (monster): a lopsided olive brute with one huge stitched-on
+	mauve arm and shoulder, bone spikes, a door-sized cleaver, chains, the
+	team's loincloth and back banner (see monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.orc_mutant(b, lod)], lod, base)
+
+
+def dark_lord(lod, base=False):
+	"""Dark Lord (monster): a towering sorcerer-king in black-violet plate, a
+	horned helm with a gold spiked crown and glowing eyes, a runed
+	greatsword, violet sorcery in his hand, the team's cape, mantle and
+	tabard (see monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.dark_lord(b, lod)], lod, base)
+
+
+def phoenix(lod, base=False):
+	"""Phoenix (monster): a great fire bird on long legs, huge raised flame
+	wings, a long flame tail, the team's collar, pennant and jesses (see
+	monsters.py)."""
+	b = parts.Body()
+	return _assemble(b, [monsters.phoenix(b, lod)], lod, base)
+
+
+# --- siege ---------------------------------------------------------------------
+
+def _crewman(lod, x, y, yaw=0.0):
+	"""The machine's crew: the Aldmere Soldier (the crew sprite is the
+	swordsman), standing on the ground beside it."""
+	bm = soldier(lod)
+	geo.rotate(bm, yaw, 'Z')
+	return geo.translate(bm, (x, y, 0.0))
+
+
+def ballista(lod, base=False):
+	"""Ballista (Siege Workshop): a huge wheeled bolt-thrower with an
+	oversized bolt loaded, the team's painted boards, fletching and pennant,
+	a Soldier crewman at its winch (see siege.py)."""
+	bm = siege.ballista(lod)
+	geo.merge(bm, _crewman(lod, -0.80, 1.78, -20.0))
+	return bm
+
+
+def magic_cannon(lod, base=False):
+	"""Magic Cannon (Siege Workshop): a brass arcane cannon with glowing rune
+	rings and a crystal core on a two-wheeled carriage, the team's painted
+	cheeks and breech, a Soldier crewman at its trail (see siege.py)."""
+	bm = siege.magic_cannon(lod)
+	geo.merge(bm, _crewman(lod, -0.85, 1.35, -15.0))
+	return bm
+
+
 ## `portrait`: the point the portrait camera looks at (the head, in the
 ## exported figure's space) and how far back it stands.
 _FOOT = {"palette": "aldmere", "portrait": (0.0, 0.0, 0.62), "portrait_distance": 1.25}
 _GNOLL = dict(_FOOT, palette="gnolls", portrait=(0.0, -0.03, 0.64))
 _DARK_ELF = dict(_FOOT, palette="dark_elves")
+_BEASTMEN = dict(_FOOT, palette="beastmen", portrait=(0.0, -0.03, 0.64))
+_STAR = dict(_FOOT, palette="star_wanderers")
 _MOUNTED = {"palette": "aldmere", "portrait": (0.0, -0.05, 1.10), "portrait_distance": 1.6, "mounted": True}
 ## `ready`: built by default. The rest are recipes in progress (written,
 ## not yet reviewed or exported): build one by name to work on it.
@@ -496,7 +960,66 @@ UNITS = {
 	"DarkElfArcher": dict(_DARK_ELF, build=dark_elf_archer, ready=True),
 	"DarkElfAssassin": dict(_DARK_ELF, build=dark_elf_assassin, ready=True),
 	"DarkElfGuard": dict(_DARK_ELF, build=dark_elf_guard, ready=True),
+	"DarkElfSorceress": dict(_DARK_ELF, build=dark_elf_sorceress, ready=True),
+	"DarkElfSpellstealer": dict(_DARK_ELF, build=dark_elf_spellstealer, ready=True),
+	"BeastmanWarrior": dict(_BEASTMEN, build=beastman_warrior, ready=True),
+	"BeastmanRaider": dict(_BEASTMEN, build=beastman_raider, portrait=(0.0, -0.08, 0.54), ready=True),
+	"BeastmanDruid": dict(_BEASTMEN, build=beastman_druid, portrait=(0.0, -0.02, 0.76), portrait_distance=1.45,
+			ready=True),
+	"BeastmanPandaWarrior": dict(_BEASTMEN, build=beastman_panda_warrior, portrait=(0.0, -0.02, 0.62),
+			portrait_distance=1.45, ready=True),
+	"BeastmanWolfPathfinder": dict(_BEASTMEN, build=beastman_wolf_pathfinder, portrait=(0.0, -0.10, 0.66),
+			ready=True),
+	"StarWarrior": dict(_STAR, build=star_warrior, ready=True),
+	"StarPriestess": dict(_STAR, build=star_priestess, portrait=(0.0, 0.0, 0.74), portrait_distance=1.45, ready=True),
+	"StarHunter": dict(_STAR, build=star_hunter, portrait=(0.0, -0.06, 0.58), ready=True),
+	"StarSpearman": dict(_STAR, build=star_spearman, portrait=(0.0, 0.0, 0.72), portrait_distance=1.4, ready=True),
+	"StarKnight": dict(_STAR, build=star_knight, portrait=(0.0, 0.0, 0.74), portrait_distance=1.4, ready=True),
+	"StarPaladin": dict(_STAR, build=star_paladin, portrait=(0.0, 0.0, 0.66), portrait_distance=1.5, ready=True),
 	"DarkElfRider": dict(_MOUNTED, palette="dark_elves", build=dark_elf_rider, ready=True),
+	"StarRider": dict(_MOUNTED, palette="star_wanderers", build=star_rider, ready=True),
+	"BearAnimal": dict(_MOUNTED, palette="animals", build=bear_animal, portrait=(0.0, -0.40, 0.52),
+			portrait_distance=1.4, ready=True),
+	"BoarAnimal": dict(_MOUNTED, palette="animals", build=boar_animal, portrait=(0.0, -0.30, 0.32),
+			portrait_distance=1.1, ready=True),
+	"DeerAnimal": dict(_MOUNTED, palette="animals", build=deer_animal, portrait=(0.0, -0.33, 0.76),
+			portrait_distance=1.2, ready=True),
+	"Griffin": dict(_MOUNTED, palette="aldmere", build=griffin, portrait=(0.0, -0.66, 1.38),
+			portrait_distance=2.4, ready=True),
+	"SandWorm": dict(_MOUNTED, palette="gnolls", build=sand_worm, portrait=(0.0, -0.34, 1.40),
+			portrait_distance=2.4, ready=True),
+	"Manticore": dict(_MOUNTED, palette="aldmere", build=manticore, portrait=(0.0, -0.78, 1.06),
+			portrait_distance=2.4, ready=True),
+	"Kitsune": dict(_MOUNTED, palette="dark_elves", build=kitsune, portrait=(0.0, -0.55, 1.32),
+			portrait_distance=2.2, ready=True),
+	"WindTiger": dict(_MOUNTED, palette="dark_elves", build=wind_tiger, portrait=(0.0, -0.84, 1.18),
+			portrait_distance=2.4, ready=True),
+	"SkeletonDragonBeast": dict(_MOUNTED, palette="gnolls", build=skeleton_dragon, portrait=(0.0, -0.74, 1.62),
+			portrait_distance=2.4, ready=True),
+	"Dragon": dict(_MOUNTED, palette="star_wanderers", build=dragon, portrait=(0.0, -0.80, 1.52),
+			portrait_distance=2.4, ready=True),
+	"LightningDragon": dict(_MOUNTED, palette="star_wanderers", build=lightning_dragon, portrait=(0.0, -0.25, 1.55),
+			portrait_distance=2.4, ready=True),
+	"BlackDragon": dict(_MOUNTED, palette="monsters", build=black_dragon, portrait=(0.0, -1.32, 2.90),
+			portrait_distance=4.7, ready=True),
+	"Hydra": dict(_MOUNTED, palette="monsters", build=hydra, portrait=(0.0, -1.20, 2.90),
+			portrait_distance=4.7, ready=True),
+	"SkeletonDragon": dict(_MOUNTED, palette="monsters", build=skeleton_dragon_monster, portrait=(0.0, -1.40, 2.90),
+			portrait_distance=4.7, ready=True),
+	"GiantBear": dict(_MOUNTED, palette="monsters", build=giant_bear, portrait=(0.0, -1.50, 1.55),
+			portrait_distance=4.7, ready=True),
+	"Yeti": dict(_MOUNTED, palette="monsters", build=yeti, portrait=(0.0, -0.59, 2.89),
+			portrait_distance=4.7, ready=True),
+	"OrcMutant": dict(_MOUNTED, palette="monsters", build=orc_mutant, portrait=(-0.16, -0.59, 2.75),
+			portrait_distance=4.7, ready=True),
+	"DarkLord": dict(_MOUNTED, palette="monsters", build=dark_lord, portrait=(0.0, -0.09, 2.98),
+			portrait_distance=4.7, ready=True),
+	"Phoenix": dict(_MOUNTED, palette="monsters", build=phoenix, portrait=(0.0, -0.40, 3.05),
+			portrait_distance=4.7, ready=True),
+	"Ballista": dict(_MOUNTED, palette="siege", build=ballista, portrait=(0.0, -0.40, 1.90),
+			portrait_distance=4.2, ready=True),
+	"MagicCannon": dict(_MOUNTED, palette="siege", build=magic_cannon, portrait=(0.0, -0.40, 2.10),
+			portrait_distance=4.2, ready=True),
 	"Horseman": dict(_MOUNTED, build=horseman, ready=True),
 	"Cavalier": dict(_MOUNTED, build=cavalier, ready=True),
 }

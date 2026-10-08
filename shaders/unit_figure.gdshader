@@ -35,6 +35,14 @@ uniform float team_saturation = 0.88;
 uniform vec4 lift_color : source_color = vec4(0.55, 0.68, 1.0, 1.0);
 uniform float lift_strength = 0.35;
 uniform float flash_strength = 0.7;
+// The plastic finish (see the end of fragment()): roughness of a shine-0 row
+// (cloth, skin, fur) and a shine-1 row (steel), the metal's metallic, the
+// edge sheen and the clear coat.
+uniform float plastic_roughness = 0.3;
+uniform float metal_roughness = 0.17;
+uniform float metal_metallic = 0.25;
+uniform float rim_amount = 0.35;
+uniform float clearcoat_amount = 0.5;
 
 varying flat vec4 v_custom;
 
@@ -72,11 +80,16 @@ void fragment() {
 	emission += vec3(flash * 0.6);
 	ALBEDO = compat_out(albedo);
 	EMISSION = compat_out(emission);
-	// Painted plastic in the satin finish every model shares, so the sun leaves
-	// a soft glint on helmets, heads and shoulders; steel tighter still.
-	ROUGHNESS = wet_roughness(mix(0.5, 0.25, shine), wet);
-	SPECULAR = mix(0.5, 0.8, shine) * cloud;
-	// The thin clear coat every model shares (plastic_light.gdshaderinc).
-	CLEARCOAT = wet_clearcoat(0.25, wet);
-	CLEARCOAT_ROUGHNESS = wet_clearcoat_roughness(0.35, wet);
+	// Glossy toy plastic on every row: shine only tightens the glint (steel,
+	// gold) and gives it a touch of metal, so a figure of fur, skin and cloth
+	// (a shine of 0) still catches the sun as the armoured ones do.
+	ROUGHNESS = wet_roughness(mix(plastic_roughness, metal_roughness, shine), wet);
+	SPECULAR = mix(0.55, 0.75, shine) * cloud;
+	METALLIC = metal_metallic * smoothstep(0.6, 1.0, shine);
+	// A soft sheen along the lit edges, as moulded plastic has.
+	RIM = rim_amount * cloud;
+	RIM_TINT = 0.6;
+	// The clear coat over it all (wet: thicker and smoother, wetness.gdshaderinc).
+	CLEARCOAT = wet_clearcoat(clearcoat_amount, wet);
+	CLEARCOAT_ROUGHNESS = wet_clearcoat_roughness(0.25, wet);
 }

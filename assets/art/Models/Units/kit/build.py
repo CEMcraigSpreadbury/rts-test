@@ -235,12 +235,17 @@ def lineup(made_by_name, out_dir, red_materials):
 	cam = _stage(scene)
 	x = 0.0
 	placed = []
+	# Big figures (beasts, monsters, siege) get room of their own: wider
+	# slots, the red row further back and a taller frame.
+	tallest = max(made[0].dimensions.z for made in made_by_name.values())
+	deepest = max(made[0].dimensions.y for made in made_by_name.values())
+	red_y = max(1.7, deepest + 0.6)
 	for name, made in made_by_name.items():
 		hero = made[0]
 		made[1].hide_render = True
-		width = 1.25 if _mounted(name) else 0.85
+		width = max(1.25 if _mounted(name) else 0.85, hero.dimensions.x + 0.35)
 		x += width * 0.5
-		for row_y, material in ((0.0, None), (1.7, red_materials[units.UNITS[name]["palette"]])):
+		for row_y, material in ((0.0, None), (red_y, red_materials[units.UNITS[name]["palette"]])):
 			copy = hero.copy()
 			scene.collection.objects.link(copy)
 			copy.hide_render = False
@@ -252,11 +257,12 @@ def lineup(made_by_name, out_dir, red_materials):
 			placed.append(copy)
 		hero.hide_render = True
 		x += width * 0.5
-	centre = Vector((x * 0.5, 0.85, 0.55))
+	frame_h = max(3.4, tallest + 1.4)
+	centre = Vector((x * 0.5, red_y * 0.5, max(0.55, tallest * 0.5)))
 	cam.data.type = 'ORTHO'
-	cam.data.ortho_scale = x + 0.6
+	cam.data.ortho_scale = max(x + 0.6, frame_h)
 	scene.render.resolution_x = 3400
-	scene.render.resolution_y = int(3400 * 3.4 / (x + 0.6))
+	scene.render.resolution_y = int(3400 * frame_h / max(x + 0.6, frame_h))
 	for view, azimuth, elevation in (("front", 0.0, 10.0), ("pitch", 0.0, 35.0), ("side", 50.0, 15.0)):
 		el, az = math.radians(elevation), math.radians(azimuth)
 		cam.location = centre + Vector((-math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))) * 30.0

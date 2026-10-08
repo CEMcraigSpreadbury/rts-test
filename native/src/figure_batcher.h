@@ -92,7 +92,15 @@ private:
 	// on the clip's release frame (Unit.SHOT_RELEASE_LEAD_FRAMES before its
 	// end, when the arrow leaves); MOTION_MOUNTED rocks into a gallop
 	// instead of hopping, lunges when it strikes and falls on its side.
-	enum Motion { MOTION_MELEE = 0, MOTION_BOW = 1, MOTION_MOUNTED = 2 };
+	// MOTION_STOMP (monsters) strikes and falls like MOTION_MOUNTED but walks
+	// in heavy stomps: up, over, down with a squash, a pause on the ground
+	// (the figure is held back so it does not slide while the unit moves on
+	// steadily), and emits `stomped` as it lands.
+	// MOTION_ROLL (siege engines) never hops or breathes: it rumbles on its
+	// wheels while moving (a small bob, rock and sway), kicks back on the
+	// shot's release frame and settles, and tips over on its side when it
+	// dies.
+	enum Motion { MOTION_MELEE = 0, MOTION_BOW = 1, MOTION_MOUNTED = 2, MOTION_STOMP = 3, MOTION_ROLL = 4 };
 
 	struct Batch {
 		godot::MultiMeshInstance3D *node = nullptr;
@@ -107,6 +115,13 @@ private:
 		float height = 1.0f;
 		// How near its upright axis a click must pass to find it.
 		float pick_radius = 0.3f;
+		// Frustum test radii round its middle (drawn, casting a shadow), and
+		// how much further than lod_distance_ it keeps its near mesh. All
+		// grow with a big figure's bounds (see type_for); a man or a horse
+		// keeps the defaults.
+		float view_radius = 1.0f;
+		float shadow_radius = 5.0f;
+		float lod_scale = 1.0f;
 		Batch near_batch;
 		Batch far_batch;
 		Batch shadow_batch;
@@ -129,6 +144,15 @@ private:
 		float hop_phase = 0.0f;
 		float walk_amount = 0.0f;
 		float speed = 0.0f;
+		// Ground velocity, smoothed (a stomp holds the figure back by it).
+		godot::Vector3 velocity;
+		// A stomp's cycles walked (0: standing), and whether it landed in
+		// this frame's pose.
+		float stomp = 0.0f;
+		bool landed = false;
+		// Seconds of its velocity the figure is drawn off the unit (behind
+		// while it pauses on the ground, ahead as it lands).
+		float hold = 0.0f;
 		godot::Vector3 last_position;
 		bool has_last_position = false;
 		godot::StringName anim;

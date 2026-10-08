@@ -194,7 +194,293 @@ DARK_ELVES.update({
 	"hoof": ((40, 46, 62), (78, 88, 112), (120, 132, 160)),
 })
 
-PALETTES = {"aldmere": ALDMERE, "gnolls": GNOLLS, "dark_elves": DARK_ELVES}
+## The Beastmen (kit/beastmen.py). Each unit is its own animal, so the
+## species coats repaint rows no beastman wears in their own role (the
+## horses' coat rows, the gnoll leader's russet, the wizard's robe): every
+## row keeps its index, only this palette's colours change.
+##   bear (Warrior): fur, fur_dark, fur_light (the gnolls' rows), nose
+##   boar (Raider): coat, coat_dark (crest, trotters), coat_grey (snout disc)
+##   stag (Druid): fur_red (fawn coat), hair_dark (dark points), cream
+##     (muzzle, spots), wood_light (antlers); robe and robe_trim (moss and
+##     leaf green), crystal (the jade spirit light)
+##   panda (Panda Warrior): beard (white fur), beard_dark (black fur)
+##   wolf (Wolf Pathfinder): hood (grey coat), hoof (dark grey points),
+##     pebble (cream muzzle, ruff and tail tip)
+## Steel is a neutral grey (a blue one read as blue team colour in game) and
+## the haft wood near-black.
+BEASTMEN = dict(GNOLLS)
+BEASTMEN.update({
+	"fur": ((110, 70, 42), (168, 108, 62), (210, 150, 96)),
+	"fur_dark": ((56, 36, 26), (92, 60, 40), (128, 90, 62)),
+	"fur_light": ((196, 140, 100), (240, 186, 138), (255, 220, 180)),
+	"nose": ((18, 16, 18), (36, 32, 32), (74, 68, 66)),
+	"blush": ((214, 130, 110), (232, 150, 126), (244, 174, 150)),
+	"steel": ((74, 74, 78), (146, 146, 148), (214, 212, 208)),
+	"trim": ((62, 62, 66), (112, 112, 114), (160, 158, 156)),
+	"blade": ((132, 132, 136), (204, 204, 202), (252, 252, 248)),
+	"wood": ((26, 22, 22), (48, 42, 40), (80, 72, 68)),
+	# Boar: slate-grey bristle, a near-black crest and trotters, a pink snout.
+	"coat": ((70, 66, 72), (116, 108, 110), (162, 152, 148)),
+	"coat_dark": ((26, 22, 26), (46, 40, 42), (74, 66, 66)),
+	"coat_grey": ((176, 112, 108), (222, 156, 146), (246, 196, 184)),
+	# Stag: a golden fawn coat, dark-brown points, cream spots and muzzle,
+	# pale antlers.
+	"fur_red": ((150, 98, 52), (212, 150, 86), (240, 194, 132)),
+	"hair_dark": ((54, 34, 26), (88, 58, 40), (124, 90, 64)),
+	"cream": ((196, 180, 150), (240, 230, 206), (255, 252, 238)),
+	"wood_light": ((150, 128, 100), (214, 196, 164), (246, 236, 212)),
+	# A narrow shadow-to-highlight range, so the robe's rings read as one
+	# green rather than stripes (the leaf-green trim is its own row).
+	"robe": ((52, 84, 46), (70, 108, 58), (88, 126, 70)),
+	"robe_trim": ((64, 120, 40), (110, 174, 64), (176, 220, 112)),
+	"crystal": ((30, 140, 100), (70, 224, 164), (200, 255, 228)),
+	# Panda: warm white fur and soft black fur.
+	"beard": ((168, 166, 166), (232, 228, 220), (252, 250, 244)),
+	"beard_dark": ((20, 18, 22), (40, 38, 42), (74, 72, 76)),
+	# Wolf: a warm grey coat, charcoal points, a cream muzzle and ruff.
+	"hood": ((86, 82, 82), (140, 134, 128), (190, 184, 174)),
+	"hoof": ((34, 32, 34), (60, 56, 56), (94, 90, 88)),
+	"pebble": ((176, 166, 150), (226, 218, 200), (250, 246, 234)),
+})
+
+## The Star Wanderers (kit/star_wanderers.py): sky-blue skin, pearl
+## porcelain plate over a midnight-indigo suit, bright gold, and gear that
+## glows in three star colours. Rows keep their roles where they can:
+##   steel = pearl porcelain, blade = pearl edges, plate_dark = the midnight
+##   suit, brass and trim = gold, robe = white robe cloth, crystal = cyan
+##   starlight, arcane = violet moonlight, gem = rose.
+## One row is repurposed, as the beastmen do with theirs (no free rows):
+##   fruit = sun-gold glow (the Warrior's sun crescent; no star wanderer
+##   carries fruit).
+## Glow rows keep their shadow end light, so they read as lit from within.
+STAR_WANDERERS = dict(ALDMERE)
+STAR_WANDERERS.update({
+	"skin": ((62, 104, 188), (110, 162, 236), (170, 210, 255)),
+	"blush": ((120, 126, 214), (144, 146, 234), (172, 172, 248)),
+	"eye": ((14, 16, 40), (26, 30, 64), (48, 56, 100)),
+	"mouth": ((34, 36, 92), (52, 56, 124), (78, 82, 152)),
+	"hair": ((150, 156, 200), (214, 220, 244), (248, 250, 255)),
+	"cloth": ((150, 150, 176), (220, 218, 230), (248, 248, 252)),
+	"cloth_dark": ((14, 16, 40), (28, 32, 70), (50, 58, 106)),
+	"leather": ((26, 30, 66), (44, 52, 100), (70, 82, 138)),
+	"leather_dark": ((18, 20, 46), (32, 36, 76), (54, 60, 110)),
+	"boot": ((20, 22, 52), (36, 42, 86), (60, 70, 126)),
+	"sole": ((10, 10, 24), (20, 22, 42), (34, 36, 62)),
+	"plate_dark": ((14, 16, 44), (30, 36, 88), (72, 84, 156)),
+	"metal_paint": ((30, 36, 92), (54, 66, 150), (100, 118, 204)),
+	"steel": ((140, 142, 184), (222, 224, 242), (255, 255, 255)),
+	"mail": ((40, 44, 84), (76, 84, 130), (120, 130, 176)),
+	"trim": ((150, 100, 34), (218, 170, 66), (252, 228, 140)),
+	"brass": ((156, 96, 26), (232, 178, 56), (255, 240, 156)),
+	"blade": ((168, 174, 214), (228, 234, 252), (255, 255, 255)),
+	"robe": ((168, 166, 200), (234, 232, 244), (255, 255, 252)),
+	"robe_trim": ((156, 96, 26), (232, 178, 56), (255, 240, 156)),
+	"lining": ((10, 12, 30), (20, 24, 52), (34, 40, 74)),
+	"crystal": ((70, 186, 232), (122, 234, 255), (224, 255, 255)),
+	"arcane": ((132, 84, 220), (182, 128, 255), (236, 208, 255)),
+	"gem": ((196, 70, 150), (238, 112, 190), (255, 190, 230)),
+	"fruit": ((236, 150, 40), (255, 204, 66), (255, 246, 176)),
+	# The Rider's comet fox: a pale silver-lavender coat (coat; a royal-blue
+	# one hid the blue team's saddle cloth), deep violet (coat_dark) and a
+	# pearl-white ruff, mane and tail (mane).
+	"coat": ((122, 110, 170), (184, 172, 226), (232, 226, 255)),
+	"coat_dark": ((48, 38, 96), (78, 64, 138), (116, 102, 178)),
+	"mane": ((168, 170, 212), (234, 236, 252), (255, 255, 255)),
+})
+
+## Wild animals (kit/animals.py): neutral wildlife in natural coats, no
+## team rows worn. This palette is theirs alone, so rows are repainted
+## freely (each keeps its index):
+##   bear: fur (dark chocolate), fur_dark (paws, inner ears, tail),
+##     fur_light (tan muzzle), nose, bone (claws)
+##   boar: coat (brown bristle), coat_dark (crest, trotters, tail tuft),
+##     coat_grey (pink snout disc, inner ears), bone (tusks)
+##   deer: fur_red (russet coat), hair_dark (ear rims, burrs, tail),
+##     cream (muzzle, throat, belly, rump), wood_light (antlers), hoof
+ANIMALS = dict(GNOLLS)
+ANIMALS.update({
+	"fur": ((62, 40, 30), (104, 68, 44), (150, 106, 70)),
+	"fur_dark": ((30, 22, 20), (52, 38, 32), (80, 62, 50)),
+	"fur_light": ((160, 120, 86), (206, 166, 120), (236, 204, 158)),
+	"blush": ((190, 110, 96), (210, 128, 110), (228, 152, 132)),
+	"coat": ((86, 60, 44), (134, 96, 66), (178, 138, 100)),
+	"coat_dark": ((26, 22, 22), (46, 40, 38), (74, 66, 62)),
+	"coat_grey": ((176, 112, 108), (222, 156, 146), (246, 196, 184)),
+	"fur_red": ((128, 60, 32), (184, 98, 52), (224, 148, 94)),
+	"hair_dark": ((48, 30, 22), (80, 52, 36), (116, 84, 60)),
+	"cream": ((196, 182, 156), (240, 232, 212), (255, 252, 240)),
+	"wood_light": ((150, 128, 100), (214, 196, 164), (246, 236, 212)),
+	"hoof": ((26, 22, 22), (46, 40, 38), (74, 66, 62)),
+})
+
+## Bestiary beasts (kit/beasts.py), on their race's palette. Applied last,
+## after every other palette has copied its base, so only these change.
+## The rows repainted are ones the race never otherwise wears:
+##   Aldmere griffin: fur (tawny lion body, coverts; the gnoll row as is),
+##     fur_light (cream belly, paws), fur_dark (tail tuft), fletch (white
+##     head, neck and chest ruff; the arrows' white as is), fur_red (brown
+##     flight feathers, crest, brows), ochre (golden beak and shins),
+##     nose (dark talons)
+##   Aldmere manticore: beard_dark (russet-orange lion; only the beastmen's
+##     panda wears it), warpaint (dark amber mane; a gnoll row), tuft (dusky
+##     violet wing membranes; only the unused base wears it), robe_dark
+##     (charcoal wing bones, scorpion tail, brows; a gnoll row), bone (horns,
+##     fangs, claws, stinger) as the gnolls'. Neither mane nor wings may be
+##     red: from the game camera they read as the red team.
+##   Dark Elf kitsune: fur (silver-white coat), fur_light (white ruff, tail
+##     tips), fur_dark (black-violet socks and ear linings); arcane (violet
+##     markings and foxfire) and brass (silver) as the race's own
+##   Gnoll sand worm: coat (sandy hide), coat_dark (segment creases, brow),
+##     coat_grey (pink lip): horse rows no gnoll wears (the hyena is fur);
+##     bone (teeth, spikes) as the gnolls' own
+##   Dark Elf wind tiger: beard (ivory-white coat), beard_dark (black
+##     stripes, tail rings), tuft (mint wind; only the unused base wears it):
+##     rows no dark elf wears; fur_light (belly, muzzle, paws) as the kitsune's
+##   Gnoll skeleton dragon: bone as the gnolls' own, mane (grey hide wing
+##     membranes; no gnoll rides a horse), crystal (green soul fire and eye
+##     sparks; only the human mages wear it)
+##   Star Wanderer sun dragon: fur (saffron-gold scales), fur_dark (amber
+##     cheek fins, nostrils), fur_light (ivory belly, jaw, neck scutes), bone
+##     (porcelain-ivory claws and fangs): rows no Star Wanderer wears;
+##     plate_dark (midnight wing membranes), steel (porcelain horns, spikes,
+##     saddle), brass and crystal as the race's own
+##   Star Wanderer lightning dragon: beard (pale storm blue, kept greyer
+##     than the blue team), beard_dark (navy brow, fins, paws): rows no Star
+##     Wanderer wears; fur_light (belly) as the sun dragon's, mane (pearl
+##     whiskers, manes, tail plume) as the comet fox's, crystal (lightning)
+ALDMERE.update({
+	"fur_red": ((92, 52, 30), (140, 86, 50), (184, 128, 82)),
+	"ochre": ((176, 110, 24), (236, 176, 48), (255, 222, 120)),
+	"beard_dark": ((150, 72, 34), (212, 122, 60), (246, 174, 106)),
+	"warpaint": ((50, 30, 18), (96, 58, 26), (146, 98, 46)),
+	"tuft": ((40, 32, 52), (74, 60, 92), (112, 98, 132)),
+	"robe_dark": ((22, 20, 26), (44, 40, 48), (84, 78, 92)),
+})
+DARK_ELVES.update({
+	"fur": ((140, 134, 172), (214, 212, 232), (248, 248, 255)),
+	"fur_light": ((196, 192, 214), (244, 242, 252), (255, 255, 255)),
+	"fur_dark": ((20, 16, 30), (42, 34, 58), (76, 64, 98)),
+	"beard": ((178, 170, 158), (234, 228, 214), (254, 252, 244)),
+	"beard_dark": ((14, 12, 20), (30, 26, 38), (58, 52, 70)),
+	"tuft": ((86, 184, 168), (140, 232, 208), (214, 255, 242)),
+})
+GNOLLS.update({
+	"coat": ((150, 100, 60), (206, 152, 96), (238, 198, 140)),
+	"coat_dark": ((96, 56, 36), (136, 86, 54), (170, 118, 80)),
+	"coat_grey": ((176, 100, 100), (220, 140, 132), (244, 186, 174)),
+	"mane": ((52, 46, 44), (86, 78, 72), (128, 118, 106)),
+	"crystal": ((70, 170, 70), (120, 232, 100), (206, 255, 180)),
+})
+
+STAR_WANDERERS.update({
+	"fur": ((196, 128, 24), (246, 188, 44), (255, 234, 132)),
+	"fur_dark": ((150, 76, 22), (204, 118, 36), (238, 168, 78)),
+	"fur_light": ((206, 194, 170), (248, 242, 226), (255, 255, 250)),
+	"bone": ((180, 176, 196), (236, 234, 244), (255, 255, 255)),
+	"beard": ((84, 104, 150), (138, 164, 210), (204, 222, 250)),
+	"beard_dark": ((22, 28, 58), (40, 50, 94), (72, 86, 140)),
+})
+
+## Monsters (kit/monsters.py, scenes/units/monsters): trained at the
+## neutral Shrine by any race, so they have one palette of their own (with
+## the team rows: each carries its owner's colour on a harness). Built on
+## the Gnolls' rows; the palette is theirs alone, so rows are repainted
+## freely (each keeps its index). Per monster:
+##   black dragon: coat (charcoal scales), coat_dark (near-black brows,
+##     spikes, nostrils, tail spade), coat_grey (dark oxblood wing membranes, kept
+##     deep so they never read as the red team), fur_red (molten ember belly
+##     and throat scutes, the glow in its maw), bone (horns, fangs, claws)
+##     as the gnolls', steel (dark iron saddle and collar ring)
+##   hydra: fur (sea-teal scales), fur_dark (brows, ridge plates), fur_light
+##     (tan belly, jaws, throat scutes), brass (gold crests, band rims),
+##     mouth, bone (fangs, claws)
+##   skeleton dragon: bone, crystal (jade soul fire, sockets, maw), mane
+##     (torn wing hide), coat_dark (sockets, claws), steel (finial, ring)
+##   giant bear: beard (chestnut fur), beard_dark (paws, brows, ear
+##     linings), cream (muzzle, jaw), warpaint (rust claw stripes, kept dark
+##     so it never reads as the red team), nose, steel (iron cap, plates,
+##     chain), wood (howdah)
+##   yeti: hair (white fur, cool blue shadows), skin (blue-grey face, hands,
+##     feet; slate, kept greyer than the blue team), hair_dark (brows, nose,
+##     nails), arcane (pale glacier ice), bone (tusks, club)
+##   orc mutant: hood (olive-grey hide, kept dull and grey so it never reads
+##     as the green team), hoof (dark hide: brows, nose, nails), ochre (raw
+##     mauve mutated flesh, kept off the red team), fruit (sickly bile
+##     pustules), string (stitches), steel, blade (cleaver edge), warpaint
+##     (rust stains), bone (horn, tusks, spikes)
+##   phoenix: robe (flame-orange plumage), robe_trim (amber flame tips,
+##     breast, crest), ermine (white-hot coverts, embers), robe_dark (deep
+##     ember feather undersides), fletch (bronze beak), coat (charcoal
+##     legs), coat_dark (brows), bone (talons), steel (collar boss, bar)
+##   dark lord: plate_dark (black-violet plate), brass (gold trim, crown,
+##     brows), gem (glowing violet runes, eyes, sorcery), coat_dark (visor,
+##     horns, pauldron spikes), blade (sword edges)
+MONSTERS = dict(GNOLLS)
+MONSTERS.update({
+	"coat": ((24, 22, 30), (54, 50, 60), (102, 96, 108)),
+	"coat_dark": ((12, 10, 14), (26, 22, 28), (48, 42, 50)),
+	"coat_grey": ((30, 16, 24), (60, 28, 38), (96, 50, 60)),
+	"fur_red": ((206, 78, 18), (250, 138, 36), (255, 220, 120)),
+	"bone": ((150, 140, 126), (214, 204, 184), (246, 240, 226)),
+	"steel": ((40, 40, 46), (84, 84, 92), (140, 140, 150)),
+	# Hydra: sea-teal scales (bluer and deeper than the green team), a
+	# near-black teal for brows, ridge plates and nostrils, a warm tan belly.
+	"fur": ((22, 92, 88), (44, 148, 132), (120, 210, 182)),
+	"fur_dark": ((10, 36, 38), (20, 62, 62), (40, 96, 92)),
+	"fur_light": ((170, 128, 82), (222, 182, 124), (248, 222, 170)),
+	# Skeleton dragon: a spectral jade soul fire (kept off the green team's
+	# lime) and slate-grey torn wing hide.
+	"crystal": ((30, 150, 130), (70, 228, 190), (200, 255, 236)),
+	"mane": ((26, 28, 36), (48, 52, 64), (86, 92, 106)),
+	# Giant bear: chestnut fur, near-black brown paws and brows, a cream
+	# muzzle, a dark rust war paint.
+	"beard": ((92, 52, 30), (146, 88, 50), (192, 136, 88)),
+	"beard_dark": ((34, 22, 18), (60, 40, 30), (92, 66, 50)),
+	"cream": ((172, 140, 104), (222, 194, 150), (246, 228, 192)),
+	"warpaint": ((84, 26, 18), (124, 42, 28), (160, 70, 50)),
+	# Yeti: white fur with cool shadows, a slate blue-grey face and hands,
+	# deep slate brows and nails, pale glacier ice.
+	"hair": ((150, 162, 186), (226, 232, 242), (255, 255, 255)),
+	"skin": ((70, 84, 112), (112, 130, 162), (160, 176, 202)),
+	"hair_dark": ((22, 26, 40), (40, 46, 64), (70, 78, 98)),
+	"arcane": ((110, 170, 210), (176, 222, 246), (236, 252, 255)),
+	# Orc mutant: olive-grey hide, a near-black olive, raw mauve mutated
+	# flesh, sickly bile pustules, black stitch thread.
+	"hood": ((62, 76, 56), (106, 124, 90), (156, 172, 128)),
+	"hoof": ((24, 30, 22), (44, 52, 38), (72, 82, 60)),
+	"ochre": ((70, 48, 54), (112, 82, 86), (158, 128, 126)),
+	"fruit": ((150, 158, 46), (204, 210, 90), (240, 246, 168)),
+	"string": ((16, 12, 12), (34, 28, 24), (62, 52, 44)),
+	# Dark lord: black-violet plate and a bright violet rune glow.
+	"plate_dark": ((14, 10, 22), (40, 32, 58), (92, 80, 124)),
+	"gem": ((120, 48, 200), (186, 108, 255), (236, 206, 255)),
+	# Phoenix: flame-orange plumage, amber flame tips, white-hot cores, a
+	# deep ember brown under the feathers and a bronze beak. Kept on orange
+	# and amber so it never reads as the red or the yellow team.
+	"robe": ((186, 66, 16), (240, 116, 26), (255, 162, 62)),
+	"robe_trim": ((212, 108, 14), (252, 158, 30), (255, 210, 104)),
+	"ermine": ((255, 176, 92), (255, 228, 176), (255, 252, 238)),
+	"robe_dark": ((64, 30, 20), (110, 52, 28), (156, 90, 48)),
+	"fletch": ((104, 64, 30), (164, 108, 46), (218, 168, 96)),
+})
+
+## Siege engines (kit/siege.py, Ballista and Magic Cannon from the Siege
+## Workshop): Aldmere's rows (wood, steel, brass, string, team_paint and the
+## crewman's skin, cloth and kettle hat), plus two rows Aldmere leaves
+## unpainted: plate_dark (blackened iron: wheel tyres, axles, bands, the
+## bolt's socket) and arcane (the cannon's glowing mint-cyan rune rings,
+## runes and bore, after the sprite's magic). crystal is pushed brighter
+## for the cannon's core and shards.
+SIEGE = dict(ALDMERE)
+SIEGE.update({
+	"plate_dark": ((22, 22, 28), (46, 46, 54), (92, 92, 104)),
+	"arcane": ((40, 190, 170), (110, 246, 214), (226, 255, 246)),
+	"crystal": ((50, 150, 220), (120, 222, 255), (236, 252, 255)),
+})
+
+PALETTES = {"aldmere": ALDMERE, "gnolls": GNOLLS, "dark_elves": DARK_ELVES, "beastmen": BEASTMEN,
+		"star_wanderers": STAR_WANDERERS, "animals": ANIMALS, "monsters": MONSTERS,
+		"siege": SIEGE}
 ## The team colours a palette is previewed with outside the game (Blender
 ## renders): Network.TEAM_COLORS[0] and [1], blue and red.
 PREVIEW_TEAM = (0.25, 0.55, 1.0)

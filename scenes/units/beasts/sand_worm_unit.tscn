@@ -10,6 +10,9 @@
 [ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
 [ext_resource type="Texture2D" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_0"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/sand_burst.png" id="icon_abilities_sand_burst"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/SandWorm.glb" id="fig_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/SandWorm_LOD1.glb" id="fig_model_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/gnolls.png" id="fig_palette"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
 script = ExtResource("3_cost_script")
@@ -86,6 +89,11 @@ armor_class = 6
 unit_category = 0
 vision_range = 11
 abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_main")])
+figure_model = ExtResource("fig_model")
+figure_model_lod1 = ExtResource("fig_model_lod1")
+figure_palette = ExtResource("fig_palette")
+figure_motion = 2
+figure_top = 1.8
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.35, 0, 0, 0, 1.35, 0, 0, 0, 1.35, 0, 0.848, 0)
