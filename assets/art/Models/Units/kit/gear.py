@@ -167,7 +167,7 @@ def quiver(b, lod):
 			(0.046, length)], seg(lod, 7, 5), sharp=40, phase=0.0,
 			ring_swatches=[row("leather_dark"), row("leather"), row("leather"), row("leather_dark"),
 					row("leather_dark")], cap_end=row("lining"))
-	arrows = 4 if lod == 0 else 2
+	arrows = 4
 	for i in range(arrows):
 		a = 2.0 * math.pi * i / arrows + 0.4
 		base = Vector((math.cos(a) * 0.018, math.sin(a) * 0.018, length - 0.01))

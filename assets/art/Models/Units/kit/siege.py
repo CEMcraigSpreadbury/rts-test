@@ -108,9 +108,9 @@ def _ballista_upper(lod):
 	bm = geo.new_bm()
 	# The stock: a long wooden rail, iron banded.
 	geo.merge(bm, _beam((0.0, 1.20, 1.56), (0.0, -1.30, 1.56), 0.34, 0.20, "wood"))
-	if lod == 0:
-		for y in (-1.10, -0.35, 0.40, 1.00):
-			geo.merge(bm, _beam((0.0, y + 0.05, 1.56), (0.0, y - 0.05, 1.56), 0.37, 0.23, "plate_dark", 0.006))
+	for y in (-1.10, -0.35, 0.40, 1.00):
+		geo.merge(bm, _beam((0.0, y + 0.05, 1.56), (0.0, y - 0.05, 1.56), 0.37, 0.23, "plate_dark",
+				0.006 if lod == 0 else 0.0))
 	# The bow frame and its two rope torsion skeins with brass washers.
 	frame = geo.box(0.92, 0.26, 0.44, row("wood"), sharp=HARD, bevel=0.03)
 	geo.translate(frame, (0.0, -0.98, 1.58))
@@ -220,13 +220,13 @@ def _cannon_barrel(lod):
 	geo.merge(bm, _ring(0.38, 0.00, 0.07, "arcane", lod, proud=0.045))
 	geo.merge(bm, _ring(0.335, 0.55, 0.06, "arcane", lod, proud=0.045))
 	geo.merge(bm, _ring(0.30, 1.22, 0.05, "brass", lod))
-	if lod == 0:
-		# Glowing rune marks on the brass between the rings.
-		for k in range(4):
-			a = math.pi * 0.5 * k + math.pi * 0.25
-			n = Vector((math.cos(a), math.sin(a), 0.0))
-			rune = geo.plate([(0.0, -0.07), (0.05, 0.0), (0.0, 0.07), (-0.05, 0.0)], 0.02, row("arcane"), sharp=40)
-			geo.merge(bm, rune, geo.orient(n * 0.36 + Vector((0.0, 0.0, 0.28)), n, (0.0, 0.0, 1.0)))
+	# Glowing rune marks on the brass between the rings (kept at LOD1 too:
+	# near-only parts pop at the LOD switch).
+	for k in range(4):
+		a = math.pi * 0.5 * k + math.pi * 0.25
+		n = Vector((math.cos(a), math.sin(a), 0.0))
+		rune = geo.plate([(0.0, -0.07), (0.05, 0.0), (0.0, 0.07), (-0.05, 0.0)], 0.02, row("arcane"), sharp=40)
+		geo.merge(bm, rune, geo.orient(n * 0.36 + Vector((0.0, 0.0, 0.28)), n, (0.0, 0.0, 1.0)))
 	# The crystal core on the breech, in a brass cage.
 	seat = Vector((0.0, 0.38, -0.36))
 	cup = geo.lathe([(0.10, 0.0), (0.22, 0.04), (0.24, 0.12), (0.20, 0.16)], seg(lod, 14, 8), row("brass"), sharp=40,
@@ -244,11 +244,10 @@ def _cannon_barrel(lod):
 		geo.merge(bm, prong)
 	geo.merge(bm, _ring(0.10, 0.0, 0.03, "brass", lod), geo.frame(core + Vector((0.0, 0.30, 0.0)), (0.0, 1.0, 0.0),
 			(0.0, 0.0, 1.0)))
-	if lod == 0:
-		for side in (-1.0, 1.0):
-			shard = geo.lathe([(0.0, -0.10), (0.06, 0.0), (0.0, 0.12)], 5, row("crystal"), sharp=30, phase=0.0)
-			geo.merge(bm, shard, geo.frame(core + Vector((side * 0.46, 0.10, 0.05 * side)), (side * 0.3, 1.0, 0.0),
-					(0.0, 0.0, 1.0)))
+	for side in (-1.0, 1.0):
+		shard = geo.lathe([(0.0, -0.10), (0.06, 0.0), (0.0, 0.12)], 5, row("crystal"), sharp=30, phase=0.0)
+		geo.merge(bm, shard, geo.frame(core + Vector((side * 0.46, 0.10, 0.05 * side)), (side * 0.3, 1.0, 0.0),
+				(0.0, 0.0, 1.0)))
 	return bm
 
 
@@ -272,10 +271,9 @@ def magic_cannon(lod):
 	spade = geo.box(0.52, 0.10, 0.22, row("plate_dark"), sharp=HARD, bevel=0.015)
 	geo.translate(spade, (0.0, 2.02, 0.12))
 	geo.merge(bm, spade)
-	if lod == 0:
-		for y, z in ((1.05, 0.50), (1.55, 0.30)):
-			geo.merge(bm, _beam((0.0, y - 0.04, z + 0.016), (0.0, y + 0.04, z - 0.016), 0.41, 0.25, "plate_dark",
-					0.006))
+	for y, z in ((1.05, 0.50), (1.55, 0.30)):
+		geo.merge(bm, _beam((0.0, y - 0.04, z + 0.016), (0.0, y + 0.04, z - 0.016), 0.41, 0.25, "plate_dark",
+				0.006 if lod == 0 else 0.0))
 	# The barrel, raised a little, with its crystal core.
 	c, s = math.cos(math.radians(CANNON_ELEVATION)), math.sin(math.radians(CANNON_ELEVATION))
 	geo.merge(bm, _cannon_barrel(lod), geo.frame(CANNON_TRUNNION, (0.0, -c, s), (0.0, s, c)))

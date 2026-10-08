@@ -1199,10 +1199,10 @@ def _orc_arm(lod, joints, radii, fist_r, swatch):
 	return bm
 
 
-## The raised cleaver: the blade rises up and back from the fist, its edge
+## The raised cleaver: the blade rises up (a little back) from the fist, its edge
 ## turned forward and in (a diagonal chop across the body), so its flat
 ## face turns to the front and the game camera rather than showing its edge.
-ORC_CLEAVER_UP = Vector((0.12, 0.42, 0.90)).normalized()
+ORC_CLEAVER_UP = Vector((0.10, 0.20, 0.97)).normalized()
 _EDGE = Vector((-0.45, -1.0, 0.0))
 ORC_CLEAVER_EDGE = (_EDGE - ORC_CLEAVER_UP * _EDGE.dot(ORC_CLEAVER_UP)).normalized()
 

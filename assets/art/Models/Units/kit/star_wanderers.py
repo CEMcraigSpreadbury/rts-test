@@ -265,11 +265,11 @@ def crescent_blade(b, lod, fist, side, body, edge, sun=False, size=1.0):
 		w = wmax * math.sin(math.pi * u) ** 0.75
 		core_o.append((math.cos(a) * (R - w * 0.30), cz + math.sin(a) * (R - w * 0.30)))
 		core_i.append((math.cos(a) * (R - w * 0.55), cz + math.sin(a) * (R - w * 0.55)))
-	if lod == 0:
-		geo.merge(bm, geo.plate(core_o + list(reversed(core_i)), 0.032, row(edge), sharp=FLAT))
+	geo.merge(bm, geo.plate(core_o + list(reversed(core_i)), 0.032, row(edge), sharp=FLAT))
 	if sun:
-		for i in range(2, steps - 2, 2 if lod == 0 else 3):
-			u = i / (steps - 1)
+		# Six rays at the same angles at both LODs (fewer at LOD1 popped).
+		for k in range(6):
+			u = (2 + 2 * k) / 14.0
 			a = t0 + (t1 - t0) * u
 			d = Vector((math.cos(a), 0.0, math.sin(a)))
 			t = Vector((-math.sin(a), 0.0, math.cos(a)))
@@ -814,10 +814,9 @@ def crescent_spear(b, lod, length=1.34, below=0.30):
 	point = geo.plate([(0.0, top - 0.060), (0.040, top + 0.030), (0.026, top + 0.140), (0.0, top + 0.260),
 			(-0.026, top + 0.140), (-0.040, top + 0.030)], 0.024, row("arcane"), side=row("crystal"), sharp=FLAT)
 	geo.merge(bm, point)
-	if lod == 0:
-		gem = geo.plate(_star(0.026, 0.020, 0.009), 0.030, row("crystal"), side=row("brass"), sharp=FLAT)
-		geo.translate(gem, (0.0, 0.0, cz - R + 0.022))
-		geo.merge(bm, gem)
+	gem = geo.plate(_star(0.026, 0.020, 0.009), 0.030, row("crystal"), side=row("brass"), sharp=FLAT)
+	geo.translate(gem, (0.0, 0.0, cz - R + 0.022))
+	geo.merge(bm, gem)
 	return gear._place(bm, b, b.r_fist, b.pole_axis)
 
 
