@@ -24,6 +24,7 @@ const DEFAULTS := {
 	&"pan_speed": 24.0,
 	&"zoom_speed": 2.0,
 	&"damage_numbers": true,
+	&"regiment_banners": true,
 	&"window_mode": WindowMode.WINDOWED,
 	&"vsync": true,
 	&"max_fps": 0,

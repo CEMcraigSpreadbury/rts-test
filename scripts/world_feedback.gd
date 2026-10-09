@@ -1113,7 +1113,7 @@ func _resurvey_regiments() -> void:
 			sprite.global_position = centre + Vector3(0.0, REGIMENT_BANNER_HEIGHT * _banner_zoom_scale(), 0.0)
 		var bearer: Unit = _majority_bearer(tallies.get(id, {}))
 		sprite.texture = _banner_texture(bearer) if bearer != null else null
-		sprite.visible = sprite.texture != null
+		sprite.visible = sprite.texture != null and Settings.get_value(&"regiment_banners")
 		var state: Array = shaken.get(id, [0, 0])
 		var mood: int = Morale.State.STEADY
 		if state[1] * 2 > counts[id]:

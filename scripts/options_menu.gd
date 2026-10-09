@@ -115,6 +115,7 @@ func _build_game_page(page: Control) -> void:
 	_add_slider(page, "Camera Zoom Speed", Settings.get_value(&"zoom_speed"), 0.5, 5.0, 0.25,
 			func(v: float): Settings.set_value(&"zoom_speed", v), func(v: float): return "%.2f" % v)
 	_add_check(page, "Show Damage Numbers", &"damage_numbers")
+	_add_check(page, "Show Regiment Banners", &"regiment_banners")
 
 func _build_visuals_page(page: Control) -> void:
 	_add_choice(page, "Window Mode", WINDOW_MODE_NAMES,
