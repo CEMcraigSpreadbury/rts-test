@@ -525,9 +525,39 @@ Next, in this order:
    complete apart from the deferred animals.
 6. Wild animals Fox and Wolf (deferred).
 7. Per-unit body radius: built (see Size); awaiting the user's test.
-8. Portraits: the selection panel, tray, regiment cards and banners still
-   show sprites. `build.py --portraits` is written but has never been run.
+8. Portraits, steps 1 and 2 done (awaiting review): every Aldmere, Dark
+   Elf, Beastmen and Star Wanderer unit, the Aldmere, Dark Elf and Star
+   Wanderer beasts, all eight monsters and both siege engines have a
+   rendered portrait in `assets/art/Models/Units/portraits/<Figure>.png`
+   (160 px: the render with team rows grey on the left, the team mask on
+   the right; golden-hour key, warm rim, glossy plastic with clear coat).
+   `scripts/unit_portrait.gd` finds it by the unit's `figure_model` file
+   name, tints the mask the way the figure shader does (cached per type and
+   colour) and falls back to the sprite head; `filter_for()` gives renders
+   linear+mipmap filtering. Colours always follow the owner:
+   `UnitPortrait.owner_tint(unit)` (team tint, else the owner's match
+   colour) for units, `local_tint()` for scenes nobody owns yet (dialogue
+   speakers, roster icons with no owner). Used by the selection portrait,
+   the multi-select tray, the regiment cards (the card's well is now the
+   owner's colour too; it used to be the local player's), the standards
+   (cut to a coin on the token), the dialogue box and the Realm slot
+   buildings' unit icons (the building's colour, re-tinted on capture).
+   Gnolls stay on sprites (`UnitPortrait.SPRITE_ONLY`); wild animals have
+   no portraits. Framing is the `portrait` / `portrait_distance` spec in
+   `units.py` (`_FOOT` 0.64 / 2.0, `_MOUNTED` 1.18 / 1.9 on the rider,
+   monsters about 5.5 on the head). Re-render without touching the game's
+   GLBs, then import:
 
+   ```
+   blender --background --factory-startup --python build.py -- <Names ...> --out <scratch dir> --portraits
+   Godot_v4.7-stable_win64_console.exe --headless --path . --import
+   ```
+
+   Open points: the Griffin, Manticore and Magic Cannon show little team
+   colour in frame. The Dark Elf Archer and Assassin faces are behind their
+   masks, as designed. The siege engines are framed whole from distance 12
+   (their fronts loom at the camera at 6 to 7.5). The Spellstealer, Druid,
+   Panda Warrior, Star Paladin and Hydra edge crops are fixed.
 Known open points:
 
 - The longbow and the Dark Elf Rider's black lance read thin.

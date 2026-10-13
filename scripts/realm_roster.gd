@@ -185,7 +185,9 @@ static func _display_name(scene_path: String) -> String:
 	return _names[scene_path]
 
 ## The building menu for a roster().
-static func items(entries: Array) -> Array[ProducibleItem]:
+## `tint`: the owner's colour for the units' portraits (the local player's
+## when not given).
+static func items(entries: Array, tint: Color = Color(0, 0, 0, 0)) -> Array[ProducibleItem]:
 	var out: Array[ProducibleItem] = []
 	for entry in entries:
 		var scene := load(entry[0]) as PackedScene
@@ -197,7 +199,7 @@ static func items(entries: Array) -> Array[ProducibleItem]:
 		item.spawn_count = int(entry[1])
 		item.build_time = float(entry[2])
 		item.elite = entry.size() > 3 and bool(entry[3])
-		item.icon = UnitPortrait.of_scene(entry[0])
+		item.icon = UnitPortrait.of_scene(entry[0], tint)
 		var probe := scene.instantiate()
 		item.item_name = probe.get(&"display_name") if probe.get(&"display_name") != null else entry[0].get_file().get_basename()
 		probe.free()

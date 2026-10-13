@@ -296,24 +296,66 @@ def _mask_material():
 
 
 PORTRAIT_SIZE = 160
+## Always the game's folder, even with --out: `--out <scratch> --portraits`
+## renders portraits without touching the game's GLBs.
+PORTRAITS = KIT.parent / "portraits"
+
+
+def _portrait_light(scene):
+	"""Golden hour for the portraits: a low warm key from the figure's front
+	left (the camera's side, wider), a cool sky fill and a warm rim from
+	behind on the far edge, so the plastic catches a glint and the helmet
+	stands off the team-coloured key behind it."""
+	scene.world.node_tree.nodes["Background"].inputs[0].default_value = (0.46, 0.52, 0.66, 1.0)
+	scene.world.node_tree.nodes["Background"].inputs[1].default_value = 0.55
+	sun = bpy.data.objects["Sun"]
+	sun.data.energy = 4.6
+	sun.data.color = (1.0, 0.80, 0.55)
+	sun.data.angle = math.radians(6.0)
+	sun.rotation_euler = (math.radians(55.0), 0.0, math.radians(58.0))
+	rim_data = bpy.data.lights.new("Rim", 'SUN')
+	rim_data.energy = 3.2
+	rim_data.color = (1.0, 0.86, 0.66)
+	rim_data.angle = math.radians(4.0)
+	rim = bpy.data.objects.new("Rim", rim_data)
+	rim.rotation_euler = (math.radians(-62.0), 0.0, math.radians(48.0))
+	scene.collection.objects.link(rim)
+
+
+def _plastic(material):
+	"""The grey preview material as the game's glossy plastic (see
+	shaders/unit_figure.gdshader): roughness 0.3 tightening to 0.17 with
+	shine, and a clear coat."""
+	nt = material.node_tree
+	for node in nt.nodes:
+		if node.type == 'MAP_RANGE':
+			node.inputs["To Min"].default_value = 0.30
+			node.inputs["To Max"].default_value = 0.17
+		elif node.type == 'BSDF_PRINCIPLED':
+			node.inputs["Coat Weight"].default_value = 0.5
+			node.inputs["Coat Roughness"].default_value = 0.12
 
 
 def portraits(made_by_name, untinted_materials):
 	"""For the HUD: each figure's head and shoulders from a little to its
 	left, its team rows left grey, beside a mask of where those rows are.
 	One image per unit, the portrait on the left and the mask on the right
-	(UnitPortrait tints it per team)."""
+	(UnitPortrait tints it per team, the way the figure shader does)."""
 	import numpy as np
 	from mathutils import Vector
-	out_dir = OUT / "portraits"
+	out_dir = PORTRAITS
 	out_dir.mkdir(exist_ok=True)
 	scene = bpy.context.scene
 	cam = _stage(scene)
+	_portrait_light(scene)
 	bpy.data.objects["Ground"].hide_render = True
 	mask_material = _mask_material()
+	for material in untinted_materials.values():
+		_plastic(material)
 	scene.render.film_transparent = True
 	scene.render.resolution_x = PORTRAIT_SIZE
 	scene.render.resolution_y = PORTRAIT_SIZE
+	scene.cycles.samples = 64
 	cam.data.type = 'PERSP'
 	cam.data.lens = 85.0
 	cam.data.sensor_fit = 'VERTICAL'
@@ -328,8 +370,7 @@ def portraits(made_by_name, untinted_materials):
 		hero.hide_render = False
 		target = Vector(spec["portrait"])
 		az, el = math.radians(28.0), math.radians(14.0)
-		cam.location = target + Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))) \
-				* spec["portrait_distance"]
+		cam.location = target + Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))) 				* spec["portrait_distance"]
 		_look_at(cam, target)
 		layers = []
 		untinted_material = untinted_materials[spec["palette"]]
@@ -338,6 +379,7 @@ def portraits(made_by_name, untinted_materials):
 			hero.material_slots[0].material = material
 			scene.view_settings.view_transform = transform
 			scene.view_settings.look = 'AgX - Medium High Contrast' if transform == 'AgX' else 'None'
+			scene.cycles.use_denoising = transform == 'AgX'
 			path = Path(tempfile.gettempdir()) / ("_portrait_%s.png" % transform)
 			scene.render.filepath = str(path)
 			bpy.ops.render.render(write_still=True)
@@ -358,7 +400,7 @@ def portraits(made_by_name, untinted_materials):
 		bpy.data.images.remove(out)
 		hero.material_slots[0].link = 'DATA'
 		hero.hide_render = True
-		print("PORTRAIT", name)
+		print("PORTRAIT", name, out_dir / ("%s.png" % name))
 	scene.render.film_transparent = False
 	scene.view_settings.view_transform = 'AgX'
 	scene.view_settings.look = 'AgX - Medium High Contrast'

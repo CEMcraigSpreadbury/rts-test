@@ -1208,7 +1208,8 @@ func _majority_bearer(tally: Dictionary) -> Unit:
 	return best
 
 func _banner_texture(bearer: Unit) -> Texture2D:
-	var key := "%s|%s" % [bearer.sprite_sheet.get_rid().get_id(), bearer.team_tint.to_html()]
+	var key := "%s|%s|%s" % [bearer.sprite_sheet.get_rid().get_id(), UnitPortrait.figure_name(bearer),
+			bearer.team_tint.to_html()]
 	var cached: Texture2D = _banner_textures.get(key)
 	if cached != null:
 		return cached
@@ -1293,6 +1294,9 @@ static func _over(under: Color, colour: Color, cover: float) -> Color:
 ## The first idle frame of the bearer's sheet, cropped round the figure and
 ## scaled up by a whole number to fill the token's disc and stay crisp.
 func _banner_figure(bearer: Unit) -> Image:
+	var rendered: Image = UnitPortrait.rendered_image(bearer, bearer.team_tint)
+	if rendered != null:
+		return _banner_coin(rendered)
 	var sheet := bearer.sprite_sheet.get_image()
 	if sheet.is_compressed():
 		sheet.decompress()
@@ -1314,6 +1318,23 @@ func _banner_figure(bearer: Unit) -> Image:
 	var fit: int = maxi(1, int(TOKEN_DISC_RADIUS * 1.6) / maxi(figure.get_width(), figure.get_height()))
 	figure.resize(figure.get_width() * fit, figure.get_height() * fit, Image.INTERPOLATE_NEAREST)
 	return figure
+
+## A figure's rendered portrait for a token: scaled to the disc and cut to a
+## circle just inside it, like a face on a coin.
+func _banner_coin(portrait: Image) -> Image:
+	var side: int = int(TOKEN_DISC_RADIUS * 2.0) - 2
+	var coin: Image = portrait.duplicate()
+	coin.resize(side, side, Image.INTERPOLATE_LANCZOS)
+	var centre := Vector2(side, side) * 0.5
+	var radius: float = side * 0.5 - 1.0
+	for y in side:
+		for x in side:
+			var cover: float = clampf(radius + 0.5 - Vector2(x + 0.5, y + 0.5).distance_to(centre), 0.0, 1.0)
+			if cover < 1.0:
+				var c: Color = coin.get_pixel(x, y)
+				c.a *= cover
+				coin.set_pixel(x, y, c)
+	return coin
 
 func _ensure_rally_marker() -> void:
 	if rally_marker:

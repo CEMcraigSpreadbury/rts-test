@@ -308,6 +308,7 @@ func _next_line() -> void:
 	_dialogue_speaker.visible = _dialogue_speaker.text != ""
 	_dialogue_text.text = String(line.get("text", ""))
 	_dialogue_portrait.texture = _portrait_for(line)
+	_dialogue_portrait.texture_filter = UnitPortrait.filter_for(_dialogue_portrait.texture)
 	_dialogue_portrait.visible = _dialogue_portrait.texture != null
 	_dialogue_panel.visible = not _briefing_panel.visible
 	## Holding the whole game for a line is a single-player thing: in
@@ -330,6 +331,7 @@ func _portrait_for(line: Dictionary) -> Texture2D:
 		return load(art_path) as Texture2D
 	var scene_path := String(line.get("speaker_scene", ""))
 	if scene_path != "":
+		## In the local player's colour: speakers are their own people.
 		return UnitPortrait.of_scene(scene_path)
 	return null
 

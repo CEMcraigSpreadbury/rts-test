@@ -538,7 +538,7 @@ func _show_item_art(icon: TextureRect, item: ProducibleItem) -> void:
 	else:
 		icon.texture = item.icon if item != null else null
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED if glyph else TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if glyph else CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if glyph else UnitPortrait.filter_for(icon.texture)
 	icon.self_modulate = CommandSlot.GLYPH_TINT if glyph else Color.WHITE
 
 static func _awaiting_choice(building: ProductionBuilding) -> bool:
@@ -617,8 +617,9 @@ func _update_portrait(tint: Color, health_text: String, head: Texture2D = null, 
 	else:
 		_portrait_head.texture = head
 		_portrait_head.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		## Pixel art: crisp rather than smeared when blown up.
-		_portrait_head.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		## Pixel art crisp rather than smeared when blown up; a figure's
+		## rendered portrait smooth.
+		_portrait_head.texture_filter = UnitPortrait.filter_for(head)
 		_portrait_head.self_modulate = Color.WHITE
 	_portrait_head.visible = _portrait_head.texture != null
 	portrait_health_label.text = health_text
@@ -930,7 +931,7 @@ func _build_unit_info() -> void:
 		portrait.expand_icon = true
 		portrait.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		portrait.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
-		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		portrait.texture_filter = UnitPortrait.filter_for(portrait.icon)
 		portrait.pressed.connect(main.select_only_unit.bind(unit))
 		cell.add_child(portrait)
 		var health_bar := ProgressBar.new()

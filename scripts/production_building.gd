@@ -79,6 +79,7 @@ enum Role { OTHER, MILITARY, SHRINE, WALL }
 	set(value):
 		team_tint = value
 		_apply_team_color()
+		_retint_roster_icons()
 ## How far the model sinks into the ground as it's destroyed.
 @export var construction_sink_depth: float = 3.0
 ## >0 marks this building as a walkable OPENING rather than a solid obstacle,
@@ -660,6 +661,14 @@ func _show_beast_on_display() -> void:
 	display.position = floor_at + Vector3(0.0, cell.y * display.pixel_size * fit * 0.5, 0.0)
 	beast.free()
 
+## A captured slot building's unit portraits follow its new owner's colour.
+func _retint_roster_icons() -> void:
+	if slot_kind < 0 or team_tint == Color.WHITE:
+		return
+	for item in producibles:
+		if item != null and item.kind == ProducibleItem.Kind.UNIT and item.unit_scene != null:
+			item.icon = UnitPortrait.of_scene(item.unit_scene.resource_path, team_tint)
+
 ## Every peer: the menu (a military building's units, and the level-ups) and,
 ## on a resource building, its pay.
 func apply_slot_level(level: int, cap: int) -> void:
@@ -667,7 +676,8 @@ func apply_slot_level(level: int, cap: int) -> void:
 	slot_level_cap = cap
 	var offered: Array[ProducibleItem] = []
 	if slot_kind >= 0:
-		offered = RealmRoster.items(RealmRoster.roster(slot_race, slot_kind, level))
+		offered = RealmRoster.items(RealmRoster.roster(slot_race, slot_kind, level),
+				team_tint if team_tint != Color.WHITE else Color(0, 0, 0, 0))
 	else:
 		for item in producibles:
 			if item.kind != ProducibleItem.Kind.LEVEL:

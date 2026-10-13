@@ -1,10 +1,30 @@
 class_name UnitPortrait
 extends RefCounted
-## A unit's head, cut out of its sprite sheet — the dialogue box's speaker
-## portrait and the HUD's selection portrait. Stands in until there is real
-## portrait art. Cached per sheet, because it never changes.
+## A unit's portrait: the dialogue box's speaker, the HUD's selection
+## portrait, the selection tray, the regiment cards and standards.
 ##
-## A unit can set its own crop instead (Unit.portrait_region).
+## A unit drawn as a 3D figure shows its rendered portrait when there is one:
+## PORTRAIT_DIR/<figure model name>.png, made by the Blender kit
+## (build.py --portraits). That image is the head-and-shoulders render, its
+## team rows left grey, on the left half and a mask of those rows on the
+## right; here the grey under the mask is multiplied by the team colour the
+## way shaders/unit_figure.gdshader does it, once per type and colour.
+## Anything else is cut out of its sprite sheet (below). Cached, because
+## neither ever changes.
+##
+## A unit can set its own sprite crop instead (Unit.portrait_region).
+
+const PORTRAIT_DIR: String = "res://assets/art/Models/Units/portraits/"
+## Figure models whose names start with these keep their sprite portraits
+## even when a render exists (the Gnolls, for now).
+const SPRITE_ONLY: Array[String] = ["Gnoll", "Hyena", "SandWorm", "SkeletonDragonBeast"]
+## shaders/unit_figure.gdshader's team_grey_ref and team_saturation.
+const TEAM_GREY_REF: float = 0.42
+const TEAM_SATURATION: float = 0.88
+## The colour a portrait takes where nobody owns the unit (a dialogue speaker).
+const DEFAULT_TINT := Color(0.25, 0.55, 1.0)
+## Marks a rendered portrait's texture (see filter_for).
+const RENDERED_META: StringName = &"figure_portrait"
 
 ## Every portrait is the whole figure. Off, units get a head-and-shoulders
 ## crop found from the art (below), and only side-on creatures (see
@@ -26,27 +46,141 @@ const MIN_FACE_PIXELS: int = 4
 const WIDE_CELL_RATIO: float = 2.0
 
 static var _cache: Dictionary = {}
+## Figure name -> the portrait-plus-mask Image, or null when there is none.
+static var _sources: Dictionary = {}
 
-## For a unit that exists: its own sheet, cell size, idle row and any crop it
-## sets for itself.
-static func of_unit(unit: Unit) -> Texture2D:
-	if unit == null or unit.sprite_sheet == null:
+## For a unit that exists: its rendered figure portrait in `tint` (its own
+## team's colour by default), else its own sheet, cell size, idle row and any
+## crop it sets for itself.
+static func of_unit(unit: Unit, tint: Color = Color(0, 0, 0, 0)) -> Texture2D:
+	if unit == null:
+		return null
+	var rendered: Texture2D = rendered_of(unit, owner_tint(unit) if tint.a == 0.0 else tint)
+	if rendered != null:
+		return rendered
+	if unit.sprite_sheet == null:
 		return null
 	return of_sheet(unit.sprite_sheet, unit.sprite_cell_size, unit.idle_row, unit.portrait_region)
 
-## For a unit scene nobody has spawned — a dialogue line's speaker.
-static func of_scene(scene_path: String) -> Texture2D:
-	if _cache.has(scene_path):
-		return _cache[scene_path]
+## The colour of the player who owns `unit`: its team tint, or (before that
+## is set) its owner's colour from the match.
+static func owner_tint(unit: Unit) -> Color:
+	if unit.team_tint != Color.WHITE:
+		return unit.team_tint
+	var main := _main()
+	return main.get_team_tint(unit.owner_peer_id) if main != null else DEFAULT_TINT
+
+## The local player's colour, for a portrait nobody owns yet (a dialogue
+## speaker, a unit offered for training).
+static func local_tint() -> Color:
+	var main := _main()
+	return main.get_team_tint(main.my_peer_id()) if main != null else DEFAULT_TINT
+
+static func _main() -> Main:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.current_scene as Main if tree != null else null
+
+## For a unit scene nobody has spawned — a dialogue line's speaker, a roster
+## entry — in `tint` (the local player's colour when not given).
+static func of_scene(scene_path: String, tint: Color = Color(0, 0, 0, 0)) -> Texture2D:
+	if tint.a == 0.0:
+		tint = local_tint()
+	var key := "%s|%s" % [scene_path, tint.to_html()]
+	if _cache.has(key):
+		return _cache[key]
 	var texture: Texture2D = null
 	if ResourceLoader.exists(scene_path):
 		var scene: PackedScene = load(scene_path)
 		var unit: Node = scene.instantiate()
 		if unit is Unit:
-			texture = of_unit(unit)
+			texture = of_unit(unit, tint)
 		unit.free()
-	_cache[scene_path] = texture
+	_cache[key] = texture
 	return texture
+
+## The filter a portrait wants: smooth for a render, crisp for pixel art.
+static func filter_for(texture: Texture2D) -> CanvasItem.TextureFilter:
+	if texture != null and texture.has_meta(RENDERED_META):
+		return CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	return CanvasItem.TEXTURE_FILTER_NEAREST
+
+## The name its rendered portrait is filed under: its figure model's file
+## name. Empty for a sprite-only unit.
+static func figure_name(unit: Unit) -> String:
+	if unit == null or unit.figure_model == null:
+		return ""
+	var name: String = unit.figure_model.resource_path.get_file().get_basename()
+	for prefix in SPRITE_ONLY:
+		if name.begins_with(prefix):
+			return ""
+	return name
+
+## The rendered portrait as an Image in `tint` (null with none): for the
+## regiment standards, which paint it onto their token.
+static func rendered_image(unit: Unit, tint: Color) -> Image:
+	var source: Image = _source(figure_name(unit))
+	if source == null:
+		return null
+	var key := "img|%s|%s" % [figure_name(unit), tint.to_html()]
+	if not _cache.has(key):
+		_cache[key] = _tinted(source, tint)
+	return _cache[key]
+
+static func rendered_of(unit: Unit, tint: Color) -> Texture2D:
+	var name: String = figure_name(unit)
+	if name == "":
+		return null
+	var key := "tex|%s|%s" % [name, tint.to_html()]
+	if not _cache.has(key):
+		var image: Image = rendered_image(unit, tint)
+		var texture: ImageTexture = null
+		if image != null:
+			var mipped: Image = image.duplicate()
+			mipped.generate_mipmaps()
+			texture = ImageTexture.create_from_image(mipped)
+			texture.set_meta(RENDERED_META, true)
+		_cache[key] = texture
+	return _cache[key]
+
+static func _source(name: String) -> Image:
+	if name == "":
+		return null
+	if not _sources.has(name):
+		var path := PORTRAIT_DIR + name + ".png"
+		var image: Image = null
+		if ResourceLoader.exists(path):
+			var texture := load(path) as Texture2D
+			image = texture.get_image() if texture != null else null
+			if image != null:
+				if image.is_compressed():
+					image.decompress()
+				image.convert(Image.FORMAT_RGBA8)
+		_sources[name] = image
+	return _sources[name]
+
+## The portrait half with the mask half's team rows multiplied by `tint`, as
+## the figure shader does: in linear light, the colour a little desaturated,
+## a swatch of TEAM_GREY_REF showing it as it is.
+static func _tinted(source: Image, tint: Color) -> Image:
+	var side: int = source.get_height()
+	var team: Color = tint.srgb_to_linear()
+	var grey: float = team.get_luminance()
+	team = Color(grey, grey, grey).lerp(team, TEAM_SATURATION)
+	var out := Image.create_empty(side, side, false, Image.FORMAT_RGBA8)
+	for y in side:
+		for x in side:
+			var c: Color = source.get_pixel(x, y)
+			var m: float = source.get_pixel(x + side, y).r
+			if m > 0.0 and c.a > 0.0:
+				var lin: Color = c.srgb_to_linear()
+				## Per channel, so the warm light on the grey carries over.
+				var dyed := Color(minf(team.r * lin.r / TEAM_GREY_REF, 1.0),
+						minf(team.g * lin.g / TEAM_GREY_REF, 1.0),
+						minf(team.b * lin.b / TEAM_GREY_REF, 1.0))
+				var mixed: Color = Color(lin.r, lin.g, lin.b).lerp(dyed, m).linear_to_srgb()
+				c = Color(mixed.r, mixed.g, mixed.b, c.a)
+			out.set_pixel(x, y, c)
+	return out
 
 ## `region`: a crop within the cell chosen by hand; empty works one out.
 static func of_sheet(sheet: Texture2D, cell: Vector2i, row: int = 0, region: Rect2i = Rect2i()) -> Texture2D:

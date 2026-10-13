@@ -231,7 +231,6 @@ func _refresh() -> void:
 		x += CARD_SIZE.x
 	var overflow: bool = xs.size() < groups.size()
 	var shown: int = xs.size()
-	var well := _well_texture(main.get_team_tint(main.my_peer_id()))
 	for i in _cards.size():
 		var card: Dictionary = _cards[i]
 		var root: Panel = card["root"]
@@ -248,7 +247,9 @@ func _refresh() -> void:
 				rest.append_array(groups[g]["units"])
 			_groups.append(rest)
 			continue
-		_show_group(card, groups[i], well)
+		## The well in the colour of the player who owns the units, like
+		## their portrait on it.
+		_show_group(card, groups[i], _well_texture(UnitPortrait.owner_tint(groups[i]["sample"])))
 		_groups.append(groups[i]["units"])
 	_place_brackets(groups, xs, shown - 1 if overflow else shown)
 
@@ -313,7 +314,7 @@ func _show_figure(figure: TextureRect, unit: Unit, px: int) -> void:
 	else:
 		figure.texture = UnitPortrait.of_unit(unit)
 		figure.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		figure.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		figure.texture_filter = UnitPortrait.filter_for(figure.texture)
 		figure.self_modulate = Color.WHITE
 
 func _show_group(card: Dictionary, group: Dictionary, well: Texture2D) -> void:
