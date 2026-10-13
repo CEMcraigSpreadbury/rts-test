@@ -294,6 +294,9 @@ func _ready() -> void:
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_collect_visuals()
+	for particles in [placement_particles, construction_particles]:
+		if particles:
+			RoundParticle.apply(particles.draw_pass_1)
 	## team_tint is normally assigned at spawn time, before there is a tree to
 	## walk, so the setter's own call is a no-op and this is where it lands.
 	_apply_team_color()
@@ -377,8 +380,8 @@ func _collect_meshes(node: Node, out: Array[MeshInstance3D]) -> void:
 		_collect_meshes(child, out)
 
 ## Squashes the whole model on production, damage and resource deposits. Held
-## off during construction, where _update_construction_rise() is already
-## driving the meshes' own Y scale.
+## off during construction, where each layer snapping on gives its own
+## (see _snap_layer).
 func play_squash() -> void:
 	if is_under_construction or is_destroyed or _model_roots.is_empty():
 		return
@@ -964,6 +967,50 @@ func collapse() -> void:
 	health_fraction = 0.0
 	_begin_destruction()
 
+## Destroyed: the model crumples and its plastic pieces burst out
+## (BuildingDebris) while the host sinks the remains into the ground.
+const BREAK_CRUMPLE: Vector3 = Vector3(1.15, 0.25, 1.15)
+const BREAK_CRUMPLE_TIME: float = 0.35
+var _broken: bool = false
+
+func _play_break() -> void:
+	_broken = true
+	var box := AABB()
+	var first := true
+	for mesh_instance in _flash_meshes:
+		if not is_instance_valid(mesh_instance) or mesh_instance.mesh == null:
+			continue
+		var part: AABB = mesh_instance.global_transform * mesh_instance.mesh.get_aabb()
+		box = part if first else box.merge(part)
+		first = false
+	if first:
+		box = AABB(global_position - Vector3(1.0, 0.0, 1.0), Vector3(2.0, 2.0, 2.0))
+	var colours: Array[Color] = []
+	for sources in _source_materials.values():
+		for material in sources:
+			var standard := material as BaseMaterial3D
+			if standard == null or standard.resource_name == "TeamColor":
+				continue
+			if not colours.has(standard.albedo_color):
+				colours.append(standard.albedo_color)
+	var count: int = clampi(roundi(maxf(box.size.x, box.size.z) * 2.5), 5, 18)
+	if get_parent() != null:
+		BuildingDebris.burst(get_parent(), box, colours, team_tint if team_tint != Color.WHITE else Color(0.6, 0.6, 0.6), count)
+	if placement_particles:
+		placement_particles.restart()
+	if _drop_tween and _drop_tween.is_valid():
+		_drop_tween.kill()
+	if _squash_tween and _squash_tween.is_valid():
+		_squash_tween.kill()
+	if _layer_tween and _layer_tween.is_valid():
+		_layer_tween.kill()
+	var tween := create_tween().set_parallel(true)
+	for i in _model_roots.size():
+		tween.tween_property(_model_roots[i], "scale", _model_base_scales[i] * BREAK_CRUMPLE, BREAK_CRUMPLE_TIME) 				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.chain().tween_callback(func():
+		for root in _model_roots:
+			root.visible = false)
+
 func _begin_destruction() -> void:
 	is_destroyed = true
 	## Whatever was still queued will never spawn, so the population enqueue()
@@ -986,6 +1033,10 @@ func _process(delta: float) -> void:
 	## this locally off the already-synced is_under_construction flag, not
 	## just the host.
 	_update_construction_visual()
+	## Every peer sees the synced health hit zero; a cancelled site (health
+	## left alone) just sinks away.
+	if not _broken and health_fraction <= 0.0:
+		_play_break()
 
 	if not is_multiplayer_authority():
 		return
@@ -1081,7 +1132,7 @@ func _update_construction_visual() -> void:
 			## catch it exactly once in _ready()).
 			if placement_particles:
 				placement_particles.restart()
-		_update_construction_rise()
+		_update_construction_layers(get_process_delta_time())
 		## Checked every frame (not just on the transition above) so the dust
 		## follows synced_builder_count live — it should stop the moment the
 		## last builder leaves/dies and resume as soon as one arrives, not
@@ -1097,7 +1148,7 @@ func _update_construction_visual() -> void:
 		if not is_destroyed:
 			play_finish_pop()
 
-const _CONSTRUCTION_ALPHA: float = 0.45
+const _CONSTRUCTION_ALPHA: float = 0.18
 
 ## The see-through version of one surface's material. A team-colored surface
 ## has to fade its recolored self — swapping in a plain StandardMaterial3D
@@ -1116,15 +1167,34 @@ func _construction_ghost_for(base: Material) -> Material:
 
 func _apply_construction_transparency() -> void:
 	_original_materials.clear()
+	_construction_materials.clear()
 	_tint_recursive(self)
+	## The model's height in the world, cut into layers about LAYER_HEIGHT
+	## tall that snap on one at a time as the work goes on.
+	_build_bottom = global_position.y
+	_build_top = global_position.y + 1.0
+	var first := true
+	for mesh_instance in _original_materials:
+		if not is_instance_valid(mesh_instance) or mesh_instance.mesh == null:
+			continue
+		var box: AABB = mesh_instance.global_transform * mesh_instance.mesh.get_aabb()
+		if first:
+			_build_bottom = box.position.y
+			_build_top = box.end.y
+			first = false
+		else:
+			_build_bottom = minf(_build_bottom, box.position.y)
+			_build_top = maxf(_build_top, box.end.y)
+	_build_layers = clampi(roundi((_build_top - _build_bottom) / LAYER_HEIGHT), MIN_LAYERS, MAX_LAYERS)
+	_shown_layer = 0
+	_build_y = _build_bottom - 0.01
+	_band_glow = 0.0
+	_set_construction_uniforms()
 
 ## Only the mesh nodes are affected (never the root/collision, which must
 ## stay put and clickable from the moment the building is placed). Each
-## mesh's own local Y and the local Y of its own bottom edge (from its AABB)
-## are remembered so it can grow from a thin sliver at ground level up to its
-## full height as construction_progress advances — the bottom edge stays
-## fixed the whole time (so it's never invisible below the ground, and never
-## needs to "pop in" at 100%), only the top rises.
+## mesh's materials are swapped for the layered construction variant and
+## the originals remembered, to be put back once it is finished.
 func _tint_recursive(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mesh_instance: MeshInstance3D = node
@@ -1133,7 +1203,10 @@ func _tint_recursive(node: Node) -> void:
 		for i in surface_count:
 			originals.append(mesh_instance.get_surface_override_material(i))
 			var base: Material = mesh_instance.get_active_material(i)
-			mesh_instance.set_surface_override_material(i, _construction_ghost_for(base))
+			var ghost: Material = _construction_ghost_for(base)
+			mesh_instance.set_surface_override_material(i, ghost)
+			if ghost is ShaderMaterial:
+				_construction_materials.append(ghost)
 		if surface_count > 0:
 			_original_materials[mesh_instance] = {
 				"materials": originals,
@@ -1144,21 +1217,54 @@ func _tint_recursive(node: Node) -> void:
 	for child in node.get_children():
 		_tint_recursive(child)
 
-## Never lets progress reach a literal 0 scale — a completely flat mesh is an
-## easy-to-misread "did it vanish?" state, so there's always a thin sliver
-## visible immediately on placement.
-const _MIN_RISE_FRACTION: float = 0.05
+## Construction as a toy being put together: the model stands full size as a
+## faint blueprint, and solid layers snap on from the ground up — the built
+## part's top springs up past its mark and settles, its fresh edge glows, and
+## the whole model gives a little squash. Nothing is built until a builder
+## starts (progress 0 is the bare blueprint); the last layer lands at 100%.
+const LAYER_HEIGHT: float = 0.8
+const MIN_LAYERS: int = 4
+const MAX_LAYERS: int = 7
+const LAYER_SNAP_TIME: float = 0.22
+const LAYER_GLOW_FADE: float = 0.55
+const LAYER_SQUASH: Vector3 = Vector3(1.06, 0.92, 1.06)
+var _construction_materials: Array[ShaderMaterial] = []
+var _build_bottom: float = 0.0
+var _build_top: float = 1.0
+var _build_layers: int = MIN_LAYERS
+var _shown_layer: int = 0
+var _build_y: float = 0.0
+var _band_glow: float = 0.0
+var _layer_tween: Tween
 
-func _update_construction_rise() -> void:
-	var t: float = clampf(construction_progress, _MIN_RISE_FRACTION, 1.0)
-	for mesh_instance in _original_materials:
-		if not is_instance_valid(mesh_instance):
-			continue
-		var info: Dictionary = _original_materials[mesh_instance]
-		var base_scale_y: float = info["base_scale_y"]
-		var scale_y: float = base_scale_y * t
-		mesh_instance.scale.y = scale_y
-		mesh_instance.position.y = info["base_y"] + info["aabb_bottom"] * base_scale_y * (1.0 - t)
+func _update_construction_layers(delta: float) -> void:
+	var layer: int = ceili(clampf(construction_progress, 0.0, 1.0) * _build_layers - 0.0001)
+	if layer > _shown_layer:
+		_shown_layer = layer
+		_snap_layer()
+	if _band_glow > 0.0:
+		_band_glow = maxf(_band_glow - delta / LAYER_GLOW_FADE, 0.0)
+	_set_construction_uniforms()
+
+func _snap_layer() -> void:
+	var target: float = lerpf(_build_bottom, _build_top, float(_shown_layer) / float(_build_layers))
+	if _shown_layer >= _build_layers:
+		target = _build_top + 0.05
+	_band_glow = 1.0
+	if _layer_tween and _layer_tween.is_valid():
+		_layer_tween.kill()
+	_layer_tween = create_tween()
+	_layer_tween.tween_property(self, "_build_y", target, LAYER_SNAP_TIME) 			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_layer_tween.parallel()
+	for i in _model_roots.size():
+		var root: Node3D = _model_roots[i]
+		root.scale = _model_base_scales[i] * LAYER_SQUASH
+		_layer_tween.parallel().tween_property(root, "scale", _model_base_scales[i], LAYER_SNAP_TIME * 1.6) 				.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+func _set_construction_uniforms() -> void:
+	for material in _construction_materials:
+		material.set_shader_parameter("build_y", _build_y)
+		material.set_shader_parameter("band_glow", _band_glow)
 
 func _restore_materials() -> void:
 	for mesh_instance in _original_materials:
@@ -1170,6 +1276,9 @@ func _restore_materials() -> void:
 			mesh_instance.position.y = info["base_y"]
 			mesh_instance.scale.y = info["base_scale_y"]
 	_original_materials.clear()
+	_construction_materials.clear()
+	if _layer_tween and _layer_tween.is_valid():
+		_layer_tween.kill()
 
 
 ## What one queued item costs in population: a Gnoll litter reserves room for

@@ -235,6 +235,15 @@ signal ability_launched(ability_index: int, from_pos: Vector3, target_pos: Vecto
 signal status_applied(dot_seconds: float, slow_seconds: float, stun_seconds: float, color: Color)
 ## Host-only, relayed by WorldFeedback: thrown by a charge (see play_thrown).
 signal thrown(height: float, duration: float)
+## Host-only, relayed by WorldFeedback.relay_impact: a blow worth showing on
+## the ground — a big body's slam, a charge striking home, or a blow turned
+## by armour (sparks).
+signal impact(world_pos: Vector3, kind: ImpactKind)
+enum ImpactKind { SLAM, CHARGE, SPARK }
+## A blow cut to this share or less (counters and armour together) sparks.
+const SPARK_RESIST: float = 0.6
+const SPARK_COOLDOWN_MS: int = 400
+var _next_spark_ms: int = 0
 
 ## What this unit type is called in UI (info panel title, etc.) — unlike the
 ## scene node's own .name, this can't get an auto-incremented suffix (e.g.
@@ -1030,6 +1039,7 @@ func _ensure_stun_stars() -> void:
 		_stun_star_mesh = QuadMesh.new()
 		_stun_star_mesh.size = Vector2(0.13, 0.13)
 		_stun_star_mesh.material = material
+		RoundParticle.apply(_stun_star_mesh)
 	_stun_stars = Node3D.new()
 	_stun_stars.position = Vector3(0, _stun_star_height(), 0)
 	for i in STUN_STAR_COUNT:
@@ -1053,6 +1063,7 @@ static func _status_quad_mesh() -> QuadMesh:
 		_status_particle_mesh = QuadMesh.new()
 		_status_particle_mesh.size = Vector2(0.12, 0.12)
 		_status_particle_mesh.material = material
+		RoundParticle.apply(_status_particle_mesh)
 	return _status_particle_mesh
 
 ## Both sprite motions (attack lunge and hit recoil) drive the same property,
@@ -2636,8 +2647,10 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	last_damaged_msec = GameClock.msec()
 	## Counters: the attacker's damage type against this unit's armour class.
 	## Only a Unit attacker has a damage type; buildings and the like hit x1.
+	var resisted := 1.0
 	if attacker is Unit:
-		amount = maxi(roundi(amount * CombatUtils.counter_multiplier(attacker.damage_type, armor_class)), 1)
+		resisted = CombatUtils.counter_multiplier(attacker.damage_type, armor_class)
+		amount = maxi(roundi(amount * resisted), 1)
 	var flanked := false
 	if directional and attacker != null and is_instance_valid(attacker):
 		var flank := _flank_multiplier(attacker.global_position)
@@ -2662,6 +2675,10 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	if armor > 0:
 		var reduction := minf(armor * ARMOR_REDUCTION_PER_POINT, ARMOR_MAX_REDUCTION)
 		amount = maxi(roundi(amount * (1.0 - reduction)), 1)
+		resisted *= 1.0 - reduction
+	if directional and attacker is Unit and resisted <= SPARK_RESIST and GameClock.msec() >= _next_spark_ms:
+		_next_spark_ms = GameClock.msec() + SPARK_COOLDOWN_MS
+		impact.emit(global_position.lerp(attacker.global_position, 0.35) + Vector3.UP * 0.8, ImpactKind.SPARK)
 	## Fatality is decided here, before the health subtraction below, purely so
 	## it can ride along with the signal: main.gd relays this to every peer and
 	## uses it to hitstop the attacker on a killing blow, and by the time the
@@ -3932,6 +3949,7 @@ func _strike_melee(target: Node3D, retarget: bool) -> void:
 	if charged and target.braces_against(self):
 		## Straight onto the spears: no charge, and the charger pays.
 		_spend_charge()
+		impact.emit(global_position.lerp(target.global_position, 0.5) + Vector3.UP * 0.9, ImpactKind.SPARK)
 		target.take_damage(damage, self)
 		_apply_on_hit_effects(target)
 		if _is_target_alive(target):
@@ -3951,6 +3969,7 @@ func _strike_melee(target: Node3D, retarget: bool) -> void:
 		_cleave(target, roundi(damage * cleave))
 	if charged:
 		var struck: Unit = target
+		impact.emit(struck.global_position, ImpactKind.CHARGE)
 		if _is_target_alive(struck):
 			struck.receive_charge(self)
 		_throw_charge_splash(struck)
@@ -3971,6 +3990,9 @@ func _tick_pending_blows(delta: float) -> void:
 			continue
 		if _flat_distance(global_position, target.global_position) > _reach_to(target) * ATTACK_LEASH_SLACK:
 			continue
+		## Where the slam comes down: just past its own front, toward the blow.
+		var front := Vector3(sin(rotation.y), 0.0, cos(rotation.y))
+		impact.emit(global_position + front * (get_body_bulk() + attack_range * 0.6), ImpactKind.SLAM)
 		_strike_melee(target, blow["retarget"])
 		if status_activity == Activity.DEAD:
 			return

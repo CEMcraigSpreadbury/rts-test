@@ -1082,6 +1082,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
 	unit.thrown.connect(feedback.relay_thrown.bind(unit))
+	unit.impact.connect(feedback.relay_impact)
 	## After Unit._ready has set its health, so research raises it from there.
 	unit.ready.connect(research.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
 	unit.ready.connect(race_traits.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
@@ -1112,6 +1113,7 @@ func register_objective_unit(unit: Unit) -> void:
 	unit.ability_launched.connect(feedback.relay_ability_launch.bind(unit))
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
 	unit.thrown.connect(feedback.relay_thrown.bind(unit))
+	unit.impact.connect(feedback.relay_impact)
 
 ## Objective Favour income "+N" — called by objective.gd (via current_scene,
 ## so it has to stay reachable on Main); the popup itself is WorldFeedback's.

@@ -326,6 +326,12 @@ const POPUP_TWEEN_META: StringName = &"pinned_popup_tween"
 var _impact_process_material: ParticleProcessMaterial
 var _impact_mesh: QuadMesh
 var _rally_dust_material: ParticleProcessMaterial
+var _slam_dust_material: ParticleProcessMaterial
+var _charge_dust_material: ParticleProcessMaterial
+var _spark_material: ParticleProcessMaterial
+var _spark_mesh: QuadMesh
+var _dust_mesh: QuadMesh
+var _crack_texture: Texture2D
 ## RPCs declared directly on dynamically-spawned Unit nodes weren't reaching
 ## clients, so units relay animation changes here and this (statically present,
 ## proven-reliable) node broadcasts them instead. Sprite flip is NOT relayed
@@ -604,14 +610,14 @@ func _spawn_impact_burst(world_pos: Vector3) -> void:
 func spawn_rally_dust(world_pos: Vector3) -> void:
 	_spawn_burst(_rally_dust_material, world_pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 16, 0.5)
 
-func _spawn_burst(material: ParticleProcessMaterial, world_pos: Vector3, amount: int, lifetime: float) -> void:
+func _spawn_burst(material: ParticleProcessMaterial, world_pos: Vector3, amount: int, lifetime: float, mesh: Mesh = null) -> void:
 	var particles := GPUParticles3D.new()
 	particles.amount = amount
 	particles.lifetime = lifetime
 	particles.one_shot = true
 	particles.explosiveness = 1.0
 	particles.process_material = material
-	particles.draw_pass_1 = _impact_mesh
+	particles.draw_pass_1 = mesh if mesh != null else _impact_mesh
 	add_child(particles)
 	particles.global_position = world_pos
 	particles.emitting = true
@@ -665,6 +671,177 @@ func _build_impact_effect_resources() -> void:
 	dust.scale_max = 1.1
 	dust.color = Color(0.82, 0.74, 0.6, 0.75)
 	_rally_dust_material = dust
+
+	## A big body's slam: the rally ring, wider and thrown harder.
+	var slam: ParticleProcessMaterial = dust.duplicate()
+	slam.emission_ring_radius = 0.7
+	slam.emission_ring_inner_radius = 0.45
+	slam.initial_velocity_min = 0.8
+	slam.initial_velocity_max = 1.6
+	slam.radial_velocity_min = 2.4
+	slam.radial_velocity_max = 3.4
+	slam.damping_min = 5.0
+	slam.damping_max = 7.0
+	slam.scale_min = 1.6
+	slam.scale_max = 2.8
+	slam.scale_curve = _shrink_curve()
+	_slam_dust_material = slam
+	## A charge striking home: a smaller, rougher burst.
+	var charge: ParticleProcessMaterial = dust.duplicate()
+	charge.emission_ring_radius = 0.5
+	charge.emission_ring_inner_radius = 0.2
+	charge.spread = 45.0
+	charge.initial_velocity_min = 0.8
+	charge.initial_velocity_max = 1.6
+	charge.radial_velocity_min = 1.4
+	charge.radial_velocity_max = 2.2
+	charge.damping_min = 5.0
+	charge.damping_max = 7.0
+	charge.scale_min = 1.2
+	charge.scale_max = 2.0
+	charge.scale_curve = _shrink_curve()
+	_charge_dust_material = charge
+
+	## Soft round puffs (RoundParticle), like every other particle.
+	var dust_material := StandardMaterial3D.new()
+	dust_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	dust_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dust_material.vertex_color_use_as_albedo = true
+	dust_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	dust_material.billboard_keep_scale = true
+	dust_material.albedo_texture = RoundParticle.texture()
+	var dust_mesh := QuadMesh.new()
+	dust_mesh.size = Vector2(0.22, 0.22)
+	dust_mesh.material = dust_material
+	_dust_mesh = dust_mesh
+
+	## Sparks: fast, hot, gone in a blink.
+	var sparks := ParticleProcessMaterial.new()
+	sparks.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	sparks.emission_sphere_radius = 0.08
+	sparks.direction = Vector3(0, 1, 0)
+	sparks.spread = 80.0
+	sparks.initial_velocity_min = 3.0
+	sparks.initial_velocity_max = 5.5
+	sparks.gravity = Vector3(0, -12.0, 0)
+	sparks.scale_min = 0.4
+	sparks.scale_max = 0.9
+	sparks.color = Color(1.0, 0.82, 0.35)
+	_spark_material = sparks
+	var spark_material := StandardMaterial3D.new()
+	spark_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	spark_material.vertex_color_use_as_albedo = true
+	spark_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	spark_material.billboard_keep_scale = true
+	spark_material.albedo_color = Color(1.0, 0.9, 0.55)
+	spark_material.emission_enabled = true
+	spark_material.emission = Color(1.0, 0.7, 0.25)
+	spark_material.emission_energy_multiplier = 3.0
+	var spark_mesh := QuadMesh.new()
+	spark_mesh.size = Vector2(0.07, 0.07)
+	spark_mesh.material = spark_material
+	_spark_mesh = spark_mesh
+
+	_crack_texture = _make_crack_texture()
+	RoundParticle.apply(_impact_mesh)
+	RoundParticle.apply(_spark_mesh)
+
+## --- Ground impacts (Unit.impact) ---
+## A big body's slam throws a wide ring of dust and leaves a crack in the
+## ground that fades; a charge striking home kicks up dust; a blow turned by
+## armour or a spear brace throws sparks. Host events, played on every peer.
+const SLAM_CRACK_SIZE: float = 3.2
+const SLAM_CRACK_HOLD: float = 1.6
+const SLAM_CRACK_FADE: float = 1.2
+
+func relay_impact(world_pos: Vector3, kind: Unit.ImpactKind) -> void:
+	_play_impact(world_pos, kind)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_impact.rpc(world_pos, kind)
+
+@rpc("authority", "call_remote", "unreliable")
+func _rpc_impact(world_pos: Vector3, kind: int) -> void:
+	_play_impact(world_pos, kind)
+
+func _play_impact(world_pos: Vector3, kind: int) -> void:
+	match kind:
+		Unit.ImpactKind.SLAM:
+			_spawn_burst(_slam_dust_material, world_pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 32, 0.5, _dust_mesh)
+			_spawn_crack(world_pos)
+		Unit.ImpactKind.CHARGE:
+			_spawn_burst(_charge_dust_material, world_pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 18, 0.38, _dust_mesh)
+		Unit.ImpactKind.SPARK:
+			_spawn_burst(_spark_material, world_pos, 10, 0.28, _spark_mesh)
+
+func _spawn_crack(world_pos: Vector3) -> void:
+	var decal := Decal.new()
+	decal.texture_albedo = _crack_texture
+	decal.size = Vector3(SLAM_CRACK_SIZE, 1.2, SLAM_CRACK_SIZE)
+	decal.upper_fade = 0.3
+	decal.lower_fade = 0.3
+	add_child(decal)
+	decal.global_position = world_pos
+	decal.rotation.y = randf() * TAU
+	var tween := decal.create_tween()
+	decal.scale = Vector3(0.6, 1.0, 0.6)
+	tween.tween_property(decal, "scale", Vector3.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(SLAM_CRACK_HOLD)
+	tween.tween_property(decal, "modulate:a", 0.0, SLAM_CRACK_FADE)
+	tween.tween_callback(decal.queue_free)
+
+## Full size at the start, gone by the end: a puff that thins as it slows.
+func _shrink_curve() -> CurveTexture:
+	var curve := Curve.new()
+	curve.add_point(Vector2(0.0, 0.7))
+	curve.add_point(Vector2(0.25, 1.0))
+	curve.add_point(Vector2(1.0, 0.0))
+	var texture := CurveTexture.new()
+	texture.curve = curve
+	return texture
+
+## Dark jagged cracks running out from a broken middle, drawn once.
+func _make_crack_texture() -> Texture2D:
+	var size := 128
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var ink := Color(0.16, 0.12, 0.08, 0.85)
+	var centre := Vector2(size, size) * 0.5
+	for i in 9:
+		var angle := TAU * i / 9.0 + rng.randf_range(-0.25, 0.25)
+		var p := centre
+		var length := rng.randf_range(0.28, 0.46) * size
+		var steps := 10
+		for step in steps:
+			angle += rng.randf_range(-0.45, 0.45)
+			var next := p + Vector2(cos(angle), sin(angle)) * (length / steps)
+			var width := lerpf(3.0, 0.6, float(step) / steps)
+			_draw_crack_line(image, p, next, width, ink)
+			if step == 4 and rng.randf() < 0.6:
+				var side := angle + rng.randf_range(0.6, 1.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+				_draw_crack_line(image, next, next + Vector2(cos(side), sin(side)) * length * 0.3, 1.2, ink)
+			p = next
+	## The broken middle.
+	for y in size:
+		for x in size:
+			if Vector2(x, y).distance_to(centre) < 6.0:
+				image.set_pixel(x, y, ink)
+	return ImageTexture.create_from_image(image)
+
+func _draw_crack_line(image: Image, a: Vector2, b: Vector2, width: float, ink: Color) -> void:
+	var steps := int(ceil(a.distance_to(b))) + 1
+	var r := int(ceil(width * 0.5))
+	for i in steps + 1:
+		var p := a.lerp(b, float(i) / steps)
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var x := int(p.x) + dx
+				var y := int(p.y) + dy
+				if x < 0 or y < 0 or x >= image.get_width() or y >= image.get_height():
+					continue
+				if Vector2(dx, dy).length() <= width * 0.5 + 0.3:
+					image.set_pixel(x, y, ink)
 
 ## Screen shake is per-viewer (rts_camera drops it when the source is off
 ## screen), but the events that cause it only fire on the host — so it relays

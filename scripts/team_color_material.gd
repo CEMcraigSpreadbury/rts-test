@@ -74,7 +74,7 @@ static func _build(source: Material, team_color: Color, shader: Shader) -> Shade
 static func to_construction_variant(source: ShaderMaterial, alpha: float) -> ShaderMaterial:
 	var material: ShaderMaterial = source.duplicate()
 	material.shader = CONSTRUCTION_SHADER
-	material.set_shader_parameter("construction_alpha", alpha)
+	material.set_shader_parameter("ghost_alpha", alpha)
 	## Same render-priority fix as the placement ghost in main.gd — grass
 	## alpha-blends at priority 0 too and would otherwise draw over this.
 	material.render_priority = 1
