@@ -40,28 +40,67 @@ func setup() -> void:
 	_voice_audio_player.bus = &"SFX"
 	main.ui_root.add_child(_voice_audio_player)
 
-## Purely local (like the sound above and the rally marker) — a quick
-## expanding, fading ring at the clicked ground point, so a right-click order
-## has an immediate visual confirmation beyond just the sound. White for a
-## plain move, red for an attack/attack-move order.
+## Purely local (like the sound above and the rally marker) — a little toy
+## map pin planted at the clicked ground point, so a right-click order has an
+## immediate visual confirmation beyond just the sound. White for a plain
+## move, red for an attack/attack-move order.
 func play_command_feedback(world_pos: Vector3, is_attack: bool) -> void:
-	var ring := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = 0.35
-	torus.outer_radius = 0.55
-	ring.mesh = torus
-	var mat := GroundRingMaterial.build(Color(1.0, 0.3, 0.25, 0.9) if is_attack else Color(1.0, 1.0, 1.0, 0.9))
-	ring.material_override = mat
-	add_child(ring)
-	ring.global_position = world_pos + Vector3(0, 0.1, 0)
-	ring.scale = Vector3.ONE * 0.3
-	var tween := create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(ring, "scale", Vector3.ONE * 1.6, 0.35) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tween.tween_method(GroundRingMaterial.set_alpha.bind(mat), 0.9, 0.0, 0.35)
-	tween.set_parallel(false)
-	tween.tween_callback(ring.queue_free)
+	var marker: Node3D = _make_pin(COMMAND_ATTACK_COLOR if is_attack else COMMAND_MOVE_COLOR)
+	add_child(marker)
+	marker.global_position = world_pos
+	_drop_marker(marker, true)
+
+## --- Toy command markers ---
+## Little glossy plastic map pins planted on the ground: white for a move,
+## red for an attack, blue for each queued waypoint. Each drops in,
+## lands with a squash and wobbles.
+const COMMAND_MOVE_COLOR: Color = Color(0.96, 0.95, 0.9)
+const COMMAND_ATTACK_COLOR: Color = Color(0.9, 0.22, 0.18)
+const MARKER_DROP_HEIGHT: float = 1.1
+const MARKER_DROP_TIME: float = 0.16
+const MARKER_HOLD: float = 0.45
+
+## A map pin: round head on a short tapered pin, standing on the ground.
+func _make_pin(colour: Color) -> Node3D:
+	var pin := Node3D.new()
+	var spike := CylinderMesh.new()
+	spike.top_radius = 0.035
+	spike.bottom_radius = 0.0
+	spike.height = 0.4
+	spike.radial_segments = 8
+	spike.rings = 1
+	spike.material = _plastic(Color(0.75, 0.76, 0.8))
+	_marker_part(pin, spike, Vector3(0, 0.2, 0))
+	var head := _sphere(0.13, _plastic(colour, 0.15))
+	_marker_part(pin, head, Vector3(0, 0.48, 0))
+	return pin
+
+func _marker_part(marker: Node3D, mesh: Mesh, at: Vector3) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	part.mesh = mesh
+	part.position = at
+	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	marker.add_child(part)
+	return part
+
+## Drops a marker in from above, squashes it on landing and wobbles it;
+## `temporary` then sinks it back into the ground and frees it.
+func _drop_marker(marker: Node3D, temporary: bool) -> void:
+	var ground := marker.global_position
+	marker.global_position = ground + Vector3.UP * MARKER_DROP_HEIGHT
+	marker.scale = Vector3(0.8, 1.25, 0.8)
+	var tween := marker.create_tween()
+	tween.tween_property(marker, "global_position", ground, MARKER_DROP_TIME) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_property(marker, "scale", Vector3(1.3, 0.7, 1.3), 0.05)
+	tween.tween_property(marker, "scale", Vector3.ONE, 0.35).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(marker, "rotation:z", 0.0, 0.5).from(0.25) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	if temporary:
+		tween.tween_interval(MARKER_HOLD)
+		tween.tween_property(marker, "global_position", ground + Vector3.DOWN * 0.9, 0.25) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tween.tween_callback(marker.queue_free)
 
 const PATH_MARKER_COLOR: Color = Color(0.45, 0.75, 1.0, 0.9)
 
@@ -199,24 +238,35 @@ func spawn_command_popup(kind: String, world_pos: Vector3, speaker: Unit) -> voi
 ## shift-drawn path — see _path_markers. Only actually shown while that unit
 ## is selected — see update_path_markers.
 func add_path_marker(unit: Unit, world_pos: Vector3) -> void:
-	var markers: Array = _path_markers.get(unit, [])
+	add_group_path_marker([unit], world_pos)
 
-	var marker := Node3D.new()
+## One pin for a whole group's queued point. It counts as reached by a
+## unit within PATH_MARKER_ARRIVAL_DISTANCE plus room for the group's
+## formation (its men stop at their places round the point, not on it), and
+## goes once every unit it was planted for has reached it or been re-ordered.
+func add_group_path_marker(units: Array, world_pos: Vector3) -> void:
+	if units.is_empty():
+		return
+	var marker := _make_pin(PATH_MARKER_COLOR)
 	add_child(marker)
-	marker.global_position = world_pos + Vector3(0, 0.05, 0)
-	marker.visible = main.selected_units.has(unit)
+	marker.global_position = world_pos
+	marker.set_meta(&"reach", PATH_MARKER_ARRIVAL_DISTANCE + PATH_MARKER_SPREAD * sqrt(float(units.size())))
+	marker.visible = units.any(func(u): return main.selected_units.has(u))
+	_marker_holders[marker] = units.size()
+	for unit in units:
+		var markers: Array = _path_markers.get(unit, [])
+		markers.append(marker)
+		_path_markers[unit] = markers
+	_drop_marker(marker, false)
+	## A gentle sway while it waits to be reached.
+	## Started once the landing wobble (which also turns it) has settled.
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		if not is_instance_valid(marker):
+			return
+		var sway := marker.create_tween().set_loops()
+		sway.tween_property(marker, "rotation:z", 0.06, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		sway.tween_property(marker, "rotation:z", -0.06, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT))
 
-	var flag_mesh := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = 0.18
-	torus.outer_radius = 0.28
-	flag_mesh.mesh = torus
-	var mat := GroundRingMaterial.build(PATH_MARKER_COLOR)
-	flag_mesh.material_override = mat
-	marker.add_child(flag_mesh)
-
-	markers.append(marker)
-	_path_markers[unit] = markers
 
 ## Untyped on purpose, same as Unit._is_target_alive: update_path_markers
 ## hands this units that have already been freed (died with waypoints still
@@ -226,9 +276,21 @@ func clear_path_markers(unit) -> void:
 	if not _path_markers.has(unit):
 		return
 	for marker in _path_markers[unit]:
-		if is_instance_valid(marker):
-			marker.queue_free()
+		_release_path_marker(marker)
 	_path_markers.erase(unit)
+
+## One of a pin's units is done with it; the last one sinks it away.
+func _release_path_marker(marker) -> void:
+	if not is_instance_valid(marker) or not _marker_holders.has(marker):
+		return
+	_marker_holders[marker] -= 1
+	if _marker_holders[marker] > 0:
+		return
+	_marker_holders.erase(marker)
+	var tween: Tween = marker.create_tween()
+	tween.tween_property(marker, "global_position", marker.global_position + Vector3.DOWN * 0.7, 0.25) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(marker.queue_free)
 
 ## Pops (and frees) the oldest marker for each unit once it's actually gotten
 ## close to that point — an approximation of "this waypoint was reached"
@@ -243,17 +305,24 @@ func update_path_markers() -> void:
 			clear_path_markers(unit)
 			continue
 		var markers: Array = _path_markers[unit]
-		while not markers.is_empty() and is_instance_valid(markers[0]) \
-				and unit.global_position.distance_to(markers[0].global_position) <= PATH_MARKER_ARRIVAL_DISTANCE:
-			markers[0].queue_free()
+		while not markers.is_empty() and (not is_instance_valid(markers[0]) or _reached(unit, markers[0])):
+			_release_path_marker(markers[0])
 			markers.pop_front()
 		if markers.is_empty():
 			_path_markers.erase(unit)
-			continue
-		var is_selected := main.selected_units.has(unit)
-		for marker in markers:
-			if is_instance_valid(marker):
-				marker.visible = is_selected
+	## Shown while any of its units is selected.
+	var shown: Dictionary = {}
+	for unit in _path_markers.keys():
+		if is_instance_valid(unit) and main.selected_units.has(unit):
+			for marker in _path_markers[unit]:
+				shown[marker] = true
+	for marker in _marker_holders.keys():
+		if is_instance_valid(marker):
+			marker.visible = shown.has(marker)
+
+func _reached(unit: Unit, marker: Node3D) -> bool:
+	var to := marker.global_position - unit.global_position
+	return Vector2(to.x, to.z).length() <= float(marker.get_meta(&"reach", PATH_MARKER_ARRIVAL_DISTANCE))
 
 ## Unit -> Array[Node3D], the flag markers for its still-pending shift-drawn
 ## waypoints, in order. Purely a local visual aid on this client (not driven
@@ -261,7 +330,11 @@ func update_path_markers() -> void:
 ## visible on screen after being planned out — see add_path_marker/
 ## update_path_markers/clear_path_markers.
 var _path_markers: Dictionary = {}
+## Pin -> how many units still hold it.
+var _marker_holders: Dictionary = {}
 const PATH_MARKER_ARRIVAL_DISTANCE: float = 1.0
+## Extra reach per sqrt(units) for a group's formation round the point.
+const PATH_MARKER_SPREAD: float = 0.9
 
 ## Voice lines get their own player rather than sharing
 ## command_audio_player: that one is a single stream, so a voice line sent
@@ -2054,8 +2127,14 @@ func _play_toy_ability(unit: Unit, ability: Ability, from_pos: Vector3, target_p
 			return
 		Ability.EffectStyle.GLOB:
 			_lob_glob(ability, from_pos, target_pos, travel)
+		Ability.EffectStyle.FIREBALL:
+			_lob_glob(ability, from_pos, target_pos, travel, true)
 		Ability.EffectStyle.FIRESTORM:
 			_call_firestorm(ability, from_pos, target_pos, travel)
+		Ability.EffectStyle.LIGHTNING:
+			_chain_lightning(ability, from_pos, target_pos)
+		Ability.EffectStyle.WIND:
+			_send_blades(ability, unit.global_position, target_pos, travel)
 	if travel <= 0.0:
 		_toy_impact(ability, target_pos, radius)
 	else:
@@ -2082,6 +2161,10 @@ func _toy_impact(ability: Ability, pos: Vector3, radius: float) -> void:
 			_frost_shards(pos, colour, radius)
 		Ability.EffectStyle.SHADOW:
 			_shadow_ring(pos, colour, radius)
+		Ability.EffectStyle.FIREBALL:
+			_fire_burst(pos, colour, radius, ability.impact_scatter_count)
+		Ability.EffectStyle.WIND:
+			_gust(pos, colour, radius)
 
 ## One glossy plastic material per colour and glow.
 var _plastics: Dictionary = {}
@@ -2125,11 +2208,12 @@ func _puff_process(colour: Color) -> ParticleProcessMaterial:
 	return process
 
 ## Acid or bile: a glossy wobbling glob on a high arc, a dripping trail.
-func _lob_glob(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float) -> void:
+## `fiery`: a Fireball's hot glowing ball, which holds its shape.
+func _lob_glob(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float, fiery: bool = false) -> void:
 	if travel <= 0.0:
 		return
 	var glob := MeshInstance3D.new()
-	glob.mesh = _sphere(0.32, _plastic(ability.effect_color, 0.5))
+	glob.mesh = _sphere(0.34 if fiery else 0.32, _plastic(ability.effect_color, 1.8 if fiery else 0.5))
 	add_child(glob)
 	var trail := _make_projectile_trail(ability.effect_color)
 	add_child(trail)
@@ -2139,7 +2223,7 @@ func _lob_glob(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel:
 		glob.global_position = pos
 		glob.visible = main.fog_of_war.is_visible_at(pos)
 		## A wobble, squashing as it goes.
-		var w := sin(t * 28.0) * 0.18
+		var w := sin(t * 28.0) * (0.04 if fiery else 0.18)
 		glob.scale = Vector3(1.0 + w, 1.0 - w, 1.0 + w)
 		trail.global_position = pos
 		trail.emitting = glob.visible
@@ -2272,16 +2356,7 @@ func _call_firestorm(ability: Ability, from_pos: Vector3, target_pos: Vector3, t
 	rise.tween_property(up, "global_position", from_pos + Vector3.UP * FIREBALL_HEIGHT, 0.35) \
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	rise.tween_callback(up.queue_free)
-	var count := maxi(ability.impact_scatter_count, 3)
-	var start := maxf(travel - FIREBALL_FALL - 0.3, 0.0)
-	for i in count:
-		var angle := randf() * TAU
-		var at := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * sqrt(randf()) * ability.area_radius * 0.85
-		var delay := start + 0.3 * float(i) / count
-		if i == count - 1:
-			at = target_pos
-			delay = maxf(travel - FIREBALL_FALL, 0.0)
-		get_tree().create_timer(maxf(delay, 0.01)).timeout.connect(_drop_fireball.bind(at, colour))
+	_rain_fireballs(ability, target_pos, maxf(travel - FIREBALL_FALL - RAIN_SPREAD, 0.0))
 
 func _drop_fireball(at: Vector3, colour: Color) -> void:
 	if not main.fog_of_war.is_visible_at(at):
@@ -2307,6 +2382,158 @@ func _drop_fireball(at: Vector3, colour: Color) -> void:
 		_spawn_burst(burst, at + Vector3(0, RALLY_DUST_HEIGHT, 0), 16, 0.45, _dust_mesh)
 		main.camera_rig.shake_at(at, 0.12))
 	tween.tween_callback(ball.queue_free)
+
+## Fireball and Foxfire: a glowing plastic ball on its arc, bursting into
+## fire puffs with flares across the area.
+func _fire_burst(pos: Vector3, colour: Color, radius: float, flares: int) -> void:
+	var burst := _fire_process(colour)
+	burst.emission_ring_radius = radius * 0.3
+	burst.initial_velocity_min = 2.0
+	burst.initial_velocity_max = 3.5
+	burst.radial_velocity_min = radius * 0.8
+	burst.radial_velocity_max = radius * 1.3
+	_spawn_burst(burst, pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 30, 0.55, _dust_mesh)
+	for i in flares:
+		var angle := randf() * TAU
+		var at := pos + Vector3(cos(angle), 0.0, sin(angle)) * sqrt(randf()) * radius * 0.85
+		get_tree().create_timer(randf_range(0.04, 0.25)).timeout.connect(
+				_spawn_burst.bind(_fire_process(colour), at + Vector3(0, RALLY_DUST_HEIGHT, 0), 10, 0.45, _dust_mesh))
+
+## Round puffs that burn white-hot to `colour` to smoke, rising.
+func _fire_process(colour: Color) -> ParticleProcessMaterial:
+	var process: ParticleProcessMaterial = _charge_dust_material.duplicate()
+	process.color = Color.WHITE
+	process.spread = 25.0
+	process.initial_velocity_min = 1.6
+	process.initial_velocity_max = 2.8
+	process.gravity = Vector3(0, 1.2, 0)
+	var burn := Gradient.new()
+	burn.set_color(0, Color(1.0, 0.97, 0.85, 1.0))
+	burn.set_color(1, Color(0.25, 0.22, 0.22, 0.0))
+	burn.add_point(0.3, Color(colour.lightened(0.25), 1.0))
+	burn.add_point(0.65, Color(colour.darkened(0.4), 0.6))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = burn
+	process.color_ramp = ramp
+	return process
+
+## Chain Lightning and Smite: a jagged bolt of glowing rods from `from_pos`
+## to `to_pos`, flickering, then gone.
+const BOLT_TIME: float = 0.28
+const BOLT_SEGMENTS: int = 9
+
+func _lightning_bolt(from_pos: Vector3, to_pos: Vector3, colour: Color, thickness: float = 0.09) -> void:
+	if not main.fog_of_war.is_visible_at(to_pos) and not main.fog_of_war.is_visible_at(from_pos):
+		return
+	var bolt := Node3D.new()
+	add_child(bolt)
+	var material := _plastic(colour.lightened(0.5), 4.0)
+	var length := from_pos.distance_to(to_pos)
+	var side := (to_pos - from_pos).cross(Vector3.UP)
+	if side.length_squared() < 0.0001:
+		side = Vector3.RIGHT
+	side = side.normalized()
+	var up := side.cross(to_pos - from_pos).normalized()
+	var previous := from_pos
+	for i in range(1, BOLT_SEGMENTS + 1):
+		var t := float(i) / BOLT_SEGMENTS
+		var point := from_pos.lerp(to_pos, t)
+		if i < BOLT_SEGMENTS:
+			var jag := length * 0.07
+			point += side * randf_range(-jag, jag) + up * randf_range(-jag, jag)
+		var rod := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		var span := previous.distance_to(point)
+		box.size = Vector3(thickness, thickness, span + thickness)
+		box.material = material
+		rod.mesh = box
+		rod.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		bolt.add_child(rod)
+		var middle := (previous + point) * 0.5
+		rod.global_position = middle
+		if span > 0.001:
+			rod.look_at(point, Vector3.UP if absf((point - previous).normalized().y) < 0.99 else Vector3.FORWARD)
+		previous = point
+	var tween := bolt.create_tween()
+	for flicker in 3:
+		tween.tween_property(bolt, "visible", false, BOLT_TIME / 6.0)
+		tween.tween_property(bolt, "visible", true, BOLT_TIME / 6.0)
+	tween.tween_callback(bolt.queue_free)
+	_spawn_burst(_spark_material, to_pos + Vector3.UP * 0.2, 14, 0.3, _spark_mesh)
+
+## Chain Lightning: the main bolt from the mouth, forking on to nearby spots.
+func _chain_lightning(ability: Ability, from_pos: Vector3, target_pos: Vector3) -> void:
+	var colour: Color = ability.effect_color
+	_lightning_bolt(from_pos, target_pos + Vector3.UP * 0.3, colour)
+	for i in maxi(ability.impact_scatter_count, 2):
+		var angle := randf() * TAU
+		var at := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * randf_range(0.5, 1.0) * ability.area_radius
+		get_tree().create_timer(0.06 * (i + 1)).timeout.connect(
+				_lightning_bolt.bind(target_pos + Vector3.UP * 0.3, at + Vector3.UP * 0.3, colour, 0.06))
+
+## Wind Blades: three spinning glossy disc-blades skimming the ground from
+## the caster to the target, a gust ring where they land.
+func _send_blades(ability: Ability, from_ground: Vector3, target_pos: Vector3, travel: float) -> void:
+	if travel <= 0.0:
+		return
+	var colour: Color = ability.effect_color
+	var material: StandardMaterial3D = _plastic(colour.lightened(0.2), 0.6).duplicate()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color.a = 0.85
+	var aim := target_pos - from_ground
+	aim.y = 0.0
+	var side := aim.cross(Vector3.UP).normalized() if aim.length_squared() > 0.0001 else Vector3.RIGHT
+	for lane in [-1.0, 0.0, 1.0]:
+		var blade := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.3
+		torus.outer_radius = 0.55
+		torus.rings = 24
+		torus.ring_segments = 6
+		torus.material = material
+		blade.mesh = torus
+		blade.scale = Vector3(1.0, 0.25, 1.0)
+		add_child(blade)
+		var start: Vector3 = from_ground + side * lane * 0.7 + Vector3.UP * 0.6
+		var end: Vector3 = target_pos + side * lane * ability.area_radius * 0.4 + Vector3.UP * 0.6
+		var fly := func(t: float) -> void:
+			blade.global_position = start.lerp(end, t) + Vector3.UP * 0.15 * sin(t * PI)
+			blade.rotation.y = t * 40.0
+			blade.visible = main.fog_of_war.is_visible_at(blade.global_position)
+		fly.call(0.0)
+		var tween := blade.create_tween()
+		tween.tween_method(fly, 0.0, 1.0, travel)
+		tween.tween_callback(blade.queue_free)
+
+func _gust(pos: Vector3, colour: Color, radius: float) -> void:
+	var gust: ParticleProcessMaterial = _puff_process(colour.lightened(0.3))
+	gust.emission_ring_radius = radius * 0.3
+	gust.radial_velocity_min = radius * 1.4
+	gust.radial_velocity_max = radius * 2.0
+	_spawn_burst(gust, pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 26, 0.45, _dust_mesh)
+
+## Fireballs raining across `target_pos` from `delay`, over RAIN_SPREAD.
+const RAIN_SPREAD: float = 0.3
+
+func _rain_fireballs(ability: Ability, target_pos: Vector3, delay: float) -> void:
+	var count := maxi(ability.impact_scatter_count, 3)
+	for i in count:
+		var angle := randf() * TAU
+		var at := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * sqrt(randf()) * ability.area_radius * 0.85
+		var when := delay + RAIN_SPREAD * float(i) / count
+		if i == count - 1:
+			at = target_pos
+		get_tree().create_timer(maxf(when, 0.01)).timeout.connect(_drop_fireball.bind(at, ability.effect_color))
+
+## A Ruler power on a 3D style: it comes from the sky.
+func _toy_power_impact(ability: Ability, pos: Vector3) -> void:
+	match ability.effect_style:
+		Ability.EffectStyle.LIGHTNING:
+			_lightning_bolt(pos + Vector3(randf_range(-1.0, 1.0), 16.0, randf_range(-1.0, 1.0)), pos + Vector3.UP * 0.2, ability.effect_color, 0.2)
+			_play_impact(pos, Unit.ImpactKind.SLAM)
+		Ability.EffectStyle.FIRESTORM:
+			_rain_fireballs(ability, pos, 0.0)
+	_toy_impact(ability, pos, ability.area_radius)
 
 ## A particle stream from `from_pos` along `aim` for BREATH_TIME, freed once
 ## its last particle is gone.
@@ -2429,7 +2656,9 @@ func _play_power_ability_impact(peer_id: int, node_index: int, target_pos: Vecto
 	if ruler == null or node_index < 0 or node_index >= ruler.nodes.size():
 		return
 	var ability: Ability = ruler.nodes[node_index].hit_ability
-	if ability != null:
+	if ability != null and ability.effect_style != Ability.EffectStyle.SPRITE:
+		_toy_power_impact(ability, target_pos)
+	elif ability != null:
 		_play_ability_impact(ability, target_pos)
 
 func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:

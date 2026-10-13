@@ -48,6 +48,7 @@ icon = ExtResource("icon_abilities_wind_blades")
 glyph = &"wind_blades"
 kind = 2
 activation_range = 8.0
+effect_style = 10
 cooldown = 15.0
 area_radius = 2.5
 area_damage = 14

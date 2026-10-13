@@ -2760,11 +2760,11 @@ func issue_minimap_move_order(world_pos: Vector3, append: bool) -> bool:
 ## A shift-queued order adds a waypoint marker per unit; a fresh one replaces
 ## whatever queue they were showing.
 func _update_order_path_markers(world_pos: Vector3, append: bool) -> void:
+	if append:
+		feedback.add_group_path_marker(selected_units.duplicate(), world_pos)
+		return
 	for unit in selected_units:
-		if append:
-			feedback.add_path_marker(unit, world_pos)
-		else:
-			feedback.clear_path_markers(unit)
+		feedback.clear_path_markers(unit)
 
 ## Same target inference as a plain move order, except empty ground issues an
 ## attack-move instead of a plain move — see _rpc_issue_command's attack_move_fallback.

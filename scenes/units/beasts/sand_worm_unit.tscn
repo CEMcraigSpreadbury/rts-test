@@ -40,6 +40,7 @@ icon = ExtResource("icon_abilities_sand_burst")
 glyph = &"sand_burst"
 kind = 2
 activation_range = 6.0
+effect_style = 4
 cooldown = 16.0
 area_radius = 3.0
 area_damage = 14

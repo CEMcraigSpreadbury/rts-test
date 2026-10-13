@@ -48,6 +48,7 @@ icon = ExtResource("icon_abilities_chain_lightning")
 glyph = &"chain_lightning"
 kind = 2
 activation_range = 9.0
+effect_style = 9
 cooldown = 18.0
 area_radius = 3.5
 area_damage = 22
@@ -56,7 +57,7 @@ effect_color = Color(0.55, 0.8, 1.0, 1)
 impact_shake = 0.6
 cast_windup = 0.5
 cast_effect = SubResource("SpriteEffect_cast")
-launch_offset = Vector2(0.9, 0.8)
+launch_offset = Vector2(1.0, 1.4)
 impact_effect = SubResource("SpriteEffect_impact")
 impact_scatter_count = 4
 

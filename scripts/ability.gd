@@ -42,8 +42,10 @@ enum Shape { CIRCLE, CONE, SELF }
 ## the others are 3D toy effects drawn by WorldFeedback instead, in
 ## effect_color: a FIRE or PLAGUE breath (a CONE), a GLOB lobbed on an arc
 ## that splashes (acid, bile), an EARTH slam, a FROST or SHADOW nova (SELF),
-## or a FIRESTORM of fireballs raining on the target.
-enum EffectStyle { SPRITE, FIRE, PLAGUE, GLOB, EARTH, FROST, SHADOW, FIRESTORM }
+## a FIRESTORM of fireballs raining on the target, a FIREBALL lobbed at it,
+## LIGHTNING forking from the caster (or the sky, for a power), or WIND blades
+## skimming the ground.
+enum EffectStyle { SPRITE, FIRE, PLAGUE, GLOB, EARTH, FROST, SHADOW, FIRESTORM, FIREBALL, LIGHTNING, WIND }
 @export var effect_style: EffectStyle = EffectStyle.SPRITE
 ## How the caster's figure performs it: its cast clip (a monster rears and
 ## breathes or throws), or its ordinary strike (a monster's rear-and-slam).
