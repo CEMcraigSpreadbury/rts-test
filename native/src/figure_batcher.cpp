@@ -80,6 +80,18 @@ constexpr float kStompHeight = 0.22f;
 constexpr float kStompRear = 0.07f;
 constexpr float kStompStretch = 0.03f;
 constexpr float kStompSquash = 0.09f;
+// A monster's blow: it rears up over the first kMonsterImpact of the clip
+// (nose up, lifted, wound to the side, stretched tall), slams down on
+// kMonsterImpact (Unit.BIG_STRIKE_IMPACT, when the damage lands) with a
+// squash and a stomp shake, holds the blow and settles.
+constexpr float kMonsterImpact = 0.5f;
+constexpr float kMonsterRear = 0.42f;
+constexpr float kMonsterLift = 0.38f;
+constexpr float kMonsterWind = 0.24f;
+constexpr float kMonsterStretch = 0.10f;
+constexpr float kMonsterSlam = 0.30f;
+constexpr float kMonsterSlamTwist = 0.18f;
+constexpr float kMonsterSquash = 0.15f;
 // Rolling (siege engines): rumbles a second at full speed, the bob, nose
 // rock and side sway on the wheels; the shot's kick back (metres, and nose
 // up) and how long it takes to settle as a share of what is left of the
@@ -488,6 +500,7 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 		stretch *= 1.0f + 0.04f * s - 0.06f * std::pow(1.0f - s, 6.0f) * (k > 0.5f ? 1.0f : 0.0f);
 	}
 
+	if (e.clip != CLIP_ATTACK) e.attack_t = 0.0f;
 	switch (e.clip) {
 		case CLIP_ATTACK: {
 			if (roller) {
@@ -499,6 +512,19 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 				offset.z -= kRollRecoil * kick;
 				pitch -= kRollRecoilPitch * kick;
 				hop += 0.02f * kick;
+				break;
+			}
+			if (stomper) {
+				const float slam_start = kMonsterImpact - 0.1f;
+				const float up = smooth(0.0f, slam_start, t) * (1.0f - smooth(slam_start, kMonsterImpact, t));
+				const float slam = smooth(slam_start, kMonsterImpact, t) * (1.0f - smooth(kMonsterImpact + 0.12f, 1.0f, t));
+				const float impact = smooth(kMonsterImpact - 0.03f, kMonsterImpact, t) * (1.0f - smooth(kMonsterImpact, kMonsterImpact + 0.25f, t));
+				pitch += -kMonsterRear * up + kMonsterSlam * slam;
+				hop += kMonsterLift * up;
+				twist += -kMonsterWind * up + kMonsterSlamTwist * slam;
+				stretch *= 1.0f + kMonsterStretch * up - kMonsterSquash * impact;
+				if (!e.dying && e.attack_t < kMonsterImpact && t >= kMonsterImpact) e.landed = true;
+				e.attack_t = t;
 				break;
 			}
 			if (mounted) {

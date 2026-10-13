@@ -150,6 +150,9 @@ private:
 		// this frame's pose.
 		float stomp = 0.0f;
 		bool landed = false;
+		// How far through its attack clip a stomper was last frame, to catch
+		// the slam crossing kMonsterImpact.
+		float attack_t = 0.0f;
 		// Seconds of its velocity the figure is drawn off the unit (behind
 		// while it pauses on the ground, ahead as it lands).
 		float hold = 0.0f;

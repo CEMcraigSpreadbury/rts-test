@@ -303,7 +303,7 @@ func register_unit(unit: Unit) -> int:
 	if not _ready_for_units:
 		return -1
 	var position := Vector2(unit.global_position.x, unit.global_position.z)
-	var id: int = sim.add_unit(sim_team(unit.owner_peer_id), position, NavigationBlockers.UNIT_BODY_RADIUS, unit.move_speed)
+	var id: int = sim.add_unit(sim_team(unit.owner_peer_id), position, unit.get_body_radius(), unit.move_speed)
 	if unit.can_fight:
 		sim.set_unit_combat(id, unit.attack_range, unit.aggro_range, unit.projectile_scene != null)
 	sim.set_unit_vision(id, unit.vision_range)

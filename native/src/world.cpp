@@ -463,11 +463,12 @@ void World::update_fight_targets() {
 			continue;
 		}
 		const Vec2 pos(units.pos_x[u], units.pos_y[u]);
-		const float reach = units.reach[u];
+		// From his own edge: a big body's reach starts at its rim.
+		const float reach = units.reach[u] + bulk(u);
 		const bool ranged = units.ranged[u] != 0;
 		uint32_t t = units.fight_target[u];
 		if (t != kInvalidId && (!is_body(t) || !is_enemy(u, t) ||
-					dist_sq(pos, { units.pos_x[t], units.pos_y[t] }) > (reach + kReachSlack) * (reach + kReachSlack))) {
+					dist_sq(pos, { units.pos_x[t], units.pos_y[t] }) > (reach + bulk(t) + kReachSlack) * (reach + bulk(t) + kReachSlack))) {
 			t = kInvalidId;
 		}
 		if (t == kInvalidId && (!ranged || (tick_index_ + u) % kRangedRetargetTicks == 0)) {
@@ -476,7 +477,7 @@ void World::update_fight_targets() {
 			if (formations.alive(f) && (formations.flags[f] & FlagAttacking)) {
 				const uint32_t ordered = formations.target_unit[f];
 				if (ordered != kInvalidId && is_body(ordered) &&
-						dist_sq(pos, { units.pos_x[ordered], units.pos_y[ordered] }) <= reach * reach) {
+						dist_sq(pos, { units.pos_x[ordered], units.pos_y[ordered] }) <= (reach + bulk(ordered)) * (reach + bulk(ordered))) {
 					t = ordered;
 				}
 			}
@@ -485,10 +486,10 @@ void World::update_fight_targets() {
 				const float penalty = ranged ? kRangedCrowdPenalty : kMeleeCrowdPenalty;
 				float best = 1e30f;
 				const uint8_t team = units.team[u];
-				hash.query(pos.x, pos.y, radius, [&](uint32_t o) {
+				query_bodies(pos.x, pos.y, radius, [&](uint32_t o) {
 					if (units.team[o] == team || (units.motion[o] & MotionGhost)) return true;
 					const float d = std::sqrt(dist_sq(pos, { units.pos_x[o], units.pos_y[o] }));
-					if (d > radius) return true;
+					if (d - bulk(o) > radius) return true;
 					const float score = d + float(attackers[o]) * penalty;
 					if (score < best) { best = score; t = o; }
 					return true;
@@ -788,6 +789,10 @@ void World::rebuild_spatial_hash() {
 	const uint32_t n = units.capacity();
 	for (uint32_t u = 0; u < n; ++u) units.in_hash[u] = units.alive[u] && !(units.motion[u] & MotionGhost);
 	hash.rebuild(units.pos_x.data(), units.pos_y.data(), units.in_hash.data(), n);
+	big_bodies_.clear();
+	for (uint32_t u = 0; u < n; ++u) {
+		if (units.in_hash[u] && units.radius[u] > kDefaultBodyRadius) big_bodies_.push_back(u);
+	}
 }
 
 namespace {
@@ -879,11 +884,13 @@ void World::update_steering() {
 		int seen = 0;
 		const uint8_t team = units.team[u];
 		const uint32_t my_target = units.attack_target[u];
-		hash.query(px, py, sep, [&](uint32_t other) {
+		const float my_bulk = bulk(u);
+		query_bodies(px, py, sep + my_bulk, [&](uint32_t other) {
 			if (other == u) return true;
 			const float dx = px - units.pos_x[other], dy = py - units.pos_y[other];
 			const float d_sq = dx * dx + dy * dy;
-			if (d_sq >= sep * sep) return true;
+			const float pair = sep + my_bulk + bulk(other);
+			if (d_sq >= pair * pair) return true;
 			// An enemy attacking this unit does not shove it: every attacker
 			// round a mobbed target would sum into one push and bulldoze it
 			// across the field. A pair fighting each other push both ways.
@@ -897,7 +904,7 @@ void World::update_steering() {
 			} else {
 				away = Vec2(dx / d, dy / d);
 			}
-			push += away * ((1.0f - d / sep) * kSeparationSpeed);
+			push += away * ((1.0f - d / pair) * kSeparationSpeed);
 			return ++seen < kMaxNeighbours;
 		});
 		const float push_len = length(push);
@@ -970,7 +977,7 @@ void World::steer_follower(uint32_t u, float dt, bool was_wedged) {
 		const Vec2 at(units.pos_x[foe], units.pos_y[foe]);
 		const Vec2 back = pos - at;
 		const float d = length(back);
-		const float stand = units.reach[u] * kEngageStandOff;
+		const float stand = units.reach[u] * kEngageStandOff + bulk(u) + bulk(foe);
 		place = d > 1e-3f ? at + back * (stand / d) : pos;
 	}
 	Vec2 goal = place;
@@ -1044,15 +1051,24 @@ void World::steer_follower(uint32_t u, float dt, bool was_wedged) {
 		friend_r = clampf(formations.spacing[own] * kSeparationSpacingFraction, kMinSeparationRadius, kFollowSeparationRadius);
 	}
 	const float friend_r_sq = friend_r * friend_r;
-	hash.query(pos.x, pos.y, kFollowSeparationRadius, [&](uint32_t other) {
+	const float my_bulk = bulk(u);
+	query_bodies(pos.x, pos.y, kFollowSeparationRadius + my_bulk, [&](uint32_t other) {
 		if (other == u) return true;
 		const float dx = pos.x - units.pos_x[other], dy = pos.y - units.pos_y[other];
 		const float d_sq = dx * dx + dy * dy;
-		if (d_sq >= r_sq || d_sq < 1e-6f) return true;
+		const float extra = my_bulk + bulk(other);
+		if (d_sq < 1e-6f) return true;
+		if (extra <= 0.0f ? d_sq >= r_sq : d_sq >= (kFollowSeparationRadius + extra) * (kFollowSeparationRadius + extra)) return true;
 		++seen;
-		const float inv = 1.0f / d_sq;
+		// dx * inv is the push away, 1 / distance; for a big body the
+		// distance between their edges, so it shoves from its rim.
+		float inv = 1.0f / d_sq;
+		if (extra > 0.0f) {
+			const float d = std::sqrt(d_sq);
+			inv = 1.0f / (d * std::max(d - extra, kMinBodyGap));
+		}
 		if (units.team[other] == team) {
-			if (d_sq >= friend_r_sq) return true;
+			if (extra <= 0.0f ? d_sq >= friend_r_sq : d_sq >= (friend_r + extra) * (friend_r + extra)) return true;
 			separation += Vec2(dx * inv, dy * inv);
 			cohesion += Vec2(units.pos_x[other], units.pos_y[other]);
 			alignment += Vec2(units.vel_x[other], units.vel_y[other]);

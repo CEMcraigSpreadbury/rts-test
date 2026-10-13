@@ -173,21 +173,19 @@ The target look is in `docs/art-reference/reference-diorama-3.png`.
   keeps the old 0.5 m cap; the Black Dragon (4.7 m) gets about 1.4 m. A click on a
   wing tip still misses (the pick is a cylinder, not the mesh); the
   nearest-to-axis rule keeps small units in front of it clickable.
-- **Bodies don't grow (deferred):** movement, separation and the navmesh
-  all use `UNIT_BODY_RADIUS` 0.4 m for every unit, so big figures overlap
-  their neighbours in a crowd. Gameplay range/aggro are separate scene
-  values. Plan, not built: the sim already stores a radius per unit
-  (`army_bridge.register_unit` passes `UNIT_BODY_RADIUS` to
-  `sim.add_unit`), but separation uses a fixed `kSeparationDistance` 0.85 m
-  and formation spacing, and the navmesh/nav grid has one clearance for
-  everyone. Steps: (1) a `body_radius` scene export (0 = default),
-  passed to `add_unit`; (2) separation by the pair's radii
-  (`r_a + r_b + gap`) with a spatial-hash query radius of the largest body;
-  (3) monsters keep the 0.4 m nav clearance (they squeeze through gaps; the
-  figure clips scenery) unless a second, wider nav grid is worth it;
-  (4) melee reach measured edge to edge (target radius added to
-  `attack_range`) so attackers stand round a monster, not inside it;
-  (5) formations: a monster stays loose (a formation of 1).
+- **Body radius:** `Unit.body_radius` (0 = `UNIT_BODY_RADIUS` 0.4 m) is
+  passed to the sim at registration. A body's *bulk* is its radius over
+  0.4 m. Separation pushes a pair apart by `kSeparationDistance` /
+  `kFollowSeparationRadius` plus both bulks, and a follower's push falls off
+  with the gap between edges. Reach (native fight targets and engage
+  stand-off, and `Unit._reach_to`) runs from the attacker's edge to the target's
+  edge: `attack_range` plus both bulks. Big bodies are skipped in the hash and
+  walked by hand (`World::query_bodies`, `big_bodies_`), so one dragon does not
+  widen every query. Men (bulk 0) behave exactly as before. Set to:
+  dragons, Hydra and Ballista 1.2, Magic Cannon 1.1, Giant Bear, Yeti and
+  Orc Mutant 1.0, Dark Lord and Phoenix 0.9 (body, not wings). Not done:
+  nav clearance stays 0.4 m (monsters squeeze through gaps and clip scenery);
+  a monster stays loose (a formation of 1). Awaiting the user's test.
 - **LOD and shadow:** LOD1 swaps in beyond 20 m from the camera, times
   the figure's height / 2 m when that is over 1 (the Black Dragon, 3.8 m,
   keeps its near mesh to 38 m). The shadow is still cast from the LOD1
@@ -526,8 +524,7 @@ Next, in this order:
 5. Siege: Ballista and Magic Cannon done (await review). The roster is
    complete apart from the deferred animals.
 6. Wild animals Fox and Wolf (deferred).
-7. Per-unit body radius (plan under Size): monsters and siege engines
-   overlap their neighbours and each other.
+7. Per-unit body radius: built (see Size); awaiting the user's test.
 8. Portraits: the selection panel, tray, regiment cards and banners still
    show sprites. `build.py --portraits` is written but has never been run.
 

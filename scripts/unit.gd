@@ -114,6 +114,10 @@ const CHARGE_MAX_THROWN: int = 10
 const CHARGE_SPLASH_FRACTION: float = 0.75
 const CHARGE_SHOVE_FRACTION: float = 0.3
 const CHARGE_STUN_SECONDS: float = 0.8
+## A cleaving blow (`cleave` over 0) also lands on up to CLEAVE_MAX_TARGETS
+## more enemies within reach and inside CLEAVE_HALF_ARC of the attacker's front.
+const CLEAVE_HALF_ARC: float = PI * 0.5
+const CLEAVE_MAX_TARGETS: int = 6
 const CHARGE_STUN_COLOR: Color = Color(1.0, 0.9, 0.6)
 ## Spear brace (see can_brace): a spear unit always meets a charge with its
 ## spear, whichever way it comes — it is never thrown, the charge gets no
@@ -503,6 +507,12 @@ func _play_sprite_pop() -> void:
 @export var attack_cooldown: float = 1.0
 ## After a target dies, how far to look for another enemy before giving up and going idle.
 @export var aggro_range: float = 6.0
+## How wide the body is for crowding and for others' reach; 0 = the usual
+## man-sized NavigationBlockers.UNIT_BODY_RADIUS. Set on monsters and siege.
+@export var body_radius: float = 0.0
+## Of each melee blow, dealt again to every other enemy within reach in front
+## (see _cleave). 0 = strikes one at a time. Set on the big monsters.
+@export var cleave: float = 0.0
 ## Scales this unit's damage against buildings — siege weapons (Ballista,
 ## Magic Cannon) set it well above 1.
 @export var building_damage_multiplier: float = 1.0
@@ -807,6 +817,9 @@ var _death_playing: bool = false
 ## toward white, where a plain white modulate would only mean "untinted".
 ## `strength` 0 is just that untinted blink (the selection pop).
 const HIT_FLASH_DURATION: float = 0.22
+const BIG_HIT_FLASH_INTERVAL_MS: int = 500
+const BIG_HIT_FLASH_STRENGTH: float = 0.5
+var _last_big_flash_ms: int = -BIG_HIT_FLASH_INTERVAL_MS
 func play_hit_flash(color: Color = Color.WHITE, strength: float = 1.0) -> void:
 	if _flash_tween and _flash_tween.is_valid():
 		_flash_tween.kill()
@@ -823,6 +836,16 @@ func play_hit_flash(color: Color = Color.WHITE, strength: float = 1.0) -> void:
 ## recoil is skipped so the unit doesn't lurch off in an arbitrary direction.
 func play_hit_reaction(from_position: Vector3, flanked: bool = false) -> void:
 	if _death_playing:
+		return
+	if get_body_bulk() > 0.0:
+		## A big body mobbed by a crowd takes hits every few frames: it would
+		## flash solid white and every recoil would cut its own swing short.
+		## No shove or squash (nothing man-sized moves it), and a softer flash
+		## at most every BIG_HIT_FLASH_INTERVAL_MS.
+		var now := Time.get_ticks_msec()
+		if now - _last_big_flash_ms >= BIG_HIT_FLASH_INTERVAL_MS:
+			_last_big_flash_ms = now
+			play_hit_flash(FLANK_HIT_FLASH_COLOR if flanked else Color.WHITE, BIG_HIT_FLASH_STRENGTH)
 		return
 	play_hit_flash(FLANK_HIT_FLASH_COLOR if flanked else Color.WHITE)
 	if Time.get_ticks_msec() < _thrown_until_ms:
@@ -861,7 +884,9 @@ func _play_hit_squash() -> void:
 ## main.gd calls this alongside it. Facing is replicated, so every peer derives
 ## the same direction without anything extra going over the network.
 func play_attack_lunge() -> void:
-	if _death_playing:
+	## A big body's blow is all in its figure's rear-and-slam (FigureBatcher);
+	## a lunge at the swing's start would shove it out of the rear-up.
+	if _death_playing or get_body_bulk() > 0.0:
 		return
 	var base := _sprite_base_position
 	_restart_sprite_move_tween()
@@ -1116,6 +1141,11 @@ var _pack_timer: float = 0.0
 var _heal_aura_timer: float = 0.0
 ## Shots drawn but not yet loosed — see _tick_pending_shots.
 var _pending_shots: Array[Dictionary] = []
+## A big body's blows, waiting for the slam — see _tick_pending_blows.
+var _pending_blows: Array[Dictionary] = []
+## How far through the attack clip a big body's slam comes down and its blow
+## lands (FigureBatcher's kMonsterImpact).
+const BIG_STRIKE_IMPACT: float = 0.5
 var patrol_points: Array[Vector3] = []
 var patrol_index: int = 0
 ## Wander mode (see command_wander) — objective guards mill about near their
@@ -2750,7 +2780,7 @@ func _maybe_sleep(delta: float) -> void:
 	if not abilities.is_empty() or heal_aura_amount > 0 or pack_member:
 		return
 	if not (_pending_projectile_hits.is_empty() and _pending_ability_hits.is_empty() \
-			and _pending_shots.is_empty() and _pending_casts.is_empty() and _dots.is_empty()):
+			and _pending_shots.is_empty() and _pending_blows.is_empty() and _pending_casts.is_empty() and _dots.is_empty()):
 		return
 	if _stun_remaining > 0.0 or _slow_remaining > 0.0 or _knockback_remaining > 0.0:
 		return
@@ -2812,6 +2842,7 @@ func _physics_tick(delta: float) -> void:
 		return
 
 	_tick_pending_shots(delta)
+	_tick_pending_blows(delta)
 	if pack_member:
 		_tick_pack_courage(delta)
 	if heal_aura_amount > 0:
@@ -3578,9 +3609,14 @@ func _end_gather_command() -> void:
 ## as part of "close enough" or they'd approach, stop at the carved edge short
 ## of attack_range, and never actually start attacking.
 func _effective_attack_range() -> float:
-	if attack_target is ProductionBuilding:
-		return attack_range + attack_target.get_footprint_radius()
-	return attack_range
+	return _reach_to(attack_target)
+
+func get_body_radius() -> float:
+	return body_radius if body_radius > 0.0 else NavigationBlockers.UNIT_BODY_RADIUS
+
+## How much wider than a man this body is: reach to it is measured to its edge.
+func get_body_bulk() -> float:
+	return maxf(0.0, get_body_radius() - NavigationBlockers.UNIT_BODY_RADIUS)
 
 ## Live Blacksmith weapon-upgrade bonus on top of the exported stat (computed
 ## live, not baked into the field itself) — then the owner's research: more against buildings
@@ -3653,11 +3689,15 @@ func _target_in_reach() -> bool:
 	return _is_target_alive(attack_target) \
 			and _flat_distance(global_position, attack_target.global_position) <= _effective_attack_range()
 
-## attack_range, plus a building's footprint (see _effective_attack_range).
+## attack_range from this body's edge, plus a building's footprint (see
+## _effective_attack_range) or a big unit's bulk.
 func _reach_to(target: Node3D) -> float:
+	var reach := attack_range + get_body_bulk()
 	if target is ProductionBuilding:
-		return attack_range + target.get_footprint_radius()
-	return attack_range
+		return reach + target.get_footprint_radius()
+	if target is Unit:
+		return reach + target.get_body_bulk()
+	return reach
 
 func _counts_as_melee() -> bool:
 	return can_fight and projectile_scene == null
@@ -3876,34 +3916,64 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 			"time_remaining": minf(_shot_release_delay(), effective_cooldown),
 			"target": attack_target,
 		})
+	elif get_body_bulk() > 0.0:
+		_pending_blows.append({
+			"time_remaining": _attack_swing_duration() * BIG_STRIKE_IMPACT,
+			"target": attack_target,
+			"retarget": retarget,
+		})
 	else:
-		var damage := _effective_attack_damage(attack_target)
-		var charged := _charge_armed() and attack_target is Unit
-		if charged and attack_target.braces_against(self):
-			## Straight onto the spears: no charge, and the charger pays.
-			_spend_charge()
-			attack_target.take_damage(damage, self)
-			_apply_on_hit_effects(attack_target)
-			if _is_target_alive(attack_target):
-				attack_target.counter_charge(self)
-			if status_activity == Activity.DEAD:
-				return
-			charged = false
-		else:
-			if charged:
-				damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER * (1.0 + race_charge_bonus))
-				_spend_charge()
-				if race_charge_heal > 0:
-					heal(race_charge_heal)
-			attack_target.take_damage(damage, self)
-		_apply_on_hit_effects(attack_target)
+		_strike_melee(attack_target, retarget)
+
+## One melee blow on `target`: charge, brace, cleave and on-hit effects.
+func _strike_melee(target: Node3D, retarget: bool) -> void:
+	var damage := _effective_attack_damage(target)
+	var charged := _charge_armed() and target is Unit
+	if charged and target.braces_against(self):
+		## Straight onto the spears: no charge, and the charger pays.
+		_spend_charge()
+		target.take_damage(damage, self)
+		_apply_on_hit_effects(target)
+		if _is_target_alive(target):
+			target.counter_charge(self)
+		if status_activity == Activity.DEAD:
+			return
+		charged = false
+	else:
 		if charged:
-			var struck: Unit = attack_target
-			if _is_target_alive(struck):
-				struck.receive_charge(self)
-			_throw_charge_splash(struck)
-		if retarget and not _is_target_alive(attack_target):
-			_find_new_target_or_idle()
+			damage = roundi(damage * CHARGE_DAMAGE_MULTIPLIER * (1.0 + race_charge_bonus))
+			_spend_charge()
+			if race_charge_heal > 0:
+				heal(race_charge_heal)
+		target.take_damage(damage, self)
+	_apply_on_hit_effects(target)
+	if cleave > 0.0 and target is Unit:
+		_cleave(target, roundi(damage * cleave))
+	if charged:
+		var struck: Unit = target
+		if _is_target_alive(struck):
+			struck.receive_charge(self)
+		_throw_charge_splash(struck)
+	if retarget and target == attack_target and not _is_target_alive(target):
+		_find_new_target_or_idle()
+
+## Host-side. Lands a big body's blow as its figure slams down, if what it
+## swung at is still alive and has not slipped far out of reach meanwhile.
+func _tick_pending_blows(delta: float) -> void:
+	for i in range(_pending_blows.size() - 1, -1, -1):
+		var blow: Dictionary = _pending_blows[i]
+		blow["time_remaining"] -= delta
+		if blow["time_remaining"] > 0.0:
+			continue
+		_pending_blows.remove_at(i)
+		var target = blow["target"]
+		if not _is_target_alive(target):
+			continue
+		if _flat_distance(global_position, target.global_position) > _reach_to(target) * ATTACK_LEASH_SLACK:
+			continue
+		_strike_melee(target, blow["retarget"])
+		if status_activity == Activity.DEAD:
+			return
 
 func _fire_projectile(target: Node3D) -> void:
 	var dist := global_position.distance_to(target.global_position)
@@ -3943,6 +4013,27 @@ func _tick_pending_projectiles(delta: float) -> void:
 			_splash(splash_at, target, roundi(hit["damage"] * race_splash))
 		if attack_target == target and not _is_target_alive(target):
 			_find_new_target_or_idle()
+
+## A monster's sweep: the nearest others in front of it and within its reach
+## of them take `damage` too, as real (directional) blows.
+func _cleave(struck: Unit, damage: int) -> void:
+	if damage <= 0:
+		return
+	var front := Vector2(sin(rotation.y), cos(rotation.y))
+	var min_dot := cos(CLEAVE_HALF_ARC)
+	var search := attack_range + get_body_bulk() + 1.0
+	var hits: Array = []
+	for other in UnitGrid.enemies_near(get_tree(), global_position, search, owner_peer_id):
+		if other == struck or not _is_target_alive(other):
+			continue
+		var to := Vector2(other.global_position.x - global_position.x, other.global_position.z - global_position.z)
+		var dist := to.length()
+		if dist > _reach_to(other) or (dist > 0.01 and front.dot(to / dist) < min_dot):
+			continue
+		hits.append([dist, other])
+	hits.sort_custom(func(a, b): return a[0] < b[0])
+	for i in mini(hits.size(), CLEAVE_MAX_TARGETS):
+		hits[i][1].take_damage(damage, self)
 
 ## Comet Arrows: the rest of what stood around the target when the shot hit.
 func _splash(at: Vector3, struck, damage: int) -> void:

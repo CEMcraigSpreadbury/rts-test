@@ -198,6 +198,13 @@ public:
 	// Neighbours one unit considers per tick. Bounds the work in a crush,
 	// which is exactly when armies meet and the frame can least afford it.
 	static constexpr int kMaxNeighbours = 12;
+	// Every body is this wide unless the game gives it more (a monster, a
+	// siege engine). Separation and reach grow by a body's bulk, its radius
+	// over this, so ordinary men keep exactly the spacing they always had.
+	static constexpr float kDefaultBodyRadius = 0.4f;
+	// A big body's push falls off with the gap between edges; under this it
+	// counts as touching.
+	static constexpr float kMinBodyGap = 0.1f;
 	// A unit following its place brakes onto it at this (m/s^2): as fast as
 	// he could still stop in the distance left, and never more than that
 	// distance in one tick, so he lands on the point instead of overshooting
@@ -295,6 +302,24 @@ private:
 	// when there is nothing left to fight.
 	bool attack_position(uint32_t f, Vec2 &out);
 	uint8_t block_clearance(uint32_t f) const;
+	float bulk(uint32_t u) const { return std::max(0.0f, units.radius[u] - kDefaultBodyRadius); }
+	// fn(id) for every ordinary body binned round (x, y) within `reach`, then
+	// for every big one wherever it is (the caller tests the distance, less
+	// its bulk). Big bodies are few, so walking them by hand keeps a dragon
+	// on the field from widening every query in the sim.
+	template <typename Fn>
+	void query_bodies(float x, float y, float reach, Fn &&fn) const {
+		bool more = true;
+		hash.query(x, y, reach, [&](uint32_t o) {
+			if (units.radius[o] > kDefaultBodyRadius) return true;
+			return more = fn(o);
+		});
+		if (!more) return;
+		for (uint32_t o : big_bodies_) {
+			if (!fn(o)) return;
+		}
+	}
+	std::vector<uint32_t> big_bodies_; // in the hash, radius over the default
 	std::vector<uint32_t> arrived_;
 	std::vector<uint32_t> alerts_;
 	std::vector<uint32_t> swings_;

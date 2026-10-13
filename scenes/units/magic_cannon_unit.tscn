@@ -52,6 +52,7 @@ can_build = false
 max_health = 55
 attack_damage = 18
 attack_range = 32.0
+body_radius = 1.1
 attack_cooldown = 3.5
 aggro_range = 18.0
 vision_range = 18.0
