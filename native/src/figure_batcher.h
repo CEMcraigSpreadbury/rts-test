@@ -100,7 +100,12 @@ private:
 	// wheels while moving (a small bob, rock and sway), kicks back on the
 	// shot's release frame and settles, and tips over on its side when it
 	// dies.
-	enum Motion { MOTION_MELEE = 0, MOTION_BOW = 1, MOTION_MOUNTED = 2, MOTION_STOMP = 3, MOTION_ROLL = 4 };
+	// MOTION_THRUST (spears, glaives) draws back and drives straight forward;
+	// MOTION_CHOP (big two-handed weapons) rises onto its toes and chops down
+	// with a squash; MOTION_CAST (casters' staff shots) gathers, lifting and
+	// stretching, and punches forward on the release frame, feet planted.
+	enum Motion { MOTION_MELEE = 0, MOTION_BOW = 1, MOTION_MOUNTED = 2, MOTION_STOMP = 3, MOTION_ROLL = 4,
+		MOTION_THRUST = 5, MOTION_CHOP = 6, MOTION_CAST = 7 };
 
 	struct Batch {
 		godot::MultiMeshInstance3D *node = nullptr;

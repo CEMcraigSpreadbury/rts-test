@@ -41,6 +41,7 @@ armor_class = 2
 unit_category = 1
 can_brace = true
 figure_model = ExtResource("6_figure")
+figure_motion = 5
 figure_model_lod1 = ExtResource("7_figure_lod1")
 figure_palette = ExtResource("8_figure_palette")
 figure_top = 0.88

@@ -41,5 +41,6 @@ damage_type = 1
 unit_category = 0
 can_brace = true
 figure_model = ExtResource("90_figure")
+figure_motion = 5
 figure_model_lod1 = ExtResource("91_figure_lod1")
 figure_palette = ExtResource("92_figure_palette")

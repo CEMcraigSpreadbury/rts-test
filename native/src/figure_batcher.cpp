@@ -92,6 +92,28 @@ constexpr float kMonsterStretch = 0.10f;
 constexpr float kMonsterSlam = 0.30f;
 constexpr float kMonsterSlamTwist = 0.18f;
 constexpr float kMonsterSquash = 0.15f;
+// Thrust: when the drive starts (share of the clip), how far it leans back
+// and draws in, then leans into the drive and how far the drive reaches.
+constexpr float kThrustDrive = 0.28f;
+constexpr float kThrustLeanBack = 0.10f;
+constexpr float kThrustDraw = 0.10f;
+constexpr float kThrustLean = 0.16f;
+constexpr float kThrustReach = 0.24f;
+// Chop: when the weapon tops out, how far it rears, rises and stretches, then
+// leans into the blow, steps in and squashes as it lands.
+constexpr float kChopTop = 0.35f;
+constexpr float kChopRear = 0.28f;
+constexpr float kChopLift = 0.07f;
+constexpr float kChopStretch = 0.08f;
+constexpr float kChopLean = 0.42f;
+constexpr float kChopStep = 0.10f;
+constexpr float kChopSquash = 0.10f;
+// Cast: how far it leans back, rises and stretches gathering, and how far it
+// punches forward on the release.
+constexpr float kCastLeanBack = 0.10f;
+constexpr float kCastLift = 0.05f;
+constexpr float kCastStretch = 0.06f;
+constexpr float kCastPunch = 0.16f;
 // Rolling (siege engines): rumbles a second at full speed, the bob, nose
 // rock and side sway on the wheels; the shot's kick back (metres, and nose
 // up) and how long it takes to settle as a share of what is left of the
@@ -388,8 +410,11 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 	Vector3 offset = sprite->get_position() - e.rest_position;
 	// An archer's swing still lunges its sprite forward (Unit.play_attack_lunge);
 	// a figure drawing a bow keeps its feet instead.
-	const bool drawing_bow = e.motion == MOTION_BOW && e.clip == CLIP_ATTACK;
+	const bool drawing_bow = (e.motion == MOTION_BOW || e.motion == MOTION_CAST) && e.clip == CLIP_ATTACK;
 	if (drawing_bow) offset.z *= 0.2f;
+	// A thrust or a chop carries its own step forward (below): the sprite's
+	// generic lunge would only blur it.
+	if ((e.motion == MOTION_THRUST || e.motion == MOTION_CHOP) && e.clip == CLIP_ATTACK) offset.z *= 0.3f;
 	// A siege engine keeps its wheels on the ground (it kicks back by itself).
 	if (e.motion == MOTION_ROLL && e.clip == CLIP_ATTACK) offset.z = 0.0f;
 	const Vector3 sprite_scale = sprite->get_scale();
@@ -501,6 +526,9 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 	}
 
 	if (e.clip != CLIP_ATTACK) e.attack_t = 0.0f;
+	// A thrust's or chop's own step forward, added after the shove lean below
+	// (which would otherwise tip it over twice).
+	float stride = 0.0f;
 	switch (e.clip) {
 		case CLIP_ATTACK: {
 			if (roller) {
@@ -533,6 +561,45 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 				const float lunge = smooth(0.25f, 0.45f, t) * (1.0f - smooth(0.5f, 1.0f, t));
 				pitch += -kMountRear * rear + kMountLunge * lunge;
 				hop += 0.05f * rear;
+				break;
+			}
+			if (e.motion == MOTION_THRUST) {
+				// Weight back with the point drawn in, then a straight drive
+				// along the shaft, held a beat, and back.
+				const float wind = smooth(0.0f, kThrustDrive, t) * (1.0f - smooth(kThrustDrive, kThrustDrive + 0.12f, t));
+				const float drive = smooth(kThrustDrive, kThrustDrive + 0.12f, t) * (1.0f - smooth(0.55f, 1.0f, t));
+				pitch += -kThrustLeanBack * wind + kThrustLean * drive;
+				twist += -0.12f * wind + 0.05f * drive;
+				stride += -kThrustDraw * wind + kThrustReach * drive;
+				stretch *= 1.0f + 0.03f * drive;
+				hop += 0.012f * drive;
+				break;
+			}
+			if (e.motion == MOTION_CHOP) {
+				// Up onto its toes with the weapon high, then down hard: a
+				// deep forward lean, a step in and a squash as it lands.
+				const float up = smooth(0.0f, kChopTop, t) * (1.0f - smooth(kChopTop, kChopTop + 0.1f, t));
+				const float down = smooth(kChopTop, kChopTop + 0.1f, t) * (1.0f - smooth(0.6f, 1.0f, t));
+				const float impact = smooth(kChopTop + 0.07f, kChopTop + 0.1f, t)
+						* (1.0f - smooth(kChopTop + 0.1f, kChopTop + 0.35f, t));
+				pitch += -kChopRear * up + kChopLean * down;
+				twist += -0.10f * up + 0.04f * down;
+				hop += kChopLift * up;
+				stretch *= 1.0f + kChopStretch * up - kChopSquash * impact;
+				stride += kChopStep * down;
+				break;
+			}
+			if (e.motion == MOTION_CAST) {
+				// Gather: rise and lean back, stretching, swaying the staff;
+				// on the release frame a forward punch and a little pop.
+				const float gather = smooth(0.0f, release, t);
+				const float after = Math::clamp((t - release) / std::max(1.0f - release, 0.05f), 0.0f, 1.0f);
+				const float hold = t < release ? gather : 1.0f - smooth(0.0f, 1.0f, after);
+				const float punch = t < release ? 0.0f : std::sin(kPi * std::min(after * 1.6f, 1.0f));
+				pitch += -kCastLeanBack * hold + kCastPunch * punch;
+				hop += kCastLift * hold + 0.012f * punch;
+				stretch *= 1.0f + kCastStretch * hold - 0.04f * punch;
+				twist += 0.08f * std::sin(2.0f * kPi * t) * hold;
 				break;
 			}
 			if (e.motion == MOTION_BOW) {
@@ -579,6 +646,7 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 		pitch += Math::clamp(offset.z * kShoveLean, -0.3f, 0.4f);
 		roll += Math::clamp(-offset.x * kShoveLean, -0.3f, 0.3f);
 	}
+	offset.z += stride;
 
 	Basis basis = Basis(Vector3(0, 1, 0), twist) * Basis::from_euler(Vector3(pitch, 0.0f, roll));
 	float lift = 0.0f;

@@ -489,7 +489,7 @@ func _play_sprite_pop() -> void:
 ## swings, or a bow drawn and loosed on the shot's beat. Stomp (monsters):
 ## heavy steps with a pause on the ground, the camera jolting as it lands.
 ## Roll (siege engines): rumbles on its wheels, kicks back as it fires.
-@export_enum("Melee", "Bow", "Mounted", "Stomp", "Roll") var figure_motion: int = 0
+@export_enum("Melee", "Bow", "Mounted", "Stomp", "Roll", "Thrust", "Chop", "Cast") var figure_motion: int = 0
 ## Where the figure's head is, for its health bar and stun stars, when the
 ## top of its mesh is something else (a lance's tip). 0: the mesh's top.
 @export var figure_top: float = 0.0

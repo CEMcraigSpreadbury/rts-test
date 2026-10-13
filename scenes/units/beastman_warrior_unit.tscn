@@ -43,5 +43,6 @@ armor_class = 1
 damage_type = 5
 unit_category = 1
 figure_model = ExtResource("6_figure")
+figure_motion = 6
 figure_model_lod1 = ExtResource("7_figure_lod1")
 figure_palette = ExtResource("8_figure_palette")

@@ -41,6 +41,7 @@ damage_type = 5
 unit_category = 0
 building_damage_multiplier = 1.50
 figure_model = ExtResource("20_figure")
+figure_motion = 6
 figure_model_lod1 = ExtResource("21_figure_lod1")
 figure_palette = ExtResource("22_figure_palette")
 figure_top = 1.10
