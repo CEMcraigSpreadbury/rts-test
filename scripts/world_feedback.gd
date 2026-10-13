@@ -417,6 +417,8 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 		return
 	Sfx.shot(shooter)
 	var projectile: Node3D = shooter.projectile_scene.instantiate()
+	if projectile is ToyProjectile and shooter.projectile_tint.a > 0.0:
+		projectile.tint = shooter.projectile_tint
 	add_child(projectile)
 	var start_pos: Vector3 = shooter.global_position + Vector3(0, 1.2, 0)
 	var end_pos: Vector3 = target.global_position + Vector3(0, 0.8, 0)
@@ -437,14 +439,17 @@ func _fly_projectile_visual(projectile: Node3D, start_pos: Vector3, end_pos: Vec
 	var fly := func(t: float) -> void:
 		var pos: Vector3 = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0)
 		projectile.global_position = pos
+		var dir: Vector3 = pos - previous[0] if t > 0.0 else end_pos - start_pos + Vector3.UP * arc_height * PI
 		if sprite:
-			var dir: Vector3 = pos - previous[0] if t > 0.0 else end_pos - start_pos + Vector3.UP * arc_height * PI
 			_orient_to_screen_direction(sprite, pos, -dir if faces_left else dir)
+		elif dir.length_squared() > 0.000001:
+			## A 3D shot (ToyProjectile) points along its arc.
+			projectile.look_at(pos + dir, Vector3.UP if absf(dir.normalized().y) < 0.99 else Vector3.FORWARD)
 		previous[0] = pos
 	fly.call(0.0)
 	var tween := create_tween()
 	tween.tween_method(fly, 0.0, 1.0, duration)
-	tween.tween_callback(projectile.queue_free)
+	tween.tween_callback(projectile.land if projectile.has_method(&"land") else projectile.queue_free)
 
 ## Building equivalent of on_unit_projectile_fired/_rpc_spawn_projectile_visual/
 ## _spawn_projectile_visual above — kept separate rather than sharing those
@@ -1712,6 +1717,9 @@ const ABILITY_TARGET_DECAL_ALPHA: float = 0.5
 var _ability_circle_texture: ImageTexture = null
 var _ability_circle_emission_texture: ImageTexture = null
 var _ability_target_decal: Decal = null
+var _ability_cone_decal: Decal = null
+## Wedge textures for cone previews, by whole-degree angle.
+var _cone_textures: Dictionary = {}
 
 ## Follows the mouse while an ability is armed (see Main.get_armed_ability),
 ## sized to what the cast will actually cover.
@@ -1721,9 +1729,16 @@ func update_ability_target_decal() -> void:
 	var hit: Dictionary = {}
 	if (ability != null or power != null) and not main.chat.is_input_open() and not main.game_over:
 		hit = main.raycast(get_viewport().get_mouse_position())
+	if _ability_cone_decal:
+		_ability_cone_decal.visible = false
 	if hit.is_empty():
 		if _ability_target_decal:
 			_ability_target_decal.visible = false
+		return
+	if ability != null and ability.shape == Ability.Shape.CONE and main.get_armed_caster() != null:
+		if _ability_target_decal:
+			_ability_target_decal.visible = false
+		_show_cone_preview(main.get_armed_caster(), ability, hit.position)
 		return
 	if _ability_target_decal == null:
 		_ability_target_decal = _make_ability_decal()
@@ -1736,10 +1751,76 @@ func update_ability_target_decal() -> void:
 	else:
 		radius = ability.area_radius if ability.kind == Ability.Kind.ACTIVATED_AREA else ability.affected_ally_radius
 		color = ability.effect_color
+	var centre: Vector3 = hit.position
+	## A nova or slam goes off round the caster, wherever the mouse is.
+	if power == null and ability.shape == Ability.Shape.SELF and main.get_armed_caster() != null:
+		centre = main.get_armed_caster().global_position
+		radius += main.get_armed_caster().get_body_bulk()
 	_ability_target_decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
 	_ability_target_decal.modulate = Color(color, ABILITY_TARGET_DECAL_ALPHA)
-	_ability_target_decal.global_position = hit.position
+	_ability_target_decal.global_position = centre
 	_ability_target_decal.visible = true
+
+## A breath's aim: its whole cone from the caster toward the mouse.
+func _show_cone_preview(caster: Unit, ability: Ability, mouse_pos: Vector3) -> void:
+	var aim := mouse_pos - caster.global_position
+	aim.y = 0.0
+	if aim.length_squared() < 0.01:
+		return
+	aim = aim.normalized()
+	if _ability_cone_decal == null:
+		_ability_cone_decal = Decal.new()
+		_ability_cone_decal.upper_fade = 0.15
+		_ability_cone_decal.lower_fade = 0.15
+		_ability_cone_decal.emission_energy = 0.6
+		add_child(_ability_cone_decal)
+	var degrees: int = roundi(ability.cone_angle)
+	var textures: Array = _cone_texture(degrees)
+	_ability_cone_decal.texture_albedo = textures[0]
+	_ability_cone_decal.texture_emission = textures[1]
+	var length: float = ability.activation_range
+	var width: float = _cone_width(degrees) * length
+	_ability_cone_decal.size = Vector3(width, ABILITY_DECAL_HEIGHT, length)
+	_ability_cone_decal.modulate = Color(ability.effect_color, ABILITY_TARGET_DECAL_ALPHA)
+	var centre := caster.global_position + aim * length * 0.5
+	_ability_cone_decal.global_position = centre
+	_ability_cone_decal.look_at(centre + aim, Vector3.UP)
+	_ability_cone_decal.visible = true
+
+## Width of a cone's box per metre of its length.
+static func _cone_width(degrees: int) -> float:
+	var half := deg_to_rad(degrees * 0.5)
+	return 2.0 * (sin(half) if half < PI * 0.5 else 1.0)
+
+## A filled wedge with a solid rim, apex at the bottom middle, like the
+## circle's look, as [albedo, emission].
+func _cone_texture(degrees: int) -> Array:
+	if _cone_textures.has(degrees):
+		return _cone_textures[degrees]
+	const SIZE: int = 256
+	const FILL_ALPHA: float = 0.3
+	var half := deg_to_rad(degrees * 0.5)
+	var width := _cone_width(degrees)
+	var albedo := Image.create_empty(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var emission := Image.create_empty(SIZE, SIZE, false, Image.FORMAT_RGBA8)
+	var rim := 0.035
+	for y in SIZE:
+		for x in SIZE:
+			## Metres per metre of length, from the apex: forward is up the image.
+			var p := Vector2(((x + 0.5) / SIZE - 0.5) * width, 1.0 - (y + 0.5) / SIZE)
+			var d := p.length()
+			var angle := absf(atan2(p.x, p.y))
+			var alpha := 0.0
+			if d <= 1.0 and angle <= half:
+				var edge := minf(1.0 - d, d * sin(half - angle))
+				alpha = lerpf(1.0, FILL_ALPHA, smoothstep(rim * 0.6, rim, edge))
+			albedo.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+			emission.set_pixel(x, y, Color(alpha, alpha, alpha, 1.0))
+	albedo.generate_mipmaps()
+	emission.generate_mipmaps()
+	var pair := [ImageTexture.create_from_image(albedo), ImageTexture.create_from_image(emission)]
+	_cone_textures[degrees] = pair
+	return pair
 
 ## The RPCs below carry the caster's path plus an ability index rather than
 ## the Ability itself (a resource can't cross the wire); each peer looks the
@@ -1832,6 +1913,9 @@ func _play_ability_launch(unit: Unit, ability_index: int, from_pos: Vector3, tar
 	Sfx.ability_launch(ability, from_pos)
 	var direction := target_pos - from_pos
 	direction.y = 0.0
+	if ability.effect_style != Ability.EffectStyle.SPRITE:
+		_play_toy_ability(unit, ability, from_pos, target_pos, direction)
+		return
 	if ability.cast_effect and main.fog_of_war.is_visible_at(from_pos):
 		## An oriented effect (a breath plume) is pushed out by half its width
 		## so it starts at the mouth rather than being centred on it.
@@ -1847,6 +1931,400 @@ func _play_ability_launch(unit: Unit, ability_index: int, from_pos: Vector3, tar
 		_play_ability_impact(ability, target_pos)
 	else:
 		get_tree().create_timer(travel).timeout.connect(_play_ability_impact.bind(ability, target_pos))
+
+## --- 3D toy ability effects (Ability.effect_style) ---
+## A breath of fire from the mouth across the whole cone: round fire puffs
+## that burn white to orange to smoke and swell as they fly, glossy plastic
+## flame blobs among them, and flames flaring up off the ground along it.
+const BREATH_TIME: float = 0.65
+const BREATH_FLIGHT: float = 0.55
+
+func _play_breath(ability: Ability, from_pos: Vector3, direction: Vector3, plague: bool = false) -> void:
+	if direction.length_squared() < 0.0001:
+		return
+	var aim := direction.normalized()
+	var length: float = ability.activation_range
+	var half := ability.cone_angle * 0.5
+	if not main.fog_of_war.is_visible_at(from_pos) and not main.fog_of_war.is_visible_at(from_pos + aim * length * 0.5):
+		return
+	var colour: Color = ability.effect_color
+	var speed := length / BREATH_FLIGHT
+	## The puffs.
+	var puffs := ParticleProcessMaterial.new()
+	puffs.direction = Vector3(0, 0, -1)
+	puffs.spread = half * 0.8
+	puffs.flatness = 0.55
+	puffs.initial_velocity_min = speed * 0.85
+	puffs.initial_velocity_max = speed * 1.15
+	puffs.gravity = Vector3(0, 1.5, 0)
+	puffs.damping_min = 2.0
+	puffs.damping_max = 3.0
+	puffs.scale_min = 2.2
+	puffs.scale_max = 3.6
+	var grow := Curve.new()
+	grow.add_point(Vector2(0.0, 0.25))
+	grow.add_point(Vector2(0.6, 1.0))
+	grow.add_point(Vector2(1.0, 0.7))
+	var grow_texture := CurveTexture.new()
+	grow_texture.curve = grow
+	puffs.scale_curve = grow_texture
+	var burn := Gradient.new()
+	if plague:
+		## Sickly pale green to the breath's colour to a grey-green rot.
+		burn.set_color(0, Color(0.9, 0.97, 0.8, 1.0))
+		burn.set_color(1, Color(0.3, 0.33, 0.27, 0.0))
+		burn.add_point(0.3, Color(colour.lightened(0.3), 1.0))
+		burn.add_point(0.6, Color(colour, 0.9))
+		burn.add_point(0.85, Color(colour.darkened(0.55), 0.55))
+	else:
+		burn.set_color(0, Color(1.0, 0.97, 0.8, 1.0))
+		burn.set_color(1, Color(0.25, 0.22, 0.22, 0.0))
+		burn.add_point(0.25, Color(1.0, 0.8, 0.3, 1.0))
+		burn.add_point(0.55, Color(colour, 0.95))
+		burn.add_point(0.8, Color(colour.darkened(0.5), 0.6))
+	var burn_texture := GradientTexture1D.new()
+	burn_texture.gradient = burn
+	puffs.color_ramp = burn_texture
+	var puff_material := StandardMaterial3D.new()
+	puff_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	puff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	puff_material.vertex_color_use_as_albedo = true
+	puff_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	puff_material.billboard_keep_scale = true
+	puff_material.albedo_texture = RoundParticle.texture()
+	var puff_mesh := QuadMesh.new()
+	puff_mesh.size = Vector2(0.35, 0.35)
+	puff_mesh.material = puff_material
+	_spawn_stream(puffs, puff_mesh, from_pos, aim, 90, BREATH_FLIGHT)
+	## Glossy plastic flame blobs riding the stream.
+	var blobs: ParticleProcessMaterial = puffs.duplicate()
+	blobs.spread = half * 0.6
+	blobs.scale_min = 0.6
+	blobs.scale_max = 1.1
+	var shrink := Curve.new()
+	shrink.add_point(Vector2(0.0, 0.5))
+	shrink.add_point(Vector2(0.35, 1.0))
+	shrink.add_point(Vector2(1.0, 0.0))
+	var shrink_texture := CurveTexture.new()
+	shrink_texture.curve = shrink
+	blobs.scale_curve = shrink_texture
+	blobs.color_ramp = null
+	var blob_material := _plastic(colour.lightened(0.15), 0.6 if plague else 1.4)
+	var blob_mesh := SphereMesh.new()
+	blob_mesh.radius = 0.16
+	blob_mesh.height = 0.32
+	blob_mesh.radial_segments = 12
+	blob_mesh.rings = 6
+	blob_mesh.material = blob_material
+	_spawn_stream(blobs, blob_mesh, from_pos, aim, 22, BREATH_FLIGHT * 0.9)
+	## Flames flaring off the ground along the cone as the breath reaches them.
+	var ground := Vector3(from_pos.x, from_pos.y - ability.launch_offset.y, from_pos.z)
+	var flare: ParticleProcessMaterial = _charge_dust_material.duplicate()
+	flare.color = Color.WHITE
+	flare.color_ramp = burn_texture
+	flare.spread = 20.0
+	flare.initial_velocity_min = 1.8
+	flare.initial_velocity_max = 3.0
+	flare.radial_velocity_min = 0.4
+	flare.radial_velocity_max = 0.9
+	flare.gravity = Vector3(0, 1.0, 0)
+	for i in 6:
+		var along := lerpf(0.3, 0.95, float(i) / 5.0) * length
+		var side := randf_range(-1.0, 1.0) * tan(deg_to_rad(half)) * along * 0.7
+		var at := ground + aim * along + aim.cross(Vector3.UP) * side
+		get_tree().create_timer(BREATH_FLIGHT * along / length).timeout.connect(
+				_spawn_burst.bind(flare, at + Vector3(0, RALLY_DUST_HEIGHT, 0), 10, 0.45, puff_mesh))
+	if ability.impact_shake > 0.0:
+		main.camera_rig.shake_at(ground + aim * length * 0.5, ability.impact_shake)
+	Sfx.ability_impact(ability, ground + aim * length * 0.5)
+
+## Every 3D-styled ability: what carries it, then its impact, timed off the
+## same Unit.ability_travel_time the host's damage uses.
+func _play_toy_ability(unit: Unit, ability: Ability, from_pos: Vector3, target_pos: Vector3, direction: Vector3) -> void:
+	var travel: float = Unit.ability_travel_time(ability, from_pos, target_pos)
+	var radius: float = ability.area_radius
+	if ability.shape == Ability.Shape.SELF:
+		radius += unit.get_body_bulk()
+	match ability.effect_style:
+		Ability.EffectStyle.FIRE, Ability.EffectStyle.PLAGUE:
+			_play_breath(ability, from_pos, direction, ability.effect_style == Ability.EffectStyle.PLAGUE)
+			if ability.linger_duration > 0.0:
+				var centre: Vector3 = Unit.cone_zone_centre(ability, unit.global_position, target_pos)
+				get_tree().create_timer(BREATH_FLIGHT).timeout.connect(_play_lingering_zone.bind(ability, centre))
+			return
+		Ability.EffectStyle.GLOB:
+			_lob_glob(ability, from_pos, target_pos, travel)
+		Ability.EffectStyle.FIRESTORM:
+			_call_firestorm(ability, from_pos, target_pos, travel)
+	if travel <= 0.0:
+		_toy_impact(ability, target_pos, radius)
+	else:
+		get_tree().create_timer(travel).timeout.connect(_toy_impact.bind(ability, target_pos, radius))
+
+func _toy_impact(ability: Ability, pos: Vector3, radius: float) -> void:
+	Sfx.ability_impact(ability, pos)
+	if ability.impact_shake > 0.0:
+		main.camera_rig.shake_at(pos, ability.impact_shake)
+	if ability.linger_duration > 0.0:
+		_play_lingering_zone(ability, pos)
+	if not main.fog_of_war.is_visible_at(pos):
+		return
+	## The area it covered, flashed on the ground.
+	_play_ability_effect(pos, radius, ability.effect_color, ability.effect_duration * 0.6, ability.effect_particle_lifetime)
+	var colour: Color = ability.effect_color
+	match ability.effect_style:
+		Ability.EffectStyle.GLOB:
+			_splash(pos, colour, radius)
+		Ability.EffectStyle.EARTH:
+			_play_impact(pos, Unit.ImpactKind.SLAM)
+			_throw_rocks(pos, colour, radius)
+		Ability.EffectStyle.FROST:
+			_frost_shards(pos, colour, radius)
+		Ability.EffectStyle.SHADOW:
+			_shadow_ring(pos, colour, radius)
+
+## One glossy plastic material per colour and glow.
+var _plastics: Dictionary = {}
+
+func _plastic(colour: Color, glow: float = 0.0) -> StandardMaterial3D:
+	var key := "%s/%s" % [colour.to_html(), glow]
+	if _plastics.has(key):
+		return _plastics[key]
+	var material := StandardMaterial3D.new()
+	material.albedo_color = colour
+	material.roughness = 0.3
+	material.clearcoat_enabled = true
+	material.clearcoat = 0.5
+	material.clearcoat_roughness = 0.25
+	if glow > 0.0:
+		material.emission_enabled = true
+		material.emission = colour
+		material.emission_energy_multiplier = glow
+	_plastics[key] = material
+	return material
+
+func _sphere(radius: float, material: Material) -> SphereMesh:
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh.radial_segments = 14
+	mesh.rings = 7
+	mesh.material = material
+	return mesh
+
+## A round puff in `colour`, fading out over its life.
+func _puff_process(colour: Color) -> ParticleProcessMaterial:
+	var process: ParticleProcessMaterial = _charge_dust_material.duplicate()
+	process.color = Color.WHITE
+	var fade := Gradient.new()
+	fade.set_color(0, colour.lightened(0.25))
+	fade.set_color(1, Color(colour, 0.0))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	process.color_ramp = ramp
+	return process
+
+## Acid or bile: a glossy wobbling glob on a high arc, a dripping trail.
+func _lob_glob(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float) -> void:
+	if travel <= 0.0:
+		return
+	var glob := MeshInstance3D.new()
+	glob.mesh = _sphere(0.32, _plastic(ability.effect_color, 0.5))
+	add_child(glob)
+	var trail := _make_projectile_trail(ability.effect_color)
+	add_child(trail)
+	var arc: float = maxf(ability.projectile_arc_height, 1.0)
+	var fly := func(t: float) -> void:
+		var pos: Vector3 = from_pos.lerp(target_pos + Vector3.UP * 0.3, t) + Vector3.UP * arc * sin(t * PI)
+		glob.global_position = pos
+		glob.visible = main.fog_of_war.is_visible_at(pos)
+		## A wobble, squashing as it goes.
+		var w := sin(t * 28.0) * 0.18
+		glob.scale = Vector3(1.0 + w, 1.0 - w, 1.0 + w)
+		trail.global_position = pos
+		trail.emitting = glob.visible
+	fly.call(0.0)
+	var tween := glob.create_tween()
+	tween.tween_method(fly, 0.0, 1.0, travel)
+	tween.tween_callback(func() -> void:
+		trail.emitting = false
+		get_tree().create_timer(trail.lifetime).timeout.connect(trail.queue_free))
+	tween.tween_callback(glob.queue_free)
+
+## The glob bursting: glossy droplets flung out and a round puff ring.
+func _splash(pos: Vector3, colour: Color, radius: float) -> void:
+	var drops := ParticleProcessMaterial.new()
+	drops.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_SPHERE
+	drops.emission_sphere_radius = 0.3
+	drops.direction = Vector3.UP
+	drops.spread = 70.0
+	drops.initial_velocity_min = radius * 1.2
+	drops.initial_velocity_max = radius * 2.2
+	drops.gravity = Vector3(0, -16.0, 0)
+	drops.scale_min = 0.5
+	drops.scale_max = 1.2
+	_spawn_burst(drops, pos + Vector3.UP * 0.3, 22, 0.7, _sphere(0.09, _plastic(colour, 0.4)))
+	var ring: ParticleProcessMaterial = _puff_process(colour)
+	ring.emission_ring_radius = radius * 0.5
+	_spawn_burst(ring, pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 18, 0.5, _dust_mesh)
+
+## Ground Slam: chunky plastic rocks thrown out of the crack.
+func _throw_rocks(pos: Vector3, colour: Color, radius: float) -> void:
+	var rocks := ParticleProcessMaterial.new()
+	rocks.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_RING
+	rocks.emission_ring_axis = Vector3.UP
+	rocks.emission_ring_radius = radius * 0.6
+	rocks.emission_ring_inner_radius = 0.2
+	rocks.emission_ring_height = 0.1
+	rocks.direction = Vector3.UP
+	rocks.spread = 35.0
+	rocks.initial_velocity_min = 4.0
+	rocks.initial_velocity_max = 7.0
+	rocks.radial_velocity_min = 1.0
+	rocks.radial_velocity_max = 2.5
+	rocks.gravity = Vector3(0, -18.0, 0)
+	rocks.angular_velocity_min = -360.0
+	rocks.angular_velocity_max = 360.0
+	rocks.scale_min = 0.6
+	rocks.scale_max = 1.4
+	var block := BoxMesh.new()
+	block.size = Vector3(0.26, 0.2, 0.24)
+	block.material = _plastic(colour.darkened(0.25))
+	_spawn_burst(rocks, pos, 16, 0.9, block)
+
+## Frost Nova: a ring of glossy ice shards bursting up out of the ground
+## from the middle outward, standing a moment, then sinking away.
+const FROST_SHARDS: int = 14
+const FROST_HOLD: float = 0.8
+
+func _frost_shards(pos: Vector3, colour: Color, radius: float) -> void:
+	var ice := _plastic(colour.lightened(0.45), 0.35)
+	for i in FROST_SHARDS:
+		var angle := TAU * i / FROST_SHARDS + randf_range(-0.2, 0.2)
+		var distance := radius * randf_range(0.45, 0.9)
+		var shard := MeshInstance3D.new()
+		var prism := PrismMesh.new()
+		var height := randf_range(0.7, 1.4)
+		prism.size = Vector3(randf_range(0.3, 0.5), height, randf_range(0.3, 0.45))
+		prism.material = ice
+		shard.mesh = prism
+		add_child(shard)
+		var at := pos + Vector3(cos(angle), 0.0, sin(angle)) * distance
+		shard.global_position = at + Vector3.DOWN * height
+		shard.rotation = Vector3(randf_range(-0.35, 0.35), randf() * TAU, randf_range(-0.35, 0.35))
+		var delay := distance / radius * 0.18
+		var tween := shard.create_tween()
+		tween.tween_interval(delay)
+		tween.tween_property(shard, "global_position", at + Vector3.UP * height * 0.35, 0.16) \
+				.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_interval(FROST_HOLD)
+		tween.tween_property(shard, "global_position", at + Vector3.DOWN * height, 0.4) \
+				.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tween.tween_callback(shard.queue_free)
+	var mist: ParticleProcessMaterial = _puff_process(Color(0.92, 0.97, 1.0))
+	mist.emission_ring_radius = radius * 0.4
+	mist.radial_velocity_min = radius * 1.2
+	mist.radial_velocity_max = radius * 1.8
+	_spawn_burst(mist, pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 30, 0.55, _dust_mesh)
+
+## Shadow Nova: a dark glossy ring racing out to the edge and fading, dark
+## wisps boiling up behind it.
+func _shadow_ring(pos: Vector3, colour: Color, radius: float) -> void:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.82
+	torus.outer_radius = 1.0
+	torus.rings = 48
+	torus.ring_segments = 8
+	var material: StandardMaterial3D = _plastic(colour.darkened(0.3), 1.2).duplicate()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	torus.material = material
+	ring.mesh = torus
+	add_child(ring)
+	ring.global_position = pos + Vector3.UP * 0.3
+	ring.scale = Vector3(0.3, 0.6, 0.3)
+	var tween := ring.create_tween().set_parallel(true)
+	tween.tween_property(ring, "scale", Vector3(radius, 0.6, radius), 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(material, "albedo_color:a", 0.0, 0.3).set_delay(0.3)
+	tween.chain().tween_callback(ring.queue_free)
+	var wisps: ParticleProcessMaterial = _puff_process(colour.darkened(0.2))
+	wisps.emission_ring_radius = radius * 0.7
+	wisps.emission_ring_inner_radius = 0.2
+	wisps.initial_velocity_min = 1.5
+	wisps.initial_velocity_max = 3.0
+	wisps.radial_velocity_min = 0.5
+	wisps.radial_velocity_max = 1.2
+	wisps.gravity = Vector3(0, 1.5, 0)
+	_spawn_burst(wisps, pos + Vector3(0, RALLY_DUST_HEIGHT, 0), 34, 0.8, _dust_mesh)
+
+## Firestorm: a fireball hurled up out of sight, then glossy fireballs
+## raining down across the target, the last landing as the damage does.
+const FIREBALL_FALL: float = 0.35
+const FIREBALL_HEIGHT: float = 9.0
+
+func _call_firestorm(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float) -> void:
+	var colour: Color = ability.effect_color
+	var up := MeshInstance3D.new()
+	up.mesh = _sphere(0.3, _plastic(colour, 1.6))
+	add_child(up)
+	up.global_position = from_pos
+	var rise := up.create_tween()
+	rise.tween_property(up, "global_position", from_pos + Vector3.UP * FIREBALL_HEIGHT, 0.35) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	rise.tween_callback(up.queue_free)
+	var count := maxi(ability.impact_scatter_count, 3)
+	var start := maxf(travel - FIREBALL_FALL - 0.3, 0.0)
+	for i in count:
+		var angle := randf() * TAU
+		var at := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * sqrt(randf()) * ability.area_radius * 0.85
+		var delay := start + 0.3 * float(i) / count
+		if i == count - 1:
+			at = target_pos
+			delay = maxf(travel - FIREBALL_FALL, 0.0)
+		get_tree().create_timer(maxf(delay, 0.01)).timeout.connect(_drop_fireball.bind(at, colour))
+
+func _drop_fireball(at: Vector3, colour: Color) -> void:
+	if not main.fog_of_war.is_visible_at(at):
+		return
+	var ball := MeshInstance3D.new()
+	ball.mesh = _sphere(0.36, _plastic(colour, 1.6))
+	add_child(ball)
+	ball.global_position = at + Vector3.UP * FIREBALL_HEIGHT
+	var trail := _make_projectile_trail(colour)
+	add_child(trail)
+	trail.global_position = ball.global_position
+	var fall := func(t: float) -> void:
+		ball.global_position = at + Vector3.UP * FIREBALL_HEIGHT * (1.0 - t)
+		trail.global_position = ball.global_position
+	var tween := ball.create_tween()
+	tween.tween_method(fall, 0.0, 1.0, FIREBALL_FALL).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween.tween_callback(func() -> void:
+		trail.emitting = false
+		get_tree().create_timer(trail.lifetime).timeout.connect(trail.queue_free)
+		var burst: ParticleProcessMaterial = _puff_process(colour)
+		burst.initial_velocity_min = 1.5
+		burst.initial_velocity_max = 3.0
+		_spawn_burst(burst, at + Vector3(0, RALLY_DUST_HEIGHT, 0), 16, 0.45, _dust_mesh)
+		main.camera_rig.shake_at(at, 0.12))
+	tween.tween_callback(ball.queue_free)
+
+## A particle stream from `from_pos` along `aim` for BREATH_TIME, freed once
+## its last particle is gone.
+func _spawn_stream(process: ParticleProcessMaterial, mesh: Mesh, from_pos: Vector3, aim: Vector3, amount: int, lifetime: float) -> void:
+	var particles := GPUParticles3D.new()
+	particles.amount = amount
+	particles.lifetime = lifetime
+	particles.process_material = process
+	particles.draw_pass_1 = mesh
+	particles.local_coords = false
+	add_child(particles)
+	particles.global_position = from_pos
+	particles.look_at(from_pos + aim, Vector3.UP)
+	particles.emitting = true
+	get_tree().create_timer(BREATH_TIME).timeout.connect(func() -> void:
+		if is_instance_valid(particles):
+			particles.emitting = false)
+	get_tree().create_timer(BREATH_TIME + lifetime + 0.1).timeout.connect(particles.queue_free)
 
 func _fly_ability_projectile(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float) -> void:
 	if ability.projectile_effect == null or travel <= 0.0:
@@ -2001,6 +2479,9 @@ func _play_lingering_zone(ability: Ability, target_pos: Vector3) -> void:
 	decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
 	decal.modulate = Color(ability.effect_color, LINGER_DECAL_ALPHA)
 	zone.add_child(decal)
+	## The flat painted disc is the old look: a 3D-styled pool is just its
+	## rising puffs.
+	decal.visible = ability.effect_style == Ability.EffectStyle.SPRITE
 	var pulse := decal.create_tween().set_loops()
 	pulse.tween_property(decal, "modulate:a", LINGER_DECAL_ALPHA * LINGER_PULSE_LOW, LINGER_PULSE_PERIOD * 0.5) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -2039,7 +2520,7 @@ func _play_lingering_zone(ability: Ability, target_pos: Vector3) -> void:
 	zone.add_child(particles)
 
 	var sprites: Array[AnimatedSprite3D] = []
-	if ability.linger_effect:
+	if ability.linger_effect and ability.effect_style == Ability.EffectStyle.SPRITE:
 		for i in ability.linger_effect_count:
 			var offset := Vector3.ZERO
 			var extra_scale := 1.0

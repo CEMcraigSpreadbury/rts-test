@@ -3746,6 +3746,12 @@ func get_armed_ability() -> Ability:
 		return null
 	return unit.get_ability(_armed_ability["ability_index"])
 
+## The unit whose ability is armed, or null.
+func get_armed_caster() -> Unit:
+	if get_armed_ability() == null:
+		return null
+	return _armed_ability["unit"]
+
 ## Same shape as arm_ability: refuses silently while the power is cooling down.
 func arm_power(node_index: int) -> void:
 	if research.power_cooldown_remaining_fraction(node_index) > 0.0:

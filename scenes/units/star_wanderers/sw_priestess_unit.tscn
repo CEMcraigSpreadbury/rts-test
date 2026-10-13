@@ -44,6 +44,7 @@ heal_aura_amount = 4
 heal_aura_radius = 8.00
 projectile_speed = 13.00
 projectile_scene = ExtResource("6_projectile")
+projectile_tint = Color(1, 0.85, 0.45, 1)
 figure_model = ExtResource("20_figure")
 figure_model_lod1 = ExtResource("21_figure_lod1")
 figure_palette = ExtResource("22_figure_palette")

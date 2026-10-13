@@ -30,6 +30,26 @@ enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT, ACTIVATED_AREA }
 ## Optional per-use cost; empty means free (still gated by cooldown).
 @export var costs: Array[ResourceCost] = []
 
+@export_group("Shape")
+## CIRCLE lands area_radius round the target point. CONE sweeps out from the
+## caster toward the target, cone_angle wide and activation_range long (a
+## breath). SELF is area_radius round the caster itself, wherever it is aimed
+## (a nova or a slam).
+enum Shape { CIRCLE, CONE, SELF }
+@export var shape: Shape = Shape.CIRCLE
+@export_range(10.0, 160.0, 1.0) var cone_angle: float = 60.0
+## SPRITE plays the pixel-art cast, projectile and impact effects below;
+## the others are 3D toy effects drawn by WorldFeedback instead, in
+## effect_color: a FIRE or PLAGUE breath (a CONE), a GLOB lobbed on an arc
+## that splashes (acid, bile), an EARTH slam, a FROST or SHADOW nova (SELF),
+## or a FIRESTORM of fireballs raining on the target.
+enum EffectStyle { SPRITE, FIRE, PLAGUE, GLOB, EARTH, FROST, SHADOW, FIRESTORM }
+@export var effect_style: EffectStyle = EffectStyle.SPRITE
+## How the caster's figure performs it: its cast clip (a monster rears and
+## breathes or throws), or its ordinary strike (a monster's rear-and-slam).
+enum CastPose { CAST, STRIKE }
+@export var cast_pose: CastPose = CastPose.CAST
+
 @export_group("Teleport (target point)")
 ## Allies within this radius of the caster (at the moment of activation) are affected too.
 @export var affected_ally_radius: float = 4.0

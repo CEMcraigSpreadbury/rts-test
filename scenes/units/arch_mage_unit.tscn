@@ -43,6 +43,7 @@ attack_cooldown = 2.6
 aggro_range = 14.0
 vision_range = 15.0
 projectile_scene = ExtResource("3_projectile")
+projectile_tint = Color(0.72, 0.5, 1, 1)
 projectile_speed = 13.0
 damage_type = 4
 armor_class = 3

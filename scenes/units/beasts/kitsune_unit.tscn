@@ -120,6 +120,7 @@ unit_category = 0
 vision_range = 14
 projectile_speed = 12.0
 projectile_scene = ExtResource("6_projectile")
+projectile_tint = Color(0.8, 0.5, 1, 1)
 abilities = Array[ExtResource("5_ability_script")]([SubResource("Ability_main")])
 figure_model = ExtResource("fig_model")
 figure_model_lod1 = ExtResource("fig_model_lod1")

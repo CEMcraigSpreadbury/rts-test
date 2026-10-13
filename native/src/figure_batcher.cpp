@@ -92,6 +92,13 @@ constexpr float kMonsterStretch = 0.10f;
 constexpr float kMonsterSlam = 0.30f;
 constexpr float kMonsterSlamTwist = 0.18f;
 constexpr float kMonsterSquash = 0.15f;
+// A monster's breath (its cast clip): when the head lunges forward (share of
+// the clip; Ability.cast_windup should land about here), how far it rears and
+// lifts first, and how far it leans into the breath.
+constexpr float kBreathLunge = 0.2f;
+constexpr float kBreathRear = 0.30f;
+constexpr float kBreathLift = 0.22f;
+constexpr float kBreathLean = 0.22f;
 // Thrust: when the drive starts (share of the clip), how far it leans back
 // and draws in, then leans into the drive and how far the drive reaches.
 constexpr float kThrustDrive = 0.28f;
@@ -631,6 +638,19 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 			hop += 0.02f * std::max(0.0f, std::sin(2.0f * kPi * t));
 		} break;
 		case CLIP_CAST: {
+			if (stomper) {
+				// A monster's breath or throw: it rears back and up, then
+				// lunges its head forward and holds it there, trembling,
+				// while the breath pours out, and settles.
+				const float rear = smooth(0.0f, kBreathLunge, t) * (1.0f - smooth(kBreathLunge, kBreathLunge + 0.1f, t));
+				const float breathe = smooth(kBreathLunge, kBreathLunge + 0.1f, t) * (1.0f - smooth(0.75f, 1.0f, t));
+				pitch += -kBreathRear * rear + kBreathLean * breathe;
+				hop += kBreathLift * rear;
+				stretch *= 1.0f + 0.06f * rear - 0.03f * breathe;
+				twist += 0.035f * std::sin(t * 60.0f) * breathe;
+				stride += 0.12f * breathe;
+				break;
+			}
 			const float s = std::sin(kPi * t);
 			hop += 0.06f * s;
 			pitch -= 0.14f * s;

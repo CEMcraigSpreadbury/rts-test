@@ -58,6 +58,7 @@ aggro_range = 18.0
 vision_range = 18.0
 building_damage_multiplier = 3.0
 projectile_scene = ExtResource("3_projectile")
+projectile_tint = Color(0.5, 0.95, 1, 1)
 projectile_speed = 12.0
 damage_type = 4
 armor_class = 5

@@ -519,6 +519,8 @@ func _play_sprite_pop() -> void:
 ## How wide the body is for crowding and for others' reach; 0 = the usual
 ## man-sized NavigationBlockers.UNIT_BODY_RADIUS. Set on monsters and siege.
 @export var body_radius: float = 0.0
+## A magic shot's colour in flight (ToyProjectile); unset keeps its default.
+@export var projectile_tint: Color = Color(0, 0, 0, 0)
 ## Of each melee blow, dealt again to every other enemy within reach in front
 ## (see _cleave). 0 = strikes one at a time. Set on the big monsters.
 @export var cleave: float = 0.0
@@ -2212,7 +2214,7 @@ func command_cast_ability(ability_index: int, target_pos: Vector3) -> void:
 	_cast_ability_index = ability_index
 	_cast_target = target_pos
 	_cast_approach_time = 0.0
-	if _flat_distance(global_position, target_pos) <= ability.activation_range:
+	if ability.shape == Ability.Shape.SELF or _flat_distance(global_position, target_pos) <= ability.activation_range:
 		_perform_cast()
 		return
 	## Aim a little short of the range edge so arriving always lands inside it.
@@ -2224,7 +2226,7 @@ func _tick_cast_approach(delta: float) -> void:
 	if ability == null:
 		_end_cast_command()
 		return
-	if _flat_distance(global_position, _cast_target) <= ability.activation_range:
+	if ability.shape == Ability.Shape.SELF or _flat_distance(global_position, _cast_target) <= ability.activation_range:
 		_perform_cast()
 		return
 	_cast_approach_time += delta
@@ -2250,9 +2252,16 @@ func _perform_cast() -> void:
 	to_target.y = 0.0
 	if to_target.length_squared() > 0.0001:
 		rotation.y = atan2(to_target.x, to_target.z)
+	## A nova or slam goes off round the caster, wherever it was aimed.
+	if ability.shape == Ability.Shape.SELF:
+		target = global_position
 	var cast_length := 0.0
 	if sprite.sprite_frames:
-		cast_length = _play_cast_animation()
+		if ability.cast_pose == Ability.CastPose.STRIKE:
+			_play_attack_swing()
+			cast_length = attack_frame_count / 10.0
+		else:
+			cast_length = _play_cast_animation()
 	ability_cast.emit(index, target)
 
 	## Teleport stays instant — its windup is meaningless (the caster is the
@@ -2318,7 +2327,7 @@ func get_ability_launch_position(ability: Ability) -> Vector3:
 ## Shared by the host's damage timer and every peer's visual, so the impact
 ## effect lands on the same beat as the damage.
 static func ability_travel_time(ability: Ability, from: Vector3, target: Vector3) -> float:
-	if ability.projectile_style == Ability.ProjectileStyle.NONE:
+	if ability.projectile_style == Ability.ProjectileStyle.NONE or ability.shape != Ability.Shape.CIRCLE:
 		return 0.0
 	var distance := Vector2(from.x, from.z).distance_to(Vector2(target.x, target.z))
 	return distance / maxf(ability.projectile_speed, 0.01)
@@ -2341,13 +2350,45 @@ func _execute_area_ability(ability: Ability, target: Vector3) -> void:
 		var other := node as Unit
 		if other == null or other == self or not Teams.is_enemy(owner_peer_id, other.owner_peer_id) or not _is_target_alive(other):
 			continue
-		if _flat_distance(target, other.global_position) <= ability.area_radius:
+		if _in_ability_area(ability, target, other):
 			victims.append(other)
 	for victim in victims:
 		if is_instance_valid(victim):
 			victim.apply_ability_hit(ability, self)
 	if ability.linger_duration > 0.0:
-		AbilityZone.spawn(get_tree().current_scene, ability, target, owner_peer_id, self)
+		var at: Vector3 = global_position if ability.shape == Ability.Shape.SELF else target
+		if ability.shape == Ability.Shape.CONE:
+			at = cone_zone_centre(ability, global_position, target)
+		AbilityZone.spawn(get_tree().current_scene, ability, at, owner_peer_id, self)
+
+## Where a breath leaves its lingering zone: well out along the cone. Shared
+## with WorldFeedback so the pool is drawn where it does its damage.
+static func cone_zone_centre(ability: Ability, caster_pos: Vector3, target: Vector3) -> Vector3:
+	var aim := Vector3(target.x - caster_pos.x, 0.0, target.z - caster_pos.z)
+	if aim.length_squared() < 0.0001:
+		return caster_pos
+	return caster_pos + aim.normalized() * ability.activation_range * 0.6
+
+## Whether `other` stands inside the ability's shape as it goes off now:
+## round the target, round this caster, or in the cone from this caster
+## toward the target (counting the edge of a big body).
+func _in_ability_area(ability: Ability, target: Vector3, other: Unit) -> bool:
+	match ability.shape:
+		Ability.Shape.SELF:
+			return _flat_distance(global_position, other.global_position) <= ability.area_radius + get_body_bulk() + other.get_body_bulk()
+		Ability.Shape.CONE:
+			var aim := Vector2(target.x - global_position.x, target.z - global_position.z)
+			var to := Vector2(other.global_position.x - global_position.x, other.global_position.z - global_position.z)
+			var reach := ability.activation_range + other.get_body_bulk()
+			if to.length() > reach:
+				return false
+			## Anyone pressed against the caster's own front is in it.
+			if to.length() <= get_body_bulk() + 0.8 + other.get_body_bulk():
+				return aim.length_squared() < 0.0001 or aim.dot(to) >= 0.0
+			if aim.length_squared() < 0.0001:
+				return false
+			return absf(aim.angle_to(to)) <= deg_to_rad(ability.cone_angle) * 0.5
+	return _flat_distance(target, other.global_position) <= ability.area_radius
 
 ## How long a zone's slow and burning visual outlast the tick that applied
 ## them. A little over one tick (AbilityZone.TICK_INTERVAL), so they hold

@@ -49,3 +49,4 @@ figure_motion = 7
 figure_top = 1.0
 projectile_speed = 13.00
 projectile_scene = ExtResource("6_projectile")
+projectile_tint = Color(0.55, 0.95, 0.4, 1)
