@@ -1,7 +1,7 @@
 extends Node
 ## 45s cinematic trailer on Aldmere Vale (Realm): a Dark Elf village grows
 ## into a walled city, a Lord leads a column down the road, cavalry smash into
-## a gnoll line (in slow motion as it lands), beasts and spells at night, then
+## a beastman line (in slow motion as it lands), beasts and spells at night, then
 ## a full battle in the rain that the camera cranes up and away from under
 ## the title.
 ## Run: godot --path . --write-movie out.png --fixed-fps 30 res://trailer/cinematic_boot.tscn
@@ -37,7 +37,7 @@ const ROAD_START: Vector3 = Vector3(-196, 0, 188)
 const ROAD_DIR: Vector3 = Vector3(0.68, 0, -0.73)
 const MARCH_DISTANCE: float = 70.0
 
-## Shot 3: open grass. The gnolls stand facing west; the riders start
+## Shot 3: open grass. The beastmen stand facing west; the riders start
 ## CHARGE_RUN metres short of them.
 const CHARGE_LINE: Vector3 = Vector3(-146, 0, -60)
 const CHARGE_RUN: float = 28.0
@@ -74,7 +74,7 @@ var battles: Array = [
 		"at": CUT_CHARGE, "hero_front": CHARGE_LINE + Vector3.LEFT * CHARGE_RUN, "hero_facing": Vector3.RIGHT,
 		"enemy_front": CHARGE_LINE, "columns": 10,
 		"hero": {"roster": [["cavalier_unit", 12], ["horseman_unit", 8]], "beasts": []},
-		"enemy": {"roster": [["gnoll_warrior_unit", 30], ["gnoll_archer_unit", 10]], "beasts": [], "columns": 14},
+		"enemy": {"roster": [["beastman_warrior_unit", 30], ["beastman_wolf_pathfinder_unit", 10]], "beasts": [], "columns": 14},
 		"casts": [],
 	},
 	{
@@ -83,7 +83,7 @@ var battles: Array = [
 		"hero": {"roster": [["soldier_unit", 14], ["sw_knight_unit", 10], ["halberdier_unit", 8],
 				["archer_unit", 14], ["wizard_unit", 6]],
 				"beasts": ["griffin_unit", "lightning_dragon_unit", "dragon_unit", "manticore_unit"]},
-		"enemy": {"roster": [["dark_elf_warrior_unit", 14], ["gnoll_berserk_unit", 12], ["dark_elf_guard_unit", 8],
+		"enemy": {"roster": [["dark_elf_warrior_unit", 14], ["beastman_panda_warrior_unit", 12], ["dark_elf_guard_unit", 8],
 				["dark_elf_archer_unit", 12], ["dark_elf_sorceress_unit", 6]],
 				"beasts": ["kitsune_unit", "skeleton_dragon_unit", "sand_worm_unit", "wind_tiger_unit"]},
 		"casts": [[2.0, 1, 1], [2.6, 0, 1], [3.3, 1, 0], [4.0, 0, 2], [4.8, 1, 2], [5.6, 1, 3], [6.3, 0, 1]],
@@ -94,8 +94,8 @@ var battles: Array = [
 		"hero": {"roster": [["shieldman_unit", 18], ["soldier_unit", 18], ["sw_warrior_unit", 18],
 				["archer_unit", 18], ["crossbowman_unit", 18], ["arch_mage_unit", 6], ["cavalier_unit", 12]],
 				"beasts": ["phoenix_unit", "hydra_unit"]},
-		"enemy": {"roster": [["gnoll_warrior_unit", 18], ["beastman_warrior_unit", 18], ["dark_elf_warrior_unit", 18],
-				["gnoll_archer_unit", 18], ["dark_elf_archer_unit", 18], ["gnoll_shaman_unit", 6], ["dark_elf_rider_unit", 12]],
+		"enemy": {"roster": [["beastman_warrior_unit", 18], ["beastman_warrior_unit", 18], ["dark_elf_warrior_unit", 18],
+				["beastman_wolf_pathfinder_unit", 18], ["dark_elf_archer_unit", 18], ["beastman_druid_unit", 6], ["dark_elf_rider_unit", 12]],
 				"beasts": ["black_dragon_unit", "dark_lord_unit"]},
 		"casts": [[2.4, 1, 0], [3.2, 0, 0], [4.1, 1, 1], [5.0, 0, 1], [7.6, 1, 0], [8.4, 0, 0], [9.6, 0, 1]],
 	},
@@ -453,7 +453,7 @@ func _advance(battle: Dictionary, index: int) -> void:
 		return
 	var meet: Vector3 = (battle.hero_front + battle.enemy_front) * 0.5
 	if index == 1:
-		## The gnolls hold; the riders run through where they stand.
+		## The beastmen hold; the riders run through where they stand.
 		meet = battle.enemy_front + facing * 4.0
 		_order(hero, battle.hero_units, meet, facing, battle.columns, true)
 	else:
@@ -506,7 +506,7 @@ func _spawn_unit(scene_name: String, peer: int, pos: Vector3) -> Unit:
 	})
 
 func _scene_path(scene_name: String) -> String:
-	for folder in ["units", "units/beasts", "units/monsters", "units/gnolls", "units/dark_elves", "units/star_wanderers"]:
+	for folder in ["units", "units/beasts", "units/monsters", "units/dark_elves", "units/star_wanderers"]:
 		var path: String = "res://scenes/%s/%s.tscn" % [folder, scene_name]
 		if ResourceLoader.exists(path):
 			return path

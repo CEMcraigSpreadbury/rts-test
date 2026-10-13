@@ -53,16 +53,6 @@ const RACES: Dictionary = {
 			[["res://scenes/units/beasts/griffin_unit.tscn", 1], ["res://scenes/units/beasts/manticore_unit.tscn", 1]],
 		],
 	},
-	"Gnolls": {
-		"scenes": ["res://scenes/buildings/gnoll_den_building.tscn", "", "", "res://scenes/buildings/gnoll_totem_building.tscn", ""],
-		"units": [
-			[["res://scenes/units/gnolls/gnoll_warrior_unit.tscn", 3], ["res://scenes/units/gnolls/gnoll_berserk_unit.tscn", 2], ["res://scenes/units/gnolls/gnoll_leader_unit.tscn", 1]],
-			[["res://scenes/units/gnolls/gnoll_archer_unit.tscn", 2]],
-			[["res://scenes/units/gnolls/hyena_unit.tscn", 2]],
-			[["res://scenes/units/gnolls/gnoll_shaman_unit.tscn", 1]],
-			[["res://scenes/units/beasts/sand_worm_unit.tscn", 1], ["res://scenes/units/beasts/skeleton_dragon_unit.tscn", 1]],
-		],
-	},
 	"Dark Elves": {
 		"scenes": ["res://scenes/buildings/dark_elf_spire_building.tscn", "", "", "res://scenes/buildings/dark_elf_coven_building.tscn", ""],
 		"units": [
@@ -86,11 +76,11 @@ const RACES: Dictionary = {
 	"Beastmen": {
 		"scenes": ["res://scenes/buildings/beastmen_barracks_building.tscn", "", "", "", ""],
 		"units": [
-			[["res://scenes/units/beastman_warrior_unit.tscn", 1], ["res://scenes/units/beastman_panda_warrior_unit.tscn", 1]],
+			[["res://scenes/units/beastman_warrior_unit.tscn", 1], ["res://scenes/units/beastman_raider_unit.tscn", 1], ["res://scenes/units/beastman_panda_warrior_unit.tscn", 1]],
 			[["res://scenes/units/beastman_wolf_pathfinder_unit.tscn", 1]],
-			[["res://scenes/units/beastman_raider_unit.tscn", 1]],
+			[["res://scenes/units/beastman_wolf_rider_unit.tscn", 1]],
 			[["res://scenes/units/beastman_druid_unit.tscn", 1]],
-			[],
+			[["res://scenes/units/beasts/sand_worm_unit.tscn", 1], ["res://scenes/units/beasts/skeleton_dragon_unit.tscn", 1]],
 		],
 	},
 }

@@ -203,6 +203,11 @@ The target look is in `docs/art-reference/reference-diorama-3.png`.
 
 ## Roster status
 
+- **Gnolls removed (2026-10-13):** the race is gone; Realm maps place a Beastmen
+  settlement instead, and the Beastmen inherit the Sand Worm and Skeleton Dragon
+  as their Bestiary. kit/gnoll.py stays: the Beastmen and others build on its
+  legs, belts, loincloths and palette rows. Gnoll notes below are history.
+
 Done and in game:
 
 - **Aldmere:** Soldier, Villager (with build, wood and gold variants), Archer,
@@ -237,8 +242,23 @@ Done and in game:
   tapering from a wide base over a heavy cream jaw, tall pointed ears, cream cheek tufts, a long
   bushy tail with a cream tip, a leather jerkin, the team's dagged
   shoulder mantle with its hood thrown back, the team loincloth, a
-  crossbow levelled and a bolt quiver at the hip; bow motion). Raider,
-  Druid, Panda Warrior and Wolf Pathfinder await the user's review.
+  crossbow levelled and a bolt quiver at the hip; bow motion). Wolf Rider
+  (the Stables unit, GLB `BeastmanWolfRider`: the Raider's slate boar seated,
+  hide kilt, team scarf, short legs with trotters by the flanks, a heavy
+  dark spear tipped with a huge curled bone tusk, leather lashings and a
+  team rag, held forward and up; on a dire wolf, `beastmen.dire_wolf`,
+  in the bear's warm brown fur rows so it stands apart from the grey boar
+  and the Star fox: a deep chest under a high shoulder hump, short thick
+  legs on big dark paws with bone claws, big haunches, a broad head 1.28x
+  held forward with a long snout, cream jaw, bone fangs, dark brow lumps
+  and tall dark ears, two rings of dark ruff locks round the neck, a cream
+  bib, shaggy belly and back locks, a bushy dark-tipped tail; a bone and
+  tusk harness: leather collar with a curled tusk at each shoulder, a bone
+  breastplate, a bone cantle horned in tusks, the team's saddle cloth over
+  each flank dagged and edged in bone with a bone boss; mounted motion,
+  portrait (0, -0.30, 0.86) at 3.0 so the scarf, spear and wolf are in
+  frame). Raider, Druid, Panda Warrior, Wolf Pathfinder and Wolf Rider
+  await the user's review.
 - **Star Wanderers:** Warrior (athletic and top-heavy: porcelain cuirass
   with a cyan star, gold-rimmed porcelain pauldrons, a chunky team scarf
   with tails streaming back, a team loincloth, a huge crescent blade in

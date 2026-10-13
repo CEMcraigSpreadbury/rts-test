@@ -194,6 +194,7 @@ unit_beastman_panda_warrior.svg <- delapouite/panda.svg
 unit_beastman_wolf_pathfinder.svg <- lorc/direwolf.svg
 unit_beastman_raider.svg <- delapouite/buffalo-head.svg
 unit_beastman_druid.svg <- cathelineau/tree-face.svg
+unit_beastman_wolf_rider.svg <- lorc/direwolf.svg
 unit_hydra.svg <- lorc/hydra.svg
 unit_orc_mutant.svg <- delapouite/orc-head.svg
 unit_black_dragon.svg <- delapouite/spiked-dragon-head.svg

@@ -55,7 +55,7 @@ var shots: Array = [
 
 ## [scene name, count] per line, and how many ranks deep the block stands.
 const BANK_ROSTER: Array = [["shieldman_unit", 14], ["sw_spearman_unit", 14], ["archer_unit", 14], ["wizard_unit", 7]]
-const FAR_BANK_ROSTER: Array = [["gnoll_warrior_unit", 14], ["gnoll_archer_unit", 14]]
+const FAR_BANK_ROSTER: Array = [["beastman_warrior_unit", 14], ["beastman_wolf_pathfinder_unit", 14]]
 const FIELD_ROSTER: Array = [["shieldman_unit", 14], ["sw_knight_unit", 14], ["archer_unit", 14],
 	["arch_mage_unit", 7]]
 
@@ -234,7 +234,7 @@ func _spawn_unit(scene_name: String, pos: Vector3) -> Unit:
 	})
 
 func _scene_path(scene_name: String) -> String:
-	for folder in ["units", "units/monsters", "units/gnolls", "units/dark_elves", "units/star_wanderers"]:
+	for folder in ["units", "units/monsters", "units/dark_elves", "units/star_wanderers"]:
 		var path: String = "res://scenes/%s/%s.tscn" % [folder, scene_name]
 		if ResourceLoader.exists(path):
 			return path

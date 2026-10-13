@@ -16,8 +16,8 @@ extends RefCounted
 
 const PORTRAIT_DIR: String = "res://assets/art/Models/Units/portraits/"
 ## Figure models whose names start with these keep their sprite portraits
-## even when a render exists (the Gnolls, for now).
-const SPRITE_ONLY: Array[String] = ["Gnoll", "Hyena", "SandWorm", "SkeletonDragonBeast"]
+## even when a render exists.
+const SPRITE_ONLY: Array[String] = []
 ## shaders/unit_figure.gdshader's team_grey_ref and team_saturation.
 const TEAM_GREY_REF: float = 0.42
 const TEAM_SATURATION: float = 0.88

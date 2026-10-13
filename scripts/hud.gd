@@ -629,7 +629,7 @@ func _update_portrait(tint: Color, health_text: String, head: Texture2D = null, 
 ## on the type.
 ## By the scene it was built from, then by name. A settlement's hall and slot
 ## buildings are named for their role (Town, Barracks), not their building
-## type, so for them the name would find the wrong picture (a Gnoll Den
+## type, so for them the name would find the wrong picture (a Dark Spire
 ## showing the human Barracks) — they go without rather than that.
 func _building_icon_of(building: ProductionBuilding) -> Texture2D:
 	var icon := Objective._building_icon_for(building.scene_file_path)

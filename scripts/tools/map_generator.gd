@@ -59,7 +59,7 @@ enum CentreSite { NONE, OBJECTIVE, SHRINE }
 @export var settlement_scenes: Array[PackedScene] = [
 	preload("res://scenes/objective.tscn"),
 	preload("res://scenes/beastmen_objective.tscn"),
-	preload("res://scenes/settlements/gnoll_settlement.tscn"),
+	preload("res://scenes/settlements/beastmen_settlement.tscn"),
 	preload("res://scenes/settlements/dark_elf_settlement.tscn"),
 	preload("res://scenes/settlements/star_wanderer_settlement.tscn"),
 ]

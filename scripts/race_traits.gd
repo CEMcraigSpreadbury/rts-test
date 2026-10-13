@@ -4,8 +4,8 @@ extends Node
 ## born with, and the upgrades their own military buildings research.
 ##
 ## A unit's people and kind (RealmRoster.Kind: infantry, ranged, cavalry,
-## caster, beast) are read off its scene through RealmRoster, so a Gnoll
-## Archer is ranged Gnolls whichever settlement trained it.
+## caster, beast) are read off its scene through RealmRoster, so a Dark Elf
+## Archer is ranged Dark Elves whichever settlement trained it.
 ## An upgrade is a plain UPGRADE item whose unlock tag (UnitUnlocks) is its id:
 ## that makes it one purchase per player, broadcast to every peer, and hidden
 ## from every building once owned. Every peer writes its effects onto the
@@ -14,7 +14,6 @@ extends Node
 ##
 ## Traits:
 ##   Human           Drilled: military units in a block take 10% less damage.
-##   Gnolls          Pack Courage and litters (see Unit.pack_member).
 ##   Dark Elves      Cruelty: +25% damage against enemies below half health.
 ##   Star Wanderers  Starlit: up to 2 armour as night falls.
 ##   Beastmen        Bloodrage: up to +40% attack speed as they lose health.
@@ -28,7 +27,7 @@ const SMITHY: int = -2
 const HUMAN_BLOCK_GUARD: float = 0.1
 const DARK_ELF_CRUELTY: float = 0.25
 ## Below this fraction of its max health a target counts as wounded (Cruelty),
-## and a Gnoll counts as frenzied (Blood Frenzy).
+## and a unit counts as frenzied (the frenzy effect).
 const WOUNDED_FRACTION: float = 0.5
 const STAR_NIGHT_ARMOR: int = 2
 const BEASTMEN_BLOODRAGE: float = 0.4
@@ -102,29 +101,6 @@ const UPGRADES: Array[Dictionary] = [
 		text = "Cavalry gain another 1 damage and 1 armour.",
 		wood = 0, gold = 320, time = 30.0, effects = {smith = [Unit.UnitCategory.CAVALRY, 1, 1]}},
 
-	# --- Gnolls ---
-	{id = &"gnl_carrion_feast", race = "Gnolls", at = EVERY_KIND, name = "Carrion Feast",
-		text = "Gnolls heal 6 health whenever an enemy dies near them.",
-		wood = 80, gold = 60, time = 30.0, effects = {carrion_heal = 6}},
-	{id = &"gnl_bigger_litters", race = "Gnolls", at = RealmRoster.Kind.BARRACKS, name = "Bigger Litters",
-		text = "Every litter trained here brings one more gnoll, if there is room for it.",
-		wood = 150, gold = 100, time = 45.0, effects = {extra_bodies = 1}},
-	{id = &"gnl_blood_frenzy", race = "Gnolls", at = RealmRoster.Kind.BARRACKS, name = "Blood Frenzy",
-		text = "Gnoll infantry attack 30% faster below half health.",
-		wood = 60, gold = 80, time = 30.0, effects = {frenzy = 0.3}},
-	{id = &"gnl_barbed_arrows", race = "Gnolls", at = RealmRoster.Kind.RANGE, name = "Barbed Arrows",
-		text = "Gnoll arrows make their target bleed for 2 damage a second.",
-		wood = 70, gold = 70, time = 30.0, effects = {bleed = 1}},
-	{id = &"gnl_hamstring", race = "Gnolls", at = RealmRoster.Kind.STABLES, name = "Hamstring",
-		text = "Hyena bites slow their prey by 35% for 2 seconds.",
-		wood = 60, gold = 80, time = 30.0, effects = {slow = 1}},
-	{id = &"gnl_war_drums", race = "Gnolls", at = RealmRoster.Kind.SANCTUM, name = "War Drums",
-		text = "Pack Courage reaches 50% further and peaks at +60% damage.",
-		wood = 100, gold = 120, time = 40.0, effects = {pack_radius = 0.5, pack_max = 0.2}},
-	{id = &"gnl_bone_plating", race = "Gnolls", at = RealmRoster.Kind.BESTIARY, name = "Bone Plating",
-		text = "Sand Worms and Skeleton Dragons gain 2 armour.",
-		wood = 150, gold = 180, time = 50.0, effects = {armor = 2}},
-
 	# --- Dark Elves ---
 	{id = &"de_blood_drinkers", race = "Dark Elves", at = EVERY_KIND, name = "Blood Drinkers",
 		text = "Dark Elves heal for 20% of the damage they deal.",
@@ -184,12 +160,18 @@ const UPGRADES: Array[Dictionary] = [
 	{id = &"bm_trackers", race = "Beastmen", at = RealmRoster.Kind.RANGE, name = "Trackers",
 		text = "Wolf Pathfinders see 25% further and shoot 3 m further.",
 		wood = 80, gold = 70, time = 30.0, effects = {range = 3.0, vision = 0.25}},
-	{id = &"bm_torch_riders", race = "Beastmen", at = RealmRoster.Kind.STABLES, name = "Torch Riders",
+	{id = &"bm_torch_riders", race = "Beastmen", at = RealmRoster.Kind.BARRACKS, name = "Torch Raiders",
 		text = "Beastman Raiders deal double damage to buildings.",
 		wood = 70, gold = 90, time = 30.0, effects = {building_damage = 1.0}},
+	{id = &"bm_pack_hunters", race = "Beastmen", at = RealmRoster.Kind.STABLES, name = "Pack Hunters",
+		text = "Wolf Riders run 15% faster and their wolves' bites slow what they strike.",
+		wood = 80, gold = 110, time = 35.0, effects = {speed = 0.15, slow = 1}},
 	{id = &"bm_wild_growth", race = "Beastmen", at = RealmRoster.Kind.SANCTUM, name = "Wild Growth",
 		text = "Beastman Druids heal nearby allies for 3 health every 3 seconds.",
 		wood = 80, gold = 110, time = 35.0, effects = {grant_aura = 3}},
+	{id = &"bm_bone_plating", race = "Beastmen", at = RealmRoster.Kind.BESTIARY, name = "Bone Plating",
+		text = "Sand Worms and Skeleton Dragons gain 2 armour.",
+		wood = 150, gold = 180, time = 50.0, effects = {armor = 2}},
 ]
 
 ## On-hit effects an upgrade can hand a unit with none of its own.
@@ -270,7 +252,7 @@ static func unit_info(scene_path: String, category: int = Unit.UnitCategory.NONE
 	return ["Human", -1]
 
 ## Whose people a building belongs to: a settlement's slot building says so
-## itself; a people's own scene (a Gnoll Den, a Dark Spire) is theirs wherever
+## itself; a people's own scene (a Dark Spire, a Star Gate) is theirs wherever
 ## it stands; anything else is Human.
 static func building_race(building: ProductionBuilding) -> String:
 	if not building.slot_race.is_empty():

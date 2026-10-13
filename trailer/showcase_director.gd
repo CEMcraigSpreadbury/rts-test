@@ -67,8 +67,8 @@ var battles: Array = [
 		"sides": [
 			{"roster": [["shieldman_unit", 10], ["soldier_unit", 8], ["sw_knight_unit", 8], ["sw_spearman_unit", 6],
 				["archer_unit", 12], ["wizard_unit", 4]], "monsters": []},
-			{"roster": [["gnoll_warrior_unit", 10], ["dark_elf_guard_unit", 8], ["gnoll_berserk_unit", 8],
-				["dark_elf_warrior_unit", 6], ["gnoll_archer_unit", 10], ["dark_elf_archer_unit", 6]], "monsters": []},
+			{"roster": [["beastman_warrior_unit", 10], ["dark_elf_guard_unit", 8], ["beastman_panda_warrior_unit", 8],
+				["dark_elf_warrior_unit", 6], ["beastman_wolf_pathfinder_unit", 10], ["dark_elf_archer_unit", 6]], "monsters": []},
 		],
 		"casts": [],
 	},
@@ -77,8 +77,8 @@ var battles: Array = [
 		"sides": [
 			{"roster": [["soldier_unit", 10], ["halberdier_unit", 8], ["sw_warrior_unit", 8], ["sw_paladin_unit", 4],
 				["archer_unit", 10], ["arch_mage_unit", 4]], "monsters": ["phoenix_unit", "giant_bear_unit"]},
-			{"roster": [["gnoll_warrior_unit", 10], ["beastman_warrior_unit", 8], ["dark_elf_warrior_unit", 8],
-				["dark_elf_assassin_unit", 4], ["gnoll_archer_unit", 10], ["dark_elf_sorceress_unit", 4]],
+			{"roster": [["beastman_warrior_unit", 10], ["beastman_warrior_unit", 8], ["dark_elf_warrior_unit", 8],
+				["dark_elf_assassin_unit", 4], ["beastman_wolf_pathfinder_unit", 10], ["dark_elf_sorceress_unit", 4]],
 				"monsters": ["black_dragon_unit", "yeti_unit"]},
 		],
 		"casts": [[2.2, 1, 0], [3.0, 0, 0], [3.9, 1, 1], [4.7, 0, 1]],
@@ -88,8 +88,8 @@ var battles: Array = [
 		"sides": [
 			{"roster": [["shieldman_unit", 10], ["soldier_unit", 8], ["sw_paladin_unit", 6], ["cavalier_unit", 6],
 				["archer_unit", 12], ["arch_mage_unit", 5]], "monsters": ["phoenix_unit", "hydra_unit"]},
-			{"roster": [["gnoll_warrior_unit", 10], ["gnoll_berserk_unit", 8], ["dark_elf_guard_unit", 6],
-				["beastman_raider_unit", 6], ["gnoll_archer_unit", 10], ["gnoll_shaman_unit", 5]],
+			{"roster": [["beastman_warrior_unit", 10], ["beastman_panda_warrior_unit", 8], ["dark_elf_guard_unit", 6],
+				["beastman_raider_unit", 6], ["beastman_wolf_pathfinder_unit", 10], ["beastman_druid_unit", 5]],
 				"monsters": ["black_dragon_unit", "dark_lord_unit"]},
 		],
 		"casts": [[2.3, 1, 0], [3.1, 0, 0], [4.0, 1, 1], [4.9, 0, 1], [7.4, 1, 0], [8.2, 0, 1]],
@@ -342,7 +342,7 @@ func _spawn_unit(scene_name: String, peer: int, pos: Vector3) -> Unit:
 	})
 
 func _scene_path(scene_name: String) -> String:
-	for folder in ["units", "units/monsters", "units/gnolls", "units/dark_elves", "units/star_wanderers"]:
+	for folder in ["units", "units/monsters", "units/dark_elves", "units/star_wanderers"]:
 		var path: String = "res://scenes/%s/%s.tscn" % [folder, scene_name]
 		if ResourceLoader.exists(path):
 			return path

@@ -14,8 +14,6 @@ const SETTLEMENT_BUILDINGS: Array[String] = [
 	"res://scenes/settlements/market_building.tscn",
 	"res://scenes/settlements/lumberyard_building.tscn",
 	"res://scenes/buildings/beastmen_barracks_building.tscn",
-	"res://scenes/buildings/gnoll_den_building.tscn",
-	"res://scenes/buildings/gnoll_totem_building.tscn",
 	"res://scenes/buildings/dark_elf_spire_building.tscn",
 	"res://scenes/buildings/dark_elf_coven_building.tscn",
 	"res://scenes/buildings/star_gate_building.tscn",

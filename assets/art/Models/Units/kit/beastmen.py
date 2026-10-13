@@ -16,7 +16,7 @@ units._beast_head), as the humans' are.
 """
 import math
 
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 import geo
 from geo import FLAT, SMOOTH
@@ -1231,4 +1231,334 @@ def bolt_quiver(b, lod):
 	geo.rotate(bm, -24.0, 'Y')
 	geo.rotate(bm, 12.0, 'X')
 	geo.translate(bm, (-0.128, 0.040, b.waist_z - 0.150))
+	return bm
+
+
+# === the Wolf Rider ==========================================================
+# A boar warrior (BoarBody, seated) on a huge shaggy dire wolf. The wolf is
+# the opposite of the Star Wanderers' slender comet fox: a deep, heavy chest
+# under a high shoulder hump, short thick legs on big clawed paws, a broad
+# wedge head held forward, a dark ruff round the neck and shoulders, shaggy
+# locks along the belly and back, a bushy tail streaming low. It wears a
+# bone and tusk harness: a dark leather collar with a curled tusk standing
+# from each shoulder, a bone breastplate, a bone cantle horned in tusks, and
+# the team's saddle cloth over each flank, dagged and edged in bone.
+# Built in the rider's standing space, as horse.py is (the ground at
+# b.base_height, facing -Y); the rider sits at horse.SEAT. Coat rows: the
+# bear's fur, fur_dark and fur_light (warm brown, dark brown, cream), so it
+# stands apart from the slate-grey boar on its back.
+
+## The barrel's spine: (y, centre z, radius), chest to rump.
+DIRE_SPINE = [(-0.350, 0.452, 0.040), (-0.315, 0.452, 0.165), (-0.190, 0.448, 0.205), (-0.030, 0.400, 0.168),
+		(0.130, 0.398, 0.155), (0.250, 0.405, 0.135), (0.315, 0.410, 0.075), (0.340, 0.412, 0.0)]
+DIRE_HEAD = Vector((0.0, -0.585, 0.640))
+## The head is built at wolf size and drawn this much bigger, so it reads.
+DIRE_HEAD_SCALE = 1.28
+
+
+def _dire_at(y):
+	"""The barrel's (centre z, radius) at body position y."""
+	for (y0, z0, r0), (y1, z1, r1) in zip(DIRE_SPINE, DIRE_SPINE[1:]):
+		if y0 <= y <= y1:
+			t = (y - y0) / max(y1 - y0, 1e-9)
+			return z0 + (z1 - z0) * t, r0 + (r1 - r0) * t
+	return DIRE_SPINE[-1][1], 0.0
+
+
+def _tuft(root, d, length, radius, lod, swatch="fur_dark"):
+	"""A shaggy lock of fur: a fat cone from `root` along `d`."""
+	d = Vector(d).normalized()
+	pts = [root, root + d * length * 0.5, root + d * length]
+	return geo.tube(pts, [radius, radius * 0.72, 0.0], seg(lod, 6, 4), row(swatch), sharp=SMOOTH)
+
+
+def _dire_head(lod, g):
+	import animals
+	H = DIRE_HEAD + Vector((0.0, 0.0, g))
+	bm = geo.new_bm()
+	skull = geo.ellipsoid(0.124, 0.118, 0.102, seg(lod, 12, 8), seg(lod, 6, 4), row("fur"), sharp=SMOOTH)
+	geo.translate(skull, H)
+	geo.merge(bm, skull)
+	for side in (-1.0, 1.0):
+		cheek = geo.ellipsoid(0.066, 0.064, 0.058, seg(lod, 8, 5), 4, row("fur"), sharp=SMOOTH)
+		geo.translate(cheek, H + Vector((side * 0.082, 0.004, -0.036)))
+		geo.merge(bm, cheek)
+	# A thick snout tapering forward, a cream lower jaw, a big black nose.
+	snout = geo.tube([H + Vector((0.0, -0.060, -0.022)), H + Vector((0.0, -0.165, -0.040)),
+			H + Vector((0.0, -0.238, -0.046))], [0.070, 0.054, 0.042], seg(lod, 10, 7), row("fur"), sharp=SMOOTH,
+			flatten=0.80, up=(0.0, 0.0, 1.0))
+	geo.merge(bm, snout)
+	jaw = geo.tube([H + Vector((0.0, -0.040, -0.070)), H + Vector((0.0, -0.150, -0.082)),
+			H + Vector((0.0, -0.210, -0.084))], [0.058, 0.044, 0.030], seg(lod, 9, 6), row("fur_light"), sharp=SMOOTH,
+			flatten=0.66, up=(0.0, 0.0, 1.0))
+	geo.merge(bm, jaw)
+	nose = geo.ellipsoid(0.034, 0.024, 0.024, seg(lod, 8, 5), 3, row("nose"), sharp=SMOOTH)
+	geo.translate(nose, H + Vector((0.0, -0.244, -0.030)))
+	geo.merge(bm, nose)
+	for side in (-1.0, 1.0):
+		fang = geo.lathe([(0.011, 0.0), (0.0, 0.040)], 5, row("bone"), sharp=40, phase=0.0, cap_start=row("bone"))
+		geo.merge(bm, fang, geo.frame(H + Vector((side * 0.030, -0.196, -0.058)), (side * 0.15, -0.2, -1.0)))
+	# A heavy dark brow over the shared eyes.
+	geo.merge(bm, animals._eyes(lod, skull, H, 0.056, 0.010, rx=0.024, ry=0.030))
+	for side in (-1.0, 1.0):
+		brow = geo.ellipsoid(0.044, 0.030, 0.020, seg(lod, 8, 5), 3, row("fur_dark"), sharp=SMOOTH)
+		geo.rotate(brow, side * -16.0, 'Y')
+		geo.translate(brow, H + Vector((side * 0.052, -0.090, 0.050)))
+		geo.merge(bm, brow)
+	# Pointed ears laid back, dark outside, cream inside.
+	for side in (-1.0, 1.0):
+		ear = geo.lathe([(0.050, 0.0), (0.040, 0.050), (0.0, 0.150)], seg(lod, 7, 5), row("fur_dark"), sharp=40,
+				phase=0.0, sy=0.46)
+		inner = geo.lathe([(0.032, 0.004), (0.024, 0.044), (0.0, 0.112)], 5, row("fur_light"), sharp=40, phase=0.0,
+				sy=0.30)
+		geo.translate(inner, (0.0, -0.014, 0.006))
+		geo.merge(ear, inner)
+		geo.rotate(ear, side * 16.0, 'Y')
+		geo.rotate(ear, 10.0, 'X')
+		geo.translate(ear, H + Vector((side * 0.070, 0.028, 0.070)))
+		geo.merge(bm, ear)
+	# The cheek ruff: dark locks swept back round the jaw.
+	count = seg(lod, 4, 2)
+	for side in (-1.0, 1.0):
+		for i in range(count):
+			t = i / max(count - 1, 1)
+			root = H + Vector((side * 0.100, 0.030, -0.070 + 0.090 * t))
+			geo.merge(bm, _tuft(root, (side * 0.8, 0.9, -0.3 + 0.5 * t), 0.080, 0.034, lod))
+	if lod == 0:
+		strap = geo.lathe([(0.064, -0.010), (0.068, 0.0), (0.064, 0.010)], 10, row("leather_dark"), sharp=40,
+				phase=0.0, sx=1.0, sy=0.82)
+		geo.transform(strap, geo.frame(H + Vector((0.0, -0.140, -0.040)), (0.0, -1.0, 0.18), (0.0, 0.0, 1.0)))
+		geo.merge(bm, strap)
+	geo.transform(bm, Matrix.Translation(H) @ Matrix.Scale(DIRE_HEAD_SCALE, 4) @ Matrix.Translation(-H))
+	return bm
+
+
+def dire_wolf(b, lod):
+	"""The dire wolf (see above)."""
+	g = b.base_height
+	bm = geo.new_bm()
+	spine = DIRE_SPINE if lod == 0 else [DIRE_SPINE[i] for i in (0, 1, 2, 3, 5, 7)]
+	barrel = geo.tube([Vector((0.0, y, g + z)) for y, z, _r in spine], [r for _y, _z, r in spine], seg(lod, 14, 9),
+			row("fur"), sharp=SMOOTH)
+	geo.merge(bm, barrel)
+	hump = geo.ellipsoid(0.172, 0.170, 0.120, seg(lod, 12, 8), seg(lod, 5, 4), row("fur"), sharp=SMOOTH)
+	geo.translate(hump, (0.0, -0.200, g + 0.585))
+	geo.merge(bm, hump)
+	chest = geo.ellipsoid(0.160, 0.110, 0.170, seg(lod, 10, 7), seg(lod, 5, 4), row("fur"), sharp=SMOOTH)
+	geo.translate(chest, (0.0, -0.300, g + 0.400))
+	geo.merge(bm, chest)
+	# Short thick legs: pillars in front, big haunches and a bent hock
+	# behind; dark paws with bone claws.
+	segs = seg(lod, 9, 6)
+	for side in (-1.0, 1.0):
+		x = side * 0.118
+		front = [Vector((x, -0.215, g + 0.370)), Vector((x * 1.06, -0.240, g + 0.180)), Vector((x * 1.10, -0.252, g + 0.060))]
+		hind = [Vector((x, 0.205, g + 0.380)), Vector((x * 1.08, 0.275, g + 0.200)), Vector((x * 1.10, 0.240, g + 0.060))]
+		for pts, radii in ((front, [0.090, 0.066, 0.060]), (hind, [0.100, 0.060, 0.056])):
+			geo.merge(bm, geo.tube(pts, radii, segs, row("fur"), sharp=SMOOTH))
+			foot = pts[-1]
+			paw = geo.ellipsoid(0.070, 0.088, 0.046, seg(lod, 9, 6), seg(lod, 4, 3), row("fur_dark"), sharp=SMOOTH,
+					squash_bottom=0.3)
+			geo.translate(paw, (foot.x, foot.y - 0.026, g + 0.024))
+			geo.merge(bm, paw)
+			if lod == 0:
+				for k in (-1.0, 0.0, 1.0):
+					claw = geo.lathe([(0.011, 0.0), (0.0, 0.030)], 4, row("bone"), sharp=40, phase=0.0,
+							cap_start=row("bone"))
+					geo.merge(bm, claw, geo.frame((foot.x + k * 0.030, foot.y - 0.104, g + 0.016),
+							(0.0, -1.0, -0.4), (0.0, 0.0, 1.0)))
+		haunch = geo.ellipsoid(0.092, 0.130, 0.130, seg(lod, 9, 6), seg(lod, 5, 4), row("fur"), sharp=SMOOTH)
+		geo.translate(haunch, (x * 0.95, 0.190, g + 0.385))
+		geo.merge(bm, haunch)
+		geo.merge(bm, _tuft(Vector((x * 1.05, -0.190, g + 0.270)), (side * 0.3, 1.0, -0.6), 0.090, 0.040, lod, "fur"))
+	# The neck, thick and held forward.
+	neck = geo.tube([Vector((0.0, -0.260, g + 0.520)), Vector((0.0, -0.400, g + 0.585)),
+			Vector((0.0, -0.520, g + 0.630))], [0.150, 0.128, 0.110], seg(lod, 10, 7), row("fur"), sharp=SMOOTH)
+	geo.merge(bm, neck)
+	# The ruff: two rings of dark locks round the neck and shoulders, and a
+	# cream bib down the chest.
+	for cy, cz, rad, length, r, n in ((-0.400, 0.585, 0.118, 0.120, 0.050, seg(lod, 11, 7)),
+			(-0.280, 0.560, 0.165, 0.095, 0.050, seg(lod, 10, 7))):
+		for i in range(n):
+			a = -math.pi * 0.62 + (math.pi * 1.24) * i / (n - 1)
+			out = Vector((math.sin(a), 0.0, math.cos(a)))
+			root = Vector((0.0, cy, g + cz)) + out * rad
+			geo.merge(bm, _tuft(root, out + Vector((0.0, 1.1, 0.0)), length, r, lod))
+	for i, dx in enumerate((-0.060, 0.0, 0.060)):
+		root = Vector((dx, -0.400, g + 0.470 - 0.020 * (i == 1)))
+		geo.merge(bm, _tuft(root, (dx * 2.0, -0.35, -1.0), 0.120, 0.046, lod, "fur_light"))
+	# Shag: locks down the belly and along the back behind the saddle.
+	steps = seg(lod, 5, 3)
+	for side in (-1.0, 1.0):
+		for i in range(steps):
+			y = -0.200 + 0.400 * i / (steps - 1)
+			cz, r = _dire_at(y)
+			root = Vector((side * r * 0.62, y, g + cz - r * 0.72))
+			geo.merge(bm, _tuft(root, (side * 0.4, 0.45, -1.0), 0.085, 0.040, lod, "fur"))
+	for i in range(seg(lod, 3, 2)):
+		y = 0.170 + 0.065 * i
+		cz, r = _dire_at(y)
+		geo.merge(bm, _tuft(Vector((0.0, y, g + cz + r * 0.86)), (0.0, 1.0, 0.55), 0.090, 0.036, lod))
+	# The bushy tail, streaming back and low, a dark tip.
+	tail = [Vector((0.0, 0.300, g + 0.460)), Vector((0.0, 0.410, g + 0.500)), Vector((0.0, 0.520, g + 0.460)),
+			Vector((0.0, 0.590, g + 0.380)), Vector((0.0, 0.610, g + 0.320))]
+	geo.merge(bm, geo.tube(tail, [0.046, 0.082, 0.088, 0.064, 0.0], seg(lod, 9, 6), sharp=SMOOTH,
+			ring_swatches=[row("fur"), row("fur"), row("fur"), row("fur_dark")]))
+	geo.merge(bm, _dire_head(lod, g))
+	return bm
+
+
+def _tusk(root, d, side_d, length, radius, lod):
+	"""A curled bone tusk from `root`, out along `d`, curling toward
+	`side_d`."""
+	d, s = Vector(d).normalized(), Vector(side_d).normalized()
+	pts = [root, root + d * length * 0.45 + s * length * 0.08, root + d * length * 0.80 + s * length * 0.30,
+			root + d * length * 0.90 + s * length * 0.62]
+	return geo.tube(pts, [radius, radius * 0.85, radius * 0.55, 0.0], seg(lod, 7, 5), row("bone"), sharp=SMOOTH,
+			cap_start=row("bone"))
+
+
+def dire_harness(b, lod):
+	"""The bone and tusk harness: a dark leather collar with a curled tusk
+	standing from each shoulder, a bone breastplate, the saddle with a bone
+	cantle horned in tusks."""
+	import horse
+	g = b.base_height
+	bm = geo.new_bm()
+	collar = geo.lathe([(0.148, -0.020), (0.160, 0.0), (0.148, 0.020)], seg(lod, 14, 9), row("leather_dark"), sharp=40,
+			phase=0.0)
+	geo.transform(collar, geo.frame(Vector((0.0, -0.335, g + 0.535)), (0.0, -0.55, 0.30), (0.0, 0.0, 1.0)))
+	geo.merge(bm, collar)
+	for side in (-1.0, 1.0):
+		geo.merge(bm, _tusk(Vector((side * 0.140, -0.310, g + 0.600)), (side * 0.35, -0.25, 1.0), (0.0, -1.0, 0.0),
+				0.200, 0.030, lod))
+	outline = [(-0.105, 0.040), (-0.040, 0.060), (0.0, 0.034), (0.040, 0.060), (0.105, 0.040), (0.110, -0.030),
+			(0.050, -0.080), (0.0, -0.118), (-0.050, -0.080), (-0.110, -0.030)]
+	plate = geo.plate(outline, 0.020, row("bone"), side=row("bone"), sharp=40, bend=3.6)
+	if lod == 0:
+		for side in (-1.0, 1.0):
+			stud = geo.ellipsoid(0.016, 0.010, 0.016, 6, 3, row("leather_dark"), sharp=SMOOTH)
+			geo.translate(stud, (side * 0.050, -0.012, 0.002))
+			geo.merge(plate, stud)
+	geo.transform(plate, geo.orient(Vector((0.0, -0.418, g + 0.430)), (0.0, -1.0, -0.15)))
+	geo.merge(bm, plate)
+	seat = geo.ellipsoid(0.110, 0.135, 0.040, seg(lod, 10, 7), 4, row("leather"), sharp=SMOOTH, squash_bottom=0.4)
+	for v in seat.verts:
+		v.co.z += 0.045 * (v.co.y / 0.135) ** 2 if v.co.z > 0.0 else 0.0
+	geo.translate(seat, (0.0, 0.010, g + horse.SEAT - 0.028))
+	geo.merge(bm, seat)
+	top = g + horse.SEAT
+	cantle = geo.tube([Vector((-0.090, 0.150, top + 0.020)), Vector((0.0, 0.185, top + 0.060)),
+			Vector((0.090, 0.150, top + 0.020))], [0.018] * 3, seg(lod, 6, 4), row("bone"), sharp=SMOOTH,
+			cap_start=row("bone"), cap_end=row("bone"))
+	geo.merge(bm, cantle)
+	for side in (-1.0, 1.0):
+		geo.merge(bm, _tusk(Vector((side * 0.090, 0.150, top + 0.020)), (side * 0.5, 0.4, 1.0), (side * 1.0, -0.6, 0.0),
+				0.140, 0.022, lod))
+	return bm
+
+
+def dire_cloth(b, lod):
+	"""The team's saddle cloth over each flank, from under the saddle down
+	past the barrel's middle, dagged at the foot and edged in bone, a bone
+	boss on each side."""
+	import star_wanderers
+	g = b.base_height
+	bm = geo.new_bm()
+	cols = 7
+	ys = [-0.150 + 0.400 * j / (cols - 1) for j in range(cols)]
+	off = 0.014
+	for side in (-1.0, 1.0):
+		grid = []
+		for a in (24.0, 48.0, 70.0, 90.0):
+			t = math.radians(a)
+			line = []
+			for y in ys:
+				cz, r = _dire_at(y)
+				line.append(Vector((side * (r + off) * math.sin(t), y, g + cz + (r + off) * math.cos(t))))
+			grid.append(line)
+		for kind in ("mid", "border", "hem"):
+			line = []
+			for j, y in enumerate(ys):
+				cz, r = _dire_at(y)
+				dag = 1.0 - abs(((j / (cols - 1)) * 3.0) % 1.0 - 0.5) * 2.0
+				hem = cz - 0.165 - 0.050 * dag
+				zz = {"mid": cz - 0.100, "border": hem + 0.026, "hem": hem}[kind]
+				flare = {"mid": 0.010, "border": 0.018, "hem": 0.022}[kind]
+				line.append(Vector((side * (r + off + flare), y, g + zz)))
+			grid.append(line)
+		bands = [row("team_cloth")] * (len(grid) - 2) + [row("bone")]
+		sheet = star_wanderers._sheet(grid, bands, lambda c, s=side: Vector((s, 0.0, 0.4)))
+		geo.merge(bm, sheet)
+		geo.merge(bm, geo.flipped(sheet, row("team_cloth_dark"), inset=0.005))
+		if lod == 0:
+			tree = geo.bvh(sheet)
+			loc, nrm = geo.project(tree, (side * 0.6, 0.020, g + 0.400), (-side, 0.0, 0.0))
+			if loc is not None:
+				boss = geo.lathe([(0.036, 0.0), (0.030, 0.012), (0.0, 0.018)], 8, row("bone"), sharp=40,
+						cap_start=row("bone"))
+				geo.merge(bm, boss, geo.frame(loc + nrm * 0.002, nrm, (0.0, 0.0, 1.0)))
+	return bm
+
+
+def dire_reins(b, lod):
+	"""Dark reins from the wolf's muzzle strap to the rider's left fist."""
+	g = b.base_height
+	H = DIRE_HEAD + Vector((0.0, 0.0, g))
+	bm = geo.new_bm()
+	for side in (-1.0, 1.0):
+		bit = H + Vector((side * 0.064, -0.140, -0.044)) * DIRE_HEAD_SCALE
+		mid = bit.lerp(b.l_fist, 0.5) + Vector((0.0, 0.0, -0.030))
+		geo.merge(bm, geo.tube([bit, mid, b.l_fist], [0.006] * 3, 4, row("leather_dark"), sharp=40))
+	return bm
+
+
+def boar_rider_legs(b, lod, seat_z):
+	"""The boar's short thick legs astride the wolf, cloven trotters
+	hanging by its flanks (in fur rows: repaint with BOAR)."""
+	bm = geo.new_bm()
+	segs = seg(lod, 8, 5)
+	for side in (-1.0, 1.0):
+		hip = Vector((side * 0.150, 0.010, seat_z + 0.035))
+		knee = Vector((side * 0.250, -0.080, seat_z - 0.060))
+		ankle = Vector((side * 0.250, -0.030, seat_z - 0.165))
+		geo.merge(bm, _limb(hip, knee, [(0.062, -0.02), (0.066, 0.01), (0.058, (knee - hip).length + 0.03)], segs,
+				row("fur")))
+		geo.merge(bm, _limb(knee, ankle, [(0.056, -0.02), (0.054, 0.02), (0.050, (ankle - knee).length)], segs,
+				row("fur")))
+		for toe in (-1.0, 1.0):
+			hoof = geo.ellipsoid(0.028, 0.050, 0.036, seg(lod, 8, 5), seg(lod, 4, 3), row("fur_dark"), sharp=SMOOTH,
+					squash_bottom=0.3)
+			geo.translate(hoof, ankle + Vector((toe * 0.022, -0.026, -0.022)))
+			geo.merge(bm, hoof)
+	return bm
+
+
+def tusk_spear(b, lod, length=1.16, below=0.30):
+	"""A heavy spear tipped with a huge curled bone tusk lashed on with
+	dark leather, a bone ring down the shaft and a team rag tied under the
+	head, held forward and up from the right fist (along b.sword_axis)."""
+	bm = geo.new_bm()
+	top = length - below - 0.30
+	shaft = geo.lathe([(0.0, -below), (0.024, -below + 0.006), (0.024, top), (0.0, top + 0.004)], seg(lod, 7, 5),
+			row("wood"), sharp=40, phase=0.0)
+	geo.merge(bm, shaft)
+	for z, r in ((top - 0.060, 0.036), (top - 0.010, 0.036), (-below + 0.040, 0.030)):
+		ring = geo.lathe([(r, -0.018), (r + 0.004, 0.0), (r, 0.018)], seg(lod, 8, 5), row("leather_dark"), sharp=40,
+				phase=0.0)
+		geo.translate(ring, (0.0, 0.0, z))
+		geo.merge(bm, ring)
+	bone_ring = geo.lathe([(0.030, -0.012), (0.034, 0.0), (0.030, 0.012)], seg(lod, 8, 5), row("bone"), sharp=40,
+			phase=0.0)
+	geo.translate(bone_ring, (0.0, 0.0, top - 0.150))
+	geo.merge(bm, bone_ring)
+	geo.merge(bm, _tusk(Vector((0.0, 0.0, top - 0.060)), (0.0, 0.0, 1.0), (0.0, 1.0, 0.0), 0.400, 0.050, lod))
+	for k, dx in enumerate((-0.010, 0.012)):
+		rag = geo.plate([(-0.022, 0.0), (0.022, 0.0), (0.026, -0.150 - 0.030 * k), (0.004, -0.120 - 0.030 * k),
+				(-0.018, -0.160 - 0.030 * k)], 0.010, row("team_cloth"), side=row("team_cloth_dark"), sharp=40)
+		geo.rotate(rag, 90.0 + 30.0 * (k * 2 - 1), 'Z')
+		geo.rotate(rag, 50.0, 'X')
+		geo.translate(rag, (dx, 0.030, top - 0.150))
+		geo.merge(bm, rag)
+	geo.transform(bm, geo.frame(b.r_fist, b.sword_axis, (0.0, 0.0, 1.0)))
 	return bm

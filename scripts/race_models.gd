@@ -5,7 +5,7 @@ extends RefCounted
 ## swapped for the settlement's race when the slot building goes up (see
 ## ProductionBuilding.setup_slot). A people with no model of its own for a
 ## building keeps the scene's (Human) one. Buildings only one people has (a
-## Gnoll Den, a Star Gate) carry their model in their own scene instead.
+## Dark Spire, a Star Gate) carry their model in their own scene instead.
 
 const RACES_DIR: String = "res://assets/art/Models/Races/"
 ## A settlement's ring of Walls asks for these two.
@@ -16,18 +16,6 @@ const WALL_GATE: String = "Wall Gate"
 const MODELS: Dictionary = {
 	"Human": {
 		"Cottage": "res://assets/art/Models/TownBuildings/House.glb",
-	},
-	"Gnolls": {
-		"Range": RACES_DIR + "Gnolls/Range.glb",
-		"Stables": RACES_DIR + "Gnolls/Stables.glb",
-		"Bestiary": RACES_DIR + "Gnolls/Bestiary.glb",
-		"Granary": RACES_DIR + "Gnolls/Granary.glb",
-		"Market": RACES_DIR + "Gnolls/Market.glb",
-		"Lumberyard": RACES_DIR + "Gnolls/Lumberyard.glb",
-		"Watchtower": RACES_DIR + "Gnolls/Watchtower.glb",
-		"Cottage": RACES_DIR + "Gnolls/Cottage.glb",
-		WALL_SEGMENT: RACES_DIR + "Gnolls/WallSegment.glb",
-		WALL_GATE: RACES_DIR + "Gnolls/WallGate.glb",
 	},
 	"Dark Elves": {
 		"Range": RACES_DIR + "DarkElves/Range.glb",

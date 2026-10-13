@@ -9,7 +9,7 @@ extends QuestCondition
 @export var settlement_names: Array[String] = []
 ## How many must be held at once.
 @export var count: int = 1
-## Only settlements of this people ("Human", "Gnolls", "Dark Elves",
+## Only settlements of this people ("Human", "Dark Elves",
 ## "Star Wanderers", "Beastmen"). Empty accepts any.
 @export var race_name: String = ""
 ## Only settlements grown to at least this tier.

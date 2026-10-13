@@ -26,7 +26,6 @@ import geo
 import gnoll
 import headgear
 import horse
-import hyena
 import monsters
 import parts
 import poses
@@ -243,101 +242,6 @@ def villager_wood(lod, base=False):
 
 def villager_gold(lod, base=False):
 	return _villager(lod, base, "pick")
-
-
-# --- gnolls -----------------------------------------------------------------
-
-def _gnoll_head(b, lod, on_head=(), war_paint=False):
-	"""The hyena head: muzzle, eyes, big ears, the mane ridge and spots,
-	tipped back together (war_paint: the berserk's red mane and stripes)."""
-	head = gnoll.head(b, lod)
-	pieces = [head, gnoll.face(b, lod, head), gnoll.muzzle(b, lod), gnoll.ears(b, lod),
-			gnoll.mane(b, lod, head, "warpaint" if war_paint else "fur_dark"), gnoll.head_spots(b, lod, head)]
-	if war_paint:
-		pieces.append(gnoll.war_paint(b, lod, head))
-	pieces += list(on_head)
-	for piece in pieces:
-		geo.transform(piece, b.head_matrix())
-	return pieces
-
-
-def _gnoll_body(b, lod):
-	"""Fur and a hide kilt, the team's loincloth, belt, necklace, arms, tail."""
-	torso = gnoll.torso(b, lod)
-	return [gnoll.legs(b, lod), torso, gnoll.body_spots(b, lod, torso), gnoll.strap(b, lod, torso),
-			gnoll.loincloth(b, lod), gnoll.belt(b, lod),
-			gnoll.necklace(b, lod), gnoll.arms(b, lod), gnoll.tail(b, lod)]
-
-
-def gnoll_warrior(lod, base=False):
-	"""Gnoll Warrior: a bone-studded club, a round hide shield, a horned
-	hide pad on the club shoulder."""
-	b = parts.Body()
-	pieces = _gnoll_head(b, lod) + _gnoll_body(b, lod)
-	pieces += [gnoll.shoulder_pad(b, lod), gnoll.bone_club(b, lod), gnoll.hide_shield(b, lod)]
-	return _assemble(b, pieces, lod, base)
-
-
-def gnoll_archer(lod, base=False):
-	"""Gnoll Archer: a feathered hide headband, a bow held out, a quiver."""
-	b = poses.bow(parts.Body())
-	pieces = _gnoll_head(b, lod, [gnoll.feather_band(b, lod)]) + _gnoll_body(b, lod)
-	pieces += [gnoll.crude_bow(b, lod), gear.quiver(b, lod)]
-	return _assemble(b, pieces, lod, base)
-
-
-def gnoll_berserk(lod, base=False):
-	"""Gnoll Berserk: red war paint and mane, a great double-bitted axe,
-	a pale pelt and horned skull on the left shoulder, no shield."""
-	b = poses.sword_only(parts.Body())
-	pieces = _gnoll_head(b, lod, war_paint=True) + _gnoll_body(b, lod)
-	pieces += [gnoll.skull_pelt(b, lod), gnoll.great_axe(b, lod)]
-	return _assemble(b, pieces, lod, base)
-
-
-## The Leader stands this much taller than the rest of the pack.
-LEADER_SCALE = 1.15
-
-
-def gnoll_leader(lod, base=False):
-	"""Gnoll Leader: bigger, russet-furred, a crown of bone tusks, horned
-	pads on both shoulders, trophy skulls at the belt and two huge
-	cleaver-swords raised."""
-	b = parts.Body()
-	b.l_elbow = Vector((-b.r_elbow.x, b.r_elbow.y, b.r_elbow.z))
-	b.l_wrist = Vector((-b.r_wrist.x, b.r_wrist.y, b.r_wrist.z))
-	b.l_fist = Vector((-b.r_fist.x, b.r_fist.y, b.r_fist.z))
-	l_axis = Vector((-b.sword_axis.x, b.sword_axis.y, b.sword_axis.z))
-	pieces = _gnoll_head(b, lod, [gnoll.tusk_crown(b, lod)]) + _gnoll_body(b, lod)
-	for piece in pieces:
-		gnoll.recolour(piece, "fur", "fur_red")
-	pieces += [gnoll.shoulder_pad(b, lod), gnoll.shoulder_pad(b, lod, side=1.0), gnoll.belt_skulls(b, lod),
-			gnoll.falchion(b, lod, b.r_fist, b.sword_axis, size=1.25),
-			gnoll.falchion(b, lod, b.l_fist, l_axis, size=1.05)]
-	bm = _assemble(b, pieces, lod, base)
-	geo.scale(bm, LEADER_SCALE, LEADER_SCALE, LEADER_SCALE)
-	return bm
-
-
-def gnoll_shaman(lod, base=False):
-	"""Gnoll Shaman: a dark indigo robe hemmed blood-red, the team's
-	loincloth over it, and a staff crowned with a horned skull, red
-	feathers and hanging charms."""
-	b = poses.staff(parts.Body())
-	pieces = _gnoll_head(b, lod)
-	sleeves = clothes.wide_sleeves(b, lod, "robe_dark")
-	gnoll.recolour(sleeves, "skin", "fur_dark")
-	pieces += [clothes.robe(b, lod, cloth="robe_dark", hem="warpaint"), gnoll.loincloth(b, lod, out=0.018),
-			gnoll.necklace(b, lod), sleeves, gnoll.tail(b, lod), gnoll.skull_staff(b, lod)]
-	return _assemble(b, pieces, lod, base)
-
-
-def hyena_beast(lod, base=False):
-	"""Hyena: a chibi spotted hyena on four legs, the gnolls' head on a
-	sloped back, a mane ridge and a short bushy tail, a collar of the
-	team's colour."""
-	b = parts.Body()
-	return _assemble(b, [hyena.hyena(b, lod)], lod, base)
 
 
 # --- dark elves -------------------------------------------------------------
@@ -748,6 +652,33 @@ def star_rider(lod, base=False):
 	return _assemble(b, pieces, lod, base)
 
 
+def beastman_wolf_rider(lod, base=False):
+	"""Beastman Wolf Rider: the slate-grey boar seated (team scarf, hide
+	kilt, trotters hanging by the flanks) with a heavy tusk-tipped spear
+	held forward and up, on a huge shaggy brown dire wolf: a high shoulder
+	hump, a dark ruff, a big wedge head held forward, a bone and tusk
+	harness and the team's saddle cloth (see beastmen.dire_wolf)."""
+	b = beastmen.BoarBody()
+	b.sword_axis = Vector((-0.06, -0.60, 0.80)).normalized()
+	lift = Vector((0.0, 0.0, b.base_height + horse.SEAT + 0.010 - b.hem_z))
+	torso = beastmen.boar_torso(b, lod)
+	head = beastmen.boar_head(b, lod)
+	pieces = _tilt(b, [head, beastmen.face(b, lod, head, eye_x=0.090, eye_dz=0.040, blush_x=0.140),
+			beastmen.boar_snout(b, lod), beastmen.boar_ears(b, lod), beastmen.boar_head_crest(b, lod)])
+	pieces += [torso, beastmen.boar_back_crest(b, lod, torso), gnoll.belt(b, lod), beastmen.arms(b, lod, k=1.18)]
+	for piece in pieces:
+		beastmen.species(piece, beastmen.BOAR)
+	pieces += [beastmen.neckerchief(b, lod), beastmen.tusk_spear(b, lod)]
+	for piece in pieces:
+		geo.translate(piece, lift)
+	for joint in ("l_fist", "l_wrist", "l_elbow", "r_fist", "r_wrist", "r_elbow"):
+		setattr(b, joint, getattr(b, joint) + lift)
+	legs = beastmen.species(beastmen.boar_rider_legs(b, lod, b.base_height + horse.SEAT), beastmen.BOAR)
+	pieces += [beastmen.dire_wolf(b, lod), beastmen.dire_harness(b, lod), beastmen.dire_cloth(b, lod),
+			beastmen.dire_reins(b, lod), legs]
+	return _assemble(b, pieces, lod, base)
+
+
 # --- wild animals -------------------------------------------------------------
 
 def bear_animal(lod, base=False):
@@ -778,7 +709,7 @@ def griffin(lod, base=False):
 
 
 def sand_worm(lod, base=False):
-	"""Sand Worm (Gnolls): a segmented worm rearing from its coil, a ringed
+	"""Sand Worm (Beastmen): a segmented worm rearing from its coil, a ringed
 	maw, the team's collar and a gnoll war banner (see beasts.py)."""
 	b = parts.Body()
 	return _assemble(b, [beasts.sand_worm(b, lod)], lod, base)
@@ -806,7 +737,7 @@ def wind_tiger(lod, base=False):
 
 
 def skeleton_dragon(lod, base=False):
-	"""Skeleton Dragon, the Bestiary drake (Gnolls): bone, torn hide wings,
+	"""Skeleton Dragon, the Bestiary drake (Beastmen): bone, torn hide wings,
 	a green soul fire, the team's blanket and horn rags (see beasts.py).
 	The monster of the same name will be its own, bigger figure."""
 	b = parts.Body()
@@ -927,7 +858,6 @@ def magic_cannon(lod, base=False):
 ## `portrait`: the point the portrait camera looks at (the head, in the
 ## exported figure's space) and how far back it stands.
 _FOOT = {"palette": "aldmere", "portrait": (0.0, 0.0, 0.64), "portrait_distance": 2.0}
-_GNOLL = dict(_FOOT, palette="gnolls", portrait=(0.0, -0.03, 0.64))
 _DARK_ELF = dict(_FOOT, palette="dark_elves")
 _BEASTMEN = dict(_FOOT, palette="beastmen", portrait=(0.0, -0.03, 0.64))
 _STAR = dict(_FOOT, palette="star_wanderers")
@@ -949,13 +879,6 @@ UNITS = {
 	"Lord": dict(_FOOT, build=lord, portrait=(0.0, 0.0, 0.70), portrait_distance=2.2, ready=True),
 	"Wizard": dict(_FOOT, build=wizard, portrait=(0.0, 0.0, 0.78), portrait_distance=2.4, ready=True),
 	"ArchMage": dict(_FOOT, build=arch_mage, ready=True),
-	"GnollWarrior": dict(_GNOLL, build=gnoll_warrior, ready=True),
-	"GnollArcher": dict(_GNOLL, build=gnoll_archer, ready=True),
-	"GnollBerserk": dict(_GNOLL, build=gnoll_berserk, ready=True),
-	"GnollLeader": dict(_GNOLL, build=gnoll_leader, portrait=(0.0, -0.03, 0.74), portrait_distance=1.4, ready=True),
-	"GnollShaman": dict(_GNOLL, build=gnoll_shaman, ready=True),
-	"Hyena": dict(_GNOLL, build=hyena_beast, portrait=(0.0, -0.33, 0.52), portrait_distance=1.3, mounted=True,
-			ready=True),
 	"DarkElfWarrior": dict(_DARK_ELF, build=dark_elf_warrior, ready=True),
 	"DarkElfArcher": dict(_DARK_ELF, build=dark_elf_archer, ready=True),
 	"DarkElfAssassin": dict(_DARK_ELF, build=dark_elf_assassin, ready=True),
@@ -980,6 +903,8 @@ UNITS = {
 	"DarkElfRider": dict(_MOUNTED, palette="dark_elves", build=dark_elf_rider, ready=True),
 	"StarRider": dict(_MOUNTED, palette="star_wanderers", build=star_rider, portrait=(0.0, -0.05, 1.26),
 			ready=True),
+	"BeastmanWolfRider": dict(_MOUNTED, palette="beastmen", build=beastman_wolf_rider, portrait=(0.0, -0.30, 0.86),
+			portrait_distance=3.0, ready=True),
 	"BearAnimal": dict(_MOUNTED, palette="animals", build=bear_animal, portrait=(0.0, -0.40, 0.52),
 			portrait_distance=1.4, ready=True),
 	"BoarAnimal": dict(_MOUNTED, palette="animals", build=boar_animal, portrait=(0.0, -0.30, 0.32),
@@ -988,8 +913,8 @@ UNITS = {
 			portrait_distance=1.2, ready=True),
 	"Griffin": dict(_MOUNTED, palette="aldmere", build=griffin, portrait=(0.0, -0.66, 1.30),
 			portrait_distance=3.8, ready=True),
-	"SandWorm": dict(_MOUNTED, palette="gnolls", build=sand_worm, portrait=(0.0, -0.34, 1.40),
-			portrait_distance=2.4, ready=True),
+	"SandWorm": dict(_MOUNTED, palette="gnolls", build=sand_worm, portrait=(0.0, -0.20, 1.45),
+			portrait_distance=4.4, ready=True),
 	"Manticore": dict(_MOUNTED, palette="aldmere", build=manticore, portrait=(0.0, -0.78, 1.00),
 			portrait_distance=3.8, ready=True),
 	"Kitsune": dict(_MOUNTED, palette="dark_elves", build=kitsune, portrait=(0.0, -0.55, 1.32),
@@ -997,7 +922,7 @@ UNITS = {
 	"WindTiger": dict(_MOUNTED, palette="dark_elves", build=wind_tiger, portrait=(0.0, -0.84, 1.18),
 			portrait_distance=3.2, ready=True),
 	"SkeletonDragonBeast": dict(_MOUNTED, palette="gnolls", build=skeleton_dragon, portrait=(0.0, -0.74, 1.62),
-			portrait_distance=2.4, ready=True),
+			portrait_distance=3.0, ready=True),
 	"Dragon": dict(_MOUNTED, palette="star_wanderers", build=dragon, portrait=(0.0, -0.80, 1.52),
 			portrait_distance=3.4, ready=True),
 	"LightningDragon": dict(_MOUNTED, palette="star_wanderers", build=lightning_dragon, portrait=(0.0, -0.25, 1.55),
