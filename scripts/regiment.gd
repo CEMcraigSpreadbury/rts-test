@@ -16,13 +16,11 @@ extends RefCounted
 ##
 ## Host-side only, like every other authoritative record (see Main.regiments).
 
-## A regiment is raised in whole ranks: any multiple of STEP, from a six-man
-## company up to MAX_SIZE. Whole ranks are what keep a block a clean rectangle
-## rather than a formation with a half-empty back row, and fixing the size at
-## forming is what makes its shape and the cost of ordering it predictable —
-## instead of both depending on however many men were box-selected.
-const STEP: int = 6
-const MIN_SIZE: int = 6
+## A regiment is raised at whatever strength the men selected make, from
+## MIN_SIZE up to MAX_SIZE. Fixing the size at forming is what makes its shape
+## and the cost of ordering it predictable between orders; reinforcing past it
+## grows the established size (see Main.reinforce_regiment).
+const MIN_SIZE: int = 2
 const MAX_SIZE: int = 120
 
 ## What being led is worth: a proportion added to damage, and armour points on
@@ -33,12 +31,12 @@ const SIZE_BANDS: Array[int] = [0, 72, 120]
 const DAMAGE_BONUS: Array[float] = [0.10, 0.15, 0.20]
 const ARMOR_BONUS: Array[int] = [1, 2, 3]
 
-## The largest whole-rank body `count` men can fill, or -1 if they cannot even
-## make the smallest.
+## The largest body `count` men can fill, or -1 if they cannot even make the
+## smallest.
 static func size_for(count: int) -> int:
 	if count < MIN_SIZE:
 		return -1
-	return mini(count - count % STEP, MAX_SIZE)
+	return mini(count, MAX_SIZE)
 
 ## The officer's place: always behind his men, whatever the block's size.
 const OFFICER_RANK: int = 1 << 20
@@ -47,7 +45,7 @@ static var _next_id: int = 1
 
 var id: int = 0
 var owner_peer_id: int = 0
-## How many men this body was raised to hold. A multiple of STEP.
+## How many men this body is established to hold.
 var size: int = MIN_SIZE
 ## The officer leading it. A regiment outlives its officer — the men hold
 ## together and still take orders — but loses its buffs until another one
@@ -68,7 +66,7 @@ static func create(peer_id: int, established_size: int) -> Regiment:
 	regiment.id = _next_id
 	_next_id += 1
 	regiment.owner_peer_id = peer_id
-	regiment.size = clampi(established_size - established_size % STEP, MIN_SIZE, MAX_SIZE)
+	regiment.size = clampi(established_size, MIN_SIZE, MAX_SIZE)
 	return regiment
 
 ## How many men this regiment is established to hold.

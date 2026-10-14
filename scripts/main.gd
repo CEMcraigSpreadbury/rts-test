@@ -3070,16 +3070,17 @@ func toggle_regiment_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
 		if loose_officers.is_empty() and loose_men.is_empty():
 			disband_regiment(regiment)
 		else:
-			reinforce_regiment(regiment, loose_men, loose_officers)
+			reinforce_regiment(regiment, loose_men, loose_officers, true)
 		return
 	form_regiment(sender_id, units)
 
 ## Tops `regiment` back up: men of its own type up to the room it has left,
-## and one officer if it is leaderless. Never past its established size and
-## never mixed — the two things a regiment's size and type are for. A body
-## worn down to nothing but its officer takes whichever single type is most
-## numerous among the men offered.
-func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_officers: Array[Unit]) -> int:
+## and one officer if it is leaderless. With `grow` (the player's Reinforce)
+## it takes every man of its type offered, raising its established size to
+## match, up to Regiment.MAX_SIZE; without it (the AI) it only refills. Never
+## mixed. A body worn down to nothing but its officer takes whichever single
+## type is most numerous among the men offered.
+func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_officers: Array[Unit], grow: bool = false) -> int:
 	var added := 0
 	## The front the block is already holding, handed to everyone who joins it
 	## so a reinforced regiment still reads as one body facing one way.
@@ -3094,6 +3095,13 @@ func reinforce_regiment(regiment: Regiment, loose_men: Array[Unit], loose_office
 			added += 1
 	var wanted: String = regiment.unit_type()
 	var joining: Array[Unit] = loose_men if wanted != "" else largest_same_type(loose_men)
+	if grow:
+		regiment.prune()
+		var offered := 0
+		for unit in joining:
+			if wanted == "" or unit.display_name == wanted:
+				offered += 1
+		regiment.size = clampi(regiment.members.size() + offered, regiment.size, Regiment.MAX_SIZE)
 	var army: int = _army_of_regiment(regiment)
 	for unit in joining:
 		if regiment.room() == 0:
@@ -3135,10 +3143,10 @@ func expand_to_regiments(units: Array[Unit]) -> Array[Unit]:
 				out.append(unit)
 	return out
 
-## Raises a regiment from the loose men in `units`. Takes the largest tier they
-## can fill and leaves the remainder loose rather than forming an
-## under-strength body. Returns null if there are not enough men of one kind
-## for the smallest tier. An officer among them (an old map's) still leads it.
+## Raises a regiment from the loose men in `units`: every man of the most
+## numerous type, up to Regiment.MAX_SIZE, with any other types left loose.
+## Returns null if there are not enough men of one kind for Regiment.MIN_SIZE.
+## An officer among them (an old map's) still leads it.
 func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 	var officer: Unit = null
 	var men: Array[Unit] = []
@@ -3151,8 +3159,7 @@ func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 		elif unit.can_fight:
 			men.append(unit)
 	men = largest_same_type(men)
-	## Raised at whole ranks, taking as many as they fill and leaving any
-	## remainder loose — a regiment is never raised part of a rank strong.
+	## Raised at the strength of the men given, up to Regiment.MAX_SIZE.
 	var established := Regiment.size_for(men.size())
 	if established < 0:
 		return null

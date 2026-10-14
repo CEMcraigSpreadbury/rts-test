@@ -49,8 +49,8 @@ extends Resource
 @export var military_queue: int = 2
 ## Soldiers (living plus queued) past which no more are trained.
 @export var max_army: int = 70
-## How many men this AI raises a regiment with — any multiple of
-## Regiment.STEP. 0 leaves its army loose, which is how it fought before
+## How many men this AI raises a regiment with, at least
+## Regiment.MIN_SIZE. 0 leaves its army loose, which is how it fought before
 ## regiments existed and the fallback if they ever cost it a match.
 ##
 ## Deliberately small. The AI trains a weighted mix across four roles under
