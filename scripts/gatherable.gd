@@ -60,11 +60,24 @@ var gatherers: Array[Unit] = []
 ## by a path each scene would have to keep in sync.
 var _model: Node3D = null
 var _model_base_scale: Vector3 = Vector3.ONE
+var _model_base_quat: Quaternion = Quaternion.IDENTITY
 var _squash_tween: Tween
-## Several gatherers can tick against the same node in quick succession, which
-## would restart the squash before it ever plays out and read as a jitter.
-const SQUASH_COOLDOWN_MSEC: int = 400
+## Several gatherers can strike the same node in quick succession, which
+## would restart the pop before it ever plays out and read as a jitter.
+const SQUASH_COOLDOWN_MSEC: int = 300
 var _next_squash_msec: int = 0
+## The harvest pop (see hit_pop): how long it runs, how fast it gives under
+## the blow, how far it squashes, how far it leans away from the gatherer, and
+## the springy settle after (wobbles a second and how quickly they die).
+const POP_SECONDS: float = 0.6
+const POP_GIVE: float = 0.05
+const POP_SQUASH: Vector3 = Vector3(0.09, -0.13, 0.09)
+const POP_TILT: float = 0.09
+const POP_WOBBLES: float = 3.4
+const POP_DAMPING: float = 6.5
+## Which way the current pop leans (flat, away from the gatherer; zero for none).
+var _pop_away: Vector3 = Vector3.ZERO
+var _pop_strength: float = 1.0
 
 ## Bumped whenever any resource node enters or leaves the tree (or starts to
 ## deplete). Resource nodes never move, so this is all NavigationBlockers needs
@@ -85,6 +98,7 @@ func _ready() -> void:
 		if child is Node3D and not (child is CollisionShape3D or child is NavigationObstacle3D):
 			_model = child
 			_model_base_scale = _model.scale
+			_model_base_quat = _model.quaternion
 			BakedLightingMaterial.apply_to(_model)
 			PlasticMaterial.apply_to(_model)
 			TreeWind.apply_to_trees_in(_model)
@@ -122,26 +136,75 @@ func play_select_sound() -> void:
 		return
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
 
-## A quick squash on every harvest tick. Purely local per peer — gather() only
-## runs on the host, so main.gd relays this out (see _on_unit_resource_harvested).
-func play_harvest_squash() -> void:
+## A gatherer's blow landing: the node gives under it, leaning away from
+## `from`, springs back past rest and wobbles still. Purely local per peer —
+## each peer's gatherer calls it on its own swing (see Unit's gather impact).
+func play_harvest_squash(from: Vector3 = Vector3.INF, strength: float = 1.0) -> void:
 	var now: int = Time.get_ticks_msec()
 	if now < _next_squash_msec:
 		return
+	var away := Vector3.ZERO
+	if from.is_finite():
+		away = global_position - from
+		away.y = 0.0
+		away = away.normalized() * _pop_tilt()
 	if is_tree():
 		_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
 		if Forest.active != null:
-			Forest.active.squash(self)
+			Forest.active.squash(self, away)
 		return
 	if _model == null:
 		return
 	_next_squash_msec = now + SQUASH_COOLDOWN_MSEC
 	if _squash_tween and _squash_tween.is_valid():
 		_squash_tween.kill()
-	_model.scale = _model_base_scale * Vector3(1.07, 0.88, 1.07)
+	_pop_away = away
+	_pop_strength = strength
 	_squash_tween = create_tween()
-	_squash_tween.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-	_squash_tween.tween_property(_model, "scale", _model_base_scale, 0.4)
+	_squash_tween.tween_method(_apply_pop, 0.0, POP_SECONDS, POP_SECONDS)
+
+## How far this node leans under a blow; a field of crops only squashes.
+func _pop_tilt() -> float:
+	return POP_TILT
+
+func _apply_pop(time: float) -> void:
+	if _model == null:
+		return
+	var pop: float = hit_pop(time) * _pop_strength
+	var basis := Basis(_model_base_quat).scaled_local(_model_base_scale * (Vector3.ONE + POP_SQUASH * pop))
+	if _pop_away != Vector3.ZERO:
+		basis = Basis(Vector3.UP.cross(_pop_away).normalized(), _pop_away.length() * pop) * basis
+	_model.basis = basis
+
+## How hard a harvest pop is pressing `time` seconds in: up to 1 as the blow
+## lands, then a spring back that overshoots below 0 and dies away to 0.
+static func hit_pop(time: float) -> float:
+	if time >= POP_SECONDS:
+		return 0.0
+	if time < POP_GIVE:
+		var k: float = time / POP_GIVE
+		return k * (2.0 - k)
+	var after: float = time - POP_GIVE
+	var fade: float = 1.0 - smoothstep(POP_SECONDS * 0.7, POP_SECONDS, time)
+	return exp(-POP_DAMPING * after) * cos(TAU * POP_WOBBLES * after) * fade
+
+## The finished building standing on this node (a Mine on its deposit), on
+## every peer: the one whose linked_deposit this is.
+func building_on_top() -> ProductionBuilding:
+	if not requires_building_on_top:
+		return null
+	if is_instance_valid(_building_on_top) and not _building_on_top.is_destroyed \
+			and _building_on_top.linked_deposit == self:
+		return _building_on_top
+	_building_on_top = null
+	for node in get_tree().get_nodes_in_group("buildings"):
+		var building := node as ProductionBuilding
+		if building and building.linked_deposit == self and not building.is_destroyed and not building.is_under_construction:
+			_building_on_top = building
+			break
+	return _building_on_top
+
+var _building_on_top: ProductionBuilding = null
 
 func can_be_gathered() -> bool:
 	return not requires_building_on_top or has_required_building

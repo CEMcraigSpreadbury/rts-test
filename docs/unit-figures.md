@@ -61,6 +61,18 @@ The target look is in `docs/art-reference/reference-diorama-3.png`.
     on death it tips over on its side (1.2 rad, lifted 0.55 m). Tune
     `kRoll*` in `figure_batcher.cpp`. A unit drawn as a figure hides its
     crew sprite (`Unit._attach_crew_drawing`): the crew is on the model.
+  - **Gathering:** the gather clip's role prefix picks the motion: an axe
+    swing (`wood_`), an overhead pick (`gold_`), a smaller hammer
+    (`build_`), or crouch-and-pull (no prefix, food). Each lands on the
+    `k*Impact` share of its clip, which must match `Unit.GATHER_IMPACT_FRAMES`.
+    The node pops on that frame on every peer (`Gatherable.hit_pop`: it gives,
+    leans away from the gatherer, springs back past rest and wobbles still).
+  - **Carrying:** a villager with a load that isn't working is drawn as
+    `Villager_carry_food|wood|gold` (a basket in both hands, logs on the
+    shoulder, a gold chunk; kit `gear.carried_basket|log_bundle|gold_chunk`,
+    poses `carry_front|carry_shoulder`). `Unit.carry` is set on the host and
+    sent with ArmyNet's unit state; `FigureBatcher.set_figure_carry` picks the
+    variant over the work role's.
   - `cmd figures` in chat switches every unit back to its sprite for
     comparison. `ui_shot --sprites` does the same.
 - **Native rebuild** (after a change to `figure_batcher`):

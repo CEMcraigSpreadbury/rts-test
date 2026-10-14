@@ -1068,6 +1068,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 		unit.ready.connect(func(): unit.sprite.scale *= RealmRoster.ELITE_SCALE, CONNECT_ONE_SHOT)
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
 	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
+	unit.mine_door_dust.connect(feedback.spawn_rally_dust)
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
 	unit.damaged.connect(feedback.relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
@@ -1099,6 +1100,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 func register_objective_unit(unit: Unit) -> void:
 	unit.animation_changed.connect(feedback.on_unit_animation_changed.bind(unit))
 	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
+	unit.mine_door_dust.connect(feedback.spawn_rally_dust)
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
 	unit.damaged.connect(feedback.relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
@@ -2382,7 +2384,7 @@ func _select_all_visible_units_of_type(unit_type: String) -> void:
 	var viewport_rect := Rect2(Vector2.ZERO, get_viewport().get_visible_rect().size)
 	for child in units_root.get_children():
 		if child is Unit and child.owner_peer_id == my_peer_id() and child.display_name == unit_type \
-				and not camera.is_position_behind(child.global_position):
+				and not child.in_mine and not camera.is_position_behind(child.global_position):
 			var screen_pos: Vector2 = camera.unproject_position(child.global_position)
 			if viewport_rect.has_point(screen_pos):
 				child.selected = true
@@ -2578,7 +2580,7 @@ func _finish_selection(start_pos: Vector2, end_pos: Vector2, double_click: bool 
 	select_resource(null)
 	clicked_ring_target = null
 	for child in units_root.get_children():
-		if child is Unit and can_command(child) and not camera.is_position_behind(child.global_position):
+		if child is Unit and can_command(child) and not child.in_mine and not camera.is_position_behind(child.global_position):
 			var screen_pos: Vector2 = camera.unproject_position(child.global_position)
 			if rect.has_point(screen_pos):
 				child.selected = true

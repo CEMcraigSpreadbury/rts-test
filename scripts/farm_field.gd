@@ -54,6 +54,9 @@ func _collect_meshes(node: Node) -> void:
 	for child in node.get_children():
 		_collect_meshes(child)
 
+func _pop_tilt() -> float:
+	return 0.0
+
 func is_yielding() -> bool:
 	return stage == Stage.RIPE
 

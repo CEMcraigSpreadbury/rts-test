@@ -115,6 +115,13 @@ constexpr float kChopStretch = 0.08f;
 constexpr float kChopLean = 0.42f;
 constexpr float kChopStep = 0.10f;
 constexpr float kChopSquash = 0.10f;
+// Gathering: when each work swing lands, as a share of its clip. These are
+// the frames Unit.GATHER_IMPACT_FRAMES pops the resource on, so the axe and
+// the tree meet: wood 3 of 6, gold 3 of 5, food 5 of 10, building 3 of 6.
+constexpr float kAxeImpact = 0.5f;
+constexpr float kPickImpact = 0.6f;
+constexpr float kPullImpact = 0.5f;
+constexpr float kHammerImpact = 0.5f;
 // Cast: how far it leans back, rises and stretches gathering, and how far it
 // punches forward on the release.
 constexpr float kCastLeanBack = 0.10f;
@@ -179,6 +186,7 @@ void FigureBatcher::_bind_methods() {
 			&FigureBatcher::add_figure);
 	ClassDB::bind_method(D_METHOD("remove_figure", "unit", "leave_corpse"), &FigureBatcher::remove_figure, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("set_figure_motion", "unit", "motion"), &FigureBatcher::set_figure_motion);
+	ClassDB::bind_method(D_METHOD("set_figure_carry", "unit", "carry"), &FigureBatcher::set_figure_carry);
 	ClassDB::bind_method(D_METHOD("set_figure_variant", "unit", "role", "mesh", "lod1"), &FigureBatcher::set_figure_variant);
 	ClassDB::bind_method(D_METHOD("set_team_color", "unit", "team"), &FigureBatcher::set_team_color);
 	ClassDB::bind_method(D_METHOD("has_figure", "unit"), &FigureBatcher::has_figure);
@@ -328,6 +336,16 @@ void FigureBatcher::set_figure_variant(Node3D *unit, const StringName &role, con
 	e.anim = StringName();
 }
 
+void FigureBatcher::set_figure_carry(Node3D *unit, const StringName &carry) {
+	if (unit == nullptr) return;
+	const auto it = index_of_.find(unit->get_instance_id());
+	if (it == index_of_.end()) return;
+	Entry &e = entries_[it->second];
+	if (e.carry == carry) return;
+	e.carry = carry;
+	e.anim = StringName();
+}
+
 void FigureBatcher::set_team_color(Node3D *unit, const Color &team) {
 	if (unit == nullptr) return;
 	const auto it = index_of_.find(unit->get_instance_id());
@@ -380,6 +398,9 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 	if (anim != e.anim) {
 		e.anim = anim;
 		e.clip = clip_of(anim);
+		const String anim_name = anim;
+		e.work = anim_name.begins_with("wood_") ? 'w' : anim_name.begins_with("gold_") ? 'g'
+				: anim_name.begins_with("build_") ? 'b' : 0;
 		// A work role's clips are "<role>_<clip>": its variant, if it has one.
 		e.type = e.base_type;
 		if (!e.variants.empty()) {
@@ -390,6 +411,14 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 				for (const auto &variant : e.variants) {
 					if (variant.first == role) e.type = variant.second;
 				}
+			}
+			// A plain gather clip (no role: food) has a "food" variant of its own.
+			const StringName food("food");
+			for (const auto &variant : e.variants) {
+				if (variant.first == food && e.clip == CLIP_GATHER && e.work == 0 && split <= 0) e.type = variant.second;
+			}
+			for (const auto &variant : e.variants) {
+				if (variant.first == e.carry) e.type = variant.second;
 			}
 		}
 	}
@@ -632,10 +661,47 @@ Transform3D FigureBatcher::pose(Entry &e, AnimatedSprite3D *sprite, float dt) {
 			hop += 0.025f * strike;
 		} break;
 		case CLIP_GATHER: {
-			// A rhythmic bob into the work.
-			const float pulse = 0.5f - 0.5f * std::cos(2.0f * kPi * t);
-			pitch += 0.22f * pulse;
-			hop += 0.02f * std::max(0.0f, std::sin(2.0f * kPi * t));
+			if (e.work == 'w') {
+				// Axe: turn away with the blade drawn back to the side, then
+				// whip round into the trunk, a jolt on the bite, and ease
+				// back square.
+				const float k = kAxeImpact;
+				const float wind = smooth(0.0f, k - 0.12f, t) * (1.0f - smooth(k - 0.1f, k, t));
+				const float swing = smooth(k - 0.1f, k, t) * (1.0f - smooth(k + 0.12f, 1.0f, t));
+				const float bite = smooth(k - 0.03f, k, t) * (1.0f - smooth(k, k + 0.18f, t));
+				twist += -0.55f * wind + 0.22f * swing;
+				pitch += -0.07f * wind + 0.20f * swing;
+				stretch *= 1.0f + 0.05f * wind - 0.09f * bite;
+				hop += 0.02f * wind;
+				roll += 0.04f * std::sin(t * 70.0f) * bite;
+				stride += 0.05f * swing;
+			} else if (e.work == 'g' || e.work == 'b') {
+				// Pick (or a builder's hammer, smaller): up onto its toes
+				// leaning back with the head high, then driven down hard, a
+				// squash and a shiver on the strike.
+				const float k = e.work == 'g' ? kPickImpact : kHammerImpact;
+				const float size = e.work == 'g' ? 1.0f : 0.7f;
+				const float up = smooth(0.0f, k - 0.12f, t) * (1.0f - smooth(k - 0.1f, k, t));
+				const float drive = smooth(k - 0.1f, k, t) * (1.0f - smooth(k + 0.1f, 1.0f, t));
+				const float strike = smooth(k - 0.03f, k, t) * (1.0f - smooth(k, k + 0.2f, t));
+				pitch += size * (-0.24f * up + 0.40f * drive);
+				hop += size * 0.06f * up;
+				stretch *= 1.0f + size * (0.09f * up - 0.12f * strike);
+				twist += -0.08f * up;
+				roll += 0.035f * std::sin(t * 80.0f) * strike;
+				stride += 0.04f * size * drive;
+			} else {
+				// Food: crouch and reach in, a beat holding on, then stand
+				// and lean back as the crop comes free, with a little hop.
+				const float k = kPullImpact;
+				const float reach = smooth(0.0f, k - 0.15f, t) * (1.0f - smooth(k - 0.02f, k + 0.08f, t));
+				const float pull = smooth(k - 0.02f, k + 0.08f, t) * (1.0f - smooth(k + 0.15f, 1.0f, t));
+				pitch += 0.34f * reach - 0.12f * pull;
+				stretch *= 1.0f - 0.12f * reach + 0.07f * pull;
+				hop += 0.035f * pull;
+				twist += 0.06f * std::sin(2.0f * kPi * t) * reach;
+				stride += 0.05f * reach;
+			}
 		} break;
 		case CLIP_CAST: {
 			if (stomper) {

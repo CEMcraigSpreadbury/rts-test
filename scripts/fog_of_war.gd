@@ -543,7 +543,7 @@ func _update_node_visibility() -> void:
 	for node in get_tree().get_nodes_in_group("units"):
 		var unit := node as Unit
 		if unit:
-			unit.visible = (i_am_valid_peer and Teams.is_friendly(my_peer, unit.owner_peer_id)) or is_visible_at(unit.global_position)
+			unit.visible = not unit.in_mine and ((i_am_valid_peer and Teams.is_friendly(my_peer, unit.owner_peer_id)) or is_visible_at(unit.global_position))
 
 	for node in get_tree().get_nodes_in_group("buildings"):
 		var building := node as ProductionBuilding

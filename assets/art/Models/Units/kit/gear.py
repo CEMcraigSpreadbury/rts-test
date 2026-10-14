@@ -393,24 +393,80 @@ def pick(b, lod):
 
 def basket(b, lod):
 	"""A wicker basket of apples on the bent left arm."""
-	fist = b.l_fist
-	centre = fist + Vector((0.020, -0.005, -0.13))
+	bm = _basket(lod)
+	geo.rotate(bm, 90.0, 'Z')
+	geo.translate(bm, b.l_fist + Vector((0.020, -0.005, -0.13)))
+	return bm
+
+
+def _basket(lod, full=False):
+	"""The basket round its base's centre, its handle across X. `full` heaps
+	it with apples."""
 	bm = geo.lathe([(0.0, -0.055), (0.050, -0.055), (0.066, -0.02), (0.075, 0.02), (0.082, 0.03), (0.074, 0.032)],
 			seg(lod, 10, 7), sharp=40, phase=0.0,
 			ring_swatches=[row("wicker"), row("wicker"), row("wicker"), row("wood_light"), row("wood_light")],
 			cap_start=row("wicker"))
 	inner = geo.lathe([(0.072, 0.02), (0.0, 0.01)], seg(lod, 10, 7), row("lining"), sharp=40, phase=0.0)
 	geo.merge(bm, inner)
-	fruit = [((0.025, 0.010), "fruit"), ((-0.022, -0.016), "fruit"), ((-0.010, 0.030), "fruit_green")]
-	if lod == 0:
-		fruit.append(((0.030, -0.030), "fruit"))
-	for (x, y), name in fruit:
+	fruit = [((0.025, 0.010, 0.035), "fruit"), ((-0.022, -0.016, 0.035), "fruit"), ((-0.010, 0.030, 0.035), "fruit_green")]
+	if lod == 0 or full:
+		fruit.append(((0.030, -0.030, 0.035), "fruit"))
+	if full:
+		fruit += [((-0.045, 0.020, 0.040), "fruit"), ((0.050, 0.030, 0.038), "fruit_green"),
+				((0.000, -0.005, 0.068), "fruit"), ((-0.030, -0.040, 0.050), "fruit_green")]
+	for (x, y, z), name in fruit:
 		apple = geo.ellipsoid(0.026, 0.026, 0.024, seg(lod, 7, 5), seg(lod, 4, 3), row(name), sharp=SMOOTH)
-		geo.translate(apple, (x, y, 0.035))
+		geo.translate(apple, (x, y, z))
 		geo.merge(bm, apple)
 	handle = geo.tube([Vector((-0.074, 0.0, 0.03)), Vector((-0.060, 0.0, 0.10)), Vector((0.0, 0.0, 0.135)),
 			Vector((0.060, 0.0, 0.10)), Vector((0.074, 0.0, 0.03))], [0.007] * 5, 4, row("wicker"), sharp=40)
 	geo.merge(bm, handle)
-	geo.rotate(bm, 90.0, 'Z')
-	geo.translate(bm, centre)
+	return bm
+
+
+# --- carried loads (a villager walking a load home) ---------------------------
+
+def carried_basket(b, lod):
+	"""A basket heaped with apples, held out in front in both hands."""
+	bm = _basket(lod, full=True)
+	geo.transform(bm, Matrix.Scale(1.35, 4))
+	geo.translate(bm, b.load_centre)
+	return bm
+
+
+def _log(lod, radius, length):
+	"""A log along Y: bark round it, pale cut ends."""
+	half = length * 0.5
+	bm = geo.lathe([(radius * 0.96, -half), (radius, -half * 0.3), (radius * 0.97, half)], seg(lod, 7, 5),
+			row("wood"), sharp=HARD, cap_start=row("wood_light"), cap_end=row("wood_light"))
+	geo.rotate(bm, 90.0, 'X')
+	return bm
+
+
+def log_bundle(b, lod):
+	"""Three logs over the right shoulder, front ends tipped up a little."""
+	bm = geo.new_bm()
+	for x, z, y, r in ((-0.030, -0.030, 0.00, 0.046), (0.055, -0.030, 0.03, 0.044), (0.012, 0.045, -0.02, 0.042)):
+		log = _log(lod, r, 0.50)
+		geo.translate(log, (x, y, z))
+		geo.merge(bm, log)
+	geo.rotate(bm, -14.0, 'X')
+	geo.translate(bm, b.load_centre)
+	return bm
+
+
+def gold_chunk(b, lod):
+	"""A big faceted lump of gold held to the chest in both hands, smaller
+	knobs grown on it."""
+	bm = geo.ellipsoid(0.105, 0.088, 0.090, 6, 3, row("brass"), sharp=HARD)
+	geo.rotate(bm, 20.0, 'Z')
+	for x, y, z, r, turn in ((0.060, -0.020, 0.055, 0.052, 30.0), (-0.055, 0.025, 0.050, 0.046, 75.0),
+			(0.010, -0.050, -0.040, 0.044, 10.0), (-0.020, 0.010, 0.085, 0.040, 55.0)):
+		knob = geo.ellipsoid(r, r * 0.85, r * 0.8, 5, 3, row("brass"), sharp=HARD)
+		geo.rotate(knob, turn, 'Z')
+		geo.rotate(knob, turn * 0.5, 'X')
+		geo.translate(knob, (x, y, z))
+		geo.merge(bm, knob)
+	geo.translate(bm, (0.0, 0.0, 0.03))
+	geo.translate(bm, b.load_centre)
 	return bm

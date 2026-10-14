@@ -202,4 +202,6 @@ static func effective_health(target) -> int:
 	return 0
 
 static func is_worth_attacking(target) -> bool:
+	if target is Unit and target.sheltered:
+		return false
 	return effective_health(target) > 0

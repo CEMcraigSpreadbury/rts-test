@@ -93,12 +93,43 @@ def tool(b):
 	return b
 
 
+def empty_handed(b):
+	"""Both hands at the sides."""
+	_right_at_side(b)
+	_left_at_side(b)
+	return b
+
+
 def basket(b):
 	"""Empty right hand at the side, a basket on the bent left arm."""
 	_right_at_side(b)
 	b.l_elbow = Vector((0.208, 0.012, 0.360))
 	b.l_wrist = Vector((0.220, -0.062, 0.330))
 	b.l_fist = Vector((0.220, -0.092, 0.326))
+	return b
+
+
+def carry_front(b):
+	"""Both arms forward and bent, the hands either side of a load held at
+	the chest (b.load_centre)."""
+	b.r_elbow = Vector((-0.205, -0.040, 0.370))
+	b.r_wrist = Vector((-0.170, -0.135, 0.345))
+	b.r_fist = Vector((-0.140, -0.170, 0.340))
+	b.l_elbow = Vector((0.205, -0.040, 0.370))
+	b.l_wrist = Vector((0.170, -0.135, 0.345))
+	b.l_fist = Vector((0.140, -0.170, 0.340))
+	b.load_centre = Vector((0.0, -0.175, 0.300))
+	return b
+
+
+def carry_shoulder(b):
+	"""A load over the right shoulder (b.load_centre), steadied by the right
+	hand raised under its front; the left hand at the side."""
+	b.r_elbow = Vector((-0.245, -0.030, 0.400))
+	b.r_wrist = Vector((-0.245, -0.120, 0.470))
+	b.r_fist = Vector((-0.240, -0.150, 0.490))
+	b.load_centre = Vector((-0.235, 0.020, 0.540))
+	_left_at_side(b)
 	return b
 
 

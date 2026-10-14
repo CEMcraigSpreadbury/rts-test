@@ -72,7 +72,7 @@ static func _collect(cells: Dictionary, pos: Vector3, radius: float, result: Arr
 			if bucket == null:
 				continue
 			for unit in bucket:
-				if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD:
+				if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD or unit.sheltered:
 					continue
 				var dx: float = unit.global_position.x - pos.x
 				var dz: float = unit.global_position.z - pos.z

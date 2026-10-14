@@ -979,20 +979,20 @@ func _rpc_building_squash(building_path: NodePath) -> void:
 	if building:
 		building.play_squash()
 
-## Gathering is simulated host-side only, so the harvested node's squash has to
-## be relayed the same way damage numbers and hit flashes are.
-func on_unit_resource_harvested(node: Gatherable) -> void:
-	node.play_harvest_squash()
-	Sfx.harvest(node)
+## Gathering is simulated host-side only, so which node a gatherer is working
+## has to be relayed; each peer then pops it on that gatherer's own swing (see
+## Unit._on_sprite_frame_changed).
+func on_unit_resource_harvested(node: Gatherable, unit: Unit) -> void:
+	unit.note_harvest(node)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_harvest_squash.rpc(node.get_path())
+		_rpc_harvest.rpc(node.get_path(), unit.get_path())
 
 @rpc("authority", "call_remote", "unreliable")
-func _rpc_harvest_squash(node_path: NodePath) -> void:
+func _rpc_harvest(node_path: NodePath, unit_path: NodePath) -> void:
 	var node := get_node_or_null(node_path) as Gatherable
-	if node:
-		node.play_harvest_squash()
-		Sfx.harvest(node)
+	var unit := get_node_or_null(unit_path) as Unit
+	if node and unit:
+		unit.note_harvest(node)
 
 func on_unit_resource_deposited(amount: int, color: Color, unit: Unit) -> void:
 	_spawn_deposit_popup(unit, amount, color)

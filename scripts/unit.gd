@@ -14,6 +14,9 @@ const WORK_ROLE_CLIPS: Dictionary = {
 	"gold": {"gather": [5, 5], "attack": [2, 5]},
 }
 const WORK_ROLE_SHARED_CLIPS: Dictionary = {"idle": [0, 4], "walk": [3, 6], "death": [7, 4]}
+## The frame of each "gather" clip where the blow lands ("" = a farmer's
+## plain one): the resource pops then. FigureBatcher's k*Impact must match.
+const GATHER_IMPACT_FRAMES: Dictionary = {"wood": 3, "gold": 3, "": 5}
 ## The stretch-and-settle pop as the sprite set swaps.
 const WORK_ROLE_POP_SCALE: Vector3 = Vector3(0.72, 1.3, 0.72)
 const WORK_ROLE_POP_DURATION: float = 0.45
@@ -212,7 +215,9 @@ signal damaged(amount: int, attacker_path: NodePath, fatal: bool, flanked: bool)
 signal resource_deposited(amount: int, color: Color)
 ## Emitted on each harvest tick (host only, like the gathering itself) so
 ## main.gd can relay the node's squash animation out to every peer.
-signal resource_harvested(node: Gatherable)
+signal resource_harvested(node: Gatherable, unit: Unit)
+## Every peer: a miner ducking into its Mine or popping back out of the door.
+signal mine_door_dust(world_pos: Vector3)
 ## Host-only, never relayed to other peers (order_queue itself isn't
 ## networked — only the host ever advances it, same as every other combat/
 ## movement decision). Fired the moment a command naturally runs its course
@@ -385,12 +390,175 @@ static func _role_of(anim_name: String) -> String:
 ## follow the swap without anything extra going over the network.
 func _on_sprite_animation_changed() -> void:
 	_update_team_tint_visual()
+	var mining: bool = sprite.animation == &"gold_gather"
+	if mining != _mine_door.is_finite():
+		if mining:
+			_enter_mine()
+		else:
+			_leave_mine()
 	var role := _role_of(sprite.animation)
 	if role == _shown_work_role:
 		return
 	_shown_work_role = role
 	if not _death_playing:
 		_play_work_role_pop()
+
+## --- Carrying ---
+## What a villager is seen carrying home: its load in its arms (a carry_*
+## figure variant) whenever it has one and isn't working. Host-set, sent to
+## every peer with the unit's other state (see ArmyNet).
+enum Carry { NONE, FOOD, WOOD, GOLD }
+const CARRY_VARIANTS: Array[StringName] = [&"", &"carry_food", &"carry_wood", &"carry_gold"]
+## The little hop as the load comes up into its arms.
+const CARRY_POP_SCALE: Vector3 = Vector3(0.85, 1.15, 0.85)
+const CARRY_POP_HOP: float = 0.12
+var carry: int = Carry.NONE:
+	set(value):
+		if value == carry:
+			return
+		carry = value
+		_show_carry()
+		if carry != Carry.NONE and is_node_ready():
+			_play_carry_pop()
+		if multiplayer.is_server() and ArmyNet.current != null:
+			ArmyNet.current.mark_state(self)
+
+func _update_carry() -> void:
+	var kind: int = Carry.NONE
+	if status_carried_amount > 0 and status_carried_type != null and status_activity != Activity.GATHERING:
+		match _work_role_for(status_carried_type):
+			"wood": kind = Carry.WOOD
+			"gold": kind = Carry.GOLD
+			_: kind = Carry.FOOD
+	carry = kind
+
+func _show_carry() -> void:
+	if _drawn_as_figure and Main.figure_batcher_current != null:
+		Main.figure_batcher_current.set_figure_carry(self, CARRY_VARIANTS[carry])
+
+func _play_carry_pop() -> void:
+	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
+		_sprite_scale_tween.kill()
+	sprite.scale = _sprite_base_scale * CARRY_POP_SCALE
+	_sprite_scale_tween = create_tween()
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale, 0.3) 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	var base := _sprite_base_position
+	_restart_sprite_move_tween()
+	_sprite_move_tween.tween_property(sprite, "position", base + Vector3(0.0, CARRY_POP_HOP, 0.0), 0.08) 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_sprite_move_tween.tween_property(sprite, "position", base, 0.14) 			.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+
+## --- Mines ---
+## A miner works inside its Mine: it hops into the door and is gone until its
+## load is full, then pops back out. Every peer plays that off the gold gather
+## clip; on the host it is also out of the sim meanwhile (see sheltered).
+## The Mine's door (the dark opening in Mine.glb) and the spot a miner walks
+## to before going in, beside the door clear of the cart, in the Mine's space.
+const MINE_DOOR: Vector3 = Vector3(0.0, 0.0, 1.05)
+const MINE_DOORSTEP: Vector3 = Vector3(-1.0, 0.0, 1.75)
+const MINE_ENTER_SECONDS: float = 0.42
+const MINE_ENTER_HOP: float = 0.6
+## How near its Mine a miner seen on another peer has to be to find it.
+const MINE_FIND_RADIUS: float = 4.0
+## The share of strikes inside that puff dust out of the door.
+const MINE_STRIKE_DUST_CHANCE: float = 0.3
+## Every peer: hidden inside its Mine (fog leaves it hidden, selection skips it).
+var in_mine: bool = false
+## Host: out of the sim while in its Mine, so nothing finds, targets or
+## pushes it. Back in the moment it moves or leaves the job.
+var sheltered: bool = false
+## Where the door of the Mine it is going into is (INF when it isn't).
+var _mine_door: Vector3 = Vector3.INF
+
+func _shelter_in_mine(on: bool) -> void:
+	if on == sheltered:
+		return
+	sheltered = on
+	if ArmyBridge.current == null:
+		return
+	if on and sim_id >= 0:
+		ArmyBridge.current.unregister_unit(sim_id)
+		sim_id = -1
+	elif not on and sim_id < 0 and is_inside_tree():
+		sim_id = ArmyBridge.current.register_unit(self)
+
+func _nearest_mine() -> ProductionBuilding:
+	if is_instance_valid(target_resource):
+		return target_resource.building_on_top()
+	for node in get_tree().get_nodes_in_group("buildings"):
+		var building := node as ProductionBuilding
+		if building and building.linked_deposit != null and not building.is_destroyed \
+				and _flat_distance(global_position, building.global_position) < MINE_FIND_RADIUS:
+			return building
+	return null
+
+## Turns to the door and hops into it, stretching and then shrinking away.
+func _enter_mine() -> void:
+	var mine := _nearest_mine()
+	if mine == null:
+		return
+	_mine_door = mine.global_transform * MINE_DOOR
+	var to_door := _mine_door - global_position
+	to_door.y = 0.0
+	if to_door.length_squared() > 0.0001:
+		rotation.y = atan2(to_door.x, to_door.z)
+	var base := _sprite_base_position
+	_restart_sprite_move_tween()
+	_sprite_move_tween.tween_method(func(p: float) -> void:
+		var world: Vector3 = to_door * p + Vector3.UP * MINE_ENTER_HOP * 4.0 * p * (1.0 - p)
+		sprite.position = base + global_transform.basis.inverse() * world
+	, 0.0, 1.0, MINE_ENTER_SECONDS).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_sprite_move_tween.tween_callback(_hide_in_mine)
+	if _sprite_scale_tween and _sprite_scale_tween.is_valid():
+		_sprite_scale_tween.kill()
+	_sprite_scale_tween = create_tween()
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale * POP_OUT_STRETCH, MINE_ENTER_SECONDS * 0.35) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_sprite_scale_tween.tween_property(sprite, "scale", _sprite_base_scale * 0.05, MINE_ENTER_SECONDS * 0.65) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+
+func _hide_in_mine() -> void:
+	in_mine = true
+	visible = false
+	sprite.position = _sprite_base_position
+	sprite.scale = _sprite_base_scale
+	mine_door_dust.emit(_mine_door)
+
+## Pops back out of the door, arcing down to where it stands.
+func _leave_mine() -> void:
+	var door := _mine_door
+	_mine_door = Vector3.INF
+	in_mine = false
+	## Fog hides it again straight away if this side can't see it.
+	visible = true
+	if door.is_finite():
+		mine_door_dust.emit(door)
+		_play_pop_out(door)
+
+## Every peer: the swing of a gather clip landing pops the node being worked
+## (and its chop or clink), so the blow and the pop meet whatever the harvest
+## tick's own rhythm.
+func _on_sprite_frame_changed() -> void:
+	var role := _role_of(sprite.animation)
+	if not GATHER_IMPACT_FRAMES.has(role) or base_animation(sprite.animation) != "gather" \
+			or sprite.frame != GATHER_IMPACT_FRAMES[role]:
+		return
+	var node: Gatherable = target_resource if is_instance_valid(target_resource) else _harvested_node
+	if not is_instance_valid(node) or node.is_queued_for_deletion() \
+			or _flat_distance(global_position, node.global_position) > node.gather_range + GATHER_REACH_SLACK + 1.0:
+		return
+	if _mine_door.is_finite():
+		## Out of sight in the Mine: the rock only shudders, and now and then
+		## dust puffs out of the door.
+		node.play_harvest_squash(Vector3.INF, 0.5)
+		if in_mine and randf() < MINE_STRIKE_DUST_CHANCE:
+			mine_door_dust.emit(_mine_door)
+	else:
+		node.play_harvest_squash(global_position)
+	Sfx.harvest(node)
+
+## Every peer, on each harvest tick (see WorldFeedback.on_unit_resource_harvested).
+func note_harvest(node: Gatherable) -> void:
+	_harvested_node = node
 
 ## Flash, a stretch that settles elastically and a little hop, plus a dust
 ## puff (see work_role_swapped), so the costume change reads as a "poof".
@@ -1089,6 +1257,9 @@ var formation_facing: Vector3 = Vector3.ZERO
 var arrived_group: Array[Unit] = []
 
 var target_resource: Gatherable = null
+## Every peer: the node this unit last harvested (see note_harvest), for a
+## peer that isn't simulating it and so has no target_resource.
+var _harvested_node: Gatherable = null
 var dropoff_point: Node3D = null
 var gather_timer: float = 0.0
 ## What to look for, and where to look from, once target_resource runs out.
@@ -1643,6 +1814,8 @@ func _ready() -> void:
 		sprite.sprite_frames = SpriteSheetFrames.build(sprite_sheet, sprite_cell_size, animations)
 		sprite.play("idle")
 		sprite.animation_changed.connect(_on_sprite_animation_changed)
+		if can_gather:
+			sprite.frame_changed.connect(_on_sprite_frame_changed)
 		_sprite_ring_mesh = selection_ring.mesh
 		_sprite_health_bar_y = health_bar.position.y
 		_take_villager_figure()
@@ -1696,6 +1869,7 @@ func _exit_tree() -> void:
 ## With the sim moving units, this is an order to the unit's own formation of
 ## one (ArmyBridge.solo_move): the sim finds the route and walks it there.
 func move_to(target_position: Vector3) -> void:
+	_shelter_in_mine(false)
 	nav_agent.target_position = target_position
 	sim_solo = true
 	solo_arrived = false
@@ -2101,6 +2275,7 @@ func _leave_build_site() -> void:
 ## assigned to, if any — mirrors _leave_build_site(), called at the top of
 ## every command_* function plus wherever gathering naturally ends.
 func _leave_gather_site() -> void:
+	_shelter_in_mine(false)
 	if target_resource != null and is_instance_valid(target_resource):
 		target_resource.remove_gatherer(self)
 	target_resource = null
@@ -2647,6 +2822,8 @@ func _rage_attack_speed() -> float:
 ## `directional` false for ability blasts and damage over time, which have no
 ## meaningful side they came from — only real attacks get flank/rear bonuses.
 func take_damage(amount: int, attacker: Node3D = null, directional: bool = true) -> void:
+	if sheltered:
+		return
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	## A man fighting in his block's fight takes his blows asleep; what a
@@ -2878,6 +3055,8 @@ func _physics_tick(delta: float) -> void:
 	_tick_pending_casts(delta)
 
 	_update_charge(delta)
+	if can_gather:
+		_update_carry()
 	if PerfStats.enabled:
 		PerfStats.add_unit_section(&"status ticks", Time.get_ticks_usec() - status_start)
 
@@ -3258,6 +3437,7 @@ func _attach_drawing() -> void:
 			var role_far: Mesh = figure_mesh(figure_role_models_lod1.get(role))
 			if role_mesh != null:
 				Main.figure_batcher_current.set_figure_variant(self, role, role_mesh, role_far if role_far != null else role_mesh)
+		Main.figure_batcher_current.set_figure_carry(self, CARRY_VARIANTS[carry])
 	else:
 		if Main.figure_batcher_current != null:
 			Main.figure_batcher_current.remove_figure(self, false)
@@ -3273,7 +3453,7 @@ func _attach_drawing() -> void:
 ## instanced from that scene itself, with no figure of its own, takes these.
 const VILLAGER_SCENE: String = "res://scenes/units/unit.tscn"
 const VILLAGER_FIGURE: String = "res://assets/art/Models/Units/Villager%s.glb"
-const VILLAGER_ROLES: Array[StringName] = [&"build", &"wood", &"gold"]
+const VILLAGER_ROLES: Array[StringName] = [&"food", &"build", &"wood", &"gold", &"carry_food", &"carry_wood", &"carry_gold"]
 
 func _take_villager_figure() -> void:
 	if figure_model != null or scene_file_path != VILLAGER_SCENE:
@@ -3457,6 +3637,9 @@ func _head_to_resource() -> void:
 ## first back from each trip takes it and the rest queue behind, working the
 ## node from metres away.
 func _gather_approach_point(node: Gatherable) -> Vector3:
+	var mine := node.building_on_top()
+	if mine != null:
+		return mine.global_transform * MINE_DOORSTEP
 	var from := dropoff_point.global_position if is_instance_valid(dropoff_point) else global_position
 	var away := from - node.global_position
 	away.y = 0.0
@@ -3491,6 +3674,8 @@ func _start_gathering() -> void:
 		return
 	_gather_approach_tries = 0
 	status_activity = Activity.GATHERING
+	if target_resource.building_on_top() != null:
+		_shelter_in_mine(true)
 	gather_timer = 0.0
 	status_carried_type = target_resource.resource_type
 
@@ -3513,7 +3698,7 @@ func _tick_gathering(delta: float) -> void:
 		var node := target_resource
 		status_carried_amount += node.gather(amount)
 		if is_instance_valid(node):
-			resource_harvested.emit(node)
+			resource_harvested.emit(node, self)
 
 	## A field that has just been harvested out goes back to sowing: take what
 	## was gathered home now rather than holding it through a whole season.

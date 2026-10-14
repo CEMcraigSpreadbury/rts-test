@@ -34,9 +34,9 @@ const PICK_RADIUS: float = 0.7
 const PICK_HEIGHT: float = 5.0
 ## Fog checks per frame once the first full pass is done.
 const FOG_CHECKS_PER_UPDATE: int = 2000
-## The harvest squash (see Gatherable.play_harvest_squash).
-const SQUASH_SCALE: Vector3 = Vector3(1.07, 0.88, 1.07)
-const SQUASH_SECONDS: float = 0.4
+## The harvest pop (see Gatherable.hit_pop). A tree squashes less than a bush
+## or a rock: it is tall, and its lean away from the axe does the work.
+const SQUASH_SCALE: Vector3 = Vector3(0.05, -0.07, 0.05)
 
 ## The forest of the map being played. Set by attach().
 static var active: Forest = null
@@ -53,6 +53,8 @@ class Entry:
 	var alive: bool = true
 	var revealed: bool = true
 	var squash_time: float = -1.0
+	## Which way and how far the pop leans it (see Gatherable.play_harvest_squash).
+	var squash_away: Vector3 = Vector3.ZERO
 
 class Chunk:
 	var entries: Array[Entry] = []
@@ -257,13 +259,14 @@ static func _cell_of(pos: Vector3) -> Vector2i:
 
 ## --- Feedback ---
 
-func squash(tree: Gatherable) -> void:
+func squash(tree: Gatherable, away: Vector3 = Vector3.ZERO) -> void:
 	var entry: Entry = _by_tree.get(tree.get_instance_id())
 	if entry == null:
 		return
 	if entry.squash_time < 0.0:
 		_squashing.append(entry)
 	entry.squash_time = 0.0
+	entry.squash_away = away
 
 func play_select(sounds: Array[AudioStream]) -> void:
 	AudioUtils.play_random(_select_player, sounds)
@@ -313,7 +316,7 @@ func _process(delta: float) -> void:
 	while i >= 0:
 		var entry: Entry = _squashing[i]
 		entry.squash_time += delta
-		if entry.squash_time >= SQUASH_SECONDS or not entry.alive:
+		if entry.squash_time >= Gatherable.POP_SECONDS or not entry.alive:
 			entry.squash_time = -1.0
 			_squashing.remove_at(i)
 		_refresh_instance(entry)
@@ -364,9 +367,10 @@ func _refresh_instance(entry: Entry) -> void:
 	if not entry.alive or not entry.revealed:
 		xform.basis = Basis(Vector3.ZERO, Vector3.ZERO, Vector3.ZERO)
 	elif entry.squash_time >= 0.0:
-		var scale: Vector3 = Tween.interpolate_value(SQUASH_SCALE, Vector3.ONE - SQUASH_SCALE,
-				entry.squash_time, SQUASH_SECONDS, Tween.TRANS_ELASTIC, Tween.EASE_OUT)
-		xform.basis = xform.basis * Basis.from_scale(scale)
+		var pop: float = Gatherable.hit_pop(entry.squash_time)
+		xform.basis = xform.basis * Basis.from_scale(Vector3.ONE + SQUASH_SCALE * pop)
+		if entry.squash_away != Vector3.ZERO:
+			xform.basis = Basis(Vector3.UP.cross(entry.squash_away).normalized(), entry.squash_away.length() * pop) * xform.basis
 	if chunk.dirty:
 		return
 	for path in chunk.models:

@@ -162,7 +162,7 @@ func _send_states() -> void:
 		if not is_instance_valid(unit) or not unit.is_inside_tree() or unit.net_id < 0:
 			continue
 		var state: Array = [unit.net_id, unit.status_current_health, unit.owner_peer_id, unit.team_tint, unit.hold_position, unit.regiment_id,
-				unit.block_id, unit.lord_level, unit.lord_progress, unit.army_lord]
+				unit.block_id, unit.lord_level, unit.lord_progress, unit.army_lord, unit.carry]
 		if not _named.has(unit.net_id):
 			_named[unit.net_id] = true
 			state.append(unit.get_path())
@@ -198,10 +198,11 @@ func _apply_state(state: Array) -> bool:
 	unit.lord_level = int(state[7])
 	unit.lord_progress = int(state[8])
 	unit.army_lord = int(state[9])
+	unit.carry = int(state[10])
 	return true
 
 ## Where a state entry carries the unit's path, the first time it is sent.
-const PATH_INDEX: int = 10
+const PATH_INDEX: int = 11
 
 func _retry_pending(delta: float) -> void:
 	if _pending.is_empty():

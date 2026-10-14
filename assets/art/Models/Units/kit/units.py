@@ -214,21 +214,27 @@ BASKET_SCALE = 1.3
 
 
 def _villager(lod, base, held):
-	b = (poses.basket if held == "basket" else poses.tool)(parts.Body())
+	b = (poses.basket if held == "basket" else poses.empty_handed if held is None else poses.tool)(parts.Body())
 	torso = parts.tunic(b, lod)
 	pieces = _head(b, lod, [headgear.cloth_cap(b, lod)])
 	pieces += [parts.boots(b, lod), parts.legs(b, lod), torso] + _team_body(b, lod, back=False)
 	pieces += [parts.belt(b, lod), clothes.cloth_collar(b, lod),
 			parts.arms(b, lod), parts.pouch(b, lod)]
-	tool = getattr(gear, held)(b, lod)
-	fist, factor = (b.l_fist, BASKET_SCALE) if held == "basket" else (b.r_fist, TOOL_SCALE)
-	geo.transform(tool, Matrix.Translation(fist) @ Matrix.Scale(factor, 4) @ Matrix.Translation(-fist))
-	pieces.append(tool)
+	if held is not None:
+		tool = getattr(gear, held)(b, lod)
+		fist, factor = (b.l_fist, BASKET_SCALE) if held == "basket" else (b.r_fist, TOOL_SCALE)
+		geo.transform(tool, Matrix.Translation(fist) @ Matrix.Scale(factor, 4) @ Matrix.Translation(-fist))
+		pieces.append(tool)
 	return _assemble(b, pieces, lod, base)
 
 
 def villager(lod, base=False):
-	"""Villager gathering food: an undyed cloth cap, a basket."""
+	"""Villager with nothing in hand: an undyed cloth cap."""
+	return _villager(lod, base, None)
+
+
+def villager_food(lod, base=False):
+	"""Villager gathering food: a basket on the arm."""
 	return _villager(lod, base, "basket")
 
 
@@ -242,6 +248,29 @@ def villager_wood(lod, base=False):
 
 def villager_gold(lod, base=False):
 	return _villager(lod, base, "pick")
+
+
+def _villager_carrying(lod, base, load, pose):
+	"""A villager walking a load home, the tool put away."""
+	b = pose(parts.Body())
+	torso = parts.tunic(b, lod)
+	pieces = _head(b, lod, [headgear.cloth_cap(b, lod)])
+	pieces += [parts.boots(b, lod), parts.legs(b, lod), torso] + _team_body(b, lod, back=False)
+	pieces += [parts.belt(b, lod), clothes.cloth_collar(b, lod),
+			parts.arms(b, lod), parts.pouch(b, lod), getattr(gear, load)(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def villager_carry_food(lod, base=False):
+	return _villager_carrying(lod, base, "carried_basket", poses.carry_front)
+
+
+def villager_carry_wood(lod, base=False):
+	return _villager_carrying(lod, base, "log_bundle", poses.carry_shoulder)
+
+
+def villager_carry_gold(lod, base=False):
+	return _villager_carrying(lod, base, "gold_chunk", poses.carry_front)
 
 
 # --- dark elves -------------------------------------------------------------
@@ -867,9 +896,13 @@ _MOUNTED = {"palette": "aldmere", "portrait": (0.0, -0.05, 1.18), "portrait_dist
 UNITS = {
 	"Soldier": dict(_FOOT, build=soldier, ready=True),
 	"Villager": dict(_FOOT, build=villager, ready=True),
+	"Villager_food": dict(_FOOT, build=villager_food, portrait=None, ready=True),
 	"Villager_build": dict(_FOOT, build=villager_build, portrait=None, ready=True),
 	"Villager_wood": dict(_FOOT, build=villager_wood, portrait=None, ready=True),
 	"Villager_gold": dict(_FOOT, build=villager_gold, portrait=None, ready=True),
+	"Villager_carry_food": dict(_FOOT, build=villager_carry_food, portrait=None, ready=True),
+	"Villager_carry_wood": dict(_FOOT, build=villager_carry_wood, portrait=None, ready=True),
+	"Villager_carry_gold": dict(_FOOT, build=villager_carry_gold, portrait=None, ready=True),
 	"Archer": dict(_FOOT, build=archer, ready=True),
 	"Spearman": dict(_FOOT, build=spearman, ready=True),
 	"Halberdier": dict(_FOOT, build=halberdier, ready=True),

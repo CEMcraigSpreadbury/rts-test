@@ -59,6 +59,7 @@ public:
 	// Another figure the unit is drawn as while its sprite plays `role`'s
 	// clips (a villager's "build", "wood", "gold": see Unit._set_work_role),
 	// in the same palette.
+	void set_figure_carry(godot::Node3D *unit, const godot::StringName &carry);
 	void set_figure_variant(godot::Node3D *unit, const godot::StringName &role, const godot::Ref<godot::Mesh> &mesh,
 			const godot::Ref<godot::Mesh> &lod1);
 	// No longer drawn as a figure. A dying unit's figure stays as a corpse,
@@ -165,6 +166,12 @@ private:
 		bool has_last_position = false;
 		godot::StringName anim;
 		Clip clip = CLIP_IDLE;
+		// The work role its clip belongs to ("wood_gather" -> 'w'): picks the
+		// gather motion. 0 for none (a farmer's plain "gather").
+		char work = 0;
+		// The variant it is drawn as while it walks a load home (empty for
+		// none); over its work role's.
+		godot::StringName carry;
 		float next_idle_hop = 0.0f;
 		float idle_hop_age = 1.0f;
 		bool had_overlay = false;
