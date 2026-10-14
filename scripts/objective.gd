@@ -74,7 +74,13 @@ const TIER_INCOME: Array[float] = [1.0, 1.5, 2.0]
 const TIER_HOUSES: Array[int] = [3, 6, 10]
 ## A neutral settlement starts with NEUTRAL_GARRISON guards for its tier (the
 ## scene's own plus copies of them).
-const NEUTRAL_GARRISON: Array[int] = [6, 9, 12]
+const NEUTRAL_GARRISON: Array[int] = [18, 27, 36]
+## Its garrison stands in blocks, one per kind of guard, each at a post this
+## far out from the hall and facing away from it (see _tick_garrison_posts).
+const GUARD_POST_RADIUS: float = 6.0
+const GUARD_POST_CHECK_SECONDS: float = 2.0
+## A block further than this from its post walks back to it once it's idle.
+const GUARD_POST_DRIFT: float = 1.5
 ## A settlement is taken by standing anywhere in it, cottages and slot
 ## buildings included, not on a small plate in the middle: its capture circle
 ## (and the progress disc drawn over it) is this wide, inside the walls.
@@ -242,8 +248,65 @@ func _setup_guard(unit: Unit) -> void:
 	unit.team_tint = NEUTRAL_TINT
 	unit.leash_origin = self
 	unit.leash_radius = wander_radius * LEASH_MULTIPLIER
-	unit.command_wander(self, wander_radius)
+	## A settlement's garrison is formed up at its posts instead.
+	if not is_settlement():
+		unit.command_wander(self, wander_radius)
 	_guards.append(unit)
+	_guard_post_timer = 0.0
+
+## Host only. A neutral settlement's guards stand as blocks at their posts:
+## formed there once they exist (and again after a respawn), and marched back
+## whenever a block is idle away from its post — after a fight, or once it has
+## chased something past the leash.
+var _guard_post_timer: float = 0.0
+
+func _tick_garrison_posts(delta: float) -> void:
+	_guard_post_timer -= delta
+	if _guard_post_timer > 0.0:
+		return
+	_guard_post_timer = GUARD_POST_CHECK_SECONDS
+	var bridge := ArmyBridge.current
+	if bridge == null or not is_settlement() or owner_peer_id != 0:
+		return
+	## One block per kind of guard, in roster order so each keeps its post.
+	var kinds: Array[String] = []
+	for entry in _guard_roster:
+		if not kinds.has(entry.scene_path):
+			kinds.append(entry.scene_path)
+	var blocks: Dictionary = {}
+	for unit in _guards:
+		if not is_instance_valid(unit) or unit.status_activity == Unit.Activity.DEAD or unit.sim_id < 0:
+			continue
+		if not blocks.has(unit.scene_file_path):
+			blocks[unit.scene_file_path] = [] as Array[Unit]
+		blocks[unit.scene_file_path].append(unit)
+	var leash: float = wander_radius * LEASH_MULTIPLIER
+	for i in kinds.size():
+		var block: Array[Unit] = blocks.get(kinds[i], [] as Array[Unit])
+		if block.is_empty():
+			continue
+		var angle: float = PI / 6.0 + TAU * float(i) / float(kinds.size())
+		var forward := Vector3(cos(angle), 0.0, sin(angle))
+		var post: Vector3 = global_position + forward * GUARD_POST_RADIUS
+		var centre := GroupMovement.group_centroid_of(block)
+		var strayed: bool = _flat(centre - global_position).length() > leash
+		var busy := false
+		for unit in block:
+			if unit.status_command == Unit.Command.MOVE:
+				busy = true
+				break
+			if not strayed and (unit.status_command != Unit.Command.NONE or unit.in_formation_fight):
+				busy = true
+				break
+		if busy:
+			continue
+		if not strayed and bridge._existing_formation(block) >= 0 \
+				and _flat(centre - post).length() <= GUARD_POST_DRIFT:
+			continue
+		bridge.order_blocks(block, post, false, false, Formation.Type.BOX, forward)
+
+static func _flat(v: Vector3) -> Vector3:
+	return Vector3(v.x, 0.0, v.z)
 
 func _any_guard_alive() -> bool:
 	for unit in _guards:
@@ -303,6 +366,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_tick_guard_respawn(delta, anyone_present)
+	_tick_garrison_posts(delta)
 
 	contested = false
 	_paying = true
@@ -653,10 +717,16 @@ func _grow_neutral_garrison() -> void:
 		return
 	var start: int = _guard_roster.size()
 	var count: int = NEUTRAL_GARRISON[tier]
+	var kinds: Array[String] = []
+	for entry in _guard_roster:
+		if not kinds.has(entry.scene_path):
+			kinds.append(entry.scene_path)
 	for i in range(start, count):
 		var template: Dictionary = _guard_roster[i % start]
-		var angle: float = TAU * float(i) / float(count)
-		var local := Vector3(cos(angle), 0.0, sin(angle)) * (wander_radius * 0.6)
+		## Beside the post its block will form at (see _tick_garrison_posts).
+		var angle: float = PI / 6.0 + TAU * float(kinds.find(template.scene_path)) / float(kinds.size())
+		var jitter := Vector3(randf_range(-1.5, 1.5), 0.0, randf_range(-1.5, 1.5))
+		var local := Vector3(cos(angle), 0.0, sin(angle)) * GUARD_POST_RADIUS + jitter
 		_guard_roster.append({scene_path = template.scene_path, position = local})
 		var unit: Unit = main.unit_spawner.spawn({
 			"scene_path": template.scene_path,
