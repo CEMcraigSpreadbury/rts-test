@@ -87,8 +87,8 @@ const FLANK_HIT_FLASH_COLOR: Color = Color(1.0, 0.25, 0.2)
 const REAR_DAMAGE_MULTIPLIER: float = 1.75
 ## Cavalry charge (see can_charge): a charger that has run at least
 ## CHARGE_MIN_RUN at CHARGE_MIN_SPEED_FRACTION of its speed or better lands its
-## next melee hit at CHARGE_DAMAGE_MULTIPLIER, throwing the target and the men
-## packed around it (see receive_charge). Spent on that hit, and its whole
+## next melee hit at CHARGE_DAMAGE_MULTIPLIER, throwing the target (see
+## receive_charge). Spent on that hit, and its whole
 ## block with it: nobody in the block charges again for CHARGE_COOLDOWN_SECONDS,
 ## bar the riders who hit home in the same impact (within
 ## CHARGE_GROUP_GRACE_SECONDS of the first). Within CHARGE_SPRINT_DISTANCE of
@@ -105,16 +105,12 @@ const CHARGE_DAMAGE_MULTIPLIER: float = 3.0
 const CHARGE_ARMED_GRACE_MS: int = 1000
 ## A landed charge throws its target CHARGE_THROW_DISTANCE along the charge,
 ## up in an arc CHARGE_THROW_HEIGHT high over CHARGE_THROW_TIME, and leaves him
-## down for CHARGE_STUN_SECONDS after he lands. Up to CHARGE_MAX_THROWN more
-## enemies within CHARGE_IMPACT_RADIUS of the target, ahead of the charger, go
-## flying too, CHARGE_SPLASH_FRACTION as far. Cavalry are shoved
-## CHARGE_SHOVE_FRACTION as far and never leave the ground.
+## down for CHARGE_STUN_SECONDS after he lands. Only the man a rider strikes is
+## thrown, so a whole rank goes down only when the whole line hits home.
+## Cavalry are shoved CHARGE_SHOVE_FRACTION as far and never leave the ground.
 const CHARGE_THROW_DISTANCE: float = 6.0
 const CHARGE_THROW_HEIGHT: float = 1.8
 const CHARGE_THROW_TIME: float = 0.7
-const CHARGE_IMPACT_RADIUS: float = 3.0
-const CHARGE_MAX_THROWN: int = 10
-const CHARGE_SPLASH_FRACTION: float = 0.75
 const CHARGE_SHOVE_FRACTION: float = 0.3
 const CHARGE_STUN_SECONDS: float = 0.8
 ## A cleaving blow (`cleave` over 0) also lands on up to CLEAVE_MAX_TARGETS
@@ -2707,16 +2703,15 @@ func _spend_charge() -> void:
 
 ## Hit by a landed charge (host-only): a man on foot is thrown along the
 ## charge and lies stunned a moment where he lands; a rider is only shoved.
-## Siege and monsters are too heavy to move. `reach` scales the throw (the
-## men around the one struck go less far, see _throw_charge_splash).
-func receive_charge(charger: Unit, reach: float = 1.0) -> void:
+## Siege and monsters are too heavy to move.
+func receive_charge(charger: Unit) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	wake()
 	if armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER or can_brace:
 		return
-	## Along the charge, splayed outward by where he stood, so a block
-	## scatters like skittles rather than sliding back as one.
+	## Along the charge, splayed outward by where he stood, so riders landing
+	## side by side scatter a line like skittles rather than sliding it back.
 	var away := global_position - charger.global_position
 	away.y = 0.0
 	var dir := charger._charge_heading
@@ -2724,33 +2719,16 @@ func receive_charge(charger: Unit, reach: float = 1.0) -> void:
 		dir += away.normalized()
 	var mounted := armor_class == ArmorClass.CAVALRY
 	if dir.length_squared() > 0.0001:
-		var distance := CHARGE_THROW_DISTANCE * reach * (CHARGE_SHOVE_FRACTION if mounted else 1.0)
+		var distance := CHARGE_THROW_DISTANCE * (CHARGE_SHOVE_FRACTION if mounted else 1.0)
 		## Eased out to a stop, so it starts at twice the average speed.
 		_knockback_velocity = dir.normalized() * (2.0 * distance / CHARGE_THROW_TIME)
 		_knockback_remaining = CHARGE_THROW_TIME
 		if not mounted:
-			thrown.emit(CHARGE_THROW_HEIGHT * reach, CHARGE_THROW_TIME)
+			thrown.emit(CHARGE_THROW_HEIGHT, CHARGE_THROW_TIME)
 	if not mounted:
 		var down := CHARGE_THROW_TIME + CHARGE_STUN_SECONDS
 		_stun_remaining = maxf(_stun_remaining, down)
 		status_applied.emit(0.0, 0.0, down, CHARGE_STUN_COLOR)
-
-## Host-only: the rest of the men a landed charge ploughs into — enemies close
-## around the one it struck and ahead of the charger, nearest first. Spears
-## stand firm.
-func _throw_charge_splash(struck: Unit) -> void:
-	var origin := struck.global_position
-	var hits: Array[Unit] = []
-	for unit in UnitGrid.enemies_near(get_tree(), origin, CHARGE_IMPACT_RADIUS, owner_peer_id):
-		if unit == struck or not _is_target_alive(unit):
-			continue
-		if _charge_heading.dot(unit.global_position - global_position) <= 0.0 or unit.can_brace:
-			continue
-		hits.append(unit)
-	hits.sort_custom(func(a: Unit, b: Unit) -> bool:
-		return a.global_position.distance_squared_to(origin) < b.global_position.distance_squared_to(origin))
-	for i in mini(hits.size(), CHARGE_MAX_THROWN):
-		hits[i].receive_charge(self, CHARGE_SPLASH_FRACTION)
 
 ## --- Spear brace ---
 
@@ -4171,7 +4149,6 @@ func _strike_melee(target: Node3D, retarget: bool) -> void:
 		impact.emit(struck.global_position, ImpactKind.CHARGE)
 		if _is_target_alive(struck):
 			struck.receive_charge(self)
-		_throw_charge_splash(struck)
 	if retarget and target == attack_target and not _is_target_alive(target):
 		_find_new_target_or_idle()
 
