@@ -376,12 +376,12 @@ func _tick_regeneration() -> void:
 	var now := GameClock.msec()
 	for node in main.units_root.get_children():
 		var unit := node as Unit
-		if unit == null or unit.race_regen <= 0.0 or unit.status_activity == Unit.Activity.DEAD:
+		if unit == null or unit.race_regen + unit.lord_regen <= 0.0 or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		if unit.status_current_health >= unit.max_health or unit.status_activity == Unit.Activity.ATTACKING \
 				or now - unit.last_damaged_msec < Research.REGEN_COMBAT_COOLDOWN_MS:
 			continue
-		unit.heal(maxi(roundi(unit.race_regen * TICK_SECONDS), 1))
+		unit.heal(maxi(roundi((unit.race_regen + unit.lord_regen) * TICK_SECONDS), 1))
 
 ## Host: Carrion Feast — the victim's enemies close by feed on it.
 func on_death(victim: Unit) -> void:

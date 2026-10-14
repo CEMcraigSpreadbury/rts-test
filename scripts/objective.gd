@@ -704,7 +704,12 @@ func _show_houses() -> void:
 		var yaw: float = rng.randf() * TAU
 		if i >= wanted:
 			continue
-		var house := _make_house(tint)
+		## A City's last plot holds its people's landmark (RaceModels.LANDMARK),
+		## kept to the inside of the ring for its size.
+		var landmark: bool = i == HOUSE_SLOTS - 1 and RaceModels.model_for(race_name, RaceModels.LANDMARK) != ""
+		var house := _make_landmark(tint) if landmark else _make_house(tint)
+		if landmark:
+			radius = HOUSE_RING.x
 		house.position = Vector3(cos(angle), 0.0, sin(angle)) * radius
 		house.rotation.y = yaw
 		add_child(house)
@@ -756,6 +761,18 @@ func _hop_house(house: Node3D, delay: float) -> void:
 			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(house, "scale", Vector3.ONE, ProductionBuilding.LAND_SETTLE_TIME) \
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+func _make_landmark(tint: Color) -> Node3D:
+	return _tinted_prop(RaceModels.landmark(race_name), tint)
+
+## A bare model in the owner's colour, hidden until explored.
+func _tinted_prop(model: Node3D, tint: Color) -> Node3D:
+	for mesh in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := mesh as MeshInstance3D
+		for i in mi.mesh.get_surface_count():
+			mi.set_surface_override_material(i, TeamColorMaterial.build(mi.get_active_material(i), tint, TeamColorMaterial.TEAM_SHADER))
+	model.add_to_group(&"fog_static_props")
+	return model
 
 func _make_house(roof_tint: Color) -> Node3D:
 	var model := RaceModels.cottage(race_name)
@@ -1248,6 +1265,7 @@ const DOOR_ALARM_RADIUS: float = 15.0
 const DOOR_CHECK_SECONDS: float = 0.5
 const WALL_SEGMENT_SCENE: String = "res://scenes/buildings/wall_segment.tscn"
 const WALL_GATE_SCENE: String = "res://scenes/buildings/wall_gate.tscn"
+const WALL_CORNER_SCENE: String = "res://scenes/buildings/wall_corner.tscn"
 const DOOR_COLOUR := Color(0.36, 0.25, 0.16)
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 
@@ -1265,6 +1283,9 @@ func _build_walls() -> void:
 	var count: int = ceili(TAU * WALL_RADIUS / WALL_SEGMENT)
 	var gate_every: int = maxi(count / WALL_GATES, 1)
 	var gate_offset: int = int(round(float(count) / (WALL_GATES * 2.0)))
+	## Which places along the ring got a plain segment, for the corner posts.
+	var segments: Array[bool] = []
+	segments.resize(count)
 	for i in count:
 		var angle: float = PI * 0.5 + TAU * float(i) / float(count)
 		var at: Vector3 = global_position + Vector3(cos(angle), 0.0, sin(angle)) * WALL_RADIUS
@@ -1272,6 +1293,7 @@ func _build_walls() -> void:
 		var is_gate: bool = (i + gate_offset) % gate_every == 0 and _gates.size() < WALL_GATES
 		if not is_gate and not main.placement._is_placement_valid(at, WALL_CLEARANCE):
 			continue
+		segments[i] = not is_gate
 		var piece: ProductionBuilding = main.building_spawner.spawn({
 			"scene_path": WALL_GATE_SCENE if is_gate else WALL_SEGMENT_SCENE,
 			"peer_id": owner_peer_id,
@@ -1287,8 +1309,36 @@ func _build_walls() -> void:
 		_slot_buildings.append(piece)
 		if is_gate:
 			_gates.append(piece)
+	## Where something broke the ring, a corner post closes each open end.
+	for i in count:
+		if not segments[i]:
+			continue
+		for side in [-1, 1]:
+			var next: int = posmod(i + side, count)
+			if segments[next] or _is_gate_place(next, gate_every, gate_offset):
+				continue
+			var joint: float = PI * 0.5 + TAU * (float(i) + 0.5 * side) / float(count)
+			var post_at: Vector3 = main.placement.grounded_position(
+					global_position + Vector3(cos(joint), 0.0, sin(joint)) * WALL_RADIUS, 0.8)
+			var post: ProductionBuilding = main.building_spawner.spawn({
+				"scene_path": WALL_CORNER_SCENE,
+				"peer_id": owner_peer_id,
+				"position": post_at,
+				"rotation": Vector3(0.0, -(joint + PI * 0.5), 0.0),
+				"tint": main.get_team_tint(owner_peer_id),
+				"drop_in_delay": WALL_DROP_STAGGER * float(i),
+				"model_race": race_name,
+				"model_name": RaceModels.WALL_CORNER,
+				"settlement_path": String(get_path()),
+			})
+			post.set_meta(&"wall_piece", true)
+			_slot_buildings.append(post)
 	slot_built.append(WALLS)
 	_send_slots()
+
+## Whether ring place `i` is one of the gates (they carry their own posts).
+func _is_gate_place(i: int, gate_every: int, gate_offset: int) -> bool:
+	return (i + gate_offset) % gate_every == 0
 
 ## Wall pieces drop in one after another round the ring.
 const WALL_DROP_STAGGER: float = 0.04

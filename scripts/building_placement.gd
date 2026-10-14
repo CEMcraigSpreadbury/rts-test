@@ -266,13 +266,24 @@ func _update_placement_ghost() -> void:
 
 	var mouse_pos := get_viewport().get_mouse_position()
 	var result := main.raycast(mouse_pos)
-	if result.is_empty():
+	if result.is_empty() and not _rotate_dragging:
 		placement_ghost.visible = false
 		placement_valid = false
 		return
 	placement_ghost.visible = true
-	var ghost_position: Vector3 = grounded_position(result.position, placing_type.footprint_radius)
+	var ghost_position: Vector3
+	if _rotate_dragging:
+		## Pinned where the press landed; the mouse only turns it.
+		ghost_position = _rotate_anchor
+		if not result.is_empty():
+			var aim: Vector3 = result.position - _rotate_anchor
+			aim.y = 0.0
+			if aim.length() > ROTATE_DEAD_ZONE:
+				_placement_yaw = snappedf(atan2(aim.x, aim.z), ROTATE_SNAP)
+	else:
+		ghost_position = grounded_position(result.position, placing_type.footprint_radius)
 	placement_ghost.global_position = ghost_position
+	placement_ghost.rotation.y = _placement_yaw if _can_rotate_placement() else 0.0
 
 	## _is_placement_valid's overlap check alone only ever compared against
 	## other buildings/resources, never terrain, so a ghost could sit embedded
@@ -396,14 +407,37 @@ func _is_placement_valid(pos: Vector3, radius: float, exclude: Array[RID] = []) 
 			return false
 	return Forest.active == null or not Forest.active.any_trunk_within(pos, radius)
 
+## Turning a building as it goes down: press to pin the ghost where it is,
+## drag to face it toward the mouse (in ROTATE_SNAP steps), release to place.
+## A plain click keeps the last facing, so a row can share one. Snapped
+## buildings (a Mine on its deposit) and the gate tool never turn.
+const ROTATE_SNAP: float = PI / 12.0
+## How far (metres) the mouse must move from the pinned spot to start turning.
+const ROTATE_DEAD_ZONE: float = 0.6
+var _placement_yaw: float = 0.0
+var _rotate_dragging: bool = false
+var _rotate_anchor: Vector3 = Vector3.ZERO
+
+func _can_rotate_placement() -> bool:
+	return not placing_type.requires_deposit and not placing_type.is_gate_tool
+
 func handle_placement_input(event: InputEvent) -> void:
 	if placing_type.is_wall:
 		_handle_wall_drag_input(event)
 		return
-	if event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed and _can_rotate_placement() and placement_ghost != null and placement_ghost.visible:
+			_rotate_dragging = true
+			_rotate_anchor = placement_ghost.global_position
+		elif event.pressed:
 			_confirm_placement()
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
+		elif _rotate_dragging:
+			_rotate_dragging = false
+			_confirm_placement()
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_rotate_dragging = false
 			_cancel_placement()
 			_pending_builder_paths.clear()
 			_build_queue_active = false
@@ -440,7 +474,8 @@ func _confirm_placement() -> void:
 	var build_position := placement_ghost.global_position
 	if _pending_builder_paths.is_empty():
 		_take_nearest_builders(build_position)
-	_rpc_request_build.rpc_id(1, type_index, build_position, target_path, _pending_builder_paths, shift_held)
+	var yaw: float = _placement_yaw if _can_rotate_placement() else 0.0
+	_rpc_request_build.rpc_id(1, type_index, build_position, target_path, _pending_builder_paths, shift_held, yaw)
 	main.report_tutorial_input(&"build_placed", placed_type.building_name)
 	AudioUtils.play_random(main.command_audio_player, main.on_building_placed_sound_effects)
 	main.feedback.spawn_command_popup("build", build_position, _builder_speaker())
@@ -469,17 +504,18 @@ func _confirm_placement() -> void:
 		main.hud.close_build_submenu()
 
 @rpc("any_peer", "call_local", "reliable")
-func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath], append: bool) -> void:
+func _rpc_request_build(type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath], append: bool, yaw: float = 0.0) -> void:
 	if not multiplayer.is_server():
 		return
 	var sender_id := multiplayer.get_remote_sender_id()
 	if sender_id == 0:
 		sender_id = main.my_peer_id()
-	request_build_as(sender_id, type_index, world_pos, target_path, builder_paths, append)
+	request_build_as(sender_id, type_index, world_pos, target_path, builder_paths, append, yaw)
 
 ## Host only. Where a human's build RPC ends up, and what an AI calls directly
 ## — same validation either way. Returns what was placed, or null if refused.
-func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath], append: bool) -> Node:
+## `yaw`: the facing the player turned it to (radians about up).
+func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, target_path: NodePath, builder_paths: Array[NodePath], append: bool, yaw: float = 0.0) -> Node:
 	if not multiplayer.is_server():
 		return null
 	## Resolved against the SENDER's own faction, never a shared/global list —
@@ -525,6 +561,10 @@ func request_build_as(sender_id: int, type_index: int, world_pos: Vector3, targe
 		"position": build_pos,
 		"tint": main.get_team_tint(sender_id),
 	}
+	## A client's number goes straight into a replicated rotation, so only a
+	## finite one is taken; a snapped building keeps its deposit's facing.
+	if not deposit and is_finite(yaw):
+		spawn_data["rotation"] = Vector3(0.0, fposmod(yaw, TAU), 0.0)
 	if deposit:
 		spawn_data["deposit_path"] = deposit.get_path()
 	var spawned: Node = main.building_spawner.spawn(spawn_data)
@@ -651,6 +691,7 @@ func _take_nearest_builders(pos: Vector3) -> void:
 		_pending_builder_paths.append(unit.get_path())
 
 func _cancel_placement() -> void:
+	_rotate_dragging = false
 	if placement_ghost:
 		placement_ghost.queue_free()
 		placement_ghost = null

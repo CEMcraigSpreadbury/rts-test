@@ -549,12 +549,10 @@ func _play_sprite_pop() -> void:
 @export var is_lord: bool = false
 
 @export_group("Race")
-## Gnolls fight as a pack: damage rises with every packmate fighting beside
-## them (see PACK_COURAGE_RADIUS) and falls away when no pack leader is near,
-## which is what makes a gnoll army collapse once its leaders are sniped.
+## Hunts as a pack (the Beastmen's wolves): damage rises with every packmate
+## fighting beside it (see PACK_COURAGE_RADIUS), and in Realm its side eats
+## from any enemy that falls near it (RealmEconomy.award_hunt).
 @export var pack_member: bool = false
-## A leader steadies every packmate around it; it is not itself steadied.
-@export var pack_leader: bool = false
 ## What a hunted animal is worth: its killer is paid this in food (see
 ## RealmEconomy), and it marks the unit as wildlife everywhere else.
 @export var hunt_meat: int = 0
@@ -1242,28 +1240,6 @@ var regiment_id: int = -1:
 		regiment_id = value
 		_net_state_changed()
 
-## --- Morale (see Morale) ---
-## How steady this man is, 0-100. Host only; the host's Morale component moves
-## it and decides morale_state from it.
-var morale: float = Morale.MAX_MORALE:
-	set(value):
-		morale = clampf(value, 0.0, Morale.MAX_MORALE)
-		var level: int = roundi(morale / Morale.MAX_MORALE * Morale.LEVELS)
-		if level != morale_level:
-			morale_level = level
-## morale in steps of MAX_MORALE / LEVELS, replicated for the HUD's bars.
-var morale_level: int = Morale.LEVELS:
-	set(value):
-		morale_level = value
-		_net_state_changed()
-## A Morale.State, replicated: routing and shattered men run and can't be
-## ordered, a wavering one fights worse.
-var morale_state: int = Morale.State.STEADY:
-	set(value):
-		morale_state = value
-		_net_state_changed()
-## Times this man has broken this match; a second rout shatters him. Host only.
-var routs: int = 0
 ## --- Lords (see Lords) ---
 ## This Lord's level (1-5) and how far he is into the next (0-10), replicated
 ## for his unit card. lord_xp is host-only.
@@ -1326,7 +1302,8 @@ var race_fast_brace: bool = false
 ## Pack Courage's reach (a multiplier) and peak (added to the cap).
 var race_pack_radius: float = 1.0
 var race_pack_max: float = 0.0
-var lord_morale: float = 0.0
+## Health a second out of combat from his Lord (a Mystic's, see Lords).
+var lord_regen: float = 0.0
 
 ## The sim block (formation) he marches in when it has a few men in it and he
 ## is not in a regiment, else -1: a loose block gets a standard too (see
@@ -1336,9 +1313,6 @@ var block_id: int = -1:
 		if value != block_id:
 			block_id = value
 			_net_state_changed()
-
-func is_routing() -> bool:
-	return morale_state == Morale.State.ROUTING or morale_state == Morale.State.SHATTERED
 
 ## This unit's share of its regiment's bonuses, or zero while it is loose or
 ## its officer is down. Resolved onto the unit by Main.refresh_regiment_buffs
@@ -1587,8 +1561,6 @@ func _tick_block_fight(delta: float) -> bool:
 ## A blow the sim says is due (World::update_swings): this man, fighting from
 ## his place, strikes `target` — awake or asleep.
 func sim_swing(target: Unit) -> void:
-	if is_routing():
-		return
 	if status_activity == Activity.DEAD or status_activity == Activity.CASTING or not sim_follow \
 			or not _fights_from_place() or _stun_remaining > 0.0 or not _is_target_alive(target):
 		return
@@ -1787,7 +1759,7 @@ func command_gather(resource_node: Gatherable, dropoff: Node3D) -> void:
 ## _find_new_target_or_idle can move on to the next thing in the area once this
 ## target dies instead of the unit stopping there.
 func command_attack(target: Node3D, keep_assault: bool = false) -> void:
-	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target) or is_routing():
+	if status_activity == Activity.DEAD or not can_fight or target == null or not is_instance_valid(target):
 		return
 	_end_formation_fight()
 	if not keep_assault:
@@ -1810,7 +1782,7 @@ func command_attack(target: Node3D, keep_assault: bool = false) -> void:
 ## order isn't spent by the first engagement: it ends when the area is clear or
 ## another command replaces it.
 func command_attack_move(target_position: Vector3, speed_override: float = -1.0, group: Array[Unit] = []) -> void:
-	if status_activity == Activity.DEAD or not can_fight or is_routing():
+	if status_activity == Activity.DEAD or not can_fight:
 		return
 	_end_formation_fight()
 	_leave_build_site()
@@ -2587,7 +2559,6 @@ func receive_charge(charger: Unit, reach: float = 1.0) -> void:
 		var down := CHARGE_THROW_TIME + CHARGE_STUN_SECONDS
 		_stun_remaining = maxf(_stun_remaining, down)
 		status_applied.emit(0.0, 0.0, down, CHARGE_STUN_COLOR)
-	Morale.shake(self, Morale.CHARGED)
 
 ## Host-only: the rest of the men a landed charge ploughs into — enemies close
 ## around the one it struck and ahead of the charger, nearest first. Spears
@@ -2708,8 +2679,6 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 		if attacker is Unit and attacker.damage_type == DamageType.PIERCE:
 			guard += race_pierce_guard
 		amount = maxi(roundi(amount * (1.0 - guard)), 1)
-	if is_routing():
-		amount = roundi(amount * Morale.ROUTING_DAMAGE_TAKEN)
 	var armor: int = UnitUpgrades.get_armor_bonus(owner_peer_id, unit_category) \
 			+ roundi(buffs.amount(ResearchNode.Buff.ARMOR)) + regiment_armor_bonus + lord_armor \
 			+ race_armor + _starlit_armor()
@@ -2738,9 +2707,7 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	if status_current_health <= 0:
 		_die(attacker)
 		return
-	Morale.shaken_by_hit(self, amount, flanked)
-
-	if can_fight and attacker != null and is_instance_valid(attacker) and not is_routing():
+	if can_fight and attacker != null and is_instance_valid(attacker):
 		## Patrol deliberately stays Command.PATROL through a fight (see
 		## _physics_process) so it can resume afterward, so status_command
 		## can't be used as the "already engaged" check the way it is for
@@ -3697,9 +3664,15 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 		result = maxi(roundi(result * _pack_multiplier), 1)
 	if target is ProductionBuilding and building_damage_multiplier != 1.0:
 		result = roundi(result * building_damage_multiplier)
-	if morale_state == Morale.State.WAVERING:
-		result = maxi(roundi(result * Morale.WAVERING_DAMAGE), 1)
+	## Realm: an army its side can't feed fights weaker (RealmEconomy).
+	if MatchRules.realm():
+		var main := get_tree().current_scene
+		if main is Main and main.realm_economy != null and main.realm_economy.is_starving(owner_peer_id):
+			result = maxi(roundi(result * STARVING_DAMAGE), 1)
 	return result
+
+## Damage dealt by a starving army's men, as a share.
+const STARVING_DAMAGE: float = 0.8
 
 func _head_to_target() -> void:
 	if not _is_target_alive(attack_target) or (_in_hold_fight() and not _hold_can_reach(attack_target)):
@@ -4316,8 +4289,6 @@ func _flat_distance(a: Vector3, b: Vector3) -> float:
 ## this unit's own kind already on it (see _crowd_penalty), so melee and ranged
 ## alike spread across nearby enemies; `search_range` still limits the raw distance.
 func _find_nearest_enemy_in_range(search_range: float) -> Unit:
-	if is_routing():
-		return null
 	if not PerfStats.enabled:
 		return _nearest_enemy_scan(search_range)
 	var start := Time.get_ticks_usec()
@@ -4384,8 +4355,6 @@ func _die(attacker: Node3D = null) -> void:
 	var main := get_tree().current_scene
 	if main is Main and main.realm_economy != null:
 		main.realm_economy.award_hunt(self, attacker)
-	if main is Main and main.morale != null:
-		main.morale.on_death(self, attacker)
 	if main is Main and main.lords != null:
 		main.lords.on_death(self, attacker)
 	if main is Main and main.race_traits != null:
@@ -4607,8 +4576,6 @@ const PACK_COURAGE_RADIUS: float = 9.0
 ## Damage gained per packmate nearby, up to PACK_COURAGE_MAX_BONUS.
 const PACK_COURAGE_PER_MATE: float = 0.08
 const PACK_COURAGE_MAX_BONUS: float = 0.4
-## Damage lost while no pack leader is within PACK_COURAGE_RADIUS.
-const PACK_LEADERLESS_PENALTY: float = 0.3
 const PACK_RECHECK_INTERVAL: float = 0.6
 
 ## Host-side. Recomputed on a timer: counting neighbours every swing would
@@ -4619,7 +4586,6 @@ func _tick_pack_courage(delta: float) -> void:
 		return
 	_pack_timer = PACK_RECHECK_INTERVAL
 	var mates: int = 0
-	var has_leader: bool = pack_leader
 	var radius: float = PACK_COURAGE_RADIUS * race_pack_radius
 	var radius_squared: float = radius * radius
 	for other in UnitGrid.units_near(get_tree(), global_position, radius):
@@ -4630,10 +4596,8 @@ func _tick_pack_courage(delta: float) -> void:
 		if global_position.distance_squared_to(other.global_position) > radius_squared:
 			continue
 		mates += 1
-		if other.pack_leader:
-			has_leader = true
 	var bonus: float = minf(float(mates) * PACK_COURAGE_PER_MATE, PACK_COURAGE_MAX_BONUS + race_pack_max)
-	_pack_multiplier = 1.0 + bonus - (0.0 if has_leader else PACK_LEADERLESS_PENALTY)
+	_pack_multiplier = 1.0 + bonus
 
 ## Host-side. A Priestess keeps her own side standing without any order.
 func _tick_heal_aura(delta: float) -> void:

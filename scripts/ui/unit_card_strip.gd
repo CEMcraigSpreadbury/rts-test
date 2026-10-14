@@ -3,7 +3,7 @@ extends UiPanel
 ## The army at a glance, Total War style: one card per regiment, in the open
 ## band between the selection panel and the tools column. Loose soldiers get
 ## no card — men only appear here once they are raised into a regiment. A card is the unit's figure on its team colour, the number of men,
-## a health bar and a morale bar (see Morale); the diamond marks a regiment,
+## and a health bar; the diamond marks a regiment,
 ## filled while it is led (in a Lord's army, see Regiment.is_led). Click a card to select that body, Shift-click
 ## to add it, double-click to look at it.
 ##
@@ -41,7 +41,6 @@ const REFRESH_SECONDS: float = 0.25
 ## How much of the team colour the top and foot of the well show.
 const WELL_TOP_WHITE: float = 0.18
 const WELL_FOOT_DARKEN: float = 0.6
-const ROUTED_WELL := Color(0.55, 0.55, 0.55)
 const MAX_TABS: int = 8
 const TAB_SIZE := Vector2(44, 44)
 const TAB_GAP: float = 4.0
@@ -154,10 +153,9 @@ func _make_card(index: int) -> Dictionary:
 	level.visible = false
 	root.add_child(level)
 
-	var health := _make_bar(root, CARD_SIZE.y - 14)
-	var spirit := _make_bar(root, CARD_SIZE.y - 8)
+	var health := _make_bar(root, CARD_SIZE.y - 8)
 	return {"root": root, "well": well, "figure": figure, "pip": pip, "count": count,
-			"more": more, "level": level, "health": health, "morale": spirit, "state": -1}
+			"more": more, "level": level, "health": health}
 
 ## A tab sits just above the strip's top edge, outside its box.
 func _make_tab(index: int) -> Dictionary:
@@ -297,7 +295,6 @@ func _show_more(card: Dictionary, hidden_count: int) -> void:
 	for key in ["well", "figure", "pip", "count", "level"]:
 		(card[key] as CanvasItem).visible = false
 	(card["health"] as ColorRect).get_parent().visible = false
-	(card["morale"] as ColorRect).get_parent().visible = false
 	(card["more"] as UiTextLine).visible = true
 	(card["more"] as UiTextLine).set_text("+%d" % hidden_count)
 	(card["root"] as Panel).add_theme_stylebox_override("panel", UiStyle.slot_box())
@@ -322,7 +319,6 @@ func _show_group(card: Dictionary, group: Dictionary, well: Texture2D) -> void:
 	for key in ["well", "figure", "count"]:
 		(card[key] as CanvasItem).visible = true
 	(card["health"] as ColorRect).get_parent().visible = true
-	(card["morale"] as ColorRect).get_parent().visible = true
 	var well_rect: TextureRect = card["well"]
 	well_rect.texture = well
 	var sample: Unit = group["sample"]
@@ -337,51 +333,14 @@ func _show_group(card: Dictionary, group: Dictionary, well: Texture2D) -> void:
 	var health: ColorRect = card["health"]
 	health.size.x = BAR_WIDTH * clampf(group["health"], 0.0, 1.0)
 	health.color = UiStyle.GOOD
-	var spirit: ColorRect = card["morale"]
-	spirit.size.x = BAR_WIDTH * clampf(group["morale"], 0.0, 1.0)
 
 	(card["level"] as UiTextLine).visible = false
 	count.visible = true
 
-	var state: int = group["state"]
 	var border: Color = UiStyle.ACCENT if group["selected"] else UiStyle.LINE
 	var width: int = 2 if group["selected"] else UiStyle.BORDER
-	var morale_colour: Color = UiStyle.ACCENT
-	var count_colour: Color = UiStyle.INK
-	well_rect.modulate = Color.WHITE
-	(card["figure"] as TextureRect).modulate = Color.WHITE
-	match state:
-		Morale.State.WAVERING:
-			morale_colour = UiStyle.WAVER
-		Morale.State.ROUTING:
-			morale_colour = UiStyle.BAD
-			count_colour = UiStyle.BAD
-			if not group["selected"]:
-				border = UiStyle.BAD
-			well_rect.modulate = ROUTED_WELL
-			(card["figure"] as TextureRect).modulate = ROUTED_WELL
-	spirit.color = morale_colour
-	count.label.add_theme_color_override("font_color", count_colour)
+	count.label.add_theme_color_override("font_color", UiStyle.INK)
 	(card["root"] as Panel).add_theme_stylebox_override("panel", UiStyle.flat(UiStyle.SLOT, border, 4, width))
-	_pulse(card, state)
-
-## Wavering breathes slowly, routing flashes: on the morale bar only.
-func _pulse(card: Dictionary, state: int) -> void:
-	if card["state"] == state:
-		return
-	card["state"] = state
-	var bar: ColorRect = card["morale"]
-	var old: Tween = card.get("tween")
-	if old != null and old.is_valid():
-		old.kill()
-	bar.modulate.a = 1.0
-	if state != Morale.State.WAVERING and state != Morale.State.ROUTING:
-		return
-	var half: float = 0.7 if state == Morale.State.WAVERING else 0.35
-	var tween := create_tween().set_loops()
-	tween.tween_property(bar, "modulate:a", 0.35, half)
-	tween.tween_property(bar, "modulate:a", 1.0, half)
-	card["tween"] = tween
 
 ## Each Lord with the regiments in his army after him, then every other
 ## regiment, in the order they were raised. Loose soldiers are left out.
@@ -433,9 +392,6 @@ func _army_groups() -> Array:
 func _summarise(units: Array[Unit], regiment: bool) -> Dictionary:
 	var men := 0
 	var health := 0.0
-	var spirit := 0.0
-	var wavering := 0
-	var running := 0
 	## Worked out from replicated state, so a client draws the same diamond.
 	var officer: bool = regiment and (not MatchRules.realm() or Lords.by_net_id(get_tree(), units[0].army_lord) != null)
 	var selected := false
@@ -448,19 +404,9 @@ func _summarise(units: Array[Unit], regiment: bool) -> Dictionary:
 		sample = unit
 		men += 1
 		health += float(unit.status_current_health) / float(maxi(unit.max_health, 1))
-		spirit += float(unit.morale_level) / float(Morale.LEVELS)
-		if unit.is_routing():
-			running += 1
-		elif unit.morale_state == Morale.State.WAVERING:
-			wavering += 1
 	var n: float = float(maxi(men, 1))
-	var state: int = Morale.State.STEADY
-	if running * 2 > men:
-		state = Morale.State.ROUTING
-	elif (running + wavering) * 2 > men:
-		state = Morale.State.WAVERING
-	return {"units": units, "sample": sample, "count": men, "health": health / n, "morale": spirit / n,
-			"state": state, "officer": officer, "regiment": regiment, "selected": selected, "bracket": -1}
+	return {"units": units, "sample": sample, "count": men, "health": health / n,
+			"officer": officer, "regiment": regiment, "selected": selected, "bracket": -1}
 
 ## --- Input ---
 

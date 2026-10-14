@@ -46,6 +46,7 @@ vision_range = 12
 armor_class = 3
 damage_type = 3
 unit_category = 2
+pack_member = true
 projectile_speed = 24.0
 projectile_scene = ExtResource("6_projectile")
 figure_model = ExtResource("20_figure")

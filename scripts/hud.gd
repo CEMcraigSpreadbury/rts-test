@@ -1006,8 +1006,11 @@ func _populate_unit_command_buttons() -> void:
 		_make_glyph_button(OS.get_keycode_string(Main.UNIT_MOVE_KEY), "Move", &"move", main.arm_move_mode),
 		_make_glyph_button(OS.get_keycode_string(Main.UNIT_STOP_KEY), "Stop", &"stop", main.issue_stop_order),
 		_make_glyph_button(OS.get_keycode_string(Main.UNIT_ATTACK_KEY), "Attack", &"attack", main.arm_attack_mode),
-		_make_glyph_button(OS.get_keycode_string(Main.UNIT_PATROL_KEY), "Patrol", &"patrol", main.arm_patrol_mode),
 	]
+	## Villagers don't patrol: a loop from the woodline they were working walked
+	## them back and forth past their old job and read as a stuck order.
+	if not main.selection_can_gather():
+		buttons.append(_make_glyph_button(OS.get_keycode_string(Main.UNIT_PATROL_KEY), "Patrol", &"patrol", main.arm_patrol_mode))
 	if main.selection_can_gather():
 		_hold_button = null
 		buttons.append(_make_glyph_button(OS.get_keycode_string(Main.UNIT_GATHER_KEY), "Gather", &"gather", main.arm_gather_mode))

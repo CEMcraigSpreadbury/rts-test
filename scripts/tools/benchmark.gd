@@ -195,32 +195,10 @@ func _physics_process(_delta: float) -> void:
 	if not _measuring:
 		return
 	var measured: int = _tick - WARMUP_TICKS - SETTLE_TICKS
-	if measured % 600 == 0:
-		_morale_line(measured)
 	if measured >= measure_ticks:
 		_finish()
 	elif measured % reorder_ticks == 0:
 		_push()
-
-## Battle mode, every 20 s: how the two armies' morale is holding.
-func _morale_line(measured: int) -> void:
-	var line := "  %5.0fs" % (measured / 30.0)
-	for peer in [1, _ai_peer]:
-		var alive := 0
-		var total := 0.0
-		var low := Morale.MAX_MORALE
-		var states := [0, 0, 0, 0]
-		for node in get_tree().get_nodes_in_group(&"units"):
-			var unit := node as Unit
-			if unit == null or unit.owner_peer_id != peer or unit.status_activity == Unit.Activity.DEAD or Morale.unbreakable(unit):
-				continue
-			alive += 1
-			total += unit.morale
-			low = minf(low, unit.morale)
-			states[unit.morale_state] += 1
-		line += "   p%d alive %3d avg %3.0f low %3.0f  s/w/r/x %d/%d/%d/%d" % [
-				peer, alive, total / maxf(alive, 1), low, states[0], states[1], states[2], states[3]]
-	print(line)
 
 func _process(delta: float) -> void:
 	if not _measuring or _perf == null:
@@ -443,25 +421,6 @@ func _finish() -> void:
 		int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)),
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))])
-	## Morale (see Morale): how many are steady, shaken or running at the end,
-	## and how many broke at some point.
-	var states := [0, 0, 0, 0]
-	var broke := 0
-	var morale_sum := 0.0
-	var morale_low := Morale.MAX_MORALE
-	var counted := 0
-	for node in get_tree().get_nodes_in_group(&"units"):
-		var unit := node as Unit
-		if unit != null and unit.status_activity != Unit.Activity.DEAD and unit.owner_peer_id > 0:
-			states[unit.morale_state] += 1
-			if unit.routs > 0:
-				broke += 1
-			if not Morale.unbreakable(unit):
-				counted += 1
-				morale_sum += unit.morale
-				morale_low = minf(morale_low, unit.morale)
-	print("morale at end: steady %d  wavering %d  routing %d  shattered %d   broke at least once %d   avg %.0f  low %.0f" % [
-			states[0], states[1], states[2], states[3], broke, morale_sum / maxf(counted, 1), morale_low])
 	print("")
 	print("unit script      %7.2f ms/tick   peak %7.2f" % [_avg("unit_ms"), _peak("unit_ms_peak")])
 	print("order dispatch   %7.2f ms peak" % _peak("command_peak_ms"))

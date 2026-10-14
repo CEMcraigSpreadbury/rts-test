@@ -45,6 +45,7 @@ vision_range = 13
 armor_class = 4
 damage_type = 2
 unit_category = 3
+pack_member = true
 can_charge = true
 figure_model = ExtResource("90_figure")
 figure_model_lod1 = ExtResource("91_figure_lod1")

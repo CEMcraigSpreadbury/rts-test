@@ -14,7 +14,7 @@ extends Node
 ## can show what food really does a minute: income less upkeep.
 ##
 ## An army that can't be fed isn't killed by it: the side is marked starving
-## (is_starving), which the morale system reads. Unpaid wages just leave the
+## (is_starving), and its men fight weaker (Unit.STARVING_DAMAGE). Unpaid wages just leave the
 ## purse at zero for now.
 ##
 ## Also pays food for hunting.
@@ -191,14 +191,14 @@ func _send(peer_id: int, food: int, gold: int, starving: bool, income: int) -> v
 func _rpc_upkeep(food: int, gold: int, starving: bool, income: int) -> void:
 	upkeep_changed.emit(food, gold, starving, income)
 
-## Gnolls strip the dead: food for every other side with a gnoll this close to
-## a body.
+## Pack hunters (Unit.pack_member) strip the dead: food for every other side
+## with one this close to a body.
 const SCAVENGE_RADIUS: float = 8.0
 const SCAVENGE_FOOD: int = 2
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 
 ## Host only, from Unit._die: the hunter's side eats what they brought down,
-## and any gnolls nearby scavenge.
+## and any pack hunters nearby scavenge.
 func award_hunt(victim: Unit, attacker) -> void:
 	if not MatchRules.realm() or not multiplayer.is_server():
 		return

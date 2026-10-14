@@ -45,8 +45,6 @@ const GOOD := Color(0.5255, 0.7176, 0.3961)               # 86B765
 const BAD := Color(0.8784, 0.4392, 0.3608)                # E0705C
 ## A destructive button's plastic (Surrender, Quit).
 const DANGER := Color(0.6627, 0.2667, 0.2039)             # A94434
-## Wavering morale (a routing one uses BAD).
-const WAVER := Color(0.8902, 0.5255, 0.2275)              # E3863A
 ## Tooltips are near-opaque: they must stay readable over whatever they cover.
 const TOOLTIP_BG := Color(0.1843, 0.2039, 0.2235, 0.96)
 ## Disabled controls keep their shape and lose their contrast.

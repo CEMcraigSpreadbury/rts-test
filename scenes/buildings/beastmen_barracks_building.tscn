@@ -8,6 +8,9 @@
 [ext_resource type="PackedScene" path="res://scenes/units/beastman_warrior_unit.tscn" id="5_warrior_scene"]
 [ext_resource type="PackedScene" path="res://scenes/units/beastman_raider_unit.tscn" id="6_raider_scene"]
 [ext_resource type="PackedScene" path="res://scenes/units/beastman_druid_unit.tscn" id="7_druid_scene"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_panda_warrior_unit.tscn" id="7_panda_scene"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_wolf_pathfinder_unit.tscn" id="7_pathfinder_scene"]
+[ext_resource type="PackedScene" path="res://scenes/units/beastman_wolf_rider_unit.tscn" id="7_wolf_rider_scene"]
 [ext_resource type="AudioStream" uid="uid://b8hfdcngfe20q" path="res://assets/sfx/Facilities/Barracks_1.wav" id="8_sfx_a"]
 [ext_resource type="AudioStream" uid="uid://lyxija30mf35" path="res://assets/sfx/Facilities/Barracks_2.wav" id="9_sfx_b"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/units/beastman_druid.png" id="icon_beastman_druid"]
@@ -27,6 +30,24 @@ item_name = "Beastman Raider"
 icon = ExtResource("icon_beastman_raider")
 build_time = 4.0
 unit_scene = ExtResource("6_raider_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_beastman_panda"]
+script = ExtResource("2_item_script")
+item_name = "Beastman Panda Warrior"
+build_time = 6.0
+unit_scene = ExtResource("7_panda_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_beastman_pathfinder"]
+script = ExtResource("2_item_script")
+item_name = "Beastman Wolf Pathfinder"
+build_time = 5.0
+unit_scene = ExtResource("7_pathfinder_scene")
+
+[sub_resource type="Resource" id="ProducibleItem_beastman_wolf_rider"]
+script = ExtResource("2_item_script")
+item_name = "Beastman Wolf Rider"
+build_time = 6.0
+unit_scene = ExtResource("7_wolf_rider_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_beastman_druid"]
 script = ExtResource("2_item_script")
@@ -126,7 +147,7 @@ properties/13/replication_mode = 2
 script = ExtResource("1_building_script")
 building_name = "Beastmen Barracks"
 role = 1
-producibles = Array[ExtResource("2_item_script")]([SubResource("ProducibleItem_beastman_warrior"), SubResource("ProducibleItem_beastman_raider"), SubResource("ProducibleItem_beastman_druid")])
+producibles = Array[ExtResource("2_item_script")]([SubResource("ProducibleItem_beastman_warrior"), SubResource("ProducibleItem_beastman_raider"), SubResource("ProducibleItem_beastman_panda"), SubResource("ProducibleItem_beastman_pathfinder"), SubResource("ProducibleItem_beastman_wolf_rider"), SubResource("ProducibleItem_beastman_druid")])
 vision_range = 18.0
 on_select_sound_effects = Array[AudioStream]([ExtResource("8_sfx_a"), ExtResource("9_sfx_b")])
 max_health = 160

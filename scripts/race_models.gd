@@ -8,9 +8,14 @@ extends RefCounted
 ## Dark Spire, a Star Gate) carry their model in their own scene instead.
 
 const RACES_DIR: String = "res://assets/art/Models/Races/"
-## A settlement's ring of Walls asks for these two.
+## A settlement's ring of Walls asks for these, a corner post closing each
+## end where the ring is broken.
 const WALL_SEGMENT: String = "Wall Segment"
 const WALL_GATE: String = "Wall Gate"
+const WALL_CORNER: String = "Wall Corner"
+## The landmark a people raises when its settlement grows into a City, in
+## place of one cottage (see Objective._show_houses).
+const LANDMARK: String = "Landmark"
 
 ## Race -> building name (the slot item's name) -> model.
 const MODELS: Dictionary = {
@@ -28,6 +33,8 @@ const MODELS: Dictionary = {
 		"Cottage": RACES_DIR + "DarkElves/Cottage.glb",
 		WALL_SEGMENT: RACES_DIR + "DarkElves/WallSegment.glb",
 		WALL_GATE: RACES_DIR + "DarkElves/WallGate.glb",
+		WALL_CORNER: RACES_DIR + "DarkElves/WallCorner.glb",
+		LANDMARK: RACES_DIR + "DarkElves/Altar.glb",
 	},
 	"Star Wanderers": {
 		"Range": RACES_DIR + "StarWanderers/Range.glb",
@@ -40,6 +47,8 @@ const MODELS: Dictionary = {
 		"Cottage": RACES_DIR + "StarWanderers/Cottage.glb",
 		WALL_SEGMENT: RACES_DIR + "StarWanderers/WallSegment.glb",
 		WALL_GATE: RACES_DIR + "StarWanderers/WallGate.glb",
+		WALL_CORNER: RACES_DIR + "StarWanderers/WallCorner.glb",
+		LANDMARK: RACES_DIR + "StarWanderers/Observatory.glb",
 	},
 	"Beastmen": {
 		"Range": RACES_DIR + "Beastmen/Range.glb",
@@ -52,11 +61,14 @@ const MODELS: Dictionary = {
 		"Cottage": RACES_DIR + "Beastmen/Cottage.glb",
 		WALL_SEGMENT: RACES_DIR + "Beastmen/WallSegment.glb",
 		WALL_GATE: RACES_DIR + "Beastmen/WallGate.glb",
+		WALL_CORNER: RACES_DIR + "Beastmen/WallCorner.glb",
 	},
 }
 
 ## Cottages are drawn this big across (the House model is a town's house).
 const COTTAGE_WIDTH: float = 1.9
+## A City's landmark, this big across.
+const LANDMARK_WIDTH: float = 3.2
 
 static func model_for(race: String, building_name: String) -> String:
 	var own: Dictionary = MODELS.get(race, {})
@@ -87,7 +99,13 @@ static func apply(building: Node3D, race: String, building_name: String) -> void
 
 ## A settlement cottage in `race`'s style, or null to fall back to the box one.
 static func cottage(race: String) -> Node3D:
-	var path := model_for(race, "Cottage")
+	return _sized(model_for(race, "Cottage"), COTTAGE_WIDTH)
+
+## `race`'s City landmark, or null if it has none.
+static func landmark(race: String) -> Node3D:
+	return _sized(model_for(race, LANDMARK), LANDMARK_WIDTH)
+
+static func _sized(path: String, width: float) -> Node3D:
 	if path.is_empty():
 		return null
 	var model := (load(path) as PackedScene).instantiate() as Node3D
@@ -96,7 +114,7 @@ static func cottage(race: String) -> Node3D:
 		var box: AABB = (mesh as MeshInstance3D).get_aabb()
 		widest = maxf(widest, maxf(box.size.x, box.size.z))
 	if widest > 0.0:
-		model.scale = Vector3.ONE * (COTTAGE_WIDTH / widest)
+		model.scale = Vector3.ONE * (width / widest)
 	## The settlement bounces and squashes the cottage itself (scale back to
 	## one), so the sizing lives a level down.
 	var holder := Node3D.new()

@@ -1179,7 +1179,7 @@ func update_rally_marker() -> void:
 ##
 ## A standard is a round plastic token on a peg, from the same toy set as the
 ## HUD's conquest tokens: a disc in the owner's plastic with the block's unit
-## sprite on it, a morale ring round it (green, wavering orange, routing red),
+## sprite on it, a ring round it filled to the block's health,
 ## a gold ring outside that while the block is selected, and the men left
 ## beside it. It is see-through, and more so the closer the camera, so the
 ## block under it always shows (see _banner_alpha).
@@ -1219,7 +1219,7 @@ const REGIMENT_BANNER_FOLLOW: float = 6.0
 ## is taken whole.
 const REGIMENT_BANNER_FIGURE: int = 16
 ## Token geometry, in texture pixels: the circle's centre, the disc, the
-## morale ring, the selection ring, and the peg under the disc.
+## health ring, the selection ring, and the peg under the disc.
 const TOKEN_SIZE: int = 128
 const TOKEN_CENTRE := Vector2(64.0, 60.0)
 const TOKEN_DISC_RADIUS: float = 38.0
@@ -1229,7 +1229,7 @@ const TOKEN_RING_OUTER: float = 51.0
 const TOKEN_SELECT_INNER: float = 54.0
 const TOKEN_SELECT_OUTER: float = 58.0
 const TOKEN_PEG_WIDTH: float = 7.0
-## The morale ring is cached in this many steps rather than redrawn per value.
+## The health ring is cached in this many steps rather than redrawn per value.
 const TOKEN_RING_STEPS: int = 12
 const TOKEN_RING_EMPTY := Color(0.0, 0.0, 0.0, 0.45)
 ## Where the men-left count sits, in texture pixels from the circle's centre.
@@ -1241,8 +1241,8 @@ var _regiment_targets: Dictionary = {}
 var _regiment_members: Dictionary = {}
 var _regiment_resurvey_timer: float = 0.0
 ## Built tokens, keyed by sprite sheet + team colour, so a new regiment of a
-## type already on the field costs nothing; and morale rings, keyed by step,
-## state and selection.
+## type already on the field costs nothing; and health rings, keyed by step
+## and selection.
 var _banner_textures: Dictionary = {}
 var _ring_textures: Dictionary = {}
 
@@ -1316,10 +1316,8 @@ func _resurvey_regiments() -> void:
 	var counts: Dictionary = {}
 	## regiment id -> {sprite sheet: [count, a man of that kind]}
 	var tallies: Dictionary = {}
-	## regiment id -> [wavering, running]
-	var shaken: Dictionary = {}
-	## regiment id -> summed morale (0..1 a man), and whether any man is selected.
-	var spirit: Dictionary = {}
+	## regiment id -> summed health (0..1 a man), and whether any man is selected.
+	var vigour: Dictionary = {}
 	var chosen: Dictionary = {}
 	_regiment_members.clear()
 	for node in get_tree().get_nodes_in_group(&"units"):
@@ -1335,13 +1333,9 @@ func _resurvey_regiments() -> void:
 		if not _regiment_members.has(id):
 			_regiment_members[id] = []
 		_regiment_members[id].append(unit)
-		spirit[id] = float(spirit.get(id, 0.0)) + float(unit.morale_level) / float(Morale.LEVELS)
+		vigour[id] = float(vigour.get(id, 0.0)) + float(unit.status_current_health) / float(maxi(unit.max_health, 1))
 		if unit.selected:
 			chosen[id] = true
-		if unit.morale_state != Morale.State.STEADY:
-			var tally_state: Array = shaken.get(id, [0, 0])
-			tally_state[1 if unit.is_routing() else 0] += 1
-			shaken[id] = tally_state
 		## The officer leads the block but the standard shows his men.
 		if unit.is_officer or unit.sprite_sheet == null:
 			continue
@@ -1369,14 +1363,8 @@ func _resurvey_regiments() -> void:
 		var bearer: Unit = _majority_bearer(tallies.get(id, {}))
 		sprite.texture = _banner_texture(bearer) if bearer != null else null
 		sprite.visible = sprite.texture != null and Settings.get_value(&"regiment_banners")
-		var state: Array = shaken.get(id, [0, 0])
-		var mood: int = Morale.State.STEADY
-		if state[1] * 2 > counts[id]:
-			mood = Morale.State.ROUTING
-		elif (state[0] + state[1]) * 2 > counts[id]:
-			mood = Morale.State.WAVERING
 		var ring: Sprite3D = sprite.get_meta(&"ring")
-		ring.texture = _ring_texture(float(spirit.get(id, 0.0)) / float(counts[id]), mood, chosen.has(id))
+		ring.texture = _ring_texture(float(vigour.get(id, 0.0)) / float(counts[id]), chosen.has(id))
 		ring.visible = sprite.visible
 		var count: Label3D = sprite.get_meta(&"count")
 		count.text = str(counts[id])
@@ -1411,7 +1399,7 @@ func banner_units_at(screen_pos: Vector2) -> Array[Unit]:
 			found.append(unit)
 	return found
 
-## The token, with its morale ring and men-left count as children (kept in
+## The token, with its health ring and men-left count as children (kept in
 ## its metadata as "ring" and "count").
 func _make_regiment_banner() -> Sprite3D:
 	var sprite := _token_sprite(REGIMENT_BANNER_PRIORITY)
@@ -1503,19 +1491,15 @@ func _banner_texture(bearer: Unit) -> Texture2D:
 	_banner_textures[key] = texture
 	return texture
 
-## The ring round a token: `fraction` of it in the morale colour, clockwise from
-## the top, the rest dark; and the gold selection ring outside it.
-func _ring_texture(fraction: float, mood: int, selected: bool) -> Texture2D:
+## The ring round a token: `fraction` of it green, clockwise from the top,
+## the rest dark; and the gold selection ring outside it.
+func _ring_texture(fraction: float, selected: bool) -> Texture2D:
 	var step: int = clampi(int(round(fraction * TOKEN_RING_STEPS)), 0, TOKEN_RING_STEPS)
-	var key := "%d|%d|%s" % [step, mood, selected]
+	var key := "%d|%s" % [step, selected]
 	var cached: Texture2D = _ring_textures.get(key)
 	if cached != null:
 		return cached
 	var colour: Color = UiStyle.GOOD
-	if mood == Morale.State.ROUTING:
-		colour = UiStyle.BAD
-	elif mood == Morale.State.WAVERING:
-		colour = UiStyle.WAVER
 	var filled: float = TAU * float(step) / float(TOKEN_RING_STEPS)
 	var image := Image.create_empty(TOKEN_SIZE, TOKEN_SIZE, false, Image.FORMAT_RGBA8)
 	for y in TOKEN_SIZE:

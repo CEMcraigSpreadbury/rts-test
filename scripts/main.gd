@@ -347,7 +347,6 @@ var weather: Weather
 var day_night: DayNight
 var research: Research
 var realm_economy: RealmEconomy
-var morale: Morale
 var lords: Lords
 var wildlife: Wildlife
 var race_traits: RaceTraits
@@ -700,10 +699,6 @@ func _add_components() -> void:
 	realm_economy.name = "RealmEconomy"
 	add_child(realm_economy)
 
-	morale = Morale.new()
-	morale.main = self
-	morale.name = "Morale"
-	add_child(morale)
 
 	lords = Lords.new()
 	lords.main = self
@@ -2059,7 +2054,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			arm_attack_mode()
 			get_viewport().set_input_as_handled()
 			return
-		elif event.keycode == UNIT_PATROL_KEY:
+		elif event.keycode == UNIT_PATROL_KEY and not selection_can_gather():
 			arm_patrol_mode()
 			get_viewport().set_input_as_handled()
 			return
@@ -2833,7 +2828,7 @@ func issue_gather_as(sender_id: int, unit_paths: Array[NodePath], world_pos: Vec
 	var movers: Array[NodePath] = []
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
-		if unit == null or unit.owner_peer_id != sender_id or unit.is_routing():
+		if unit == null or unit.owner_peer_id != sender_id:
 			continue
 		var best: Gatherable = null
 		var best_score := INF
@@ -3263,8 +3258,6 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 		if unit != null and unit.owner_peer_id == sender_id:
 			units.append(unit)
 	units = expand_to_regiments(units)
-	## Broken men run whatever they are told; see Morale.
-	units = units.filter(func(unit: Unit) -> bool: return not unit.is_routing())
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: resolve units", Time.get_ticks_usec() - resolve_start)
 
@@ -3519,7 +3512,9 @@ func issue_patrol_as(sender_id: int, unit_paths: Array[NodePath], world_pos: Vec
 		return
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
-		if unit == null or unit.owner_peer_id != sender_id:
+		## Villagers don't patrol (see Hud's command card); soldiers alongside
+		## them still do.
+		if unit == null or unit.owner_peer_id != sender_id or unit.can_gather:
 			continue
 		if append and unit.status_command == Unit.Command.PATROL:
 			unit.command_patrol_add_waypoint(world_pos)
@@ -3544,7 +3539,7 @@ func issue_stop_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
 		return
 	for path in unit_paths:
 		var unit := get_node_or_null(path) as Unit
-		if unit == null or unit.owner_peer_id != sender_id or unit.is_routing():
+		if unit == null or unit.owner_peer_id != sender_id:
 			continue
 		unit.clear_order_queue()
 		unit.command_stop()

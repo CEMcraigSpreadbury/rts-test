@@ -333,9 +333,6 @@ func _field_army(main: Node, town_centre: Node3D) -> void:
 			spearmen.append(unit)
 		elif unit.display_name == "Archer":
 			unit.status_current_health = int(unit.max_health * 0.6)
-		elif unit.display_name == "Soldier":
-			unit.morale = 30.0
-			unit.morale_state = Morale.State.WAVERING
 	if officer != null:
 		spearmen.append(officer)
 	main.form_regiment(me, spearmen)

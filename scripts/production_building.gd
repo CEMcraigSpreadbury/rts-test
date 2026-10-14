@@ -291,6 +291,10 @@ func _ready() -> void:
 		producibles = offered
 	## Its people's upgrades for what it trains (see RaceTraits).
 	RaceTraits.offer_upgrades(self)
+	## A unit with no icon of its own shows its figure's portrait.
+	for item in producibles:
+		if item != null and item.kind == ProducibleItem.Kind.UNIT and item.icon == null and item.unit_scene != null:
+			item.icon = UnitPortrait.of_scene(item.unit_scene.resource_path)
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_collect_visuals()
@@ -568,6 +572,10 @@ func remove_builder(unit: Unit) -> void:
 ## their research discounts (Efficient Workshops; Arcane Tutelage at a Shrine),
 ## then scaled by whatever a scenario charges them (MatchRules).
 func costs_for(item: ProducibleItem) -> Array[ResourceCost]:
+	## A side with no villager left, and none on the way, gets one free:
+	## otherwise losing them all with no food in store ends its economy.
+	if item.is_worker() and not _side_has_workers():
+		return []
 	var base: Array[ResourceCost] = item.get_costs()
 	var discount := Research.bonus(owner_peer_id, ResearchNode.Stat.COST_REDUCTION)
 	if role == Role.SHRINE and item.kind == ProducibleItem.Kind.UNIT:
@@ -1280,6 +1288,17 @@ func _restore_materials() -> void:
 	if _layer_tween and _layer_tween.is_valid():
 		_layer_tween.kill()
 
+
+## Whether this building's owner has a living gatherer, or one queued here.
+func _side_has_workers() -> bool:
+	for item in queue:
+		if item != null and item.is_worker():
+			return true
+	for node in get_tree().get_nodes_in_group(&"units"):
+		var unit := node as Unit
+		if unit != null and unit.can_gather and unit.owner_peer_id == owner_peer_id 				and unit.status_activity != Unit.Activity.DEAD:
+			return true
+	return false
 
 ## What one queued item costs in population: a Gnoll litter reserves room for
 ## every body it will spawn, not just the first, or three gnolls arrive on one

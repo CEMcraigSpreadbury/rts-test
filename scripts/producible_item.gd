@@ -88,6 +88,10 @@ func get_costs() -> Array[ResourceCost]:
 		return MatchRules.realm_unit_costs(probe.costs, probe.is_worker)
 	return costs
 
+## A villager or other gatherer.
+func is_worker() -> bool:
+	return kind == Kind.UNIT and unit_scene != null and _probe().is_worker
+
 ## A Lord (see Lords), which only a Realm Town Centre offers.
 func is_lord() -> bool:
 	return kind == Kind.UNIT and unit_scene != null and _probe().is_lord
