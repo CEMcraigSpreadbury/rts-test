@@ -35,6 +35,13 @@ public:
 	void set_blocker(int64_t key, const std::vector<std::vector<Vec2>> &outlines);
 	void clear_blocker(int64_t key);
 	void clear_all_blockers();
+	// A shut gate's door: solid like a blocker, except to `team`, whose men
+	// walk through it. Cleared with clear_blocker like any stamp. Routes,
+	// steering and sight all ask as whoever set_pass_team last named.
+	void set_door(int64_t key, const std::vector<std::vector<Vec2>> &outlines, uint8_t team);
+	static constexpr uint8_t kNoTeam = 255;
+	// Whose men the next queries are for (kNoTeam: doors are solid to all).
+	void set_pass_team(uint8_t team) const { pass_team_ = team; }
 
 	bool configured() const { return cols_ > 0; }
 	int cols() const { return cols_; }
@@ -54,7 +61,7 @@ public:
 	bool open(int cx, int cy) const {
 		if (!in_bounds(cx, cy)) return false;
 		const int i = index(cx, cy);
-		return terrain_[i] && blockers_[i] == 0;
+		return terrain_[i] && blockers_[i] == 0 && (doors_[i] == 0 || door_team_[i] == pass_team_);
 	}
 	bool walkable(Vec2 p) const { return open(cell_x(p.x), cell_y(p.y)); }
 
@@ -130,6 +137,23 @@ private:
 	std::vector<uint8_t> terrain_;
 	std::vector<uint16_t> blockers_;
 	std::unordered_map<int64_t, std::vector<uint32_t>> stamps_;
+	std::vector<uint16_t> doors_;
+	std::vector<uint8_t> door_team_;
+	std::unordered_map<int64_t, std::vector<uint32_t>> door_stamps_;
+	mutable uint8_t pass_team_ = kNoTeam;
+	// Regions treat a door as open (it is, to someone), so the team it lets
+	// through is never told its own settlement is unreachable.
+	bool region_open(int cx, int cy) const {
+		if (!in_bounds(cx, cy)) return false;
+		const int i = index(cx, cy);
+		return terrain_[i] && blockers_[i] == 0;
+	}
+	// Clearance is the same for every team: a door counts as solid.
+	bool open_to_all(int cx, int cy) const {
+		if (!in_bounds(cx, cy)) return false;
+		const int i = index(cx, cy);
+		return terrain_[i] && blockers_[i] == 0 && doors_[i] == 0;
+	}
 
 	struct Node {
 		uint32_t g = 0, f = 0;
@@ -169,6 +193,7 @@ private:
 		uint32_t expanded = 0;
 		uint32_t max_expansions = 0;
 		uint8_t min_clearance = 0; // in chamfer units (2 per cell)
+		uint8_t pass_team = kNoTeam; // whose doors it may go through
 	};
 
 

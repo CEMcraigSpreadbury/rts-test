@@ -298,6 +298,8 @@ func _ready() -> void:
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	_collect_visuals()
+	## After the model is collected, so its meshes are never taken for the model's.
+	add_child(BuildingTorches.new(self))
 	for particles in [placement_particles, construction_particles]:
 		if particles:
 			RoundParticle.apply(particles.draw_pass_1)

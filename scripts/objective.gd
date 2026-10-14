@@ -103,6 +103,7 @@ var _house_owner_tint: Color = Color.TRANSPARENT
 static var _house_mesh_body: BoxMesh = null
 static var _house_mesh_roof: PrismMesh = null
 static var _house_materials: Dictionary = {}
+var _folk: SettlementFolk = null
 const NEUTRAL_TINT: Color = Color(0.5, 0.5, 0.5)
 ## Above the Favour "+N" popups (WorldFeedback.FAVOUR_POPUP_HEIGHT).
 const LETTER_HEIGHT: float = 5.5
@@ -189,6 +190,8 @@ func _ready() -> void:
 		wander_radius = SETTLEMENT_WANDER_RADIUS
 		_widen_capture_zone()
 		_show_houses()
+		_folk = SettlementFolk.new(self)
+		add_child(_folk)
 		_offer_slots()
 		_name_hall()
 	if not multiplayer.is_server():
@@ -718,6 +721,8 @@ func _show_houses() -> void:
 			_drop_in_house(house, HOUSE_DROP_STAGGER * float(i - already_standing))
 		if captured:
 			_hop_house(house, radius * CAPTURE_RIPPLE_PER_METRE)
+	if _folk != null:
+		_folk.refresh()
 
 const HOUSE_DROP_STAGGER: float = 0.12
 
@@ -1355,8 +1360,9 @@ func _tick_doors(delta: float) -> void:
 		return
 	_door_timer = DOOR_CHECK_SECONDS
 	_gates = _gates.filter(func(gate): return is_instance_valid(gate) and not gate.is_destroyed)
-	var danger: bool = owner_peer_id > 0 and not UnitGrid.enemies_near(get_tree(), global_position,
-			WALL_RADIUS + DOOR_ALARM_RADIUS, owner_peer_id).is_empty()
+	var danger: bool = owner_peer_id > 0 and _raiders_near()
+	if _doors_shut:
+		_let_friends_through()
 	if danger == _doors_shut:
 		return
 	_doors_shut = danger
@@ -1366,6 +1372,34 @@ func _tick_doors(delta: float) -> void:
 	_apply_doors(paths, danger)
 	if multiplayer.multiplayer_peer != null:
 		_rpc_doors.rpc(paths, danger)
+
+## A shut door is solid only to the owner's enemies (see ArmyBridge._sync_doors);
+## it swings out of the way while one of the owner's side is passing, and
+## follows the settlement to a new owner.
+func _let_friends_through() -> void:
+	for gate in _gates:
+		var door := gate.get_node_or_null(^"Door") as Node3D
+		if door == null:
+			continue
+		if door.get_meta(&"door_peer", 0) != owner_peer_id:
+			door.set_meta(&"door_peer", owner_peer_id)
+		var passing: bool = false
+		if ArmyBridge.current != null:
+			for unit in ArmyBridge.current.units_in_circle(gate.global_position, GATE_PASS_RADIUS):
+				if unit.status_activity != Unit.Activity.DEAD and Teams.is_friendly(owner_peer_id, unit.owner_peer_id):
+					passing = true
+					break
+		(door.get_child(1) as Node3D).visible = not passing
+
+const GATE_PASS_RADIUS: float = 3.0
+
+## Soldiers come to fight within DOOR_ALARM_RADIUS of the walls. Deer and the
+## like grazing outside are neutral too, but no reason to bar the gates.
+func _raiders_near() -> bool:
+	for unit in UnitGrid.enemies_near(get_tree(), global_position, WALL_RADIUS + DOOR_ALARM_RADIUS, owner_peer_id):
+		if unit.can_fight and unit.hunt_meat <= 0 and unit.status_activity != Unit.Activity.DEAD:
+			return true
+	return false
 
 @rpc("authority", "call_remote", "reliable")
 func _rpc_doors(paths: Array[NodePath], shut: bool) -> void:
@@ -1385,6 +1419,9 @@ func _apply_doors(paths: Array[NodePath], shut: bool) -> void:
 		if door == null:
 			door = _make_door(gate)
 		door.visible = shut
+		(door.get_child(1) as Node3D).visible = true
+		## The owner's own men still come and go through it (see ArmyBridge._sync_doors).
+		door.set_meta(&"door_peer", owner_peer_id)
 		(door.get_child(0) as CollisionShape3D).disabled = not shut
 		if shut:
 			door.add_to_group(&"nav_blockers")

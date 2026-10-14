@@ -34,6 +34,7 @@ var _poll_timer: float = 0.0
 var _stamped_buildings: Dictionary = {}
 ## Solid things that are not buildings but come and go — a settlement gate's
 ## door (see Objective), in the "nav_blockers" group while it is shut.
+## Instance id -> the sim team it lets through (-1 for a plain blocker).
 var _stamped_doors: Dictionary = {}
 var _stamped_gatherables: Dictionary = {}
 var _tree_changes_seen: int = -1
@@ -166,7 +167,7 @@ func _process(delta: float) -> void:
 ## came or went.
 func _restamp() -> void:
 	_sync_group(&"buildings", _stamped_buildings)
-	_sync_group(&"nav_blockers", _stamped_doors)
+	_sync_doors()
 	if Gatherable.tree_changes != _tree_changes_seen:
 		_tree_changes_seen = Gatherable.tree_changes
 		_sync_group(&"gatherables", _stamped_gatherables)
@@ -205,6 +206,27 @@ func _sync_group(group: StringName, stamped: Dictionary) -> void:
 			sim.set_blocker(id, footprint(solid[id]))
 			stamped[id] = true
 
+## As _sync_group, but a shut gate's door (meta door_peer) stays open to its
+## owner's side, and is stamped again if the settlement changes hands.
+func _sync_doors() -> void:
+	var solid: Dictionary = {}
+	for node in get_tree().get_nodes_in_group(&"nav_blockers"):
+		_note_solid(node as CollisionObject3D, solid)
+	for id in _stamped_doors.keys():
+		if not solid.has(id):
+			sim.clear_blocker(id)
+			_stamped_doors.erase(id)
+	for id in solid:
+		var body: CollisionObject3D = solid[id]
+		var team: int = sim_team(body.get_meta(&"door_peer")) if body.has_meta(&"door_peer") else -1
+		if _stamped_doors.get(id, -2) == team:
+			continue
+		if team >= 0:
+			sim.set_door(id, footprint(body), team)
+		else:
+			sim.set_blocker(id, footprint(body))
+		_stamped_doors[id] = team
+
 func _note_solid(body: CollisionObject3D, solid: Dictionary) -> void:
 	if body == null or not is_instance_valid(body) or body.is_queued_for_deletion():
 		return
@@ -222,6 +244,7 @@ func _note_solid(body: CollisionObject3D, solid: Dictionary) -> void:
 static func footprint(body: CollisionObject3D) -> Array:
 	var outlines: Array = []
 	var ground_y: float = body.global_position.y
+	var grow: float = _footprint_grow(body)
 	for owner_id in body.get_shape_owners():
 		if body.is_shape_owner_disabled(owner_id):
 			continue
@@ -243,9 +266,22 @@ static func footprint(body: CollisionObject3D) -> Array:
 				hull.remove_at(hull.size() - 1)
 			if hull.size() < 3:
 				continue
-			for outline in Geometry2D.offset_polygon(hull, NavigationBlockers.UNIT_BODY_RADIUS, Geometry2D.JOIN_MITER):
+			for outline in Geometry2D.offset_polygon(hull, grow, Geometry2D.JOIN_MITER):
 				outlines.append(outline)
 	return outlines
+
+## A gateway (ProductionBuilding.passage_width) grows its posts by less than a
+## body, so what stays open between them is always at least two cells wide,
+## however the gate sits on the grid. A full body each side left a 1.4 m gate
+## 0.6 m of open ground: one cell or two depending on its angle, and a gate one
+## cell wide is no way through for a block, which went round to another gate.
+const GATEWAY_OPEN_WIDTH: float = 1.1
+
+static func _footprint_grow(body: CollisionObject3D) -> float:
+	var passage: float = body.get(&"passage_width") if body.get(&"passage_width") != null else 0.0
+	if passage <= 0.0:
+		return NavigationBlockers.UNIT_BODY_RADIUS
+	return clampf((passage - GATEWAY_OPEN_WIDTH) * 0.5, 0.05, NavigationBlockers.UNIT_BODY_RADIUS)
 
 ## --- Units ---
 

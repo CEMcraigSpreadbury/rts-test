@@ -21,6 +21,7 @@ void ArmySim::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("mark_walkable_polygons", "points", "starts"), &ArmySim::mark_walkable_polygons);
 	ClassDB::bind_method(D_METHOD("set_blocker", "key", "outlines"), &ArmySim::set_blocker);
 	ClassDB::bind_method(D_METHOD("clear_blocker", "key"), &ArmySim::clear_blocker);
+	ClassDB::bind_method(D_METHOD("set_door", "key", "outlines", "team"), &ArmySim::set_door);
 	ClassDB::bind_method(D_METHOD("finish_grid"), &ArmySim::finish_grid);
 	ClassDB::bind_method(D_METHOD("is_walkable", "point"), &ArmySim::is_walkable);
 	ClassDB::bind_method(D_METHOD("height_at", "point"), &ArmySim::height_at);
@@ -113,7 +114,8 @@ void ArmySim::mark_walkable_polygons(const PackedVector2Array &points, const Pac
 	}
 }
 
-void ArmySim::set_blocker(int64_t key, const Array &outlines) {
+namespace {
+std::vector<std::vector<army::Vec2>> sim_outlines(const Array &outlines) {
 	std::vector<std::vector<army::Vec2>> converted;
 	for (int64_t o = 0; o < outlines.size(); ++o) {
 		const PackedVector2Array outline = outlines[o];
@@ -122,7 +124,16 @@ void ArmySim::set_blocker(int64_t key, const Array &outlines) {
 		for (int64_t i = 0; i < outline.size(); ++i) points.push_back(to_sim(outline[i]));
 		converted.push_back(std::move(points));
 	}
-	world_.grid.set_blocker(key, converted);
+	return converted;
+}
+} // namespace
+
+void ArmySim::set_blocker(int64_t key, const Array &outlines) {
+	world_.grid.set_blocker(key, sim_outlines(outlines));
+}
+
+void ArmySim::set_door(int64_t key, const Array &outlines, int64_t team) {
+	world_.grid.set_door(key, sim_outlines(outlines), uint8_t(team));
 }
 
 void ArmySim::clear_blocker(int64_t key) {

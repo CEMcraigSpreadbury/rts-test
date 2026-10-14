@@ -46,6 +46,8 @@ public:
 	// `outlines` is an Array of PackedVector2Array, in world XZ.
 	void set_blocker(int64_t key, const godot::Array &outlines);
 	void clear_blocker(int64_t key);
+	// A shut gate: solid to everyone but `team` (a sim team index).
+	void set_door(int64_t key, const godot::Array &outlines, int64_t team);
 	// Call once the grid and its first stamps are in (see NavGrid::rebuild_regions).
 	void finish_grid();
 	bool is_walkable(const godot::Vector2 &point) const;

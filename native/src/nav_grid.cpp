@@ -13,6 +13,9 @@ void NavGrid::configure(Vec2 origin, int cols, int rows, float cell) {
 	terrain_.assign(size_t(cols_) * rows_, 0);
 	blockers_.assign(size_t(cols_) * rows_, 0);
 	stamps_.clear();
+	doors_.assign(size_t(cols_) * rows_, 0);
+	door_team_.assign(size_t(cols_) * rows_, kNoTeam);
+	door_stamps_.clear();
 	regions_dirty_ = true;
 	clearance_full_ = true;
 }
@@ -74,7 +77,31 @@ void NavGrid::set_blocker(int64_t key, const std::vector<std::vector<Vec2>> &out
 	stamps_[key] = std::move(cells);
 }
 
+void NavGrid::set_door(int64_t key, const std::vector<std::vector<Vec2>> &outlines, uint8_t team) {
+	clear_blocker(key);
+	std::vector<uint32_t> cells;
+	for (const auto &outline : outlines) {
+		for_cells_inside(outline.data(), int(outline.size()), [&](uint32_t i) { cells.push_back(i); });
+	}
+	std::sort(cells.begin(), cells.end());
+	cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+	for (uint32_t i : cells) {
+		++doors_[i];
+		door_team_[i] = team;
+	}
+	mark_clearance_dirty(cells);
+	door_stamps_[key] = std::move(cells);
+}
+
 void NavGrid::clear_blocker(int64_t key) {
+	auto door = door_stamps_.find(key);
+	if (door != door_stamps_.end()) {
+		for (uint32_t i : door->second) {
+			if (doors_[i] > 0) --doors_[i];
+		}
+		mark_clearance_dirty(door->second);
+		door_stamps_.erase(door);
+	}
 	auto it = stamps_.find(key);
 	if (it == stamps_.end()) return;
 	for (uint32_t i : it->second) {
@@ -88,6 +115,8 @@ void NavGrid::clear_blocker(int64_t key) {
 void NavGrid::clear_all_blockers() {
 	std::fill(blockers_.begin(), blockers_.end(), uint16_t(0));
 	stamps_.clear();
+	std::fill(doors_.begin(), doors_.end(), uint16_t(0));
+	door_stamps_.clear();
 	regions_dirty_ = true;
 	clearance_full_ = true;
 }
@@ -164,7 +193,7 @@ float NavGrid::sample_slope(Vec2 p) const {
 std::vector<uint8_t> NavGrid::debug_cells() const {
 	std::vector<uint8_t> out(terrain_.size());
 	for (size_t i = 0; i < out.size(); ++i) {
-		out[i] = !terrain_[i] ? 0 : (blockers_[i] ? 2 : 1);
+		out[i] = !terrain_[i] ? 0 : (blockers_[i] || doors_[i] ? 2 : 1);
 	}
 	return out;
 }
@@ -225,7 +254,7 @@ void NavGrid::compute_clearance(int x0, int y0, int x1, int y1) {
 	x1 = std::min(cols_ - 1, x1); y1 = std::min(rows_ - 1, y1);
 	const uint8_t cap = uint8_t(kClearanceCap * 2);
 	for (int cy = y0; cy <= y1; ++cy) {
-		for (int cx = x0; cx <= x1; ++cx) clearance_[index(cx, cy)] = open(cx, cy) ? cap : 0;
+		for (int cx = x0; cx <= x1; ++cx) clearance_[index(cx, cy)] = open_to_all(cx, cy) ? cap : 0;
 	}
 	// Off the map counts as solid.
 	auto at = [&](int cx, int cy) -> int { return in_bounds(cx, cy) ? clearance_[index(cx, cy)] : 0; };
@@ -302,7 +331,7 @@ void NavGrid::join_regions(uint32_t a, uint32_t b) {
 }
 
 uint32_t NavGrid::region_of(int cx, int cy) {
-	if (!open(cx, cy)) return 0;
+	if (!region_open(cx, cy)) return 0;
 	if (regions_dirty_) relabel_regions();
 	const uint32_t raw = regions_[index(cx, cy)];
 	return raw ? find_region(raw) : 0;
@@ -328,7 +357,7 @@ void NavGrid::relabel_regions() {
 			const int cx = i % cols_, cy = i / cols_;
 			const int nbr[4][2] = { { cx + 1, cy }, { cx - 1, cy }, { cx, cy + 1 }, { cx, cy - 1 } };
 			for (const auto &n : nbr) {
-				if (!open(n[0], n[1])) continue;
+				if (!region_open(n[0], n[1])) continue;
 				const int32_t j = index(n[0], n[1]);
 				if (regions_[j]) continue;
 				regions_[j] = label;
@@ -359,7 +388,7 @@ void NavGrid::reopen_cells(const std::vector<uint32_t> &cells) {
 		const int cx = int(i) % cols_, cy = int(i) / cols_;
 		const int nbr[4][2] = { { cx + 1, cy }, { cx - 1, cy }, { cx, cy + 1 }, { cx, cy - 1 } };
 		for (const auto &n : nbr) {
-			if (!open(n[0], n[1])) continue;
+			if (!region_open(n[0], n[1])) continue;
 			const uint32_t other = regions_[index(n[0], n[1])];
 			if (other) join_regions(regions_[i], other);
 		}
@@ -447,6 +476,7 @@ NavGrid::SearchStatus NavGrid::begin_path(Vec2 start, Vec2 goal, uint32_t max_ex
 	ctx_->search.goal_idx = index(ctx_->search.gx, ctx_->search.gy);
 	ctx_->search.max_expansions = max_expansions;
 	ctx_->search.min_clearance = uint8_t(std::min<int>(min_clearance * 2, 255));
+	ctx_->search.pass_team = pass_team_;
 	const int sx = cell_x(s.x), sy = cell_y(s.y);
 	const int32_t start_idx = index(sx, sy);
 	ctx_->search.best_cell = start_idx;
@@ -460,6 +490,8 @@ NavGrid::SearchStatus NavGrid::begin_path(Vec2 start, Vec2 goal, uint32_t max_ex
 NavGrid::SearchStatus NavGrid::continue_path(uint32_t budget, uint32_t &expanded) {
 	expanded = 0;
 	if (!ctx_->search.active) return SearchStatus::Done;
+	// Resumed on a later tick, after other queries named other teams.
+	pass_team_ = ctx_->search.pass_team;
 	bool found = false;
 	while (!ctx_->open.empty() && expanded < budget && ctx_->search.expanded < ctx_->search.max_expansions) {
 		std::pop_heap(ctx_->open.begin(), ctx_->open.end(), heap_less);

@@ -613,6 +613,7 @@ void World::update_paths() {
 		}
 		fs.repath[f] = 0;
 		++path_stats_.searches;
+		grid.set_pass_team(fs.team[f]);
 		if (grid.begin_path({ fs.pos_x[f], fs.pos_y[f] }, { fs.dest_x[f], fs.dest_y[f] }, kMaxExpansions,
 					block_clearance(f)) == NavGrid::SearchStatus::Done) {
 			finish(f);
@@ -874,6 +875,8 @@ void World::update_steering() {
 			continue;
 		}
 
+		// A shut gate of his own side's is open to him.
+		grid.set_pass_team(units.team[u]);
 		if (units.motion[u] & MotionFollow) {
 			steer_follower(u, dt, was_wedged);
 			continue;
@@ -924,6 +927,7 @@ void World::update_steering() {
 	}
 	units.pos_x.swap(units.next_x);
 	units.pos_y.swap(units.next_y);
+	grid.set_pass_team(NavGrid::kNoTeam);
 }
 
 namespace {
@@ -955,6 +959,7 @@ void World::plan_detours() {
 		if (!units.valid(u) || !(units.motion[u] & MotionFollow)) continue;
 		uint32_t expanded = 0;
 		auto &route = units.detour[u];
+		grid.set_pass_team(units.team[u]);
 		grid.find_detour({ units.pos_x[u], units.pos_y[u] }, { units.target_x[u], units.target_y[u] },
 				kDetourMaxExpansions, route, expanded);
 		units.detour_index[u] = 0;
@@ -1126,6 +1131,7 @@ void World::update_slot_targets() {
 		const float ox = fs.pos_x[f], oy = fs.pos_y[f];
 		const auto &members = fs.members[f];
 		const auto &slots = fs.local_slots[f];
+		grid.set_pass_team(fs.team[f]);
 		for (size_t i = 0; i < members.size() && i < slots.size(); ++i) {
 			// Local +y is forward (cos, sin), local +x is right (sin, -cos).
 			// The obvious-looking (x*c - y*s, x*s + y*c) is the wrong basis

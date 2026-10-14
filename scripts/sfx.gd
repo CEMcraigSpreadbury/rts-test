@@ -17,6 +17,8 @@ static var ability_hit: bool = false
 const DIR: String = "res://assets/sfx/Fantasy SFX/SFX/"
 const SWORD: String = "Attacks/Sword Attacks Hits and Blocks/"
 const BOW: String = "Attacks/Bow Attacks Hits and Blocks/"
+## Clips given as a full res:// path are loaded as they are, not under DIR.
+const FACILITIES: String = "res://assets/sfx/Facilities/"
 
 ## Set -> clips, relative to DIR.
 const SETS: Dictionary = {
@@ -56,6 +58,10 @@ const SETS: Dictionary = {
 	&"gate_close": ["Doors Gates and Chests/Gate Close.wav"],
 	&"torch": ["Torch/Light Torch 1.wav", "Torch/Light Torch 2.wav"],
 	&"chest": ["Doors Gates and Chests/Chest Open 1.wav", "Doors Gates and Chests/Chest Open 2.wav"],
+	## A settlement's square (SettlementFolk): not from the Fantasy pack.
+	&"town_murmur": [FACILITIES + "Market_1.wav", FACILITIES + "Market_2.wav"],
+	&"town_farm": [FACILITIES + "Farm_1.wav", FACILITIES + "Farm_2.wav"],
+	&"town_drill": [FACILITIES + "Barracks_1.wav", FACILITIES + "Barracks_2.wav"],
 }
 ## [seconds between two plays of a set, how many of it at once, volume dB].
 ## Sets not listed use DEFAULT_LIMIT.
@@ -73,6 +79,9 @@ const LIMITS: Dictionary = {
 	&"collapse": [0.5, 2, 0.0],
 	&"unsheath": [0.3, 1, -10.0],
 	&"bow_ready": [0.3, 1, -8.0],
+	&"town_murmur": [4.0, 1, -14.0],
+	&"town_farm": [4.0, 1, -14.0],
+	&"town_drill": [4.0, 1, -16.0],
 }
 const DEFAULT_LIMIT: Array = [0.2, 2, -4.0]
 const PLAYERS: int = 20
@@ -130,7 +139,7 @@ func _ready() -> void:
 	for set_name in SETS:
 		var loaded: Array[AudioStream] = []
 		for clip in SETS[set_name]:
-			var stream := load(DIR + clip) as AudioStream
+			var stream := load(clip if clip.begins_with("res://") else DIR + clip) as AudioStream
 			if stream != null:
 				loaded.append(stream)
 		_streams[set_name] = loaded
