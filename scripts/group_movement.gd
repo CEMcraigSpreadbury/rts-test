@@ -24,16 +24,6 @@ const DEFAULT_FORWARD: Vector3 = Vector3.FORWARD
 ## shuffling back a little doesn't step straight out of reach.
 const ENGAGE_RANGE_FRACTION: float = 0.9
 
-## Where an officer stands: behind the rearmost rank, on the block's centre
-## line, spread sideways if a body somehow has more than one.
-func officer_ground(front_centre: Vector3, forward: Vector3, slots: Array[Vector3], index: int, count: int) -> Vector3:
-	var right := Vector3(forward.z, 0.0, -forward.x)
-	var deepest := 0.0
-	for slot in slots:
-		deepest = maxf(deepest, (front_centre - slot).dot(forward))
-	var across: float = (index - (count - 1) * 0.5) * Formation.SPACING
-	return front_centre - forward * (deepest + OFFICER_STANDOFF) + right * across
-
 ## The front every member of `units` is holding from its last formation order
 ## (see Unit.formation_facing), or ZERO if they don't all share one.
 func held_facing(units: Array[Unit]) -> Vector3:
@@ -59,42 +49,26 @@ func drag_facing(units: Array[Unit], line_start: Vector3, line_end: Vector3) -> 
 		return _group_forward(group_centroid(units), line_start)
 	return along.normalized()
 
-## Slot layout for a dragged formation, in shape order rather than assigned to
-## units — only for drawing the preview.
-func drag_preview_slots(units: Array[Unit], line_start: Vector3, line_end: Vector3, facing: Vector3, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> Array[Vector3]:
-	var midpoint := line_start
-	var right := Vector3(facing.z, 0.0, -facing.x)
-	## Officers are kept out of the ranks and shown behind the block, so the
-	## preview is the shape the order will actually make. Appended last, which
-	## is what lets the preview mark them out (see drag_preview_officers).
-	var men: Array[Unit] = []
-	var officers := 0
-	for unit in units:
-		if unit.is_officer:
-			officers += 1
-		else:
-			men.append(unit)
-	if men.is_empty():
-		men = units
-		officers = 0
-	## The drag only aims the block: its width comes from the shape.
-	var formation := Formation.new(men, formation_type, -1.0)
-	var slots := formation.get_slot_positions(midpoint, facing, right)
-	for i in officers:
-		slots.append(officer_ground(midpoint, facing, slots, i, officers))
-	return slots
-
-## How many of drag_preview_slots' places belong to officers — the trailing
-## ones, drawn apart from the ranks.
-func drag_preview_officers(units: Array[Unit]) -> int:
-	var officers := 0
-	var men := 0
-	for unit in units:
-		if unit.is_officer:
-			officers += 1
-		else:
-			men += 1
-	return officers if men > 0 else 0
+## Where a dragged formation's men will stand, from the same block plan the
+## order uses (ArmyBridge.plan_blocks) — one block per unit type or regiment,
+## side by side — so the preview is the shape the order will actually make.
+## Returns [slots, officers]: the officers' and Lords' places come last, the
+## trailing `officers` of them, so the preview can mark them out.
+func drag_preview(units: Array[Unit], line_start: Vector3, facing: Vector3, formation_type: Formation.Type = Formation.DEFAULT_TYPE) -> Array:
+	var slots: Array[Vector3] = []
+	var officer_slots: Array[Vector3] = []
+	for entry: Dictionary in ArmyBridge.plan_blocks(units, line_start, formation_type, facing, false):
+		var block: Array[Unit] = entry.block
+		if block.size() == 1 and block[0].is_lord:
+			officer_slots.append(entry.dest)
+			continue
+		var places: Array = ArmyBridge.block_slots(block, entry.dest, entry.forward, formation_type)
+		slots.append_array(places[0])
+		officer_slots.append_array(places[1])
+	if slots.is_empty():
+		return [officer_slots, 0]
+	slots.append_array(officer_slots)
+	return [slots, officer_slots.size()]
 
 ## group_centroid for an untyped array, callable without an instance.
 static func group_centroid_of(units: Array) -> Vector3:

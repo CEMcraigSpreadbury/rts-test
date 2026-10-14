@@ -495,24 +495,41 @@ func sim_team(peer_id: int) -> int:
 
 ## A ground order (move or attack-move) for `units`, from a player or an AI.
 ## The selection splits into blocks — each regiment on its own, and the loose
-## units one block per unit type — and every block marches to the ordered
-## point offset by where it stands in the group, so a line of blocks arrives
-## as a line of blocks. The men then hold their places (Unit.sim_follow) until
+## units one block per unit type — laid out side by side along the front
+## (plan_blocks), and the men then hold their places (Unit.sim_follow) until
 ## given something else to do. `facing` is a right-drag's facing, or zero to
 ## face the way the group is going. `append` queues the leg after whatever
 ## each block is already doing.
+func order_blocks(units: Array[Unit], world_pos: Vector3, attack_move: bool, append: bool, formation_type: Formation.Type, facing: Vector3) -> void:
+	var plan := plan_blocks(units, world_pos, formation_type, facing, true)
+	if plan.is_empty():
+		return
+	var forward: Vector3 = plan[0].forward
+	## One order shared by every block, so a block that meets an enemy on an
+	## attack-move can bring the whole group round (block_contact).
+	var order := {}
+	if attack_move:
+		order = {"units": units.duplicate(), "target": world_pos, "type": formation_type, "forward": forward, "front_width": -1.0}
+	for entry: Dictionary in plan:
+		_order_block(entry.block, entry.dest, forward, attack_move, append, formation_type, order)
+
 ## How far behind his army's rear rank a Lord marching with it stands, and how
 ## far apart two Lords ordered together stand.
 const LORD_BEHIND: float = 2.5
 const LORD_SPACING: float = 2.0
+## Metres between the flanks of two blocks standing side by side.
+const BLOCK_GAP: float = 2.0
 
-func order_blocks(units: Array[Unit], world_pos: Vector3, attack_move: bool, append: bool, formation_type: Formation.Type, facing: Vector3) -> void:
-	var blocks := _split_blocks(units)
+## Where each block of a ground order goes: one {block, dest, forward} per
+## block, dest being its front-rank centre. The blocks stand in rows of
+## side-by-side blocks, the front row centred on `world_pos`. A Lord goes with his men rather than
+## keeping whatever gap he had to them: behind their deepest rear rank. Shared
+## by the order and the drag preview so the ghost is what the order makes;
+## `need_sim` skips units the sim doesn't hold, which only the order cares about.
+static func plan_blocks(units: Array[Unit], world_pos: Vector3, formation_type: Formation.Type, facing: Vector3, need_sim: bool) -> Array:
+	var blocks := split_blocks(units, need_sim)
 	if blocks.is_empty():
-		return
-	## A Lord goes with his men rather than keeping whatever gap he had to
-	## them: he takes his place behind their rear rank (see below), and the
-	## rest are laid out round their own centre, not one dragged toward him.
+		return []
 	var lords: Array = []
 	var army: Array = []
 	for block: Array[Unit] in blocks:
@@ -531,26 +548,90 @@ func order_blocks(units: Array[Unit], world_pos: Vector3, attack_move: bool, app
 	if forward == Vector3.ZERO:
 		forward = (world_pos - centre) * Vector3(1, 0, 1)
 	if forward.length_squared() < 0.0001:
-		forward = _held_forward(units)
+		forward = _held_forward_of(units)
 	forward = forward.normalized()
-	## One order shared by every block, so a block that meets an enemy on an
-	## attack-move can bring the whole group round (block_contact).
-	var order := {}
-	if attack_move:
-		order = {"units": units.duplicate(), "target": world_pos, "type": formation_type, "forward": forward, "front_width": -1.0}
-	var rear: float = 0.0
-	for block: Array[Unit] in army:
-		var offset := Vector3.ZERO
-		if army.size() > 1:
-			offset = (GroupMovement.group_centroid_of(block) - centre) * Vector3(1, 0, 1)
-		var layout := block_layout(formation_type, block.size(), block_spacing(block))
-		var rows: int = ceili(float(block.size()) / maxi(int(layout.columns), 1))
-		rear = minf(rear, offset.dot(forward) - (rows - 1) * float(layout.spacing))
-		_order_block(block, world_pos + offset, forward, attack_move, append, formation_type, order)
 	var right := Vector3(forward.z, 0.0, -forward.x)
+	## Rows of about sqrt(n) blocks, so a big mixed army stays a deep body
+	## rather than one ever-wider line: shortest reach in front (melee leads,
+	## missiles behind), each row then left to right as its blocks stand now.
+	army.sort_custom(func(a, b) -> bool: return _block_reach(a) < _block_reach(b))
+	var per_row: int = ceili(sqrt(float(army.size())))
+	var plan: Array = []
+	var row_front := 0.0
+	var deepest := 0.0
+	for start in range(0, army.size(), per_row):
+		var row: Array = army.slice(start, mini(start + per_row, army.size()))
+		row.sort_custom(func(a, b) -> bool:
+			return GroupMovement.group_centroid_of(a).dot(right) < GroupMovement.group_centroid_of(b).dot(right))
+		var widths: Array[float] = []
+		var total := 0.0
+		var row_depth := 0.0
+		for block: Array[Unit] in row:
+			var shape := block_shape(block, formation_type)
+			widths.append(shape.width)
+			total += shape.width
+			row_depth = maxf(row_depth, shape.depth)
+		total += BLOCK_GAP * (row.size() - 1)
+		var across := -total * 0.5
+		for i in row.size():
+			var dest := world_pos - forward * row_front + right * (across + widths[i] * 0.5)
+			across += widths[i] + BLOCK_GAP
+			plan.append({"block": row[i], "dest": dest, "forward": forward})
+		deepest = row_front + row_depth
+		row_front = deepest + BLOCK_GAP
 	for i in lords.size():
-		var across: float = (i - (lords.size() - 1) * 0.5) * LORD_SPACING
-		_order_block(lords[i], world_pos + forward * (rear - LORD_BEHIND) + right * across, forward, attack_move, append, formation_type, order)
+		var offset: float = (i - (lords.size() - 1) * 0.5) * LORD_SPACING
+		plan.append({"block": lords[i], "dest": world_pos - forward * (deepest + LORD_BEHIND) + right * offset, "forward": forward})
+	return plan
+
+## The shortest reach among a block's men, rounded so near-equal ranges tie
+## and the left-to-right order decides instead.
+static func _block_reach(block: Array) -> float:
+	var reach: float = INF
+	for unit in block:
+		if not (unit as Unit).is_officer:
+			reach = minf(reach, (unit as Unit).attack_range)
+	return roundf(reach) if reach < INF else 0.0
+
+## The footprint `block` takes in `formation_type`: width across its widest
+## rank and depth from front rank to its rearmost man (officers included).
+static func block_shape(block: Array[Unit], formation_type: Formation.Type) -> Dictionary:
+	var men := 0
+	var officers := 0
+	for unit in block:
+		if unit.is_officer and block.size() > 1:
+			officers += 1
+		else:
+			men += 1
+	var layout := block_layout(formation_type, men, block_spacing(block))
+	var columns: int = clampi(int(layout.columns), 1, maxi(men, 1))
+	var rows: int = ceili(float(men) / columns)
+	var depth: float = (rows - 1) * float(layout.spacing)
+	if officers > 0:
+		depth += GroupMovement.OFFICER_STANDOFF
+	return {"width": (columns - 1) * float(layout.spacing), "depth": depth, "columns": columns, "rows": rows, "spacing": float(layout.spacing), "men": men, "officers": officers}
+
+## Where every man of a planned block (plan_blocks) will stand, as the sim lays
+## it out (World::rebuild_slots): ranks of up to `columns`, each centred, the
+## officers behind the rear rank. Second array is the officers' places.
+static func block_slots(block: Array[Unit], dest: Vector3, forward: Vector3, formation_type: Formation.Type) -> Array:
+	var shape := block_shape(block, formation_type)
+	var right := Vector3(forward.z, 0.0, -forward.x)
+	var spacing: float = shape.spacing
+	var men: int = shape.men
+	var rows: int = shape.rows
+	var slots: Array[Vector3] = []
+	var placed := 0
+	for row in rows:
+		var in_row: int = clampi(ceili(float(men - placed) / (rows - row)), 1, shape.columns)
+		for col in in_row:
+			slots.append(dest + right * ((col - (in_row - 1) * 0.5) * spacing) - forward * (row * spacing))
+			placed += 1
+	var officer_slots: Array[Vector3] = []
+	var rear: float = maxi(0, rows - 1) * spacing + GroupMovement.OFFICER_STANDOFF
+	for i in shape.officers:
+		officer_slots.append(dest - forward * rear + right * ((i - (shape.officers - 1) * 0.5) * spacing))
+	return [slots, officer_slots]
 
 ## One unit walking somewhere on its own (Unit.move_to): out of any block it
 ## was in, and its formation of one sent there at its own pace. The sim plans
@@ -646,10 +727,13 @@ func order_contact(order: Dictionary, enemy: Node3D) -> bool:
 ## Regiments whole (officer last, men in their fixed places), then the loose
 ## units by type.
 func _split_blocks(units: Array[Unit]) -> Array:
+	return split_blocks(units, true)
+
+static func split_blocks(units: Array[Unit], need_sim: bool) -> Array:
 	var by_regiment: Dictionary = {}
 	var by_type: Dictionary = {}
 	for unit in units:
-		if unit.sim_id < 0 or unit.status_activity == Unit.Activity.DEAD:
+		if (need_sim and unit.sim_id < 0) or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		if unit.regiment_id >= 0:
 			if not by_regiment.has(unit.regiment_id):
@@ -670,6 +754,9 @@ func _split_blocks(units: Array[Unit]) -> Array:
 
 ## The front the units were last holding, for an order given on the spot.
 func _held_forward(units: Array[Unit]) -> Vector3:
+	return _held_forward_of(units)
+
+static func _held_forward_of(units: Array[Unit]) -> Vector3:
 	for unit in units:
 		if unit.formation_facing != Vector3.ZERO:
 			return unit.formation_facing

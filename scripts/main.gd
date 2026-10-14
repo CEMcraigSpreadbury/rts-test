@@ -2148,10 +2148,8 @@ func _refresh_formation_drag_preview() -> void:
 	_formation_drag_facing = group_movement.drag_facing(selected_units, _formation_drag_start_world, _formation_drag_end_world)
 	if _formation_drag_flipped:
 		_formation_drag_facing = -_formation_drag_facing
-	feedback.show_formation_preview(group_movement.drag_preview_slots(
-			selected_units, _formation_drag_start_world, _formation_drag_end_world, _formation_drag_facing, current_formation_type),
-			_formation_drag_start_world, _formation_drag_facing,
-			group_movement.drag_preview_officers(selected_units))
+	var preview := group_movement.drag_preview(expand_to_regiments(selected_units), _formation_drag_start_world, _formation_drag_facing, current_formation_type)
+	feedback.show_formation_preview(preview[0], _formation_drag_start_world, _formation_drag_facing, preview[1])
 
 ## Never dragged far enough: exactly the right-click order the press used to
 ## issue on its own, from where the button went down.

@@ -2964,7 +2964,7 @@ var _formation_arrow_texture: ImageTexture = null
 var _formation_arrow_emission_texture: ImageTexture = null
 
 ## The last `officers` places are drawn in the officer colour — see
-## GroupMovement.drag_preview_slots, which appends them behind the ranks.
+## GroupMovement.drag_preview, which appends them behind the ranks.
 func show_formation_preview(slots: Array[Vector3], front_center: Vector3, facing: Vector3, officers: int = 0) -> void:
 	_show_formation_arrow(front_center, facing)
 	while _formation_preview_decals.size() < slots.size():
