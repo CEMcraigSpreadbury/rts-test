@@ -7,8 +7,6 @@
 [ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
-[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
-[ext_resource type="Texture2D" uid="uid://bgodqytsfivx2" path="res://assets/art/MiniBigMonsters/DarkFire-Sheet.png" id="fx_darkfire"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/shadow_nova.png" id="icon_abilities_shadow_nova"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkLord.glb" id="fig_model"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/DarkLord_LOD1.glb" id="fig_model_lod1"]
@@ -23,30 +21,6 @@ amount = 200
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 150
-
-[sub_resource type="Resource" id="SpriteEffect_dark_lord_projectile"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_darkfire")
-frame_size = Vector2i(32, 32)
-frame_count = 5
-fps = 12.0
-scale = 1.0
-
-[sub_resource type="Resource" id="SpriteEffect_dark_lord_impact"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_darkfire")
-frame_size = Vector2i(32, 32)
-frame_count = 5
-fps = 10.0
-scale = 1.8
-
-[sub_resource type="Resource" id="SpriteEffect_dark_lord_linger"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_darkfire")
-frame_size = Vector2i(32, 32)
-frame_count = 4
-fps = 10.0
-scale = 1.0
 
 [sub_resource type="Resource" id="Ability_dark_lord"]
 script = ExtResource("5_ability_script")
@@ -65,15 +39,11 @@ impact_shake = 0.45
 cast_windup = 1.0
 launch_offset = Vector2(0.5, 0.8)
 projectile_style = 2
-projectile_effect = SubResource("SpriteEffect_dark_lord_projectile")
 projectile_speed = 14.0
 wave_spacing = 0.9
-impact_effect = SubResource("SpriteEffect_dark_lord_impact")
 impact_scatter_count = 6
 linger_duration = 8.0
 linger_damage_per_second = 3
-linger_effect = SubResource("SpriteEffect_dark_lord_linger")
-linger_effect_count = 6
 
 [node name="DarkLord" instance=ExtResource("1_unit")]
 glyph = &"unit_dark_lord"

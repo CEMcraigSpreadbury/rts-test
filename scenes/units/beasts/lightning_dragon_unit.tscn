@@ -10,9 +10,6 @@
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/LightningDragon_LOD1.glb" id="fig_model_lod1"]
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/star_wanderers.png" id="fig_palette"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
-[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
-[ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/Lightning1-Sheet.png" id="fx_0"]
-[ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/Lightning2-Sheet.png" id="fx_1"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/chain_lightning.png" id="icon_abilities_chain_lightning"]
 
 [sub_resource type="Resource" id="ResourceCost_gold"]
@@ -24,22 +21,6 @@ amount = 300
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 220
-
-[sub_resource type="Resource" id="SpriteEffect_impact"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_1")
-frame_size = Vector2i(56, 40)
-frame_count = 9
-fps = 16.0
-scale = 1.6
-
-[sub_resource type="Resource" id="SpriteEffect_cast"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_0")
-frame_size = Vector2i(40, 32)
-frame_count = 7
-fps = 16.0
-scale = 1.2
 
 [sub_resource type="Resource" id="Ability_main"]
 script = ExtResource("5_ability_script")
@@ -56,9 +37,7 @@ stun_duration = 1.0
 effect_color = Color(0.55, 0.8, 1.0, 1)
 impact_shake = 0.6
 cast_windup = 0.5
-cast_effect = SubResource("SpriteEffect_cast")
 launch_offset = Vector2(1.0, 1.4)
-impact_effect = SubResource("SpriteEffect_impact")
 impact_scatter_count = 4
 
 [node name="LightningDragon" instance=ExtResource("1_unit")]

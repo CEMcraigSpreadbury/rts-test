@@ -38,15 +38,16 @@ enum Kind { PASSIVE_AURA, ACTIVATED_TARGET_POINT, ACTIVATED_AREA }
 enum Shape { CIRCLE, CONE, SELF }
 @export var shape: Shape = Shape.CIRCLE
 @export_range(10.0, 160.0, 1.0) var cone_angle: float = 60.0
-## SPRITE plays the pixel-art cast, projectile and impact effects below;
-## the others are 3D toy effects drawn by WorldFeedback instead, in
+## PLAIN is just the ground flash and sparks every area ability gets (and an
+## orb in effect_color if it flies); the others are 3D toy effects drawn by
+## WorldFeedback, in
 ## effect_color: a FIRE or PLAGUE breath (a CONE), a GLOB lobbed on an arc
 ## that splashes (acid, bile), an EARTH slam, a FROST or SHADOW nova (SELF),
 ## a FIRESTORM of fireballs raining on the target, a FIREBALL lobbed at it,
 ## LIGHTNING forking from the caster (or the sky, for a power), or WIND blades
 ## skimming the ground.
-enum EffectStyle { SPRITE, FIRE, PLAGUE, GLOB, EARTH, FROST, SHADOW, FIRESTORM, FIREBALL, LIGHTNING, WIND }
-@export var effect_style: EffectStyle = EffectStyle.SPRITE
+enum EffectStyle { PLAIN, FIRE, PLAGUE, GLOB, EARTH, FROST, SHADOW, FIRESTORM, FIREBALL, LIGHTNING, WIND }
+@export var effect_style: EffectStyle = EffectStyle.PLAIN
 ## How the caster's figure performs it: its cast clip (a monster rears and
 ## breathes or throws), or its ordinary strike (a monster's rear-and-slam).
 enum CastPose { CAST, STRIKE }
@@ -84,20 +85,16 @@ enum CastPose { CAST, STRIKE }
 ## monster breathes, throws or slams. Committed once the animation starts:
 ## a new order can walk the caster away, but the ability still fires.
 @export_range(0.0, 3.0, 0.05, "or_greater") var cast_windup: float = 0.4
-## Played at the caster's mouth/hands the moment the ability goes off, turned
-## toward the target if the effect is set to orient.
-@export var cast_effect: SpriteEffect
-## Where cast_effect and the projectile start, relative to the caster: x is
+## Where the cast and the projectile start, relative to the caster: x is
 ## forward along its facing, y is up.
 @export var launch_offset: Vector2 = Vector2(0.6, 0.9)
 
 @export_group("Projectile")
 enum ProjectileStyle { NONE, FLYING, GROUND_WAVE }
 ## NONE lands the impact at the target the instant the ability goes off.
-## FLYING sends projectile_effect through the air to the target. GROUND_WAVE
-## erupts projectile_effect along the ground from caster to target instead.
+## FLYING sends a shot through the air to the target (the style's own, or an
+## orb for PLAIN). GROUND_WAVE runs along the ground instead.
 @export var projectile_style: ProjectileStyle = ProjectileStyle.NONE
-@export var projectile_effect: SpriteEffect
 @export var projectile_speed: float = 12.0
 @export var projectile_arc_height: float = 0.0
 ## GROUND_WAVE only: distance between eruptions along the path.
@@ -106,9 +103,6 @@ enum ProjectileStyle { NONE, FLYING, GROUND_WAVE }
 @export var projectile_trail: bool = true
 
 @export_group("Impact")
-## Played at the target when the ability lands, on top of the ground flash
-## and sparks every area ability gets.
-@export var impact_effect: SpriteEffect
 ## One full-size burst at the centre plus this many smaller ones scattered
 ## across area_radius, staggered slightly, so a big area reads as covered
 ## rather than as a single explosion in the middle.
@@ -120,10 +114,6 @@ enum ProjectileStyle { NONE, FLYING, GROUND_WAVE }
 ## in afterwards — is hurt once a second (see AbilityZone).
 @export var linger_duration: float = 0.0
 @export var linger_damage_per_second: int = 0
-## Looped at scattered points across the zone for as long as it lasts, on
-## top of the ground disc and rising particles every zone gets.
-@export var linger_effect: SpriteEffect
-@export var linger_effect_count: int = 5
 
 func is_activated() -> bool:
 	return kind != Kind.PASSIVE_AURA

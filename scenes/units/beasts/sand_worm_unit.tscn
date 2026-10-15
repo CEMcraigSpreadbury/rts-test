@@ -7,8 +7,6 @@
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
-[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
-[ext_resource type="Texture2D" path="res://assets/art/MiniBigMonsters/Explosion-Sheet.png" id="fx_0"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/sand_burst.png" id="icon_abilities_sand_burst"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/SandWorm.glb" id="fig_model"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/SandWorm_LOD1.glb" id="fig_model_lod1"]
@@ -23,15 +21,6 @@ amount = 160
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 120
-
-[sub_resource type="Resource" id="SpriteEffect_impact"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_0")
-frame_size = Vector2i(48, 32)
-frame_count = 9
-fps = 14.0
-scale = 1.5
-tint = Color(0.9, 0.75, 0.5, 1)
 
 [sub_resource type="Resource" id="Ability_main"]
 script = ExtResource("5_ability_script")
@@ -49,7 +38,6 @@ effect_color = Color(0.85, 0.7, 0.4, 1)
 impact_shake = 0.5
 cast_windup = 0.5
 launch_offset = Vector2(0.9, 0.8)
-impact_effect = SubResource("SpriteEffect_impact")
 impact_scatter_count = 4
 
 [node name="SandWorm" instance=ExtResource("1_unit")]

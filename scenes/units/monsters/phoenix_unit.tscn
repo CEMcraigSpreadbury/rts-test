@@ -7,8 +7,6 @@
 [ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="4_wood"]
 [ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
-[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
-[ext_resource type="Texture2D" uid="uid://b7amoqcrdrtic" path="res://assets/art/MiniBigMonsters/Effect-Sheet.png" id="fx_effect"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/firestorm.png" id="icon_abilities_firestorm"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/Phoenix.glb" id="fig_model"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/Phoenix_LOD1.glb" id="fig_model_lod1"]
@@ -23,32 +21,6 @@ amount = 200
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 150
-
-[sub_resource type="Resource" id="SpriteEffect_phoenix_projectile"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_effect")
-frame_size = Vector2i(32, 32)
-frame_count = 2
-fps = 10.0
-scale = 3.5
-
-[sub_resource type="Resource" id="SpriteEffect_phoenix_impact"]
-script = ExtResource("fx_script")
-sheet = ExtResource("2_sheet")
-frame_size = Vector2i(40, 32)
-row = 6
-frame_count = 5
-fps = 10.0
-scale = 1.4
-
-[sub_resource type="Resource" id="SpriteEffect_phoenix_linger"]
-script = ExtResource("fx_script")
-sheet = ExtResource("2_sheet")
-frame_size = Vector2i(40, 32)
-row = 6
-frame_count = 4
-fps = 8.0
-scale = 0.9
 
 [sub_resource type="Resource" id="Ability_phoenix"]
 script = ExtResource("5_ability_script")
@@ -66,15 +38,11 @@ impact_shake = 0.4
 cast_windup = 0.45
 launch_offset = Vector2(0.6, 2.7)
 projectile_style = 1
-projectile_effect = SubResource("SpriteEffect_phoenix_projectile")
 projectile_speed = 12.0
 projectile_arc_height = 1.2
-impact_effect = SubResource("SpriteEffect_phoenix_impact")
 impact_scatter_count = 7
 linger_duration = 8.0
 linger_damage_per_second = 3
-linger_effect = SubResource("SpriteEffect_phoenix_linger")
-linger_effect_count = 8
 
 [node name="Phoenix" instance=ExtResource("1_unit")]
 glyph = &"unit_phoenix"

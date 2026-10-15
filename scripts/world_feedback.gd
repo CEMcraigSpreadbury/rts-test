@@ -532,23 +532,15 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
 	_fly_projectile_visual(projectile, start_pos, end_pos, duration, arc_height)
 
-## Arcs a projectile from start_pos to end_pos, then frees it. Sprite
-## projectiles are turned every frame to point along their on-screen flight
-## path; art drawn facing left carries metadata/art_faces_left in its scene.
+## Arcs a projectile (a ToyProjectile) from start_pos to end_pos, pointing it
+## along its arc, then lands or frees it.
 func _fly_projectile_visual(projectile: Node3D, start_pos: Vector3, end_pos: Vector3, duration: float, arc_height: float) -> void:
-	var sprite := projectile as SpriteBase3D
-	var faces_left: bool = projectile.get_meta(&"art_faces_left", false)
-	if sprite:
-		sprite.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	var previous := [start_pos]
 	var fly := func(t: float) -> void:
 		var pos: Vector3 = start_pos.lerp(end_pos, t) + Vector3(0, arc_height * sin(t * PI), 0)
 		projectile.global_position = pos
 		var dir: Vector3 = pos - previous[0] if t > 0.0 else end_pos - start_pos + Vector3.UP * arc_height * PI
-		if sprite:
-			_orient_to_screen_direction(sprite, pos, -dir if faces_left else dir)
-		elif dir.length_squared() > 0.000001:
-			## A 3D shot (ToyProjectile) points along its arc.
+		if dir.length_squared() > 0.000001:
 			projectile.look_at(pos + dir, Vector3.UP if absf(dir.normalized().y) < 0.99 else Vector3.FORWARD)
 		previous[0] = pos
 	fly.call(0.0)
@@ -2009,20 +2001,17 @@ func _play_ability_launch(unit: Unit, ability_index: int, from_pos: Vector3, tar
 	Sfx.ability_launch(ability, from_pos)
 	var direction := target_pos - from_pos
 	direction.y = 0.0
-	if ability.effect_style != Ability.EffectStyle.SPRITE:
+	if ability.effect_style != Ability.EffectStyle.PLAIN:
 		_play_toy_ability(unit, ability, from_pos, target_pos, direction)
 		return
-	if ability.cast_effect and main.fog_of_war.is_visible_at(from_pos):
-		## An oriented effect (a breath plume) is pushed out by half its width
-		## so it starts at the mouth rather than being centred on it.
-		var push: float = ability.cast_effect.world_width() * 0.5 if ability.cast_effect.orient_to_direction else 0.0
-		_spawn_sprite_effect(ability.cast_effect, from_pos + direction.normalized() * push, direction)
 	var travel: float = Unit.ability_travel_time(ability, from_pos, target_pos)
-	match ability.projectile_style:
-		Ability.ProjectileStyle.FLYING:
-			_fly_ability_projectile(ability, from_pos, target_pos, travel)
-		Ability.ProjectileStyle.GROUND_WAVE:
-			_run_ground_wave(ability, unit.global_position, target_pos, travel)
+	## A plain ability's shot, if it flies, is a glowing orb in its colour.
+	if ability.projectile_style == Ability.ProjectileStyle.FLYING and travel > 0.0 and main.fog_of_war.is_visible_at(from_pos):
+		var orb := ToyProjectile.new()
+		orb.kind = ToyProjectile.Kind.ORB
+		orb.tint = ability.effect_color
+		add_child(orb)
+		_fly_projectile_visual(orb, from_pos, target_pos + Vector3.UP * 0.5, travel, ability.projectile_arc_height)
 	if travel <= 0.0:
 		_play_ability_impact(ability, target_pos)
 	else:
@@ -2576,55 +2565,6 @@ func _spawn_stream(process: ParticleProcessMaterial, mesh: Mesh, from_pos: Vecto
 			particles.emitting = false)
 	get_tree().create_timer(BREATH_TIME + lifetime + 0.1).timeout.connect(particles.queue_free)
 
-func _fly_ability_projectile(ability: Ability, from_pos: Vector3, target_pos: Vector3, travel: float) -> void:
-	if ability.projectile_effect == null or travel <= 0.0:
-		return
-	var end_pos: Vector3 = target_pos + Vector3.UP * (ability.projectile_effect.world_height() * 0.5)
-	var sprite := _make_effect_sprite(ability.projectile_effect)
-	sprite.play(SpriteEffect.LOOP)
-	add_child(sprite)
-	sprite.global_position = from_pos
-	var trail: GPUParticles3D = null
-	if ability.projectile_trail:
-		trail = _make_projectile_trail(ability.effect_color)
-		add_child(trail)
-		trail.global_position = from_pos
-	var arc: float = ability.projectile_arc_height
-	var previous := [from_pos]
-	var fly := func(t: float) -> void:
-		var pos: Vector3 = from_pos.lerp(end_pos, t) + Vector3.UP * arc * sin(t * PI)
-		sprite.global_position = pos
-		sprite.visible = main.fog_of_war.is_visible_at(pos)
-		if trail:
-			trail.global_position = pos
-			trail.emitting = sprite.visible
-		if ability.projectile_effect.orient_to_direction:
-			_orient_to_screen_direction(sprite, pos, pos - previous[0])
-		previous[0] = pos
-	fly.call(0.0)
-	var tween := sprite.create_tween()
-	tween.tween_method(fly, 0.0, 1.0, travel)
-	if trail:
-		## Left behind rather than freed with the sprite, so its last sparks
-		## finish fading instead of vanishing mid-air on impact.
-		tween.tween_callback(func() -> void:
-			trail.emitting = false
-			get_tree().create_timer(trail.lifetime).timeout.connect(trail.queue_free))
-	tween.tween_callback(sprite.queue_free)
-
-## Eruptions marching along the ground from the caster to the target, one
-## every wave_spacing, reaching the target exactly when the impact does.
-func _run_ground_wave(ability: Ability, from_ground: Vector3, target_pos: Vector3, travel: float) -> void:
-	if ability.projectile_effect == null or travel <= 0.0:
-		return
-	var flat := Vector2(target_pos.x - from_ground.x, target_pos.z - from_ground.z)
-	var steps := int(flat.length() / maxf(ability.wave_spacing, 0.1))
-	## The last step would sit on the target itself, where the impact goes.
-	for i in range(1, steps):
-		var t := float(i) / steps
-		var pos := from_ground.lerp(target_pos, t)
-		get_tree().create_timer(travel * t).timeout.connect(_spawn_ground_effect.bind(ability.projectile_effect, pos, 0.85))
-
 ## A Ruler power landing — the ground flash and sparks an area ability gets,
 ## with no caster or projectile, since a power comes from nowhere.
 const POWER_EFFECT_DURATION: float = 1.4
@@ -2679,7 +2619,7 @@ func _play_power_ability_impact(peer_id: int, node_index: int, target_pos: Vecto
 	if ruler == null or node_index < 0 or node_index >= ruler.nodes.size():
 		return
 	var ability: Ability = ruler.nodes[node_index].hit_ability
-	if ability != null and ability.effect_style != Ability.EffectStyle.SPRITE:
+	if ability != null and ability.effect_style != Ability.EffectStyle.PLAIN:
 		_toy_power_impact(ability, target_pos)
 	elif ability != null:
 		_play_ability_impact(ability, target_pos)
@@ -2692,17 +2632,6 @@ func _play_ability_impact(ability: Ability, target_pos: Vector3) -> void:
 		main.camera_rig.shake_at(target_pos, ability.impact_shake)
 	if ability.linger_duration > 0.0:
 		_play_lingering_zone(ability, target_pos)
-	if ability.impact_effect == null:
-		return
-	_spawn_ground_effect(ability.impact_effect, target_pos, 1.0)
-	for i in ability.impact_scatter_count:
-		## sqrt keeps the scatter even across the disc instead of bunching
-		## toward the middle.
-		var angle := randf() * TAU
-		var distance := sqrt(randf()) * ability.area_radius * 0.85
-		var pos := target_pos + Vector3(cos(angle), 0.0, sin(angle)) * distance
-		var delay := randf_range(0.03, 0.25)
-		get_tree().create_timer(delay).timeout.connect(_spawn_ground_effect.bind(ability.impact_effect, pos, randf_range(0.55, 0.8)))
 
 ## How strongly a lingering zone's ground disc shows while it lasts — fainter
 ## than the impact flash, so the flash still reads as the moment it lands.
@@ -2731,9 +2660,8 @@ func _play_lingering_zone(ability: Ability, target_pos: Vector3) -> void:
 	decal.size = Vector3(radius * 2.0, ABILITY_DECAL_HEIGHT, radius * 2.0)
 	decal.modulate = Color(ability.effect_color, LINGER_DECAL_ALPHA)
 	zone.add_child(decal)
-	## The flat painted disc is the old look: a 3D-styled pool is just its
-	## rising puffs.
-	decal.visible = ability.effect_style == Ability.EffectStyle.SPRITE
+	## A plain pool shows its disc; a 3D-styled pool is just its rising puffs.
+	decal.visible = ability.effect_style == Ability.EffectStyle.PLAIN
 	var pulse := decal.create_tween().set_loops()
 	pulse.tween_property(decal, "modulate:a", LINGER_DECAL_ALPHA * LINGER_PULSE_LOW, LINGER_PULSE_PERIOD * 0.5) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -2771,26 +2699,6 @@ func _play_lingering_zone(ability: Ability, target_pos: Vector3) -> void:
 	particles.emitting = true
 	zone.add_child(particles)
 
-	var sprites: Array[AnimatedSprite3D] = []
-	if ability.linger_effect and ability.effect_style == Ability.EffectStyle.SPRITE:
-		for i in ability.linger_effect_count:
-			var offset := Vector3.ZERO
-			var extra_scale := 1.0
-			## The first sits in the middle; the rest spread evenly over the disc.
-			if i > 0:
-				var angle := randf() * TAU
-				offset = Vector3(cos(angle), 0.0, sin(angle)) * sqrt(randf()) * radius * 0.8
-				extra_scale = randf_range(0.6, 0.9)
-			var sprite := _make_effect_sprite(ability.linger_effect, extra_scale)
-			zone.add_child(sprite)
-			sprite.position = offset + Vector3.UP * (ability.linger_effect.world_height(extra_scale) * 0.5 + ability.linger_effect.height_offset)
-			sprite.play(SpriteEffect.LOOP)
-			## Out of step with each other, so the pool flickers rather than
-			## pulsing in unison.
-			sprite.frame = randi() % ability.linger_effect.frame_count
-			sprite.speed_scale = randf_range(0.85, 1.15)
-			sprites.append(sprite)
-
 	var fog_check := Timer.new()
 	fog_check.wait_time = LINGER_FOG_RECHECK
 	fog_check.autostart = true
@@ -2808,8 +2716,6 @@ func _play_lingering_zone(ability: Ability, target_pos: Vector3) -> void:
 		particles.emitting = false)
 	life.set_parallel(true)
 	life.tween_property(decal, "modulate:a", 0.0, LINGER_FADE_OUT)
-	for sprite in sprites:
-		life.tween_property(sprite, "modulate:a", 0.0, LINGER_FADE_OUT)
 	life.set_parallel(false)
 	## Leaves the particles already in the air time to finish fading.
 	life.tween_interval(particles.lifetime)
@@ -2846,60 +2752,6 @@ func _play_thrown(unit: Unit, height: float, duration: float) -> void:
 	get_tree().create_timer(duration).timeout.connect(func() -> void:
 		if is_instance_valid(unit) and main.fog_of_war.is_visible_at(unit.global_position):
 			spawn_rally_dust(unit.global_position))
-
-## --- Sprite effects ---
-
-## One-shot flipbook sitting on the ground at `ground_pos`, lifted so the
-## bottom of the frame rests on the ground rather than its middle.
-func _spawn_ground_effect(effect: SpriteEffect, ground_pos: Vector3, extra_scale: float) -> void:
-	var pos: Vector3 = ground_pos + Vector3.UP * (effect.world_height(extra_scale) * 0.5 + effect.height_offset)
-	if not main.fog_of_war.is_visible_at(pos):
-		return
-	_spawn_sprite_effect(effect, pos, Vector3.ZERO, extra_scale)
-
-## One-shot flipbook centred on `world_pos`, freed when the clip ends.
-## `direction` only matters for an effect that orients to it.
-func _spawn_sprite_effect(effect: SpriteEffect, world_pos: Vector3, direction: Vector3, extra_scale: float = 1.0) -> void:
-	var sprite := _make_effect_sprite(effect, extra_scale)
-	add_child(sprite)
-	sprite.global_position = world_pos
-	if effect.orient_to_direction:
-		_orient_to_screen_direction(sprite, world_pos, direction)
-	sprite.animation_finished.connect(sprite.queue_free)
-	sprite.play(SpriteEffect.ONCE)
-
-func _make_effect_sprite(effect: SpriteEffect, extra_scale: float = 1.0) -> AnimatedSprite3D:
-	var sprite := AnimatedSprite3D.new()
-	sprite.sprite_frames = effect.get_frames()
-	sprite.pixel_size = SpriteEffect.BASE_PIXEL_SIZE * effect.scale * extra_scale
-	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	sprite.shaded = not effect.unshaded
-	sprite.modulate = effect.tint
-	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	## Same trick as the command rings: draw after the grass in the transparent
-	## pass, so a ground burst isn't swallowed by the blades around it.
-	sprite.render_priority = 10
-	## Oriented sprites are turned by hand every frame to face the camera (see
-	## _orient_to_screen_direction) — a billboard would discard that rotation.
-	if not effect.orient_to_direction:
-		sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	return sprite
-
-## Faces the camera like a billboard, but rolled so the sheet's right-facing
-## art points along `world_dir` as it appears on screen. Mirrored instead of
-## rolled past vertical, so a breath aimed left isn't drawn upside down.
-func _orient_to_screen_direction(sprite: SpriteBase3D, world_pos: Vector3, world_dir: Vector3) -> void:
-	var camera: Camera3D = main.camera
-	if world_dir.length_squared() < 0.000001 or camera.is_position_behind(world_pos):
-		return
-	var a := camera.unproject_position(world_pos)
-	var b := camera.unproject_position(world_pos + world_dir.normalized())
-	## Screen y runs down; the roll is measured with y up.
-	var angle := atan2(-(b.y - a.y), b.x - a.x)
-	sprite.flip_h = absf(angle) > PI * 0.5
-	if sprite.flip_h:
-		angle = angle - PI if angle > 0.0 else angle + PI
-	sprite.global_basis = camera.global_basis * Basis(Vector3.BACK, angle)
 
 ## Sparks shed behind a flying projectile — emitted in world space so they
 ## hang in the air along its path.

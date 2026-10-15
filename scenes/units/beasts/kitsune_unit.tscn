@@ -10,9 +10,6 @@
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/Kitsune_LOD1.glb" id="fig_model_lod1"]
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/dark_elves.png" id="fig_palette"]
 [ext_resource type="Script" uid="uid://bg5qab25d22ks" path="res://scripts/ability.gd" id="5_ability_script"]
-[ext_resource type="Script" path="res://scripts/sprite_effect.gd" id="fx_script"]
-[ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/Fire2-Sheet.png" id="fx_0"]
-[ext_resource type="Texture2D" path="res://assets/art/MiniFolksPlusMythicalCreatures/FireBall2-Sheet.png" id="fx_1"]
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_magic_ball.tscn" id="6_projectile"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/abilities/foxfire.png" id="icon_abilities_foxfire"]
 
@@ -25,35 +22,6 @@ amount = 160
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
 amount = 100
-
-[sub_resource type="Resource" id="SpriteEffect_projectile"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_1")
-frame_size = Vector2i(32, 32)
-frame_count = 6
-fps = 14.0
-scale = 1.0
-tint = Color(0.55, 0.75, 1.0, 1)
-orient_to_direction = true
-
-[sub_resource type="Resource" id="SpriteEffect_impact"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_0")
-frame_size = Vector2i(48, 32)
-frame_count = 9
-fps = 14.0
-scale = 1.2
-tint = Color(0.55, 0.75, 1.0, 1)
-
-[sub_resource type="Resource" id="SpriteEffect_linger"]
-script = ExtResource("fx_script")
-sheet = ExtResource("fx_0")
-frame_size = Vector2i(48, 32)
-first_frame = 2
-frame_count = 4
-fps = 8.0
-scale = 0.8
-tint = Color(0.55, 0.75, 1.0, 1)
 
 [sub_resource type="Resource" id="Ability_main"]
 script = ExtResource("5_ability_script")
@@ -73,15 +41,11 @@ impact_shake = 0.25
 cast_windup = 0.4
 launch_offset = Vector2(0.9, 1.3)
 projectile_style = 1
-projectile_effect = SubResource("SpriteEffect_projectile")
 projectile_speed = 12.0
 projectile_arc_height = 0.6
-impact_effect = SubResource("SpriteEffect_impact")
 impact_scatter_count = 3
 linger_duration = 5.0
 linger_damage_per_second = 2
-linger_effect = SubResource("SpriteEffect_linger")
-linger_effect_count = 4
 
 [node name="Kitsune" instance=ExtResource("1_unit")]
 glyph = &"unit_kitsune"
