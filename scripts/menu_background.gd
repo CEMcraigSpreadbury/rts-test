@@ -5,7 +5,7 @@ extends Node3D
 ## circles the town.
 ##
 ## None of it is the real game — no Main, no Units, no Network — just the same
-## models and sprite sheets, walked about by this script. So it can't leave
+## models and figures, walked about by this script. So it can't leave
 ## match state behind for the game the player then starts.
 ##
 ## Wind normally comes from FogOfWar, which walks the tree for grass materials
@@ -19,19 +19,11 @@ const PINES: Array[PackedScene] = [
 	preload("res://assets/art/Trees/tree_pine_low.glb"),
 	preload("res://assets/art/Trees/tree_pine_low_2.glb"),
 ]
-const LUMBERJACK_SHEET: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniLumberjack.png")
-const MINER_SHEET: Texture2D = preload("res://assets/art/MinifolksVillagers2/Blue/Outline/MiniMiner.png")
-## Rows of the Minifolks work sheets, as Unit.WORK_ROLE_CLIPS has them.
-const LUMBERJACK_CLIPS: Dictionary = {
-	"idle": {"row": 0, "frames": 4, "fps": 5.0},
-	"walk": {"row": 3, "frames": 6, "fps": 8.0},
-	"work": {"row": 2, "frames": 6, "fps": 8.0},
-}
-const MINER_CLIPS: Dictionary = {
-	"idle": {"row": 0, "frames": 4, "fps": 5.0},
-	"walk": {"row": 3, "frames": 6, "fps": 8.0},
-	"work": {"row": 5, "frames": 5, "fps": 8.0},
-}
+## The villager figures the game draws, by job: tool in hand going out and
+## working, the load on his back coming home.
+const VILLAGER_FIGURE: String = "res://assets/art/Models/Units/Villager_%s.glb"
+## The blue the old backdrop sheets were drawn in, as a team colour.
+const VILLAGER_TINT: Color = Color(0.25, 0.45, 0.9)
 
 ## Radians per second the wind direction wanders, so the field never looks looped.
 const DRIFT_RATE: float = 0.08
@@ -68,9 +60,11 @@ const CREWS: Array = [[2, 4], [1, 3], [0, 2], [3, 3], [4, 2], [-1, 5]]
 const WALK_SPEED: float = 2.4
 const WORK_SECONDS := Vector2(5.0, 9.0)
 const DROP_SECONDS: float = 0.8
-## As a Unit's sprite.
-const SPRITE_PIXEL_SIZE: float = 0.05
-const SPRITE_LIFT: float = 0.628
+## The toy hop of a walking figure and the rock of one at work.
+const HOP_HEIGHT: float = 0.1
+const HOP_RATE: float = 11.0
+const WORK_RATE: float = 6.0
+const WORK_TILT: float = 0.22
 
 enum Job { WALK_OUT, WORK, WALK_BACK, DROP }
 
@@ -84,7 +78,7 @@ var _rng := RandomNumberGenerator.new()
 var _centre: Vector3
 var _camera: Camera3D
 var _orbit: float = 0.0
-## Each villager: {sprite, job, timer, pos, work, drop, face}.
+## Each villager: {node, tool, carry, job, timer, pos, work, drop, face, t}.
 var _villagers: Array[Dictionary] = []
 
 func _ready() -> void:
@@ -110,13 +104,13 @@ func _ready() -> void:
 		for i in crew[1]:
 			if crew[0] < 0:
 				var around := Vector2.from_angle(PI * 0.5 + _rng.randf_range(-1.3, 1.3)) * 1.6
-				_add_villager(MINER_SHEET, MINER_CLIPS, gold + around, gold)
+				_add_villager("gold", gold + around, gold)
 			else:
 				var trees: Array = groves[crew[0]]
 				var tree: Vector2 = trees[_rng.randi() % trees.size()]
 				## Stand on the town's side of the tree, so he's in view.
 				var toward_town := (CENTRE_XZ - tree).normalized()
-				_add_villager(LUMBERJACK_SHEET, LUMBERJACK_CLIPS, tree + toward_town * 1.2, tree)
+				_add_villager("wood", tree + toward_town * 1.2, tree)
 	## TerraBrush builds its foliage around the active camera over the first few
 	## frames, so the sweep is deferred rather than run against an empty tree.
 	await get_tree().process_frame
@@ -157,23 +151,21 @@ func _plant_grove(centre: Vector2, count: int, spread: float) -> Array:
 		spots.append(spot)
 	return spots
 
-func _add_villager(sheet: Texture2D, clips: Dictionary, work: Vector2, target: Vector2) -> void:
-	var animations := {}
-	for clip in clips:
-		animations[clip] = clips[clip].merged({"loop": true})
-	var sprite := AnimatedSprite3D.new()
-	sprite.sprite_frames = SpriteSheetFrames.build(sheet, Vector2i(32, 32), animations)
-	sprite.pixel_size = SPRITE_PIXEL_SIZE
-	sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	sprite.shaded = true
-	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
-	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
-	add_child(sprite)
+func _add_villager(job: String, work: Vector2, target: Vector2) -> void:
+	var node := Node3D.new()
+	add_child(node)
+	var tool := _figure(job)
+	var carry := _figure("carry_" + job)
+	node.add_child(tool)
+	node.add_child(carry)
 	## Each one drops off at his own spot round the town centre's edge.
 	var drop := CENTRE_XZ + (work - CENTRE_XZ).normalized().rotated(_rng.randf_range(-0.35, 0.35)) \
 			* (TOWN_CENTRE_RADIUS + 0.8)
 	var villager := {
-		"sprite": sprite,
+		"node": node,
+		"tool": tool,
+		"carry": carry,
+		"t": _rng.randf() * TAU,
 		"work": work,
 		"drop": drop,
 		"face": target,
@@ -187,8 +179,12 @@ func _add_villager(sheet: Texture2D, clips: Dictionary, work: Vector2, target: V
 		villager.job = Job.WORK
 		villager.timer = _rng.randf_range(0.5, WORK_SECONDS.y)
 	_villagers.append(villager)
-	sprite.frame = _rng.randi() % 4
+	_face(villager, (target - work) * (1.0 if villager.job == Job.WALK_OUT else -1.0))
 	_show(villager)
+
+func _figure(role: String) -> MultiMeshInstance3D:
+	var model: PackedScene = load(VILLAGER_FIGURE % role)
+	return FigureMaterials.standalone(Unit.figure_mesh(model), null, VILLAGER_TINT)
 
 func _process(delta: float) -> void:
 	_orbit = wrapf(_orbit + ORBIT_RATE * delta, 0.0, TAU)
@@ -198,6 +194,7 @@ func _process(delta: float) -> void:
 	_blow_wind(delta)
 
 func _step(villager: Dictionary, delta: float) -> void:
+	villager.t += delta
 	match villager.job:
 		Job.WALK_OUT, Job.WALK_BACK:
 			var goal: Vector2 = villager.work if villager.job == Job.WALK_OUT else villager.drop
@@ -221,26 +218,29 @@ func _step(villager: Dictionary, delta: float) -> void:
 	_show(villager)
 
 func _show(villager: Dictionary) -> void:
-	var sprite: AnimatedSprite3D = villager.sprite
-	sprite.position = _ground(villager.pos) + Vector3.UP * SPRITE_LIFT
-	var anim: StringName
+	var node: Node3D = villager.node
+	var t: float = villager.t
+	var lift := 0.0
+	var tilt := 0.0
 	match villager.job:
 		Job.WORK:
-			anim = &"work"
 			_face(villager, (villager.face as Vector2) - (villager.pos as Vector2))
-		Job.DROP:
-			anim = &"idle"
-		_:
-			anim = &"walk"
-	if sprite.animation != anim:
-		sprite.play(anim)
+			## Leaning into each stroke of the axe or pick.
+			tilt = maxf(sin(t * WORK_RATE), 0.0) * WORK_TILT
+		Job.WALK_OUT, Job.WALK_BACK:
+			lift = absf(sin(t * HOP_RATE)) * HOP_HEIGHT
+	node.position = _ground(villager.pos) + Vector3.UP * lift
+	node.rotation.x = tilt
+	## Tools out and at work; the load on his back coming home and dropping it.
+	var carrying: bool = villager.job == Job.WALK_BACK or villager.job == Job.DROP
+	(villager.carry as Node3D).visible = carrying
+	(villager.tool as Node3D).visible = not carrying
 
-## The sheets face right; mirror them when heading screen-left.
+## Turns the figure to face along `direction` (in XZ).
 func _face(villager: Dictionary, direction: Vector2) -> void:
-	if _camera == null or direction.is_zero_approx():
+	if direction.is_zero_approx():
 		return
-	var right := _camera.global_transform.basis.x
-	(villager.sprite as AnimatedSprite3D).flip_h = right.x * direction.x + right.z * direction.y < 0.0
+	(villager.node as Node3D).rotation.y = atan2(direction.x, direction.y)
 
 func _collect(node: Node) -> void:
 	if node is GeometryInstance3D:

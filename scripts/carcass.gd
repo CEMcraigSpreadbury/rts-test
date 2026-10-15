@@ -73,11 +73,6 @@ static func _lying_figure(animal: Unit) -> MultiMeshInstance3D:
 	var mesh := Unit.figure_mesh(animal.figure_model)
 	if mesh == null:
 		return null
-	var multimesh := MultiMesh.new()
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.use_custom_data = true
-	multimesh.mesh = mesh
-	multimesh.instance_count = 1
 	## Rolled onto its side about its own length, lifted so the flank that was
 	## at -X rests on the ground, and slid so the body's middle (not the feet it
 	## stood on, now off to one side) sits on the carcass's own centre, where
@@ -85,14 +80,5 @@ static func _lying_figure(animal: Unit) -> MultiMeshInstance3D:
 	var box: AABB = mesh.get_aabb()
 	var lying := Basis(Vector3.UP, animal.rotation.y) * Basis(Vector3.BACK, PI * 0.5)
 	var middle: Vector3 = lying * box.get_center()
-	multimesh.set_instance_transform(0, Transform3D(lying, Vector3(-middle.x, -box.position.x, -middle.z)))
-	## As FigureBatcher draws a corpse: team colour, white status tint, no
-	## flash, fully shown (negative = no see-through silhouette).
-	multimesh.set_instance_custom_data(0, Color(_pack(animal.team_tint), _pack(Color.WHITE), 0.0, -1.0))
-	var instance := MultiMeshInstance3D.new()
-	instance.multimesh = multimesh
-	instance.material_override = FigureMaterials.build(mesh, animal.figure_palette)
-	return instance
-
-static func _pack(colour: Color) -> float:
-	return float((colour.r8 << 16) | (colour.g8 << 8) | colour.b8)
+	return FigureMaterials.standalone(mesh, animal.figure_palette, animal.team_tint,
+			Transform3D(lying, Vector3(-middle.x, -box.position.x, -middle.z)))

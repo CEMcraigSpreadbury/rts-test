@@ -28,3 +28,27 @@ static func build(_mesh: Mesh, palette: Texture2D) -> Material:
 	figure.next_pass = mask
 	mask.next_pass = silhouette
 	return figure
+
+## One figure drawn on its own, outside FigureBatcher (a carcass, a beast in
+## its Bestiary cage, the menu backdrop's villagers): a one-instance MultiMesh
+## carrying the same material and per-instance data the batcher gives a
+## corpse, so it looks just as it does in the field. `pose` places the mesh
+## within the returned node.
+static func standalone(mesh: Mesh, palette: Texture2D, team_tint: Color, pose: Transform3D = Transform3D.IDENTITY) -> MultiMeshInstance3D:
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_custom_data = true
+	multimesh.mesh = mesh
+	multimesh.instance_count = 1
+	multimesh.set_instance_transform(0, pose)
+	## Team colour, white status tint, no flash, fully shown (negative: no
+	## see-through silhouette).
+	multimesh.set_instance_custom_data(0, Color(pack_rgb(team_tint), pack_rgb(Color.WHITE), 0.0, -1.0))
+	var instance := MultiMeshInstance3D.new()
+	instance.multimesh = multimesh
+	instance.material_override = build(mesh, palette)
+	return instance
+
+## A colour as the figure shader unpacks it: 0xRRGGBB in a float.
+static func pack_rgb(colour: Color) -> float:
+	return float((colour.r8 << 16) | (colour.g8 << 8) | colour.b8)

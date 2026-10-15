@@ -318,6 +318,9 @@ func _ready() -> void:
 		(func(): books.has_required_building = not is_under_construction).call_deferred()
 		construction_finished.connect(func(): books.has_required_building = true)
 	_collect_visuals()
+	## The capital's Bestiary (a settlement's is set up in setup_slot).
+	if has_node(^"BeastDisplay") and slot_kind < 0:
+		_show_beast_on_display.call_deferred()
 	## After the model is collected, so its meshes are never taken for the model's.
 	add_child(BuildingTorches.new(self))
 	for particles in [placement_particles, construction_particles]:
@@ -657,25 +660,27 @@ func setup_slot(race: String, kind: int, level: int, cap: int) -> void:
 	apply_slot_level(level, cap)
 	_show_beast_on_display()
 
-@onready var _beast_display: Sprite3D = get_node_or_null(^"BeastDisplay") as Sprite3D
 
 ## Room inside a Bestiary's cage for its beast, and the cage floor's height.
 const BEAST_CAGE_WIDTH: float = 1.8
 const BEAST_CAGE_FLOOR: float = 0.36
 
-## A Bestiary shows off the first beast its people train there, standing in
-## its cage and shrunk to fit it.
+## A Bestiary shows off the first beast its people train there, its figure
+## standing in the cage and shrunk to fit it. The scene's BeastDisplay (an old
+## sprite stand) only marks where the cage is.
 func _show_beast_on_display() -> void:
-	var display := get_node_or_null(^"BeastDisplay") as Sprite3D
-	var entries: Array = RealmRoster.roster(slot_race, slot_kind, 1)
-	if display == null or entries.is_empty():
+	var display := get_node_or_null(^"BeastDisplay") as Node3D
+	var beast_scene: PackedScene = _display_beast_scene()
+	if display == null or beast_scene == null:
 		return
-	var beast := (load(entries[0][0]) as PackedScene).instantiate() as Unit
+	display.visible = false
+	var beast := beast_scene.instantiate() as Unit
 	if beast == null:
 		return
-	var cell := Vector2(beast.sprite_cell_size)
-	display.texture = beast.sprite_sheet
-	display.region_rect = Rect2(Vector2.ZERO, cell)
+	var mesh: Mesh = Unit.figure_mesh(beast.figure_model)
+	if mesh == null:
+		beast.free()
+		return
 	## A race's own Bestiary model marks its cage with a BeastSpot (floor
 	## centre, scaled to the cage's width); the Human one is the default.
 	var floor_at := Vector3(display.position.x, BEAST_CAGE_FLOOR, display.position.z)
@@ -689,10 +694,29 @@ func _show_beast_on_display() -> void:
 			node = node.get_parent()
 		floor_at = t.origin
 		width = t.basis.x.length() * 0.9
-	var fit: float = minf(1.0, width / (cell.x * display.pixel_size))
-	display.scale = Vector3.ONE * fit
-	display.position = floor_at + Vector3(0.0, cell.y * display.pixel_size * fit * 0.5, 0.0)
+	var box: AABB = mesh.get_aabb()
+	var fit: float = minf(1.0, width / maxf(maxf(box.size.x, box.size.z), 0.01))
+	var old := get_node_or_null(^"BeastFigure")
+	if old != null:
+		old.free()
+	var figure := FigureMaterials.standalone(mesh, beast.figure_palette, team_tint,
+			Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * fit), Vector3(-box.get_center().x * fit, -box.position.y * fit, -box.get_center().z * fit)))
+	figure.name = "BeastFigure"
+	figure.position = floor_at
+	figure.visible = not is_under_construction and not is_destroyed
+	add_child(figure)
 	beast.free()
+
+## The first beast this Bestiary trains: a settlement's from its people's
+## roster, the capital's from its own list.
+func _display_beast_scene() -> PackedScene:
+	if slot_kind >= 0:
+		var entries: Array = RealmRoster.roster(slot_race, slot_kind, 1)
+		return load(entries[0][0]) as PackedScene if not entries.is_empty() else null
+	for item in producibles:
+		if item != null and item.kind == ProducibleItem.Kind.UNIT and item.unit_scene != null:
+			return item.unit_scene
+	return null
 
 ## A captured slot building's unit portraits follow its new owner's colour.
 func _retint_roster_icons() -> void:
@@ -1148,8 +1172,9 @@ func _update_health_bar_visual() -> void:
 
 func _update_construction_visual() -> void:
 	## A Bestiary's beast only moves in once the cage is finished.
-	if _beast_display != null:
-		_beast_display.visible = not is_under_construction and not is_destroyed
+	var beast_figure := get_node_or_null(^"BeastFigure") as Node3D
+	if beast_figure != null:
+		beast_figure.visible = not is_under_construction and not is_destroyed
 	if is_under_construction:
 		if not _construction_visual_applied:
 			_apply_construction_transparency()
