@@ -40,6 +40,9 @@ var gatherers: Array[Unit] = []
 ## of the same kind (see Unit._retarget_resource) instead of going idle. On for
 ## trees only — gold deposits need a Mine each, so there's no "next one" to find.
 @export var seek_replacement_when_depleted: bool = false
+## Whatever is gathered here goes straight into the stockpile instead of being
+## carried to a drop-off, so the worker never leaves (a Library's readers).
+@export var pays_at_once: bool = false
 ## Above zero, this is a forest tree: no collision shape, obstacle or model of
 ## its own. Forest draws it and answers clicks and placement checks for it,
 ## and the navmesh and the sim grid carve it as a trunk of this radius — see

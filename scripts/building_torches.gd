@@ -6,7 +6,8 @@ extends Node3D
 ## flickers. Purely cosmetic and local to each peer. Added to every building
 ## by ProductionBuilding; it only lights up for one whose model is Aldmere's
 ## own (TownBuildings) and not a wall, field or banner, and only once the
-## building is finished. Lights are off by day and fade out at a distance.
+## building is finished. Torches are unlit by day: the flame and light come up
+## together as night falls, and the light fades out at a distance.
 
 const ALDMERE_MODELS: String = "res://assets/art/Models/TownBuildings/"
 ## Models that get no torches.
@@ -25,15 +26,19 @@ const LIGHT_ENERGY: float = 1.8
 const LIGHT_RANGE: float = 7.0
 const LIGHT_FADE_FROM: float = 45.0
 const LIGHT_FADE_OVER: float = 15.0
-const DAY_FLAME_GLOW: float = 0.6
-const NIGHT_FLAME_GLOW: float = 4.0
+const FLAME_GLOW: float = 4.0
 const FLICKER: float = 0.18
+## Below this night amount the torch is unlit.
+const LIT_FROM: float = 0.02
+## The flame: an orange cone with a yellow core, standing in the cup.
+const FLAME_HEIGHT: float = 0.32
+const FLAME_RADIUS: float = 0.09
+const CORE_SHARE: float = 0.55
 
 static var _post_mesh: CylinderMesh = null
 static var _cup_mesh: CylinderMesh = null
-static var _flame_mesh: SphereMesh = null
-static var _flame_material: StandardMaterial3D = null
-static var _flame_frame: int = -1
+static var _flame_mesh: CylinderMesh = null
+static var _core_mesh: CylinderMesh = null
 
 var _building: ProductionBuilding
 ## null until the building is finished and known to want torches; false once
@@ -63,30 +68,26 @@ func _process(_delta: float) -> void:
 			return
 	visible = true
 	var night: float = _night()
-	_glow_flames(night)
+	var lit: bool = night > LIT_FROM
+	## The flame grows to full size over the first part of dusk.
+	var size: float = smoothstep(LIT_FROM, 0.3, night)
 	var t: float = GameClock.msec() * 0.001 + _phase
 	for i in _lights.size():
 		var light := _lights[i]
-		light.visible = night > 0.02
-		if not light.visible:
+		light.visible = lit
+		_flames[i].visible = lit
+		if not lit:
 			continue
 		var flicker: float = 1.0 - FLICKER * (0.5 + 0.5 * sin(t * 11.0 + i * 2.3) * sin(t * 7.3 + i))
 		light.light_energy = LIGHT_ENERGY * night * flicker
-		_flames[i].scale = Vector3(1.0, 1.6 * (0.9 + 0.2 * flicker), 1.0)
+		var sway: float = 0.08 * sin(t * 5.1 + i * 1.7)
+		_flames[i].scale = Vector3(size * (1.05 - 0.1 * flicker), size * (0.8 + 0.4 * flicker), size * (1.05 - 0.1 * flicker))
+		_flames[i].rotation = Vector3(sway, t * 1.3 + i, sway * 0.6)
 
 func _night() -> float:
 	var main := get_tree().current_scene
 	var day_night: DayNight = main.get(&"day_night") if main != null and &"day_night" in main else null
 	return day_night.night_amount if day_night != null else 0.0
-
-## Every torch shares one flame material: whichever building gets here first
-## each frame sets how bright the flames burn.
-static func _glow_flames(night: float) -> void:
-	var frame: int = Engine.get_process_frames()
-	if frame == _flame_frame or _flame_material == null:
-		return
-	_flame_frame = frame
-	_flame_material.emission_energy_multiplier = lerpf(DAY_FLAME_GLOW, NIGHT_FLAME_GLOW, night)
 
 ## Puts the torches up, or says this building gets none.
 func _place() -> bool:
@@ -144,10 +145,16 @@ func _add_torch(at: Vector3) -> void:
 	cup.mesh = _cup_mesh
 	cup.position.y = POST_HEIGHT + 0.07
 	torch.add_child(cup)
-	var flame := MeshInstance3D.new()
-	flame.mesh = _flame_mesh
-	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	flame.position.y = POST_HEIGHT + 0.2
+	## Pivots at the cup's rim so the flame grows and sways from its base.
+	var flame := Node3D.new()
+	flame.position.y = POST_HEIGHT + 0.14
+	flame.visible = false
+	for mesh in [_flame_mesh, _core_mesh]:
+		var part := MeshInstance3D.new()
+		part.mesh = mesh
+		part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		part.position.y = (mesh as CylinderMesh).height * 0.5
+		flame.add_child(part)
 	torch.add_child(flame)
 	var light := OmniLight3D.new()
 	light.light_color = LIGHT_COLOUR
@@ -187,15 +194,24 @@ static func _build_meshes() -> void:
 	iron.roughness = 0.4
 	iron.metallic = 0.4
 	_cup_mesh.material = iron
-	_flame_mesh = SphereMesh.new()
-	_flame_mesh.radius = 0.1
-	_flame_mesh.height = 0.2
-	_flame_mesh.radial_segments = 8
-	_flame_mesh.rings = 4
-	_flame_material = StandardMaterial3D.new()
-	_flame_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_flame_material.albedo_color = Color(1.0, 0.7, 0.25)
-	_flame_material.emission_enabled = true
-	_flame_material.emission = Color(1.0, 0.55, 0.15)
-	_flame_material.emission_energy_multiplier = DAY_FLAME_GLOW
-	_flame_mesh.material = _flame_material
+	## The outer cone is part see-through so the core glows inside it.
+	_flame_mesh = _cone(FLAME_RADIUS, FLAME_HEIGHT, Color(1.0, 0.42, 0.08, 0.7))
+	_core_mesh = _cone(FLAME_RADIUS * CORE_SHARE, FLAME_HEIGHT * CORE_SHARE, Color(1.0, 0.86, 0.4))
+
+static func _cone(radius: float, height: float, colour: Color) -> CylinderMesh:
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = radius
+	cone.height = height
+	cone.radial_segments = 6
+	cone.rings = 1
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.albedo_color = colour
+	if colour.a < 1.0:
+		glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow.emission_enabled = true
+	glow.emission = Color(colour, 1.0)
+	glow.emission_energy_multiplier = FLAME_GLOW
+	cone.material = glow
+	return cone

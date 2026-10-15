@@ -256,7 +256,7 @@ count = 3
 [sub_resource type="Resource" id="a_dialogue_36"]
 script = ExtResource("a_dialogue")
 speaker = "Steward Edda"
-text = "One village will not hold the Vale. Win two more settlements; the Dark Elves and Star Wanderers here will fight for whoever holds their homes."
+text = "One village will not hold the Vale. Win two more settlements; the villages and the Dark Elves here will fight for whoever holds their homes."
 speaker_scene = ExtResource("unit_villager")
 
 [sub_resource type="Resource" id="c_settlements_37"]

@@ -43,6 +43,10 @@ extends Resource
 ## AiBaseBuilder._military_type finds the others.
 @export var blacksmith_at_villagers: int = 14
 @export var arcane_sanctum_at_villagers: int = 18
+## A Library, and how many villagers it keeps reading there once it stands
+## (research comes from readers, kills and capture points; see Library).
+@export var library_at_villagers: int = 12
+@export var library_readers: int = 2
 
 @export_group("Military")
 ## Units kept queued at each military building at once.

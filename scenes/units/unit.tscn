@@ -5,8 +5,6 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="2_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
-[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/06_confirm_1.wav" id="90_sfx_confirm1"]
-[ext_resource type="AudioStream" path="res://assets/sfx/UI SFX/06_confirm_2.wav" id="91_sfx_confirm2"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Drop_Whoosh.wav" id="92_sfx_whoosh"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Metal_Light.wav" id="93_sfx_metal_l"]
 [ext_resource type="AudioStream" path="res://assets/sfx/Inventory_SFX/Drops/Metal_Heavy.wav" id="94_sfx_metal_h"]
@@ -59,7 +57,6 @@ walk_row = 3
 walk_frame_count = 6
 max_health = 25
 attack_cooldown = 1.6
-on_select_sound_effects = Array[AudioStream]([ExtResource("90_sfx_confirm1"), ExtResource("91_sfx_confirm2")])
 on_move_sound_effects = Array[AudioStream]([ExtResource("92_sfx_whoosh")])
 on_attack_sound_effects = Array[AudioStream]([ExtResource("93_sfx_metal_l"), ExtResource("94_sfx_metal_h")])
 on_patrol_sound_effects = Array[AudioStream]([ExtResource("95_sfx_cancel1"), ExtResource("96_sfx_cancel2")])

@@ -19,7 +19,7 @@ extends Node
 ##   --walls    with --look --realm: wall the settlement in, gates shut
 ##   --build    select a builder and open its build menu
 ##   --controls open the controls card
-##   --zoom=N   camera distance (gameplay starts at 22, the wheel pulls out to 110)
+##   --zoom=N   camera distance (gameplay starts at 26, the wheel pulls out to 29)
 ##   --nograss  hide the Binbun grass blades, as the Grass option does (not saved)
 ##   --grass    show them even if the player's saved Grass option is off (not saved)
 ##   --sprites  draw units that have a 3D figure as their sprites instead, for

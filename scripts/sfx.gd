@@ -17,6 +17,7 @@ static var ability_hit: bool = false
 const DIR: String = "res://assets/sfx/Fantasy SFX/SFX/"
 const SWORD: String = "Attacks/Sword Attacks Hits and Blocks/"
 const BOW: String = "Attacks/Bow Attacks Hits and Blocks/"
+const STEPS: String = "Footsteps/Dirt/"
 ## Clips given as a full res:// path are loaded as they are, not under DIR.
 const FACILITIES: String = "res://assets/sfx/Facilities/"
 
@@ -31,6 +32,9 @@ const SETS: Dictionary = {
 	&"bow_hit": [BOW + "Bow Impact Hit 1.wav", BOW + "Bow Impact Hit 2.wav", BOW + "Bow Impact Hit 3.wav"],
 	&"bow_block": [BOW + "Bow Blocked 1.wav", BOW + "Bow Blocked 2.wav", BOW + "Bow Blocked 3.wav"],
 	&"bow_ready": [BOW + "Bow Take Out 1.wav"],
+	&"march": [STEPS + "Dirt Walk 1.wav", STEPS + "Dirt Walk 2.wav", STEPS + "Dirt Walk 3.wav", STEPS + "Dirt Walk 4.wav",
+			STEPS + "Dirt Walk 5.wav", STEPS + "Dirt Chain Walk 1.wav", STEPS + "Dirt Chain Walk 2.wav",
+			STEPS + "Dirt Chain Walk 3.wav", STEPS + "Dirt Chain Walk 4.wav", STEPS + "Dirt Chain Walk 5.wav"],
 	&"magic_shot": ["Spells/Fireball 1.wav", "Spells/Fireball 2.wav", "Spells/Fireball 3.wav"],
 	&"magic_hit": ["Spells/Spell Impact 1.wav", "Spells/Spell Impact 2.wav", "Spells/Spell Impact 3.wav"],
 	&"fire_cast": ["Spells/Firebuff 1.wav", "Spells/Firebuff 2.wav"],
@@ -78,6 +82,7 @@ const LIMITS: Dictionary = {
 	&"mine": [0.12, 3, -9.0],
 	&"collapse": [0.5, 2, 0.0],
 	&"unsheath": [0.3, 1, -10.0],
+	&"march": [0.09, 4, -16.0],
 	&"bow_ready": [0.3, 1, -8.0],
 	&"town_murmur": [4.0, 1, -14.0],
 	&"town_farm": [4.0, 1, -14.0],

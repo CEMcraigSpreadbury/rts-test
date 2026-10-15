@@ -212,7 +212,8 @@ func _draw_minimap() -> void:
 ## --- Territory (Realm) ---
 ## Each settlement's and Town Centre's land (Objective.territory_owner) washed
 ## in its owner's colour. Worked out on a coarse grid, and only again when a
-## site changes hands.
+## site changes hands. Nobody else's site is drawn until it has been explored,
+## so the minimap never gives away where an unscouted enemy lives.
 const TERRITORY_GRID: int = 64
 const TERRITORY_ALPHA: float = 0.2
 var _territory_texture: ImageTexture = null
@@ -223,18 +224,22 @@ func _draw_territory() -> void:
 		return
 	var signature := ""
 	var sites: Array = []
+	var my_peer: int = _my_peer_id()
 	for node in get_tree().get_nodes_in_group(&"objectives"):
-		if node is Objective and not (node is ShrineObjective):
+		if node is Objective and not (node is ShrineObjective) and _territory_known(node, my_peer):
 			sites.append(node)
-			signature += "%d," % node.owner_peer_id
+			signature += "%d:%d," % [node.get_instance_id(), node.owner_peer_id]
 	for node in get_tree().get_nodes_in_group(&"buildings"):
-		if node is ProductionBuilding and node.is_main_base and not node.is_destroyed:
+		if node is ProductionBuilding and node.is_main_base and not node.is_destroyed and _territory_known(node, my_peer):
 			sites.append(node)
-			signature += "t%d," % node.owner_peer_id
+			signature += "t%d:%d," % [node.get_instance_id(), node.owner_peer_id]
 	if signature != _territory_signature or _territory_texture == null:
 		_territory_signature = signature
 		_territory_texture = ImageTexture.create_from_image(_territory_image(sites))
 	draw_texture_rect(_territory_texture, Rect2(Vector2.ZERO, size), false)
+
+func _territory_known(site: Node3D, my_peer: int) -> bool:
+	return site.owner_peer_id <= 0 or Teams.is_friendly(my_peer, site.owner_peer_id) 			or fog.is_explored_at(site.global_position)
 
 ## The same rule as Objective.territory_owner, over the sites already gathered.
 func _territory_image(sites: Array) -> Image:

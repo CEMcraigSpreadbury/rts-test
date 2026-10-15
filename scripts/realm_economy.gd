@@ -48,8 +48,6 @@ const INCOME_MIN_SPAN: float = 60.0
 ## A unit this big or bigger draws wages as well as rations.
 const ELITE_POPULATION: int = 2
 const GOLD_PER_ELITE_POPULATION: float = 1.0
-## Food for each point of an animal's hunt_meat.
-const HUNT_FOOD_PER_MEAT: int = 3
 ## What each side starts a Realm match with, on top of Main.STARTING_RESOURCES.
 const STARTING_FOOD: int = 200
 
@@ -197,9 +195,9 @@ const SCAVENGE_RADIUS: float = 8.0
 const SCAVENGE_FOOD: int = 2
 const UnitGrid = preload("res://scripts/unit_grid.gd")
 
-## Host only, from Unit._die: the hunter's side eats what they brought down,
-## and any pack hunters nearby scavenge.
-func award_hunt(victim: Unit, attacker) -> void:
+## Host only, from Unit._die: any pack hunters near a body scavenge it. Game
+## brought down pays nothing here; it leaves a Carcass to be gathered.
+func award_hunt(victim: Unit, _attacker) -> void:
 	if not MatchRules.realm() or not multiplayer.is_server():
 		return
 	var fed: Dictionary = {}
@@ -211,14 +209,6 @@ func award_hunt(victim: Unit, attacker) -> void:
 		fed[unit.owner_peer_id] = true
 		ResourceStockpile.add(unit.owner_peer_id, FOOD, SCAVENGE_FOOD)
 		note_income(unit.owner_peer_id, FOOD, SCAVENGE_FOOD)
-	if victim.hunt_meat <= 0:
-		return
-	if attacker == null or not is_instance_valid(attacker) or not "owner_peer_id" in attacker:
-		return
-	var killer: int = attacker.owner_peer_id
-	if killer > 0:
-		ResourceStockpile.add(killer, FOOD, victim.hunt_meat * HUNT_FOOD_PER_MEAT)
-		note_income(killer, FOOD, victim.hunt_meat * HUNT_FOOD_PER_MEAT)
 
 func _replenish() -> void:
 	for id in main.regiments.keys():

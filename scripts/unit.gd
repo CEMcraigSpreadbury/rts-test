@@ -386,7 +386,8 @@ static func _role_of(anim_name: String) -> String:
 ## follow the swap without anything extra going over the network.
 func _on_sprite_animation_changed() -> void:
 	_update_team_tint_visual()
-	var mining: bool = sprite.animation == &"gold_gather"
+	## A Library's readers go in at its door just as miners do.
+	var mining: bool = sprite.animation == &"gold_gather" or (sheltered and base_animation(sprite.animation) == "gather")
 	if mining != _mine_door.is_finite():
 		if mining:
 			_enter_mine()
@@ -717,8 +718,8 @@ func _play_sprite_pop() -> void:
 ## fighting beside it (see PACK_COURAGE_RADIUS), and in Realm its side eats
 ## from any enemy that falls near it (RealmEconomy.award_hunt).
 @export var pack_member: bool = false
-## What a hunted animal is worth: its killer is paid this in food (see
-## RealmEconomy), and it marks the unit as wildlife everywhere else.
+## What a hunted animal is worth: it leaves a Carcass of this much meat (see
+## Carcass.FOOD_PER_MEAT), and it marks the unit as wildlife everywhere else.
 @export var hunt_meat: int = 0
 ## Applied to whatever this unit hits (Dark Elf poison). Only the damage-over-
 ## time, slow and stun parts of an Ability are used here.
@@ -1693,6 +1694,9 @@ func _fights_from_place() -> bool:
 ## cooldown. True while he has someone to fight.
 func _tick_block_fight(delta: float) -> bool:
 	var target: Node3D = sim_target if _is_target_alive(sim_target) else null
+	## A deer brushing past the ranks isn't a fight unless it was the order.
+	if target is Unit and target.is_harmless_game() and target != formation_attack_target:
+		target = null
 	## Checked before the cast: the block's enemy may already be freed.
 	var building: ProductionBuilding = null
 	if is_instance_valid(formation_attack_target) and formation_attack_target is ProductionBuilding:
@@ -1770,6 +1774,8 @@ func _tick_follow(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, atan2(formation_facing.x, formation_facing.z), rotation_speed * delta)
 	if sprite.sprite_frames:
 		_set_animation("walk" if moving else "idle")
+	if moving:
+		_march_step()
 	_slide()
 
 func _ready() -> void:
@@ -1845,9 +1851,10 @@ func _exit_tree() -> void:
 		Main.sprite_batcher_current.remove_sprite(sprite)
 		if crew_sprite != null:
 			Main.sprite_batcher_current.remove_sprite(crew_sprite)
-	## A dying figure stays behind as a corpse (see FigureBatcher).
+	## A dying figure stays behind as a corpse (see FigureBatcher), unless it
+	## left a Carcass, which draws it lying there itself.
 	if Main.figure_batcher_current != null:
-		Main.figure_batcher_current.remove_figure(self)
+		Main.figure_batcher_current.remove_figure(self, _carcass == null)
 	if net_id >= 0:
 		ArmyNet.unregister(self)
 	if sim_id >= 0 and ArmyBridge.current != null:
@@ -2984,6 +2991,7 @@ func quiet_motion(vel: Vector2) -> void:
 	var moving := vel.length() > FOLLOW_WALK_SPEED
 	if moving:
 		rotation.y = lerp_angle(rotation.y, atan2(vel.x, vel.y), rotation_speed / 30.0)
+		_march_step()
 	if sprite.sprite_frames:
 		_set_animation("walk" if moving else "idle")
 
@@ -3253,6 +3261,8 @@ func _velocity_step(desired: Vector3) -> void:
 
 	if sprite.sprite_frames:
 		_set_animation("walk" if is_moving else "idle")
+	if is_moving:
+		_march_step()
 
 	_slide()
 
@@ -3557,6 +3567,22 @@ func _update_health_bar_visual() -> void:
 ## its own broadcast RPC (see note on the signal above). AnimatedSprite3D.animation
 ## resets playback to frame 0 whenever it's set (even to the same value), so this
 ## must only fire on an actual change, not continuously.
+## A walking soldier offers a footstep every half second or so; Sfx keeps only
+## the ones near the camera and caps how many sound at once, so a marching
+## block reads as a steady tramp rather than one sound per man.
+const MARCH_STEP_MSEC_MIN: int = 380
+const MARCH_STEP_MSEC_MAX: int = 560
+var _next_march_step_msec: int = 0
+
+func _march_step() -> void:
+	if can_gather or not can_fight or Sfx.is_beast(self):
+		return
+	var now := Time.get_ticks_msec()
+	if now < _next_march_step_msec:
+		return
+	_next_march_step_msec = now + randi_range(MARCH_STEP_MSEC_MIN, MARCH_STEP_MSEC_MAX)
+	Sfx.play_at(&"march", global_position)
+
 func _set_animation(anim_name: String) -> void:
 	anim_name = _role_animation(anim_name)
 	if sprite.animation == anim_name:
@@ -3656,12 +3682,18 @@ func _tick_gathering(delta: float) -> void:
 
 	gather_timer += delta
 	var interval: float = target_resource.resource_type.gather_interval / maxf(gather_level, 1.0) \
-			/ (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.GATHER_SPEED) + buffs.amount(ResearchNode.Buff.GATHER_SPEED))
+			/ (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.GATHER_SPEED) + buffs.amount(ResearchNode.Buff.GATHER_SPEED)) \
+			/ _reading_speed(target_resource)
 	if gather_timer >= interval:
 		gather_timer = 0.0
 		var amount: int = target_resource.resource_type.gather_amount_per_tick * gather_level
 		var node := target_resource
-		status_carried_amount += node.gather(amount)
+		if node.pays_at_once and node.resource_type == Research.RESOURCE:
+			Research.earn(owner_peer_id, node.gather(amount), &"reading")
+		elif node.pays_at_once:
+			ResourceStockpile.add(owner_peer_id, node.resource_type, node.gather(amount))
+		else:
+			status_carried_amount += node.gather(amount)
 		if is_instance_valid(node):
 			resource_harvested.emit(node, self)
 
@@ -3670,6 +3702,13 @@ func _tick_gathering(delta: float) -> void:
 	if status_carried_amount >= carry_capacity or not is_instance_valid(target_resource) \
 			or (status_carried_amount > 0 and not target_resource.is_yielding()):
 		_head_to_dropoff()
+
+## How much faster than usual this unit reads at `node` (Guilds, the old
+## trickle node, now speeds Library reading instead); 1 anywhere else.
+func _reading_speed(node: Gatherable) -> float:
+	if node.resource_type != Research.RESOURCE:
+		return 1.0
+	return 1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.RESEARCH_TRICKLE)
 
 func _head_to_dropoff() -> void:
 	if status_carried_amount <= 0:
@@ -3748,6 +3787,24 @@ func _retarget_resource(from: Variant = null, skip: Gatherable = null) -> bool:
 	var origin: Vector3 = from if from != null else _last_resource_position
 	var best: Gatherable = null
 	var best_distance: float = RESOURCE_RETARGET_RADIUS
+	## A picked-clean carcass hands its butchers on to the next one nearby.
+	if _replacement_resource_type == Carcass.FOOD:
+		for node in get_tree().get_nodes_in_group(&"carcasses"):
+			var carcass := node as Carcass
+			if carcass == null or carcass == skip or carcass.is_queued_for_deletion() or carcass.amount_remaining <= 0 \
+					or not carcass.can_accept_gatherer():
+				continue
+			var distance: float = origin.distance_to(carcass.global_position)
+			if distance < best_distance:
+				best_distance = distance
+				best = carcass
+		if best == null:
+			return false
+		_leave_gather_site()
+		target_resource = best
+		best.add_gatherer(self)
+		_last_resource_position = best.global_position
+		return true
 	## Only trees seek a replacement, and trees live in the Forest, not a group.
 	if Forest.active == null:
 		return false
@@ -3814,12 +3871,22 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 		result = maxi(roundi(result * _pack_multiplier), 1)
 	if target is ProductionBuilding and building_damage_multiplier != 1.0:
 		result = roundi(result * building_damage_multiplier)
+	if can_gather and target is Unit and target.hunt_meat > 0:
+		result = roundi(result * HUNTING_DAMAGE)
 	## Realm: an army its side can't feed fights weaker (RealmEconomy).
 	if MatchRules.realm():
 		var main := get_tree().current_scene
 		if main is Main and main.realm_economy != null and main.realm_economy.is_starving(owner_peer_id):
 			result = maxi(roundi(result * STARVING_DAMAGE), 1)
 	return result
+
+## Game that never starts a fight (deer, fox, boar): left alone unless a unit
+## is ordered to hunt it, though a boar still fights back.
+func is_harmless_game() -> bool:
+	return hunt_meat > 0 and aggro_range <= 0.0
+
+## A villager's blows against game: hunting is work, not a brawl.
+const HUNTING_DAMAGE: float = 3.0
 
 ## Damage dealt by a starving army's men, as a share.
 const STARVING_DAMAGE: float = 0.8
@@ -4452,6 +4519,10 @@ func _nearest_enemy_scan(search_range: float) -> Unit:
 	var sorted := UnitGrid.last_sorted
 	for node in candidates:
 		var other: Unit = node
+		## Deer and the like are only hunted when ordered, never picked up by
+		## a scan (an idle villager would otherwise wander off after one).
+		if other.is_harmless_game():
+			continue
 		## Nearest first: once they are further off than the best score so
 		## far (never less than its distance), nothing later can beat it.
 		if sorted and nearest != null and _flat_distance(global_position, other.global_position) > nearest_score + UnitGrid.SORT_SLACK:
@@ -4537,10 +4608,21 @@ func _die(attacker: Node3D = null) -> void:
 	## clients to remove it. This RPC covers both cases identically: it plays
 	## the death animation and frees the node on every peer, not just here.
 	_play_death_and_remove.rpc(away.normalized())
+	## Villagers who brought down game go straight to butchering it: the one
+	## who landed the last blow and any others who were on the same hunt.
+	if _carcass != null:
+		var hunters: Array = UnitGrid.units_near(get_tree(), global_position, HUNT_PARTY_RADIUS)
+		if attacker is Unit and is_instance_valid(attacker) and not hunters.has(attacker):
+			hunters.append(attacker)
+		for hunter in hunters:
+			if is_instance_valid(hunter) and hunter.can_gather and hunter.status_activity != Activity.DEAD \
+					and (hunter == attacker or hunter.attack_target == self):
+				hunter.command_gather(_carcass, hunter._nearest_dropoff())
 
 @rpc("authority", "call_local", "reliable")
 func _play_death_and_remove(away: Vector3) -> void:
 	_death_playing = true
+	_carcass = Carcass.leave(self)
 	## Corpses don't need picking out behind buildings.
 	sprite.material_overlay = null
 	if crew_sprite:
@@ -4563,7 +4645,15 @@ func _play_death_and_remove(away: Vector3) -> void:
 		var frame_count: int = sprite.sprite_frames.get_frame_count(death_anim)
 		var fps: float = sprite.sprite_frames.get_animation_speed(death_anim)
 		await get_tree().create_timer(frame_count / maxf(fps, 1.0)).timeout
+	if is_instance_valid(_carcass):
+		_carcass.reveal()
 	queue_free()
+
+## Hunted game's remains (see Carcass), from the moment it dies.
+var _carcass: Carcass = null
+## How far from a kill the rest of a hunting party can be and still be sent
+## to butcher it (a fleeing deer strings its hunters out behind it).
+const HUNT_PARTY_RADIUS: float = 15.0
 
 ## Runs on the sprite only, like the hit recoil — the body itself stays put, so
 ## there's nothing to fight ArmyNet's snapshots and every peer can play

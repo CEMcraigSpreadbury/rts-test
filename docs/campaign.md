@@ -39,7 +39,7 @@ Mill. Turn it off for a mission that should play by the older rules.
 
 A mission does not get the skirmish starting purse. Give each side its gold,
 wood and food in the slot's `starting_resources`. A side with a spawn point
-gets the faction's Town Center and eight villagers unless the slot lists its
+gets the faction's Town Center and six villagers unless the slot lists its
 own.
 
 Sides with no spawn point (`DEFENDERS`) are not charged upkeep, so scripted

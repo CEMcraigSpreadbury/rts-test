@@ -8,4 +8,5 @@ script = ExtResource("1_script")
 display_name = "Research"
 display_color = Color(0.5, 0.85, 1, 1)
 glyph = &"research"
+gather_interval = 20.0
 insufficient_sound_effects = Array[AudioStream]([ExtResource("2_sfx_short")])

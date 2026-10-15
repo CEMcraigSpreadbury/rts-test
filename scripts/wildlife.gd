@@ -5,7 +5,7 @@ extends Node
 ##
 ## Animals are ordinary neutral units (peer 0, like an Objective's guards)
 ## rather than resource nodes, so hunting them is just combat: a hunter kills
-## one, RealmEconomy.award_hunt pays its food. That
+## one and villagers gather the Carcass it leaves. That
 ## also means they show up in fog of war, get in the way, and — for the wolves
 ## and bears — bite back.
 ##

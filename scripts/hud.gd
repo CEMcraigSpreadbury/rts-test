@@ -743,7 +743,7 @@ func _build_building_info(building: ProductionBuilding) -> void:
 		var slot := Button.new()
 		slot.custom_minimum_size = Vector2(UiStyle.SLOT_QUEUE, UiStyle.SLOT_QUEUE)
 		slot.focus_mode = Control.FOCUS_NONE
-		slot.pressed.connect(main.cancel_production.bind(building, i + 1))
+		slot.pressed.connect(_on_info_slot_pressed.bind(building, i))
 		## The portrait is added now and only its texture changes later, so the
 		## row's size never depends on what is queued.
 		var icon := TextureRect.new()
@@ -789,6 +789,12 @@ func _refresh_building_info() -> void:
 		return
 
 	_refresh_producible_badges(building)
+
+	## A Library trains nobody: its row shows who is inside reading.
+	if is_instance_valid(building.linked_deposit) and building.linked_deposit.pays_at_once:
+		_info_progress_bar.visible = false
+		_style_reader_slots(building)
+		return
 
 	if building.synced_queue_size <= 0:
 		_info_progress_bar.visible = false
@@ -841,6 +847,45 @@ func _style_queue_slots(filled: int, building: ProductionBuilding) -> void:
 				UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.HOVER) if occupied else normal)
 		slot.add_theme_stylebox_override("pressed",
 				UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.PRESSED) if occupied else normal)
+
+## A queued item cancels; a Library reader comes out (Main.release_reader).
+func _on_info_slot_pressed(building: ProductionBuilding, index: int) -> void:
+	if is_instance_valid(building.linked_deposit) and building.linked_deposit.pays_at_once:
+		main.release_reader(building, index)
+	else:
+		main.cancel_production(building, index + 1)
+
+## The queue row for a Library: one key per reader, his portrait on it.
+func _style_reader_slots(building: ProductionBuilding) -> void:
+	if _info_slot_row == null:
+		return
+	var readers: Array[Unit] = main.readers_of(building)
+	var signature: String = "readers"
+	for reader in readers:
+		signature += ",%d" % reader.get_instance_id()
+	if signature == _info_last_queue_signature:
+		return
+	_info_last_queue_signature = signature
+	for i in _info_slot_row.get_child_count():
+		var slot := _info_slot_row.get_child(i) as Button
+		if slot == null:
+			continue
+		var reader: Unit = readers[i] if i < readers.size() else null
+		slot.disabled = reader == null
+		slot.tooltip_text = reader.display_name if reader != null else ""
+		var icon := slot.get_node_or_null("Icon") as TextureRect
+		if icon != null:
+			icon.texture = UnitPortrait.of_unit(reader) if reader != null else null
+			icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			icon.texture_filter = UnitPortrait.filter_for(icon.texture)
+			icon.self_modulate = Color.WHITE
+		var normal: StyleBox = UiStyle.key_box(UiStyle.KEY) if reader != null else _empty_queue_box
+		slot.add_theme_stylebox_override("normal", normal)
+		slot.add_theme_stylebox_override("disabled", normal)
+		slot.add_theme_stylebox_override("hover",
+				UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.HOVER) if reader != null else normal)
+		slot.add_theme_stylebox_override("pressed",
+				UiStyle.key_box(UiStyle.KEY, UiStyle.KeyState.PRESSED) if reader != null else normal)
 
 ## Counts are totalled over a double-click group, since that's where the
 ## clicks went.

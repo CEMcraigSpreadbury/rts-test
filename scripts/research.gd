@@ -3,7 +3,8 @@ extends Node
 ## Research points and what players buy with them from their Ruler's tree
 ## (see Ruler). Points are host-authoritative and banked in ResourceStockpile
 ## like any other resource, so each player is only ever told their own total.
-## Earned three ways: a slow trickle (here), kills (award_kill, called from
+## Earned three ways: villagers reading in a Library (Unit's gather tick on its
+## Books, see Gatherable.pays_at_once), kills (award_kill, called from
 ## Unit._die) and holding capture points (Objective._tick_research).
 ##
 ## Purchases are validated by the host (buy_as) but then broadcast to every
@@ -18,7 +19,6 @@ signal owned_changed
 const RESOURCE: ResourceType = preload("res://resources/research_resource_type.tres")
 const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 const WOOD: ResourceType = preload("res://resources/wood_resource_type.tres")
-const TRICKLE_PER_SECOND: float = 1.0 / 20.0
 ## A kill is worth one point per this much of the victim's cost. Fractions
 ## carry over to the killer's next kill (see _kill_fraction), so a Soldier is
 ## about half a point and a Shrine monster about five.
@@ -45,7 +45,7 @@ var _owned: Dictionary = {}
 var _bonuses: Dictionary = {}
 ## The local player's own purchases.
 var my_owned: Array[int] = []
-## Host-only, for tuning: peer_id -> { &"trickle" / &"kills" / &"points": total earned }.
+## Host-only, for tuning: peer_id -> { &"reading" / &"kills" / &"points": total earned }.
 var earned: Dictionary = {}
 
 ## Match clock for powers (see now()): paused with the tree in single player,
@@ -60,8 +60,6 @@ var _heals: Array = []
 ## Host-only Muster summons: [{unit, until}].
 var _summons: Array = []
 
-## Host-only: peer_id -> trickle earned but not yet a whole point.
-var _trickle_fraction: Dictionary = {}
 ## Host-only: peer_id -> kill value earned but not yet a whole point.
 var _kill_fraction: Dictionary = {}
 ## Host-only: peer_id -> seconds towards the next Stat.PERIODIC_INCOME payout.
@@ -104,19 +102,12 @@ func _physics_process(delta: float) -> void:
 	for peer_id in main.main_base_count_by_peer.keys():
 		if not main.is_peer_active(peer_id):
 			continue
-		_tick_trickle(peer_id, delta)
 		_tick_periodic_income(peer_id, delta)
 	_regen_timer += delta
 	if _regen_timer >= REGEN_INTERVAL:
 		_regen_timer -= REGEN_INTERVAL
 		_tick_regeneration()
 
-func _tick_trickle(peer_id: int, delta: float) -> void:
-	var rate := TRICKLE_PER_SECOND * (1.0 + bonus(peer_id, ResearchNode.Stat.RESEARCH_TRICKLE))
-	var fraction: float = _trickle_fraction.get(peer_id, 0.0) + rate * delta
-	var whole := int(fraction)
-	_trickle_fraction[peer_id] = fraction - float(whole)
-	earn(peer_id, whole, &"trickle")
 
 func _tick_periodic_income(peer_id: int, delta: float) -> void:
 	var amount := roundi(bonus(peer_id, ResearchNode.Stat.PERIODIC_INCOME))

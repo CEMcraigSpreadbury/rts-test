@@ -23,7 +23,7 @@ enum Stat {
 	BUILD_SPEED,
 	POINT_GOLD,
 	COST_REDUCTION,
-	RESEARCH_TRICKLE,
+	RESEARCH_TRICKLE, ## Library reading speed (named for the old passive trickle)
 	PERIODIC_INCOME, ## gold and wood each Research.PERIODIC_INCOME_INTERVAL
 	TOWER_DAMAGE,
 	TOWER_RANGE,

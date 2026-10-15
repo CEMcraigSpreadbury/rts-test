@@ -1,6 +1,8 @@
 extends Node
 ## Plays the UI click on every button press, game-wide. Hooks each BaseButton
-## as it enters the tree, so buttons built in code are covered too.
+## as it enters the tree, so buttons built in code are covered too. Also lets
+## every popup menu (dropdowns included) draw its rounded panel over a
+## see-through window, or the corners come out square.
 
 const CLICK: AudioStream = preload("res://assets/sfx/UI SFX/Click.mp3")
 
@@ -27,6 +29,8 @@ func _hook_tree(node: Node) -> void:
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton and not node.pressed.is_connected(_play):
 		node.pressed.connect(_play)
+	elif node is PopupMenu:
+		node.transparent_bg = true
 
 
 func _play() -> void:

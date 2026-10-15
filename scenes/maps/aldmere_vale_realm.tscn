@@ -14,7 +14,6 @@
 [ext_resource type="PackedScene" path="res://scenes/player_spawn_point.tscn" id="10_ebagt"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gold_deposit.tscn" id="11_2n3sw"]
 [ext_resource type="PackedScene" path="res://scenes/resource_nodes/gatherable.tscn" id="12_thwj8"]
-[ext_resource type="PackedScene" path="res://scenes/settlements/star_wanderer_settlement.tscn" id="13_vx0qp"]
 [ext_resource type="PackedScene" path="res://scenes/settlements/dark_elf_settlement.tscn" id="14_lqxo7"]
 [ext_resource type="PackedScene" path="res://scenes/objective.tscn" id="16_j527u"]
 [ext_resource type="PackedScene" path="res://scenes/settlements/beastmen_settlement.tscn" id="17_xi6sa"]
@@ -19897,7 +19896,7 @@ transform = Transform3D(-0.79179585, 0, 0.61078584, 0, 1, 0, -0.61078584, 0, -0.
 
 [node name="Objectives" type="Node3D" parent="." unique_id=212632669]
 
-[node name="Objective1" parent="Objectives" unique_id=282376302 instance=ExtResource("13_vx0qp")]
+[node name="Objective1" parent="Objectives" unique_id=282376302 instance=ExtResource("16_j527u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6933244e-28, 0)
 start_tier = 2
 
@@ -19915,11 +19914,11 @@ start_tier = 1
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 213.21428, 0.5414768, -8.366487)
 start_tier = 1
 
-[node name="Objective6" parent="Objectives" unique_id=611935285 instance=ExtResource("13_vx0qp")]
+[node name="Objective6" parent="Objectives" unique_id=611935285 instance=ExtResource("16_j527u")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 101.90818, 0.4202394, 333.41214)
 start_tier = 1
 
-[node name="Objective7" parent="Objectives" unique_id=1908932531 instance=ExtResource("13_vx0qp")]
+[node name="Objective7" parent="Objectives" unique_id=1908932531 instance=ExtResource("16_j527u")]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -101.90815, 0.42023495, -333.41214)
 start_tier = 1
 

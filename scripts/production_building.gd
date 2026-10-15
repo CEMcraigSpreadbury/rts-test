@@ -161,8 +161,8 @@ var _purchased_upgrades: Array[ProducibleItem] = []
 var repeat_item: ProducibleItem = null
 
 ## How long a SINGLE builder takes to finish this from 0%; each additional
-## villager assigned via add_builder() scales progress proportionally, so N
-## builders finish in construction_time / N seconds. No progress is made at
+## villager assigned via add_builder() adds less (see builder_effort), so N
+## builders finish in construction_time / builder_effort(N). No progress is made at
 ## all with zero builders — see _process().
 var construction_time: float = 0.0
 var builders: Array[Unit] = []
@@ -222,6 +222,14 @@ var _pending_projectile_hits: Array[Dictionary] = []
 ## script) — see _update_construction_visual() for when each one fires.
 @onready var placement_particles: GPUParticles3D = get_node_or_null("PlacementBurst")
 @onready var construction_particles: GPUParticles3D = get_node_or_null("ConstructionDust")
+
+## How many builders' worth of work `count` builders put in. Each one past the
+## first adds a third of a builder (Age of Empires' rule), so piling villagers
+## onto a site helps but never by much: 1 = 1x, 2 = 1.33x, 4 = 2x, 10 = 4x.
+static func builder_effort(count: int) -> float:
+	if count <= 0:
+		return 0.0
+	return 1.0 + (count - 1) / 3.0
 
 func play_select_sound() -> void:
 	AudioUtils.play_random(select_audio_player, on_select_sound_effects)
@@ -297,6 +305,15 @@ func _ready() -> void:
 			item.icon = UnitPortrait.of_scene(item.unit_scene.resource_path)
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
+	## A Library's readers work the Books inside it as miners work a Mine's
+	## deposit (see Gatherable.pays_at_once), once it is finished. Deferred:
+	## a building placed for construction is only marked so after it enters
+	## the tree.
+	var books := get_node_or_null(^"Books") as Gatherable
+	if books != null:
+		linked_deposit = books
+		(func(): books.has_required_building = not is_under_construction).call_deferred()
+		construction_finished.connect(func(): books.has_required_building = true)
 	_collect_visuals()
 	## After the model is collected, so its meshes are never taken for the model's.
 	add_child(BuildingTorches.new(self))
@@ -1070,7 +1087,7 @@ func _process(delta: float) -> void:
 
 		if not builders.is_empty():
 			construction_progress = clampf(
-				construction_progress + (builders.size() / maxf(construction_time, 0.01)) \
+				construction_progress + (builder_effort(builders.size()) / maxf(construction_time, 0.01)) \
 						* (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.BUILD_SPEED)) * delta, 0.0, 1.0
 			)
 		if construction_progress >= 1.0:

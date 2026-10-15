@@ -15,7 +15,8 @@ extends RefCounted
 ## they train (see _type_named / _military_type).
 const BLACKSMITH_NAME: String = "Blacksmith"
 const ARCANE_SANCTUM_NAME: String = "Arcane Sanctum"
-const NAMED_STEP_BUILDINGS: Array[String] = [BLACKSMITH_NAME, ARCANE_SANCTUM_NAME]
+const LIBRARY_NAME: String = "Library"
+const NAMED_STEP_BUILDINGS: Array[String] = [BLACKSMITH_NAME, ARCANE_SANCTUM_NAME, LIBRARY_NAME]
 
 ## Walking room kept around every AI building, on top of its footprint.
 const SITE_CLEARANCE: float = 1.6
@@ -140,6 +141,9 @@ func _follow_build_order() -> void:
 	var sanctum: BuildingType = _type_named(ARCANE_SANCTUM_NAME)
 	if sanctum != null:
 		steps.append([sanctum, p.arcane_sanctum_at_villagers, 1])
+	var library: BuildingType = _type_named(LIBRARY_NAME)
+	if library != null:
+		steps.append([library, p.library_at_villagers, 1])
 	steps.sort_custom(func(a, b): return a[1] < b[1])
 	for step in steps:
 		var type: BuildingType = step[0]

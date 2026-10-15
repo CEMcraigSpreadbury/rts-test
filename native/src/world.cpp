@@ -499,10 +499,14 @@ void World::update_fight_targets() {
 		units.fight_target[u] = t;
 		if (t != kInvalidId) ++counts[t];
 
-		// Melee in an attacking block that is in the fight: go for someone.
+		// Melee in an attacking block that is in the fight: go for someone. A
+		// block that has stopped at its enemy without a man in reach (its
+		// anchor got close, the men didn't; or it is being shot from beyond
+		// its front) goes for someone too, or it would stand there forever.
 		uint32_t seek = kInvalidId;
 		const uint32_t f = units.formation[u];
-		if (!ranged && formations.alive(f) && (formations.flags[f] & FlagAttacking) && formations.engaged[f]) {
+		if (!ranged && formations.alive(f) && (formations.flags[f] & FlagAttacking) &&
+				(formations.engaged[f] || !(formations.flags[f] & FlagMoving))) {
 			if (t != kInvalidId) {
 				seek = t;
 			} else {

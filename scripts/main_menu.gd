@@ -11,6 +11,7 @@ const PLAYER_COLUMNS: int = 6
 const COL_NAME: int = 92
 const COL_PICKER: int = 104
 const COL_REMOVE: int = 40
+const SWATCH_SIZE: float = 22.0
 
 @onready var menu: VBoxContainer = $Menu
 @onready var map_select: PanelContainer = $MapSelect
@@ -37,8 +38,9 @@ var _tutorial_offer: PanelContainer = null
 func _ready() -> void:
 	$Menu/SinglePlayerButton.pressed.connect(_on_single_player_pressed)
 	$Menu/MultiplayerButton.pressed.connect(SceneLoader.change_scene.bind(LOBBY_SCENE_PATH))
-	## Demo exports (the "demo" feature tag in export_presets.cfg) are single player only.
-	$Menu/MultiplayerButton.disabled = OS.has_feature("demo")
+	## Multiplayer is out of scope for 1.0 (docs/scope-1.0.md); the lobby stays wired for later.
+	const MULTIPLAYER_ENABLED: bool = false
+	$Menu/MultiplayerButton.disabled = not MULTIPLAYER_ENABLED or OS.has_feature("demo")
 	$VersionStamp.text = "v" + str(ProjectSettings.get_setting("application/config/version", ""))
 	$Menu/OptionsButton.pressed.connect(_on_options_pressed)
 	$Menu/ExitButton.pressed.connect(get_tree().quit)
@@ -297,9 +299,15 @@ func _add_player_cells(peer_id: int) -> void:
 	var data: Dictionary = Network.players[peer_id]
 	var row := _players_box
 
-	var swatch := ColorRect.new()
-	swatch.color = data.get("color", Color.WHITE)
-	swatch.custom_minimum_size = Vector2(26.0, 26.0)
+	## A round plastic peg in the player's colour, like a game piece.
+	var swatch := Panel.new()
+	var peg := UiStyle.key_box(data.get("color", Color.WHITE))
+	peg.radius = int(SWATCH_SIZE * 0.5)
+	swatch.add_theme_stylebox_override(&"panel", peg)
+	swatch.custom_minimum_size = Vector2(SWATCH_SIZE, SWATCH_SIZE)
+	swatch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(swatch)
 
 	var name_label := Label.new()

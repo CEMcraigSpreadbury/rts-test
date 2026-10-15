@@ -283,6 +283,7 @@ func think_workers() -> void:
 	_staff_construction_sites()
 	var jobs := _count_jobs()
 	_staff_farms(jobs)
+	_staff_library(jobs)
 	var gold_sources := _gold_sources()
 	var gatherers: int = jobs.wood + jobs.gold + jobs.idle.size()
 	var want_gold: int = roundi(gatherers * _gold_share()) if not gold_sources.is_empty() else 0
@@ -362,10 +363,38 @@ func _staff_farms(jobs: Dictionary) -> void:
 			jobs.wood_workers.erase(villager)
 			jobs.wood -= 1
 
-## {wood: int, gold: int, food: int, idle: Array[Unit], wood_workers, gold_workers}.
+## Readers for a finished Library, out of the idle and then the wood cutters,
+## as farm hands are; anyone sent leaves `jobs.idle`.
+func _staff_library(jobs: Dictionary) -> void:
+	var library: ProductionBuilding = null
+	for building in ai.my_buildings:
+		if not building.is_under_construction and is_instance_valid(building.linked_deposit) \
+				and building.linked_deposit.pays_at_once and building.linked_deposit.can_accept_gatherer():
+			library = building
+			break
+	if library == null:
+		return
+	while jobs.research < ai.profile.library_readers:
+		var villager: Unit = null
+		if not jobs.idle.is_empty():
+			villager = jobs.idle[0]
+		elif not jobs.wood_workers.is_empty():
+			villager = _pick_unloaded(jobs.wood_workers)
+			if villager.status_carried_amount > 0:
+				return
+		if villager == null or not ai.use_order():
+			return
+		ai.order_target([villager], library)
+		jobs.research += 1
+		jobs.idle.erase(villager)
+		if jobs.wood_workers.has(villager):
+			jobs.wood_workers.erase(villager)
+			jobs.wood -= 1
+
+## {wood: int, gold: int, food: int, research: int, idle: Array[Unit], wood_workers, gold_workers}.
 ## Builders and anyone fighting count as none of them.
 func _count_jobs() -> Dictionary:
-	var jobs := {wood = 0, gold = 0, food = 0, idle = [] as Array[Unit], wood_workers = [] as Array[Unit], gold_workers = [] as Array[Unit]}
+	var jobs := {wood = 0, gold = 0, food = 0, research = 0, idle = [] as Array[Unit], wood_workers = [] as Array[Unit], gold_workers = [] as Array[Unit]}
 	for villager in ai.villagers:
 		match villager.status_command:
 			Unit.Command.NONE:
@@ -380,6 +409,8 @@ func _count_jobs() -> Dictionary:
 					jobs.gold_workers.append(villager)
 				elif type == RealmEconomy.FOOD:
 					jobs.food += 1
+				elif type == Research.RESOURCE:
+					jobs.research += 1
 				else:
 					jobs.wood += 1
 					jobs.wood_workers.append(villager)
@@ -407,7 +438,7 @@ func _gold_sources() -> Array:
 		if building.is_under_construction:
 			continue
 		var deposit = building.linked_deposit
-		if is_instance_valid(deposit) and deposit.can_be_gathered() and deposit.amount_remaining > 0:
+		if is_instance_valid(deposit) and deposit.resource_type == AiPlayer.GOLD and deposit.can_be_gathered() and deposit.amount_remaining > 0:
 			sources.append(deposit)
 	return sources
 

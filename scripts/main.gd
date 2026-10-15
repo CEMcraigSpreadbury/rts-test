@@ -554,7 +554,6 @@ func _ready() -> void:
 	utility_buttons.get_node(^"FormationBoxButton").pressed.connect(_set_formation_type.bind(Formation.Type.BOX))
 	utility_buttons.get_node(^"FormationLineButton").pressed.connect(_set_formation_type.bind(Formation.Type.LINE))
 	utility_buttons.get_node(^"FormationLooseButton").pressed.connect(_set_formation_type.bind(Formation.Type.LOOSE))
-	_setup_music_button(utility_buttons.get_node(^"MusicButton"))
 	var research_button: Button = utility_buttons.get_node(^"ResearchButton")
 	research_button.icon = UiGlyphs.texture(&"research", UiStyle.GLYPH_TOOL)
 	research_button.pressed.connect(research_panel.toggle)
@@ -2263,25 +2262,6 @@ func _idle_villagers() -> Array[Unit]:
 			idle_villagers.append(unit)
 	return idle_villagers
 
-const MUSIC_ICON: Texture2D = preload("res://assets/ui/icons/hud/music.svg")
-const MUSIC_OFF_ICON: Texture2D = preload("res://assets/ui/icons/hud/music_off.svg")
-
-var _music_button: Button
-
-## The utility bar's music button mutes the Music bus, the same switch as its
-## Mute box in Options > Sound, so each follows the other. Settings is an
-## autoload, so it is told through a method: a lambda that never touches `self`
-## belongs to the script, not this match, and would outlive it.
-func _setup_music_button(button: Button) -> void:
-	_music_button = button
-	button.pressed.connect(func(): Settings.set_bus_muted("Music", not Settings.muted["Music"]))
-	_on_mute_changed("Music", Settings.muted["Music"])
-	Settings.mute_changed.connect(_on_mute_changed)
-
-func _on_mute_changed(bus_name: String, on: bool) -> void:
-	if bus_name == "Music":
-		_music_button.icon = MUSIC_OFF_ICON if on else MUSIC_ICON
-
 ## The utility bar's idle button: every idle gatherer at once, left where the
 ## camera is (they may be scattered across the map).
 func _select_all_idle_villagers() -> void:
@@ -3850,6 +3830,28 @@ func _rpc_toggle_repeat(building_path: NodePath, item_index: int) -> void:
 
 ## queue_index 0 is the item in progress (the progress bar); 1+ are the slots
 ## queued behind it, in order.
+## A Library's readers (its Books' gatherers), in the order they were sent;
+## empty for any other building.
+func readers_of(building: ProductionBuilding) -> Array[Unit]:
+	var readers: Array[Unit] = []
+	var books := building.linked_deposit
+	if is_instance_valid(books) and books.pays_at_once:
+		for unit in books.gatherers:
+			if is_instance_valid(unit) and unit.status_activity != Unit.Activity.DEAD:
+				readers.append(unit)
+	return readers
+
+## A click on a reader's slot: he stops reading, steps out of the door and is
+## selected, ready for another job.
+func release_reader(building: ProductionBuilding, index: int) -> void:
+	var readers := readers_of(building)
+	if index < 0 or index >= readers.size():
+		return
+	var unit: Unit = readers[index]
+	var paths: Array[NodePath] = [unit.get_path()]
+	_rpc_issue_stop.rpc_id(1, paths)
+	select_units_from_hud([unit], false)
+
 func cancel_production(building: ProductionBuilding, queue_index: int) -> void:
 	_rpc_cancel_production.rpc_id(1, building.get_path(), queue_index)
 	play_command_sound()

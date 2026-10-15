@@ -62,7 +62,7 @@ const SHAKE_MAX_OFFSET: float = 0.22
 const DEFAULT_ZOOM: float = 18.0
 ## Where a match opens — a little further out than DEFAULT_ZOOM, which stays
 ## the reference distance for pan speed and banner scaling.
-const START_ZOOM: float = 22.0
+const START_ZOOM: float = 26.0
 ## Close in, panning never drops below this share of pan_speed.
 const MIN_PAN_SCALE: float = 0.6
 var zoom_distance: float = START_ZOOM
