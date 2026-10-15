@@ -1,11 +1,10 @@
 extends Node
 ## Run this scene (F6) to regenerate every command-card icon that comes from
 ## art: each of the faction's buildings and each settlement-only building,
-## rendered from its model, and each trainable unit, cut from its idle sprite.
-## Quits when done. Single icons are made from the Icon Maker dock instead.
+## rendered from its model. Units need none: their buttons show figure
+## portraits made at runtime (UnitPortrait). Quits when done. Single icons are made from the Icon Maker dock instead.
 
 const FACTION_PATH: String = "res://resources/factions/faction_one.tres"
-const BUILDINGS_DIR: String = "res://scenes/buildings"
 const OUTPUT_DIR: String = "res://assets/ui/icons"
 ## Built in settlement slots or standing in a settlement, never from the
 ## faction's build menu. Saved under the scene's name (see Objective._building_icon_for).
@@ -22,7 +21,6 @@ const SETTLEMENT_BUILDINGS: Array[String] = [
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUTPUT_DIR + "/buildings")
-	DirAccess.make_dir_recursive_absolute(OUTPUT_DIR + "/units")
 
 	var model_options := IconMaker.Options.new()
 	var faction: Faction = load(FACTION_PATH)
@@ -33,36 +31,6 @@ func _ready() -> void:
 		var icon: Image = await IconMaker.render_model(self, load(scene_path), model_options)
 		_save(icon, "buildings", scene_path.get_file().get_basename().trim_suffix("_building"))
 
-	var sprite_options := IconMaker.Options.new()
-	sprite_options.outline = false
-	var done: Dictionary = {}
-	for file in DirAccess.get_files_at(BUILDINGS_DIR):
-		if not file.ends_with(".tscn"):
-			continue
-		var building: Node = load(BUILDINGS_DIR + "/" + file).instantiate()
-		var producibles: Array = building.get("producibles") if building.get("producibles") != null else []
-		building.free()
-		## One zoom for the whole roster, taken from whichever of its units has
-		## the largest figure: these buttons sit side by side on the command
-		## card, and a unit drawn small looked blown up next to its own kin.
-		var roster: Array[ProducibleItem] = []
-		for item: ProducibleItem in producibles:
-			if item.kind == ProducibleItem.Kind.UNIT and item.unit_scene != null:
-				roster.append(item)
-		sprite_options.scale = 0.0
-		for item in roster:
-			var scale: float = IconMaker.unit_scale(item.unit_scene, sprite_options.size)
-			sprite_options.scale = scale if sprite_options.scale <= 0.0 else minf(sprite_options.scale, scale)
-		for item in roster:
-			if done.has(item.item_name):
-				continue
-			done[item.item_name] = true
-			_save(IconMaker.unit_icon(item.unit_scene, sprite_options), "units", item.item_name)
-	## Every production building offers the Lord (ProductionBuilding.LORD_ITEM),
-	## so no scene's list carries it.
-	var lord := ProductionBuilding.LORD_ITEM
-	sprite_options.scale = 0.0
-	_save(IconMaker.unit_icon(lord.unit_scene, sprite_options), "units", lord.item_name)
 	get_tree().quit()
 
 func _save(icon: Image, folder: String, display_name: String) -> void:

@@ -9,8 +9,6 @@
 [ext_resource type="Texture2D" uid="uid://phqvpmnp3vkf" path="res://assets/ui/solid_white.png" id="7_bar_tex"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="8_cost_script"]
 [ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="9_wood"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/horseman.png" id="icon_horseman"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/cavalier.png" id="icon_cavalier"]
 
 [ext_resource type="PackedScene" path="res://assets/art/Models/TownBuildings/Stables.glb" id="90_model"]
 
@@ -22,14 +20,12 @@ amount = 90
 [sub_resource type="Resource" id="ProducibleItem_horseman"]
 script = ExtResource("3_item_script")
 item_name = "Horseman"
-icon = ExtResource("icon_horseman")
 build_time = 5.0
 unit_scene = ExtResource("6_horseman_scene")
 
 [sub_resource type="Resource" id="ProducibleItem_cavalier"]
 script = ExtResource("3_item_script")
 item_name = "Cavalier"
-icon = ExtResource("icon_cavalier")
 build_time = 8.0
 unit_scene = ExtResource("6_cavalier_scene")
 population_cost = 2

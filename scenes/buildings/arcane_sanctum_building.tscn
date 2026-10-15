@@ -9,8 +9,6 @@
 [ext_resource type="Script" uid="uid://pu2w6wofj2hd" path="res://scripts/producible_item.gd" id="3_item_script"]
 [ext_resource type="PackedScene" path="res://scenes/units/wizard_unit.tscn" id="20_0"]
 [ext_resource type="PackedScene" path="res://scenes/units/arch_mage_unit.tscn" id="20_1"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/wizard.png" id="icon_wizard"]
-[ext_resource type="Texture2D" path="res://assets/ui/icons/units/arch_mage.png" id="icon_arch_mage"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/upgrades/ancient_texts.png" id="icon_up_ancient_texts"]
 
 [sub_resource type="Resource" id="ResourceCost_build_wood"]
@@ -26,7 +24,6 @@ amount = 180
 [sub_resource type="Resource" id="ProducibleItem_0"]
 script = ExtResource("3_item_script")
 item_name = "Wizard"
-icon = ExtResource("icon_wizard")
 build_time = 14.0
 unit_scene = ExtResource("20_0")
 
@@ -49,7 +46,6 @@ grants_unlock = &"ancient_texts"
 [sub_resource type="Resource" id="ProducibleItem_1"]
 script = ExtResource("3_item_script")
 item_name = "Arch Mage"
-icon = ExtResource("icon_arch_mage")
 build_time = 22.0
 unit_scene = ExtResource("20_1")
 requires_unlock = &"ancient_texts"

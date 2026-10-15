@@ -39,7 +39,7 @@ func _build_selection_panel() -> void:
 	row.add_theme_constant_override("separation", UiStyle.SPACE_L)
 	panel.content.add_child(row)
 
-	row.add_child(_portrait("res://assets/ui/icons/units/villager.png"))
+	row.add_child(_portrait("res://scenes/units/unit.tscn"))
 
 	var body := VBoxContainer.new()
 	body.add_theme_constant_override("separation", UiStyle.SPACE_S)
@@ -68,13 +68,14 @@ func _build_selection_panel() -> void:
 		elif entry[0] == "P":
 			slot.state = CommandSlot.State.UNAFFORDABLE
 
-func _portrait(icon_path: String) -> Control:
+## A unit scene's figure portrait in a frame.
+func _portrait(unit_scene_path: String) -> Control:
 	var frame := Panel.new()
 	frame.custom_minimum_size = Vector2(UiStyle.PORTRAIT, UiStyle.PORTRAIT)
 	frame.add_theme_stylebox_override("panel", UiStyle.slot_box(UiStyle.LINE_STRONG))
 
 	var icon := TextureRect.new()
-	icon.texture = load(icon_path)
+	icon.texture = UnitPortrait.of_scene(unit_scene_path)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.size = Vector2(UiStyle.ICON_2X, UiStyle.ICON_2X)
@@ -143,7 +144,7 @@ func _build_component_row() -> void:
 		slot.custom_minimum_size = Vector2(UiStyle.SLOT_QUEUE, UiStyle.SLOT_QUEUE)
 		queue.add_child(slot)
 		if i < 3:
-			slot.setup_icon(load("res://assets/ui/icons/units/spearman.png"), str(i + 1), "Spearman", [{"amount": 50}])
+			slot.setup_icon(UnitPortrait.of_scene("res://scenes/units/spearman_unit.tscn"), str(i + 1), "Spearman", [{"amount": 50}])
 		else:
 			slot.make_empty()
 	column.add_child(queue)
