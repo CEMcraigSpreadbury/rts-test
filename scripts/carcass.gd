@@ -40,11 +40,17 @@ static func leave(animal: Unit) -> Carcass:
 	shape.position.y = COLLISION_HEIGHT * 0.5
 	carcass.add_child(shape)
 	carcass._figure = _lying_figure(animal)
+	var mesh := Unit.figure_mesh(animal.figure_model)
+	if mesh != null:
+		## Lying down, its height and length are what spread over the ground.
+		carcass.ring_radius = 0.5 * maxf(mesh.get_aabb().size.y, mesh.get_aabb().size.z) + 0.15
 	main.add_child(carcass)
 	carcass.global_position = animal.global_position
 	return carcass
 
 var _figure: MultiMeshInstance3D = null
+## Its hover ring's radius: round the body lying there (WorldFeedback).
+var ring_radius: float = 0.8
 
 func _ready() -> void:
 	super._ready()
@@ -72,11 +78,14 @@ static func _lying_figure(animal: Unit) -> MultiMeshInstance3D:
 	multimesh.use_custom_data = true
 	multimesh.mesh = mesh
 	multimesh.instance_count = 1
-	## Rolled onto its side about its own length, then lifted so the flank
-	## that was at -X rests on the ground.
+	## Rolled onto its side about its own length, lifted so the flank that was
+	## at -X rests on the ground, and slid so the body's middle (not the feet it
+	## stood on, now off to one side) sits on the carcass's own centre, where
+	## its click and its hover ring are.
+	var box: AABB = mesh.get_aabb()
 	var lying := Basis(Vector3.UP, animal.rotation.y) * Basis(Vector3.BACK, PI * 0.5)
-	var lift: float = -mesh.get_aabb().position.x
-	multimesh.set_instance_transform(0, Transform3D(lying, Vector3(0.0, lift, 0.0)))
+	var middle: Vector3 = lying * box.get_center()
+	multimesh.set_instance_transform(0, Transform3D(lying, Vector3(-middle.x, -box.position.x, -middle.z)))
 	## As FigureBatcher draws a corpse: team colour, white status tint, no
 	## flash, fully shown (negative = no see-through silhouette).
 	multimesh.set_instance_custom_data(0, Color(_pack(animal.team_tint), _pack(Color.WHITE), 0.0, -1.0))

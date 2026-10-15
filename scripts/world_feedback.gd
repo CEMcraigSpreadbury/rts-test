@@ -1742,6 +1742,8 @@ func _hover_ring_radius(node: Node) -> float:
 		var ring := unit.selection_ring.mesh as TorusMesh if unit.selection_ring != null else null
 		var ring_radius: float = ring.outer_radius if ring != null else 0.0
 		return maxf(HOVER_RING_UNIT_RADIUS, maxf(ring_radius, unit.get_body_radius() + 0.35))
+	if node is Carcass:
+		return node.ring_radius
 	var obstacle: NavigationObstacle3D = node.get_node_or_null("NavigationObstacle3D")
 	var obstacle_radius: float = obstacle.radius + 0.2 if obstacle else 1.0
 	if node is Gatherable and node.is_tree():

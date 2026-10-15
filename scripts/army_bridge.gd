@@ -869,7 +869,7 @@ static func block_spacing(block: Array) -> float:
 	return Formation.SPACING
 
 ## Open ground kept between two big bodies standing side by side.
-const BIG_BODY_GAP: float = 0.5
+const BIG_BODY_GAP: float = 1.0
 
 func _apply_shape(formation: int, formation_type: Formation.Type, men: int, spacing: float = Formation.SPACING) -> void:
 	var layout := block_layout(formation_type, men, spacing)
