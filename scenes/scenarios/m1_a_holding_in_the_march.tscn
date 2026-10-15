@@ -158,7 +158,7 @@ count = 1
 [sub_resource type="Resource" id="a_dialogue_24"]
 script = ExtResource("a_dialogue")
 speaker = "Steward Edda"
-text = "Every mouth eats, villagers and soldiers alike, and food comes from the fields. Build a Mill (B, then P) where there is open ground around it. Its fields are laid out once it stands; right-click one with villagers and they will sow it, tend it and bring in the harvest."
+text = "Every mouth eats, villagers and soldiers alike. Deer and boar in the woods are quick food for hunters, but fields last. Build a Mill (B, then P) where there is open ground around it. Its fields are laid out once it stands; right-click one with villagers and they will sow it, tend it and bring in the harvest."
 speaker_scene = ExtResource("unit_villager")
 pause_in_single_player = true
 
@@ -209,7 +209,7 @@ count = 1
 [sub_resource type="Resource" id="a_dialogue_33"]
 script = ExtResource("a_dialogue")
 speaker = "Captain Bram"
-text = "Loose men are a crowd. Select the soldiers and press N to form them into a regiment. It is raised in ranks of six, every man keeps his place in the line, and its card appears along the bottom of the screen."
+text = "Loose men are a crowd. Select the soldiers and press N to form them into a regiment. Every man keeps his place in the line, and its card appears along the bottom of the screen."
 speaker_scene = ExtResource("unit_soldier")
 pause_in_single_player = true
 
@@ -239,7 +239,7 @@ amounts = Array[ExtResource("cost")]([SubResource("cost_37")])
 [sub_resource type="Resource" id="a_dialogue_39"]
 script = ExtResource("a_dialogue")
 speaker = "Steward Edda"
-text = "A regiment fights harder and holds its nerve under a Lord. The Crown has sent gold for one: select the Town Center and raise him. You may keep one Lord, and one more for every two settlements you hold."
+text = "A regiment fights harder under a Lord. The Crown has sent gold for one: select the Town Center and raise him. You may keep one Lord, and one more for every two settlements you hold."
 speaker_scene = ExtResource("unit_villager")
 pause_in_single_player = true
 

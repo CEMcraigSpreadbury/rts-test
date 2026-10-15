@@ -17,12 +17,7 @@
 [sub_resource type="Resource" id="ResourceCost_library_wood"]
 script = ExtResource("3_cost_script")
 resource_type = ExtResource("4_wood")
-amount = 150
-
-[sub_resource type="Resource" id="ResourceCost_library_gold"]
-script = ExtResource("3_cost_script")
-resource_type = ExtResource("6_gold")
-amount = 50
+amount = 175
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_body"]
 size = Vector3(3.2, 2.4, 2.2)
@@ -114,7 +109,7 @@ properties/13/replication_mode = 2
 [node name="Library" type="StaticBody3D" unique_id=247093089 groups=["buildings"]]
 script = ExtResource("1_building_script")
 building_name = "Library"
-costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_library_wood"), SubResource("ResourceCost_library_gold")])
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_library_wood")])
 can_rally = false
 on_select_sound_effects = Array[AudioStream]([ExtResource("4_uvdig"), ExtResource("5_ej24r"), ExtResource("fsfx_0"), ExtResource("fsfx_1")])
 max_health = 80
