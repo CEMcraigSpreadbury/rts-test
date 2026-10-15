@@ -26,30 +26,23 @@ const SMITHY: int = -2
 
 const HUMAN_BLOCK_GUARD: float = 0.1
 const DARK_ELF_CRUELTY: float = 0.25
-## Below this fraction of its max health a target counts as wounded (Cruelty),
-## and a unit counts as frenzied (the frenzy effect).
+## Below this fraction of its max health a target counts as wounded (Cruelty).
 const WOUNDED_FRACTION: float = 0.5
 const STAR_NIGHT_ARMOR: int = 2
 const BEASTMEN_BLOODRAGE: float = 0.4
 
-## How close an enemy's death has to be for Carrion Feast.
-const CARRION_RADIUS: float = 7.0
 ## How far a Comet Arrow's burst reaches from the unit it hits.
 const SPLASH_RADIUS: float = 2.5
 
-const UnitGrid = preload("res://scripts/unit_grid.gd")
 const WOOD: ResourceType = preload("res://resources/wood_resource_type.tres")
 const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 
 ## Effects an upgrade can carry (key -> amount):
 ##   health, speed, vision, damage, attack_speed, aura: fractions
 ##   range: metres (ranged units only)   armor: points
-##   extra_bodies: one more body in each litter
-##   carrion_heal: health per enemy death nearby   regen: health a second out of combat
-##   frenzy: attack speed while below WOUNDED_FRACTION   bloodrage: more Bloodrage
+##   regen: health a second out of combat   bloodrage: more Bloodrage
 ##   lifesteal: of damage dealt   cruelty: more Cruelty   splash: of a shot's damage
-##   bleed / slow / venom: an on-hit effect (for units with none of their own)
-##   pack_radius / pack_max: Pack Courage reach (fraction) and peak (added)
+##   slow / venom: an on-hit effect (for units with none of their own)
 ##   night_always: Starlit by day too   charge_damage: fraction   charge_heal: health
 ##   fast_brace: spears counter charging cavalry harder
 ##   pierce_guard: less damage from arrows and bolts while in a block
@@ -183,11 +176,6 @@ static func _on_hit(effect: StringName) -> Ability:
 	var ability := Ability.new()
 	ability.kind = Ability.Kind.ACTIVATED_AREA
 	match effect:
-		&"bleed":
-			ability.ability_name = "Bleed"
-			ability.dot_damage_per_second = 2
-			ability.dot_duration = 3.0
-			ability.effect_color = Color(0.85, 0.2, 0.2)
 		&"slow":
 			ability.ability_name = "Hamstring"
 			ability.slow_fraction = 0.35
@@ -228,7 +216,7 @@ static func _index() -> void:
 		var entry: Dictionary = RealmRoster.RACES[race]
 		for kind in (entry.units as Array).size():
 			for unit in entry.units[kind]:
-				_unit_info[unit[0]] = [race, kind]
+				_unit_info[unit] = [race, kind]
 		for scene in entry.scenes:
 			if not (scene as String).is_empty():
 				_building_race[scene] = race
@@ -333,18 +321,6 @@ static func _item(entry: Dictionary) -> ProducibleItem:
 	item.set_meta(&"race_upgrade", true)
 	return item
 
-## Host: how many more bodies a litter of `item` brings for `peer_id`.
-static func extra_bodies(peer_id: int, item: ProducibleItem) -> int:
-	if item.spawn_count <= 1 or item.unit_scene == null:
-		return 0
-	var info := unit_info(item.unit_scene.resource_path)
-	var extra := 0
-	for entry in UPGRADES:
-		if entry.race == info[0] and (entry.at == EVERY_KIND or entry.at == info[1]) \
-				and entry.effects.has("extra_bodies") and UnitUnlocks.has(peer_id, entry.id):
-			extra += int(entry.effects.extra_bodies)
-	return extra
-
 ## --- Units ---
 
 var main: Main
@@ -382,13 +358,6 @@ func _tick_regeneration() -> void:
 				or now - unit.last_damaged_msec < Research.REGEN_COMBAT_COOLDOWN_MS:
 			continue
 		unit.heal(maxi(roundi((unit.race_regen + unit.lord_regen) * TICK_SECONDS), 1))
-
-## Host: Carrion Feast — the victim's enemies close by feed on it.
-func on_death(victim: Unit) -> void:
-	for other in UnitGrid.enemies_near(get_tree(), victim.global_position, CARRION_RADIUS, victim.owner_peer_id):
-		if other.race_carrion_heal > 0 and other.status_activity != Unit.Activity.DEAD \
-				and other.global_position.distance_to(victim.global_position) <= CARRION_RADIUS:
-			other.heal(other.race_carrion_heal)
 
 ## Every peer, as a unit spawns (after Unit._ready): its people's trait and
 ## every upgrade its owner already holds.
@@ -459,12 +428,8 @@ func _apply_to(unit: Unit, entry: Dictionary) -> void:
 				unit.attack_cooldown /= 1.0 + float(amount)
 			"armor":
 				unit.race_armor += int(amount)
-			"carrion_heal":
-				unit.race_carrion_heal += int(amount)
 			"regen":
 				unit.race_regen += float(amount)
-			"frenzy":
-				unit.race_frenzy += float(amount)
 			"bloodrage":
 				unit.race_bloodrage += float(amount)
 			"lifesteal":
@@ -474,13 +439,9 @@ func _apply_to(unit: Unit, entry: Dictionary) -> void:
 			"splash":
 				if ranged:
 					unit.race_splash += float(amount)
-			"bleed", "slow", "venom":
+			"slow", "venom":
 				if unit.on_hit_ability == null:
 					unit.race_on_hit = _on_hit(StringName(key))
-			"pack_radius":
-				unit.race_pack_radius += float(amount)
-			"pack_max":
-				unit.race_pack_max += float(amount)
 			"night_always":
 				unit.race_night_always = true
 			"charge_damage":

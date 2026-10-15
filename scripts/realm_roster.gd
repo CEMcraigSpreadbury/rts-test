@@ -15,7 +15,7 @@ const KIND_NAMES: Array[String] = ["Barracks", "Range", "Stables", "Sanctum", "B
 const KIND_GLYPHS: Array[StringName] = [&"barracks", &"range", &"stables", &"sanctum", &"bestiary"]
 ## [wood, gold] to build one.
 const KIND_COSTS: Array = [[120, 40], [120, 60], [150, 80], [140, 100], [180, 150]]
-## Seconds to train one of each kind (a litter counts as one).
+## Seconds to train one of each kind.
 const KIND_TRAIN_SECONDS: Array[float] = [20.0, 22.0, 26.0, 30.0, 40.0]
 ## The building put up when a people has none of its own for that kind.
 const GENERIC_SCENES: Array[String] = [
@@ -41,46 +41,46 @@ const ELITE_DAMAGE: float = 1.25
 const ELITE_SCALE: float = 1.15
 
 ## Race -> {scenes: a building per Kind ("" for the generic one), units: per
-## Kind, [scene path, bodies per training] in level order}.
+## Kind, unit scene paths in level order}.
 const RACES: Dictionary = {
 	"Human": {
 		"scenes": ["", "", "", "", ""],
 		"units": [
-			[["res://scenes/units/soldier_unit.tscn", 1], ["res://scenes/units/spearman_unit.tscn", 1], ["res://scenes/units/halberdier_unit.tscn", 1]],
-			[["res://scenes/units/archer_unit.tscn", 1], ["res://scenes/units/crossbowman_unit.tscn", 1]],
-			[["res://scenes/units/horseman_unit.tscn", 1], ["res://scenes/units/cavalier_unit.tscn", 1]],
-			[["res://scenes/units/wizard_unit.tscn", 1], ["res://scenes/units/arch_mage_unit.tscn", 1]],
-			[["res://scenes/units/beasts/griffin_unit.tscn", 1], ["res://scenes/units/beasts/manticore_unit.tscn", 1]],
+			["res://scenes/units/soldier_unit.tscn", "res://scenes/units/spearman_unit.tscn", "res://scenes/units/halberdier_unit.tscn"],
+			["res://scenes/units/archer_unit.tscn", "res://scenes/units/crossbowman_unit.tscn"],
+			["res://scenes/units/horseman_unit.tscn", "res://scenes/units/cavalier_unit.tscn"],
+			["res://scenes/units/wizard_unit.tscn", "res://scenes/units/arch_mage_unit.tscn"],
+			["res://scenes/units/beasts/griffin_unit.tscn", "res://scenes/units/beasts/manticore_unit.tscn"],
 		],
 	},
 	"Dark Elves": {
 		"scenes": ["res://scenes/buildings/dark_elf_spire_building.tscn", "", "", "res://scenes/buildings/dark_elf_coven_building.tscn", ""],
 		"units": [
-			[["res://scenes/units/dark_elves/dark_elf_warrior_unit.tscn", 1], ["res://scenes/units/dark_elves/dark_elf_guard_unit.tscn", 1], ["res://scenes/units/dark_elves/dark_elf_assassin_unit.tscn", 1]],
-			[["res://scenes/units/dark_elves/dark_elf_archer_unit.tscn", 1]],
-			[["res://scenes/units/dark_elves/dark_elf_rider_unit.tscn", 1]],
-			[["res://scenes/units/dark_elves/dark_elf_sorceress_unit.tscn", 1], ["res://scenes/units/dark_elves/dark_elf_spellstealer_unit.tscn", 1]],
-			[["res://scenes/units/beasts/kitsune_unit.tscn", 1], ["res://scenes/units/beasts/wind_tiger_unit.tscn", 1]],
+			["res://scenes/units/dark_elves/dark_elf_warrior_unit.tscn", "res://scenes/units/dark_elves/dark_elf_guard_unit.tscn", "res://scenes/units/dark_elves/dark_elf_assassin_unit.tscn"],
+			["res://scenes/units/dark_elves/dark_elf_archer_unit.tscn"],
+			["res://scenes/units/dark_elves/dark_elf_rider_unit.tscn"],
+			["res://scenes/units/dark_elves/dark_elf_sorceress_unit.tscn", "res://scenes/units/dark_elves/dark_elf_spellstealer_unit.tscn"],
+			["res://scenes/units/beasts/kitsune_unit.tscn", "res://scenes/units/beasts/wind_tiger_unit.tscn"],
 		],
 	},
 	"Star Wanderers": {
 		"scenes": ["res://scenes/buildings/star_gate_building.tscn", "", "", "res://scenes/buildings/star_sanctum_building.tscn", ""],
 		"units": [
-			[["res://scenes/units/star_wanderers/sw_warrior_unit.tscn", 1], ["res://scenes/units/star_wanderers/sw_spearman_unit.tscn", 1], ["res://scenes/units/star_wanderers/sw_paladin_unit.tscn", 1]],
-			[["res://scenes/units/star_wanderers/sw_hunter_unit.tscn", 1]],
-			[["res://scenes/units/star_wanderers/sw_rider_unit.tscn", 1], ["res://scenes/units/star_wanderers/sw_knight_unit.tscn", 1]],
-			[["res://scenes/units/star_wanderers/sw_priestess_unit.tscn", 1]],
-			[["res://scenes/units/beasts/dragon_unit.tscn", 1], ["res://scenes/units/beasts/lightning_dragon_unit.tscn", 1]],
+			["res://scenes/units/star_wanderers/sw_warrior_unit.tscn", "res://scenes/units/star_wanderers/sw_spearman_unit.tscn", "res://scenes/units/star_wanderers/sw_paladin_unit.tscn"],
+			["res://scenes/units/star_wanderers/sw_hunter_unit.tscn"],
+			["res://scenes/units/star_wanderers/sw_rider_unit.tscn", "res://scenes/units/star_wanderers/sw_knight_unit.tscn"],
+			["res://scenes/units/star_wanderers/sw_priestess_unit.tscn"],
+			["res://scenes/units/beasts/dragon_unit.tscn", "res://scenes/units/beasts/lightning_dragon_unit.tscn"],
 		],
 	},
 	"Beastmen": {
 		"scenes": ["res://scenes/buildings/beastmen_barracks_building.tscn", "", "", "", ""],
 		"units": [
-			[["res://scenes/units/beastman_warrior_unit.tscn", 1], ["res://scenes/units/beastman_raider_unit.tscn", 1], ["res://scenes/units/beastman_panda_warrior_unit.tscn", 1]],
-			[["res://scenes/units/beastman_wolf_pathfinder_unit.tscn", 1]],
-			[["res://scenes/units/beastman_wolf_rider_unit.tscn", 1]],
-			[["res://scenes/units/beastman_druid_unit.tscn", 1]],
-			[["res://scenes/units/beasts/sand_worm_unit.tscn", 1], ["res://scenes/units/beasts/skeleton_dragon_unit.tscn", 1]],
+			["res://scenes/units/beastman_warrior_unit.tscn", "res://scenes/units/beastman_raider_unit.tscn", "res://scenes/units/beastman_panda_warrior_unit.tscn"],
+			["res://scenes/units/beastman_wolf_pathfinder_unit.tscn"],
+			["res://scenes/units/beastman_wolf_rider_unit.tscn"],
+			["res://scenes/units/beastman_druid_unit.tscn"],
+			["res://scenes/units/beasts/sand_worm_unit.tscn", "res://scenes/units/beasts/skeleton_dragon_unit.tscn"],
 		],
 	},
 }
@@ -111,10 +111,9 @@ static func roster(race: String, kind: int, level: int = 1) -> Array:
 		return out
 	var units: Array = RACES[race].units[kind]
 	for i in mini(level, units.size()):
-		out.append([units[i][0], units[i][1], KIND_TRAIN_SECONDS[kind], false])
+		out.append([units[i], KIND_TRAIN_SECONDS[kind], false])
 	if level > units.size() and not units.is_empty():
-		var top: Array = units[units.size() - 1]
-		out.append([top[0], top[1], KIND_TRAIN_SECONDS[kind], true])
+		out.append([units[units.size() - 1], KIND_TRAIN_SECONDS[kind], true])
 	return out
 
 ## A level beyond the elite has no unit to give, so it trains faster.
@@ -154,7 +153,7 @@ static func level_items(military: bool = false) -> Array[ProducibleItem]:
 static func describe_kind(race: String, kind: int) -> String:
 	var names: Array[String] = []
 	for entry in RACES[race].units[kind] if RACES.has(race) else []:
-		names.append(_display_name(entry[0]))
+		names.append(_display_name(entry))
 	if names.is_empty():
 		return ""
 	if names.size() == 1:
@@ -186,9 +185,8 @@ static func items(entries: Array, tint: Color = Color(0, 0, 0, 0)) -> Array[Prod
 		var item := ProducibleItem.new()
 		item.kind = ProducibleItem.Kind.UNIT
 		item.unit_scene = scene
-		item.spawn_count = int(entry[1])
-		item.build_time = float(entry[2])
-		item.elite = entry.size() > 3 and bool(entry[3])
+		item.build_time = float(entry[1])
+		item.elite = entry.size() > 2 and bool(entry[2])
 		item.icon = UnitPortrait.of_scene(entry[0], tint)
 		var probe := scene.instantiate()
 		item.item_name = probe.get(&"display_name") if probe.get(&"display_name") != null else entry[0].get_file().get_basename()

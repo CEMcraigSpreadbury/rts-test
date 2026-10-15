@@ -15,9 +15,6 @@ extends RefCounted
 ## A unit can set its own sprite crop instead (Unit.portrait_region).
 
 const PORTRAIT_DIR: String = "res://assets/art/Models/Units/portraits/"
-## Figure models whose names start with these keep their sprite portraits
-## even when a render exists.
-const SPRITE_ONLY: Array[String] = []
 ## shaders/unit_figure.gdshader's team_grey_ref and team_saturation.
 const TEAM_GREY_REF: float = 0.42
 const TEAM_SATURATION: float = 0.88
@@ -109,11 +106,7 @@ static func filter_for(texture: Texture2D) -> CanvasItem.TextureFilter:
 static func figure_name(unit: Unit) -> String:
 	if unit == null or unit.figure_model == null:
 		return ""
-	var name: String = unit.figure_model.resource_path.get_file().get_basename()
-	for prefix in SPRITE_ONLY:
-		if name.begins_with(prefix):
-			return ""
-	return name
+	return unit.figure_model.resource_path.get_file().get_basename()
 
 ## The rendered portrait as an Image in `tint` (null with none): for the
 ## regiment standards, which paint it onto their token.

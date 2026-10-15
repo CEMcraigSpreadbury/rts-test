@@ -80,9 +80,6 @@ func get_costs() -> Array[ResourceCost]:
 func get_corner_costs() -> Array[ResourceCost]:
 	return _peek_costs(wall_corner_scene, costs)
 
-func get_gate_costs() -> Array[ResourceCost]:
-	return _peek_costs(wall_gate_scene, costs)
-
 func _peek_costs(target_scene: PackedScene, fallback: Array[ResourceCost]) -> Array[ResourceCost]:
 	if target_scene == null:
 		return fallback

@@ -1454,10 +1454,6 @@ var race_wounded_bonus: float = 0.0
 var race_lifesteal: float = 0.0
 ## Bloodrage: attack speed gained in proportion to health lost, up to this.
 var race_bloodrage: float = 0.0
-## Blood Frenzy: attack speed while below RaceTraits.WOUNDED_FRACTION.
-var race_frenzy: float = 0.0
-## Health per enemy death nearby (RaceTraits.on_death).
-var race_carrion_heal: int = 0
 ## Health a second out of combat (RaceTraits._tick_regeneration).
 var race_regen: float = 0.0
 var race_on_hit: Ability = null
@@ -1466,9 +1462,6 @@ var race_splash: float = 0.0
 var race_charge_bonus: float = 0.0
 var race_charge_heal: int = 0
 var race_fast_brace: bool = false
-## Pack Courage's reach (a multiplier) and peak (added to the cap).
-var race_pack_radius: float = 1.0
-var race_pack_max: float = 0.0
 ## Health a second out of combat from his Lord (a Mystic's, see Lords).
 var lord_regen: float = 0.0
 
@@ -2787,15 +2780,12 @@ func _starlit_armor() -> int:
 		return 0
 	return race_night_armor if race_night_always else roundi(race_night_armor * RaceTraits.night)
 
-## Bloodrage and Blood Frenzy: faster the more this unit is hurt.
+## Bloodrage: faster the more this unit is hurt.
 func _rage_attack_speed() -> float:
-	if (race_bloodrage <= 0.0 and race_frenzy <= 0.0) or max_health <= 0:
+	if race_bloodrage <= 0.0 or max_health <= 0:
 		return 0.0
 	var health := float(status_current_health) / float(max_health)
-	var speed := race_bloodrage * clampf(1.0 - health, 0.0, 1.0)
-	if health < RaceTraits.WOUNDED_FRACTION:
-		speed += race_frenzy
-	return speed
+	return race_bloodrage * clampf(1.0 - health, 0.0, 1.0)
 
 ## `directional` false for ability blasts and damage over time, which have no
 ## meaningful side they came from — only real attacks get flank/rear bonuses.
@@ -3385,9 +3375,6 @@ static func figure_mesh(model: PackedScene) -> Mesh:
 		_figure_meshes[model] = (found[0] as MeshInstance3D).mesh if not found.is_empty() else null
 		root.free()
 	return _figure_meshes[model]
-
-func is_drawn_as_figure() -> bool:
-	return _drawn_as_figure
 
 ## How tall its figure stands, to the head (0 with none; see figure_top).
 func figure_height() -> float:
@@ -4519,8 +4506,6 @@ func _die(attacker: Node3D = null) -> void:
 		main.realm_economy.award_hunt(self, attacker)
 	if main is Main and main.lords != null:
 		main.lords.on_death(self, attacker)
-	if main is Main and main.race_traits != null:
-		main.race_traits.on_death(self)
 	if main is Main and main.research != null:
 		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
 		main.research.award_kill(self, attacker, credit)
@@ -4748,7 +4733,7 @@ func _tick_pack_courage(delta: float) -> void:
 		return
 	_pack_timer = PACK_RECHECK_INTERVAL
 	var mates: int = 0
-	var radius: float = PACK_COURAGE_RADIUS * race_pack_radius
+	var radius: float = PACK_COURAGE_RADIUS
 	var radius_squared: float = radius * radius
 	for other in UnitGrid.units_near(get_tree(), global_position, radius):
 		if other == self or not is_instance_valid(other) or other.status_activity == Activity.DEAD:
@@ -4758,7 +4743,7 @@ func _tick_pack_courage(delta: float) -> void:
 		if global_position.distance_squared_to(other.global_position) > radius_squared:
 			continue
 		mates += 1
-	var bonus: float = minf(float(mates) * PACK_COURAGE_PER_MATE, PACK_COURAGE_MAX_BONUS + race_pack_max)
+	var bonus: float = minf(float(mates) * PACK_COURAGE_PER_MATE, PACK_COURAGE_MAX_BONUS)
 	_pack_multiplier = 1.0 + bonus
 
 ## Host-side. A Priestess keeps her own side standing without any order.

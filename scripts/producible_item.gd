@@ -53,10 +53,6 @@ func display_glyph() -> StringName:
 ## hitting and drawn a size up.
 @export var elite: bool = false
 
-## How many units one completed item spawns. Gnolls are trained in litters:
-## one cost, one build time, three or four bodies. 1 for everything else.
-@export var spawn_count: int = 1
-
 ## Used when kind == UPGRADE, for a Blacksmith-style weapon/armor upgrade
 ## (see UnitUpgrades autoload). upgrade_bonus == 0 means this item doesn't
 ## grant one. A future upgrade effect is another optional field here plus a

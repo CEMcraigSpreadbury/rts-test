@@ -1796,33 +1796,6 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		"elite": item.elite,
 	})
 	building.register_produced_unit(unit)
-	## A litter: one cost, one build time, several bodies (Gnolls). The extras
-	## are spawned here rather than queued so they arrive together; their
-	## population was already reserved for the whole litter at enqueue time
-	## (ProductionBuilding.population_for). Every one of them is rallied
-	## below, not just the first — a pack that walked off one body at a time
-	## was the whole point of training them as a litter.
-	var litter: Array[Unit] = [unit]
-	var bodies: int = maxi(item.spawn_count, 1)
-	## Bigger Litters: the extra gnolls were never reserved at enqueue, so each
-	## comes only if the pool still has room for it.
-	for _extra in RaceTraits.extra_bodies(building.owner_peer_id, item):
-		if not Population.has_room(building.owner_peer_id, item.get_population_cost()):
-			break
-		Population.reserve(building.owner_peer_id, item.get_population_cost())
-		bodies += 1
-	for i in range(1, bodies):
-		var litter_pos := spawn_pos + Vector3(randf_range(-1.6, 1.6), 0.0, randf_range(-1.6, 1.6))
-		var mate: Unit = unit_spawner.spawn({
-			"scene_path": item.unit_scene.resource_path,
-			"peer_id": building.owner_peer_id,
-			"tint": get_team_tint(building.owner_peer_id),
-			"position": litter_pos,
-			"pop_out_from": pop_out_from,
-			"elite": item.elite,
-		})
-		building.register_produced_unit(mate)
-		litter.append(mate)
 	feedback.relay_building_squash(building)
 	if building.can_rally and building.has_rally_point:
 		var rally_target: Node = get_node_or_null(building.rally_target_path) \
@@ -1837,9 +1810,8 @@ func _on_building_item_completed(item: ProducibleItem, building: ProductionBuild
 		## meaningful for a plain-ground rally; a rally_target (gather/attack/
 		## build) makes _dispatch_smart_command path to the target node
 		## itself and ignore this position entirely.
-		for member in litter:
-			var rally_pos := building.rally_point + Vector3(randf_range(-1.2, 1.2), 0.0, randf_range(-1.2, 1.2))
-			_dispatch_smart_command(member, rally_target, rally_pos, false)
+		var rally_pos := building.rally_point + Vector3(randf_range(-1.2, 1.2), 0.0, randf_range(-1.2, 1.2))
+		_dispatch_smart_command(unit, rally_target, rally_pos, false)
 
 ## Only ever fires host-side (construction progress is host-authoritative),
 ## so the chat line is sent explicitly to whichever peer owns the building

@@ -760,13 +760,13 @@ func enqueue(item: ProducibleItem) -> bool:
 	## actually spawns) so a player can't queue past the cap; Unit.release()s
 	## the same amount when the resulting unit later dies.
 	if item.kind == ProducibleItem.Kind.UNIT and not Population.has_room(
-			owner_peer_id, population_for(item)):
+			owner_peer_id, item.get_population_cost()):
 		return false
 	if item.kind == ProducibleItem.Kind.UNIT and is_at_unit_limit(owner_peer_id):
 		return false
 	ResourceStockpile.spend(owner_peer_id, costs)
 	if item.kind == ProducibleItem.Kind.UNIT:
-		Population.reserve(owner_peer_id, population_for(item))
+		Population.reserve(owner_peer_id, item.get_population_cost())
 	queue.append(item)
 	_paid_costs.append(costs)
 	queue_changed.emit()
@@ -819,7 +819,7 @@ func cancel_at(index: int) -> bool:
 	for cost in paid:
 		ResourceStockpile.add(owner_peer_id, cost.resource_type, cost.amount)
 	if item.kind == ProducibleItem.Kind.UNIT:
-		Population.release(owner_peer_id, population_for(item))
+		Population.release(owner_peer_id, item.get_population_cost())
 	queue_changed.emit()
 	return true
 
@@ -1029,7 +1029,7 @@ func _begin_destruction() -> void:
 	## of the match. (No refund: the building and its work are lost.)
 	for item in queue:
 		if item.kind == ProducibleItem.Kind.UNIT:
-			Population.release(owner_peer_id, population_for(item))
+			Population.release(owner_peer_id, item.get_population_cost())
 	queue.clear()
 	_paid_costs.clear()
 	is_under_construction = false
@@ -1301,9 +1301,3 @@ func _side_has_workers() -> bool:
 		if unit != null and unit.can_gather and unit.owner_peer_id == owner_peer_id 				and unit.status_activity != Unit.Activity.DEAD:
 			return true
 	return false
-
-## What one queued item costs in population: a Gnoll litter reserves room for
-## every body it will spawn, not just the first, or three gnolls arrive on one
-## gnoll's worth of room (see ProducibleItem.spawn_count).
-static func population_for(item: ProducibleItem) -> int:
-	return item.get_population_cost() * maxi(item.spawn_count, 1)

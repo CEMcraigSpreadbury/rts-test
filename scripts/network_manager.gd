@@ -577,15 +577,6 @@ func set_my_color(index: int) -> void:
 func color_index_of(peer_id: int) -> int:
 	return TEAM_COLORS.find(players.get(peer_id, {}).get("color", Color.WHITE))
 
-## Every colour is offered to everyone — picking one somebody already has is
-## how you join their team. Kept as a function (rather than dropped) because
-## both pickers ask it, and a scenario may yet want to narrow the choice.
-func available_color_indices(_peer_id: int) -> Array[int]:
-	var out: Array[int] = []
-	for i in TEAM_COLORS.size():
-		out.append(i)
-	return out
-
 ## Whether at least two teams are represented — false when everyone has picked
 ## the same colour, which would be a match with nobody to fight.
 func has_opposing_teams() -> bool:

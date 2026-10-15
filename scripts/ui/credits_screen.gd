@@ -24,12 +24,10 @@ const SECTIONS: Array = [
 		["MiniFolks Star Wanderers", "Dreamir"],
 	]],
 	["Environment", [
-		["Free Stylized Low Poly Forest & Nature Pack", "AmiPolyGon"],
 		["Forgotten Memories 32x32 Tileset", "Immunity"],
 		["Stylized Grass Shader", "Binbun"],
 	]],
 	["Interface", [
-		["Dark Ages UI", "Hypnobius"],
 		["Icons from game-icons.net", "Lorc, Delapouite, Skoll, Sbed, Carl Olsen, Caro Asercion, Cathelineau, DarkZaitzev, Faithtoken, Kier Heyl and Sparker (CC BY 3.0)"],
 	]],
 	["Sound", [
@@ -49,7 +47,6 @@ const SECTIONS: Array = [
 	["Engine & Plugins", [
 		["Godot Engine", "Juan Linietsky, Ariel Manzur and contributors (MIT)"],
 		["TerraBrush", "spimort (MIT)"],
-		["TileMapLayer3D", "DanTrz (MIT)"],
 		["GodotSteam", "GP Garcia, Chris Ridenour and contributors (MIT)"],
 	]],
 ]

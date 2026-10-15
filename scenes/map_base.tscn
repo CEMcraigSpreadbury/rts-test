@@ -170,7 +170,6 @@ draw_pass_1 = SubResource("SphereMesh_dust")
 script = ExtResource("23_fvor6")
 map_origin = Vector2(-84, -75)
 map_size = Vector2(168, 150)
-terrain_mesh_path = NodePath("../NavigationRegion3D/TileMapLayer3D_Baked")
 wind_strength_range = Vector2(0.5, 5)
 
 [node name="PlayerSpawnPoints" type="Node3D" parent="." unique_id=453093757]
