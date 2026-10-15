@@ -1457,6 +1457,8 @@ var race_lifesteal: float = 0.0
 var race_bloodrage: float = 0.0
 ## Health a second out of combat (RaceTraits._tick_regeneration).
 var race_regen: float = 0.0
+## Fraction faster gathering (a Town Centre's tools).
+var race_gather: float = 0.0
 var race_on_hit: Ability = null
 ## Of a shot's damage, dealt again to enemies around what it hits.
 var race_splash: float = 0.0
@@ -3682,7 +3684,8 @@ func _tick_gathering(delta: float) -> void:
 
 	gather_timer += delta
 	var interval: float = target_resource.resource_type.gather_interval / maxf(gather_level, 1.0) \
-			/ (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.GATHER_SPEED) + buffs.amount(ResearchNode.Buff.GATHER_SPEED)) \
+			/ (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.GATHER_SPEED) + buffs.amount(ResearchNode.Buff.GATHER_SPEED) \
+				+ (race_gather if target_resource.resource_type != Research.RESOURCE else 0.0)) \
 			/ _reading_speed(target_resource)
 	if gather_timer >= interval:
 		gather_timer = 0.0

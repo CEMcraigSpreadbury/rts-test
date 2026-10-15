@@ -23,6 +23,8 @@ extends Node
 const EVERY_KIND: int = -1
 ## A Human Blacksmith line (Unit.UnitCategory-wide, through UnitUpgrades).
 const SMITHY: int = -2
+## A Town Centre line, for villagers only (whatever builds and gathers).
+const TOWN_CENTRE: int = -3
 
 const HUMAN_BLOCK_GUARD: float = 0.1
 const DARK_ELF_CRUELTY: float = 0.25
@@ -49,7 +51,25 @@ const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 ##   grant_aura: a healing aura of this much for units without one
 ##   building_damage: added to the building damage multiplier
 ##   smith: [Unit.UnitCategory, weapon points, armour points] (host, UnitUpgrades)
+##   carry: more carried per trip   gather: fraction faster gathering
 const UPGRADES: Array[Dictionary] = [
+	# --- Town Centre (villagers) ---
+	{id = &"tc_loom", race = "Human", at = TOWN_CENTRE, name = "Loom",
+		text = "Villagers gain 40% health and 1 armour.",
+		wood = 0, gold = 50, time = 25.0, effects = {health = 0.4, armor = 1}},
+	{id = &"tc_wheelbarrow", race = "Human", at = TOWN_CENTRE, name = "Wheelbarrow",
+		text = "Villagers carry 5 more and walk 10% faster.",
+		wood = 100, gold = 50, time = 30.0, effects = {carry = 5, speed = 0.1}},
+	{id = &"tc_hand_cart", race = "Human", at = TOWN_CENTRE, name = "Hand Cart", requires = &"tc_wheelbarrow",
+		text = "Villagers carry 5 more and walk 10% faster.",
+		wood = 200, gold = 120, time = 45.0, effects = {carry = 5, speed = 0.1}},
+	{id = &"tc_sharp_tools", race = "Human", at = TOWN_CENTRE, name = "Sharp Tools",
+		text = "Villagers gather 15% faster.",
+		wood = 100, gold = 60, time = 30.0, effects = {gather = 0.15}},
+	{id = &"tc_iron_tools", race = "Human", at = TOWN_CENTRE, name = "Iron Tools", requires = &"tc_sharp_tools",
+		text = "Villagers gather 15% faster.",
+		wood = 180, gold = 140, time = 45.0, effects = {gather = 0.15}},
+
 	# --- Human ---
 	{id = &"hum_shield_wall", race = "Human", at = RealmRoster.Kind.BARRACKS, name = "Shield Wall",
 		text = "Infantry standing in a block take 25% less damage from arrows and bolts.",
@@ -268,7 +288,9 @@ static func offer_upgrades(building: ProductionBuilding) -> void:
 	var kinds: Array[int] = []
 	if building.slot_kind >= 0:
 		kinds.append(building.slot_kind)
-	else:
+	elif not building.is_main_base:
+		## (A Town Centre offers its villager line and nothing else: its
+		## Lord would otherwise bring the Barracks' upgrades with him.)
 		for item in kept:
 			if item.kind != ProducibleItem.Kind.UNIT or item.unit_scene == null:
 				continue
@@ -281,7 +303,10 @@ static func offer_upgrades(building: ProductionBuilding) -> void:
 		if entry.race != race:
 			continue
 		var at: int = entry.at
-		if (at == SMITHY and smithy) or (at == EVERY_KIND and not kinds.is_empty()) or (at >= 0 and kinds.has(at)):
+		if at == TOWN_CENTRE:
+			if building.is_main_base:
+				offered.append(_item(entry))
+		elif (at == SMITHY and smithy) or (at == EVERY_KIND and not kinds.is_empty()) or (at >= 0 and kinds.has(at)):
 			offered.append(_item(entry))
 	offered.append_array(levels)
 	building.producibles = offered
@@ -399,7 +424,10 @@ const APPLIED_META: StringName = &"race_upgrades"
 func _apply_to(unit: Unit, entry: Dictionary) -> void:
 	if unit.race_name.is_empty() or entry.race != unit.race_name:
 		return
-	if entry.at != EVERY_KIND and entry.at != unit.race_kind:
+	if entry.at == TOWN_CENTRE:
+		if not unit.can_gather:
+			return
+	elif entry.at != EVERY_KIND and entry.at != unit.race_kind:
 		return
 	var applied: Array = unit.get_meta(APPLIED_META, [])
 	if applied.has(entry.id):
@@ -461,6 +489,10 @@ func _apply_to(unit: Unit, entry: Dictionary) -> void:
 					unit.heal_aura_amount = int(amount)
 			"building_damage":
 				unit.building_damage_multiplier += float(amount)
+			"carry":
+				unit.carry_capacity += int(amount)
+			"gather":
+				unit.race_gather += float(amount)
 	## A sleeping unit (see Unit._maybe_sleep) has to be up to heal around it,
 	## and the sim holds its own copy of range, vision and speed.
 	unit.wake()

@@ -62,6 +62,11 @@ hum_battle_magic.svg <- lorc/magic-swirl.svg
 hum_royal_aerie.svg <- delapouite/griffin-shield.svg
 smith_archer.svg <- delapouite/quiver.svg
 smith_cavalry.svg <- delapouite/horseshoe.svg
+tc_loom.svg <- delapouite/yarn.svg
+tc_wheelbarrow.svg <- delapouite/wheelbarrow.svg
+tc_hand_cart.svg <- delapouite/old-wagon.svg
+tc_sharp_tools.svg <- delapouite/sharp-axe.svg
+tc_iron_tools.svg <- lorc/mining.svg
 gnl_carrion_feast.svg <- lorc/vulture.svg
 gnl_bigger_litters.svg <- lorc/paw-print.svg
 gnl_blood_frenzy.svg <- delapouite/enrage.svg
