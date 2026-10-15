@@ -297,6 +297,10 @@ STAR_WANDERERS.update({
 ##     coat_grey (pink snout disc, inner ears), bone (tusks)
 ##   deer: fur_red (russet coat), hair_dark (ear rims, burrs, tail),
 ##     cream (muzzle, throat, belly, rump), wood_light (antlers), hoof
+##   wolf: beard (grey coat), beard_dark (saddle, ear tips, tail tip),
+##     ermine (pale mask, jaw, bib, belly, feet), nose
+##   fox: robe (red coat), robe_trim (black socks, ear tips),
+##     fletch (white cheeks, chin, bib, belly, tail tip), nose
 ANIMALS = dict(GNOLLS)
 ANIMALS.update({
 	"fur": ((62, 40, 30), (104, 68, 44), (150, 106, 70)),
@@ -311,6 +315,12 @@ ANIMALS.update({
 	"cream": ((196, 182, 156), (240, 232, 212), (255, 252, 240)),
 	"wood_light": ((150, 128, 100), (214, 196, 164), (246, 236, 212)),
 	"hoof": ((26, 22, 22), (46, 40, 38), (74, 66, 62)),
+	"beard": ((88, 90, 96), (142, 144, 148), (194, 196, 198)),
+	"beard_dark": ((40, 40, 46), (70, 70, 76), (108, 108, 114)),
+	"ermine": ((168, 166, 158), (214, 212, 204), (242, 240, 234)),
+	"robe": ((160, 62, 20), (222, 108, 38), (250, 160, 84)),
+	"robe_trim": ((30, 22, 20), (54, 40, 34), (86, 68, 58)),
+	"fletch": ((206, 202, 196), (246, 244, 238), (255, 255, 255)),
 })
 
 ## Bestiary beasts (kit/beasts.py), on their race's palette. Applied last,

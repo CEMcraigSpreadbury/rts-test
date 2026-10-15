@@ -25,6 +25,7 @@ const DEFAULTS := {
 	&"zoom_speed": 2.0,
 	&"damage_numbers": true,
 	&"regiment_banners": true,
+	&"auto_cast_abilities": true,
 	&"window_mode": WindowMode.WINDOWED,
 	&"vsync": true,
 	&"max_fps": 0,

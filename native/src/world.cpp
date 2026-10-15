@@ -479,6 +479,22 @@ void World::update_fight_targets() {
 				if (ordered != kInvalidId && is_body(ordered) &&
 						dist_sq(pos, { units.pos_x[ordered], units.pos_y[ordered] }) <= (reach + bulk(ordered)) * (reach + bulk(ordered))) {
 					t = ordered;
+					// A volley spreads over the ordered man and those round him
+					// rather than all landing on him: the least shot-at in reach.
+					if (ranged) {
+						const Vec2 at(units.pos_x[ordered], units.pos_y[ordered]);
+						float best = 1e30f;
+						query_bodies(at.x, at.y, kRangedSpreadRadius, [&](uint32_t o) {
+							if (!is_enemy(u, o) || (units.motion[o] & MotionGhost)) return true;
+							const Vec2 op(units.pos_x[o], units.pos_y[o]);
+							if (std::sqrt(dist_sq(at, op)) - bulk(o) > kRangedSpreadRadius) return true;
+							const float d = std::sqrt(dist_sq(pos, op));
+							if (d - bulk(o) > reach) return true;
+							const float score = d + float(attackers[o] + counts[o]) * kRangedCrowdPenalty;
+							if (score < best) { best = score; t = o; }
+							return true;
+						});
+					}
 				}
 			}
 			if (t == kInvalidId) {
@@ -490,7 +506,7 @@ void World::update_fight_targets() {
 					if (units.team[o] == team || (units.motion[o] & MotionGhost)) return true;
 					const float d = std::sqrt(dist_sq(pos, { units.pos_x[o], units.pos_y[o] }));
 					if (d - bulk(o) > radius) return true;
-					const float score = d + float(attackers[o]) * penalty;
+					const float score = d + float(attackers[o] + counts[o]) * penalty;
 					if (score < best) { best = score; t = o; }
 					return true;
 				});

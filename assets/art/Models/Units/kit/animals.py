@@ -323,3 +323,188 @@ def deer(b, lod):
 	geo.merge(bm, tail)
 	geo.merge(bm, _deer_head(lod, g))
 	return bm
+
+
+# --- wolf --------------------------------------------------------------------
+
+## A rangy grey wolf: a narrow, deep-chested body on long legs, the head held
+## level and forward on a ruffed neck, a long pale-jawed snout, tall upright
+## ears, a dark saddle down the back and a bushy tail hanging low.
+WOLF_SPINE = [(-0.250, 0.478, 0.020), (-0.222, 0.484, 0.104), (-0.120, 0.478, 0.108), (0.020, 0.466, 0.086),
+		(0.150, 0.470, 0.084), (0.222, 0.476, 0.064), (0.252, 0.480, 0.0)]
+WOLF_HEAD = Vector((0.0, -0.385, 0.650))
+
+
+def _wolf_head(lod, g):
+	H = WOLF_HEAD + Vector((0.0, 0.0, g))
+	bm = geo.new_bm()
+	skull = geo.ellipsoid(0.104, 0.112, 0.096, seg(lod, 12, 8), seg(lod, 6, 4), row("beard"), sharp=SMOOTH)
+	geo.translate(skull, H)
+	geo.merge(bm, skull)
+	# Pale cheek ruffs flaring out below and behind the eyes: the wolf's mask.
+	for side in (-1.0, 1.0):
+		cheek = geo.ellipsoid(0.052, 0.060, 0.050, seg(lod, 8, 5), 4, row("ermine"), sharp=SMOOTH)
+		geo.translate(cheek, H + Vector((side * 0.074, 0.030, -0.040)))
+		geo.merge(bm, cheek)
+	# A long snout, grey on top, a pale jaw, a black nose.
+	snout = geo.tube([H + Vector((0.0, -0.060, -0.030)), H + Vector((0.0, -0.160, -0.050)),
+			H + Vector((0.0, -0.215, -0.056))], [0.056, 0.040, 0.028], seg(lod, 9, 6), row("beard"), sharp=SMOOTH,
+			flatten=0.82, cap_end=row("beard"))
+	geo.merge(bm, snout)
+	jaw = geo.ellipsoid(0.034, 0.080, 0.022, seg(lod, 8, 5), 3, row("ermine"), sharp=SMOOTH)
+	geo.translate(jaw, H + Vector((0.0, -0.128, -0.078)))
+	geo.merge(bm, jaw)
+	nose = geo.ellipsoid(0.024, 0.020, 0.018, seg(lod, 7, 5), 3, row("nose"), sharp=SMOOTH)
+	geo.translate(nose, H + Vector((0.0, -0.228, -0.044)))
+	geo.merge(bm, nose)
+	# Tall pointed ears standing upright, dark at the tip, pale inside.
+	for side in (-1.0, 1.0):
+		ear = geo.lathe([(0.042, 0.0), (0.034, 0.050), (0.0, 0.118)], seg(lod, 7, 5), sharp=40, phase=0.0, sy=0.40,
+				ring_swatches=[row("beard"), row("beard_dark")])
+		inner = geo.lathe([(0.026, 0.004), (0.018, 0.044), (0.0, 0.090)], 5, row("ermine"), sharp=40, phase=0.0,
+				sy=0.26)
+		geo.translate(inner, (0.0, -0.010, 0.004))
+		geo.merge(ear, inner)
+		geo.rotate(ear, side * 14.0, 'Y')
+		geo.rotate(ear, 10.0, 'X')
+		geo.translate(ear, H + Vector((side * 0.060, 0.034, 0.068)))
+		geo.merge(bm, ear)
+	geo.merge(bm, _eyes(lod, skull, H, 0.048, 0.020, rx=0.020, ry=0.026))
+	return bm
+
+
+def wolf(b, lod):
+	g = b.base_height
+	bm = _body(WOLF_SPINE, lod, "beard", up=(1.0, 0.0, 0.0), flatten=0.84, g=g)
+	# A deep chest dropping below the line of the belly, pale underneath.
+	chest = geo.ellipsoid(0.088, 0.104, 0.126, seg(lod, 10, 7), seg(lod, 5, 4), row("beard"), sharp=SMOOTH)
+	geo.translate(chest, (0.0, -0.170, g + 0.430))
+	geo.merge(bm, chest)
+	bib = geo.ellipsoid(0.060, 0.050, 0.100, seg(lod, 8, 5), 4, row("ermine"), sharp=SMOOTH)
+	geo.rotate(bib, -20.0, 'X')
+	geo.translate(bib, (0.0, -0.250, g + 0.430))
+	geo.merge(bm, bib)
+	belly = geo.ellipsoid(0.062, 0.150, 0.040, seg(lod, 9, 6), 4, row("ermine"), sharp=SMOOTH)
+	geo.translate(belly, (0.0, 0.040, g + 0.390))
+	geo.merge(bm, belly)
+	# The dark saddle along the back.
+	saddle = geo.ellipsoid(0.078, 0.200, 0.040, seg(lod, 9, 6), 4, row("beard_dark"), sharp=SMOOTH)
+	geo.translate(saddle, (0.0, 0.000, g + 0.540))
+	geo.merge(bm, saddle)
+	# Long thin legs, the hind bent back at the hock, pale feet.
+	segs = seg(lod, 7, 5)
+	for side in (-1.0, 1.0):
+		x = side * 0.060
+		front = [Vector((x, -0.190, g + 0.430)), Vector((x * 1.04, -0.204, g + 0.220)),
+				Vector((x * 1.06, -0.214, g + 0.036))]
+		hind = [Vector((x, 0.170, g + 0.440)), Vector((x * 1.06, 0.250, g + 0.230)),
+				Vector((x * 1.06, 0.210, g + 0.036))]
+		for pts, radii in ((front, [0.048, 0.028, 0.024]), (hind, [0.064, 0.030, 0.024])):
+			geo.merge(bm, geo.tube(pts, radii, segs, row("beard"), sharp=SMOOTH))
+			foot = pts[-1]
+			paw = geo.ellipsoid(0.032, 0.044, 0.024, seg(lod, 8, 5), seg(lod, 4, 3), row("ermine"), sharp=SMOOTH,
+					squash_bottom=0.3)
+			geo.translate(paw, (foot.x, foot.y - 0.014, g + 0.016))
+			geo.merge(bm, paw)
+	# The neck reaching forward, a thick ruff round it.
+	neck = geo.tube([Vector((0.0, -0.200, g + 0.500)), Vector((0.0, -0.280, g + 0.570)),
+			Vector((0.0, -0.340, g + 0.620))], [0.078, 0.070, 0.064], seg(lod, 9, 6), row("beard"), sharp=SMOOTH,
+			flatten=0.88, up=(1.0, 0.0, 0.0))
+	geo.merge(bm, neck)
+	ruff = geo.ellipsoid(0.100, 0.070, 0.100, seg(lod, 10, 7), seg(lod, 5, 4), row("beard"), sharp=SMOOTH)
+	geo.rotate(ruff, -35.0, 'X')
+	geo.translate(ruff, (0.0, -0.268, g + 0.560))
+	geo.merge(bm, ruff)
+	# A bushy tail hanging low behind, dark at the tip.
+	pts = [Vector((0.0, 0.236, g + 0.500)), Vector((0.0, 0.310, g + 0.430)), Vector((0.0, 0.350, g + 0.330)),
+			Vector((0.0, 0.356, g + 0.230)), Vector((0.0, 0.350, g + 0.180))]
+	geo.merge(bm, geo.tube(pts, [0.030, 0.052, 0.060, 0.044, 0.0], seg(lod, 8, 6), sharp=SMOOTH,
+			ring_swatches=[row("beard"), row("beard"), row("beard"), row("beard_dark"), row("beard_dark")]))
+	geo.merge(bm, _wolf_head(lod, g))
+	return bm
+
+
+# --- fox ---------------------------------------------------------------------
+
+## A small red fox: low and light on thin black-socked legs, a big head with
+## huge black-tipped ears, a white bib and cheeks, and a great brush of a
+## tail swept up behind, white at the tip.
+FOX_SPINE = [(-0.150, 0.262, 0.020), (-0.130, 0.268, 0.074), (-0.060, 0.270, 0.082), (0.030, 0.264, 0.074),
+		(0.100, 0.268, 0.068), (0.140, 0.274, 0.046), (0.158, 0.278, 0.0)]
+FOX_HEAD = Vector((0.0, -0.215, 0.400))
+
+
+def _fox_head(lod, g):
+	H = FOX_HEAD + Vector((0.0, 0.0, g))
+	bm = geo.new_bm()
+	skull = geo.ellipsoid(0.094, 0.090, 0.084, seg(lod, 12, 8), seg(lod, 6, 4), row("robe"), sharp=SMOOTH)
+	geo.translate(skull, H)
+	geo.merge(bm, skull)
+	# White cheeks flaring out below the eyes.
+	for side in (-1.0, 1.0):
+		cheek = geo.ellipsoid(0.048, 0.048, 0.040, seg(lod, 8, 5), 4, row("fletch"), sharp=SMOOTH)
+		geo.translate(cheek, H + Vector((side * 0.060, -0.010, -0.042)))
+		geo.merge(bm, cheek)
+	# A fine pointed snout, red on top, a white chin, a black nose.
+	snout = geo.tube([H + Vector((0.0, -0.050, -0.024)), H + Vector((0.0, -0.120, -0.040)),
+			H + Vector((0.0, -0.170, -0.046))], [0.044, 0.028, 0.012], seg(lod, 9, 6), row("robe"), sharp=SMOOTH,
+			flatten=0.80)
+	geo.merge(bm, snout)
+	chin = geo.ellipsoid(0.028, 0.060, 0.018, seg(lod, 8, 5), 3, row("fletch"), sharp=SMOOTH)
+	geo.translate(chin, H + Vector((0.0, -0.096, -0.060)))
+	geo.merge(bm, chin)
+	nose = geo.ellipsoid(0.016, 0.014, 0.013, seg(lod, 7, 5), 3, row("nose"), sharp=SMOOTH)
+	geo.translate(nose, H + Vector((0.0, -0.172, -0.040)))
+	geo.merge(bm, nose)
+	# Huge upright ears, black at the tips, white inside.
+	for side in (-1.0, 1.0):
+		ear = geo.lathe([(0.052, 0.0), (0.044, 0.060), (0.020, 0.112), (0.0, 0.140)], seg(lod, 7, 5), sharp=40,
+				phase=0.0, sy=0.34, ring_swatches=[row("robe"), row("robe"), row("robe_trim")])
+		inner = geo.lathe([(0.034, 0.004), (0.026, 0.056), (0.0, 0.110)], 5, row("fletch"), sharp=40, phase=0.0,
+				sy=0.22)
+		geo.translate(inner, (0.0, -0.010, 0.004))
+		geo.merge(ear, inner)
+		geo.rotate(ear, side * 24.0, 'Y')
+		geo.translate(ear, H + Vector((side * 0.054, 0.016, 0.056)))
+		geo.merge(bm, ear)
+	geo.merge(bm, _eyes(lod, skull, H, 0.042, 0.016, rx=0.019, ry=0.025))
+	return bm
+
+
+def fox(b, lod):
+	g = b.base_height
+	bm = _body(FOX_SPINE, lod, "robe", up=(1.0, 0.0, 0.0), flatten=0.86, g=g)
+	# A white bib down the chest and a pale belly.
+	bib = geo.ellipsoid(0.050, 0.040, 0.074, seg(lod, 8, 5), 4, row("fletch"), sharp=SMOOTH)
+	geo.rotate(bib, -24.0, 'X')
+	geo.translate(bib, (0.0, -0.160, g + 0.264))
+	geo.merge(bm, bib)
+	belly = geo.ellipsoid(0.044, 0.110, 0.028, seg(lod, 8, 5), 4, row("fletch"), sharp=SMOOTH)
+	geo.translate(belly, (0.0, 0.0, g + 0.200))
+	geo.merge(bm, belly)
+	# Thin legs in black socks.
+	segs = seg(lod, 6, 5)
+	for side in (-1.0, 1.0):
+		x = side * 0.046
+		front = [Vector((x, -0.120, g + 0.240)), Vector((x, -0.128, g + 0.120)), Vector((x, -0.134, g + 0.024))]
+		hind = [Vector((x, 0.110, g + 0.250)), Vector((x, 0.152, g + 0.130)), Vector((x, 0.130, g + 0.024))]
+		for pts, radii in ((front, [0.032, 0.020, 0.018]), (hind, [0.044, 0.022, 0.018])):
+			geo.merge(bm, geo.tube(pts, radii, segs, sharp=SMOOTH,
+					ring_swatches=[row("robe"), row("robe_trim"), row("robe_trim")]))
+			foot = pts[-1]
+			paw = geo.ellipsoid(0.024, 0.032, 0.018, seg(lod, 7, 5), 3, row("robe_trim"), sharp=SMOOTH,
+					squash_bottom=0.3)
+			geo.translate(paw, (foot.x, foot.y - 0.010, g + 0.012))
+			geo.merge(bm, paw)
+	# A short neck up into the big head.
+	neck = geo.tube([Vector((0.0, -0.120, g + 0.290)), Vector((0.0, -0.170, g + 0.340)),
+			Vector((0.0, -0.200, g + 0.370))], [0.060, 0.054, 0.050], seg(lod, 8, 6), row("robe"), sharp=SMOOTH)
+	geo.merge(bm, neck)
+	# The great brush: out low behind, then swept up, a white tip.
+	pts = [Vector((0.0, 0.140, g + 0.280)), Vector((0.0, 0.230, g + 0.270)), Vector((0.0, 0.330, g + 0.300)),
+			Vector((0.0, 0.400, g + 0.370)), Vector((0.0, 0.430, g + 0.450)), Vector((0.0, 0.430, g + 0.510))]
+	geo.merge(bm, geo.tube(pts, [0.030, 0.066, 0.084, 0.080, 0.056, 0.0], seg(lod, 10, 7), sharp=SMOOTH,
+			flatten=0.86, up=(1.0, 0.0, 0.0),
+			ring_swatches=[row("robe"), row("robe"), row("robe"), row("robe"), row("fletch"), row("fletch")]))
+	geo.merge(bm, _fox_head(lod, g))
+	return bm

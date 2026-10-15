@@ -21,6 +21,15 @@ extends QuestAction
 ## like the conditions that read it.
 @export var name_as: String = ""
 
+## How far the navmesh may move a unit off its spot (out of a tree, off a
+## wall) before the answer is taken for a stale one.
+const NAV_SNAP_LIMIT: float = 6.0
+
+static func _ground_y(main: Node3D, at: Vector3) -> float:
+	var query := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 60.0, at + Vector3.DOWN * 60.0, 1)
+	var hit: Dictionary = main.get_world_3d().direct_space_state.intersect_ray(query)
+	return hit.position.y if not hit.is_empty() else at.y
+
 func run(runner) -> void:
 	if unit_scene == null or count <= 0:
 		return
@@ -46,7 +55,15 @@ func run(runner) -> void:
 		## of trees and buildings.
 		var spot: Vector3 = origin + offset
 		if on_navmesh:
-			spot = NavigationServer3D.map_get_closest_point(nav_map, spot)
+			## The navigation map belongs to the world, which outlives a scene
+			## change: at the start of the next mission it can still be answering
+			## from the last one's ground, somewhere else entirely. Trust it only
+			## near the spot; otherwise just stand them on the ground there.
+			var snapped: Vector3 = NavigationServer3D.map_get_closest_point(nav_map, spot)
+			if Vector2(snapped.x - spot.x, snapped.z - spot.z).length() <= NAV_SNAP_LIMIT:
+				spot = snapped
+			else:
+				spot.y = _ground_y(runner.main, spot)
 		var unit: Unit = runner.main.unit_spawner.spawn({
 			"scene_path": unit_scene.resource_path,
 			"peer_id": peer_id,

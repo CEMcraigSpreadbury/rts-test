@@ -728,6 +728,18 @@ def deer_animal(lod, base=False):
 	return _assemble(b, [animals.deer(b, lod)], lod, base)
 
 
+def wolf_animal(lod, base=False):
+	"""Wolf: a rangy grey wild wolf on long legs, bushy tail hanging low."""
+	b = parts.Body()
+	return _assemble(b, [animals.wolf(b, lod)], lod, base)
+
+
+def fox_animal(lod, base=False):
+	"""Fox: a small red fox, huge ears, a white-tipped brush tail."""
+	b = parts.Body()
+	return _assemble(b, [animals.fox(b, lod)], lod, base)
+
+
 # --- bestiary beasts ---------------------------------------------------------
 
 def griffin(lod, base=False):
@@ -944,6 +956,10 @@ UNITS = {
 			portrait_distance=1.1, ready=True),
 	"DeerAnimal": dict(_MOUNTED, palette="animals", build=deer_animal, portrait=(0.0, -0.33, 0.76),
 			portrait_distance=1.2, ready=True),
+	"WolfAnimal": dict(_MOUNTED, palette="animals", build=wolf_animal, portrait=(0.0, -0.38, 0.64),
+			portrait_distance=1.2, ready=True),
+	"FoxAnimal": dict(_MOUNTED, palette="animals", build=fox_animal, portrait=(0.0, -0.21, 0.39),
+			portrait_distance=0.9, ready=True),
 	"Griffin": dict(_MOUNTED, palette="aldmere", build=griffin, portrait=(0.0, -0.66, 1.30),
 			portrait_distance=3.8, ready=True),
 	"SandWorm": dict(_MOUNTED, palette="gnolls", build=sand_worm, portrait=(0.0, -0.20, 1.45),

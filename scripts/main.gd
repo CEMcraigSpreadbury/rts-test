@@ -644,6 +644,9 @@ func _add_components() -> void:
 	var dust := DustPool.new()
 	dust.name = "DustPool"
 	add_child(dust)
+	var autocast := AbilityAutocast.new()
+	autocast.main = self
+	add_child(autocast)
 	var voices := UnitVoices.new()
 	voices.name = "UnitVoices"
 	add_child(voices)
@@ -1069,6 +1072,7 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
 	unit.mine_door_dust.connect(feedback.spawn_rally_dust)
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
+	unit.torch_thrown.connect(feedback.on_unit_torch_thrown.bind(unit))
 	unit.damaged.connect(feedback.relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
 	unit.resource_harvested.connect(feedback.on_unit_resource_harvested)
@@ -1101,6 +1105,7 @@ func register_objective_unit(unit: Unit) -> void:
 	unit.work_role_swapped.connect(func(): feedback.spawn_rally_dust(unit.global_position))
 	unit.mine_door_dust.connect(feedback.spawn_rally_dust)
 	unit.projectile_fired.connect(feedback.on_unit_projectile_fired.bind(unit))
+	unit.torch_thrown.connect(feedback.on_unit_torch_thrown.bind(unit))
 	unit.damaged.connect(feedback.relay_damage_number.bind(unit))
 	unit.resource_deposited.connect(feedback.on_unit_resource_deposited.bind(unit))
 	unit.resource_harvested.connect(feedback.on_unit_resource_harvested)

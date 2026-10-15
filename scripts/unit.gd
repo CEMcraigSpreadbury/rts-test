@@ -196,6 +196,9 @@ signal work_role_swapped
 ## cosmetic projectile visual flying toward the target. Real damage timing is
 ## tracked independently on the host via _pending_projectile_hits, not this.
 signal projectile_fired(target: Node3D)
+## A melee unit attacking a building throws a torch at it instead of a blow
+## (see _throw_torch); WorldFeedback draws it.
+signal torch_thrown(target: Node3D)
 ## Relayed the same way (see main.gd) for a floating damage-number popup —
 ## take_damage() only ever runs on the host, so without relaying this every
 ## other peer would never see the number at all.
@@ -4155,7 +4158,9 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 	attack_timer = 0.0
 	_last_swing_ms = GameClock.msec()
 	_play_attack_swing()
-	if projectile_scene != null:
+	if _throws_torch_at(attack_target):
+		_throw_torch(attack_target)
+	elif projectile_scene != null:
 		## The shot leaves just before the draw/cast animation ends rather
 		## than the instant the swing starts, so an archer's arrow and a
 		## caster's bolt both come off the animation that throws them
@@ -4175,6 +4180,24 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 		})
 	else:
 		_strike_melee(attack_target, retarget)
+
+## Men set buildings alight rather than hack at them: an ordinary melee unit
+## (not a shooter, not a monster with blows of its own) attacking a building.
+func _throws_torch_at(target: Node3D) -> bool:
+	return target is ProductionBuilding and projectile_scene == null and get_body_bulk() <= 0.0
+
+## How long a thrown torch is in the air; its damage lands when it does.
+const TORCH_FLIGHT: float = 0.45
+
+func _throw_torch(target: Node3D) -> void:
+	var damage := _effective_attack_damage(target)
+	_pending_projectile_hits.append({
+		"time_remaining": TORCH_FLIGHT,
+		"target": target,
+		"damage": damage,
+	})
+	CombatUtils.reserve_damage(target, damage)
+	torch_thrown.emit(target)
 
 ## One melee blow on `target`: charge, brace, cleave and on-hit effects.
 func _strike_melee(target: Node3D, retarget: bool) -> void:

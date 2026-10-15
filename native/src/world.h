@@ -170,6 +170,8 @@ public:
 	// RANGED_SPREAD_PENALTY.
 	static constexpr float kMeleeCrowdPenalty = 1.0f;
 	static constexpr float kRangedCrowdPenalty = 3.0f;
+	// How far round a ranged block's ordered enemy its volley spreads.
+	static constexpr float kRangedSpreadRadius = 5.0f;
 	// Once his block is in the fight, a melee man with nobody in reach goes
 	// for the nearest enemy this close (checked every kSeekTicks, staggered):
 	// the whole block closes on the enemy, and a wide one wraps round a

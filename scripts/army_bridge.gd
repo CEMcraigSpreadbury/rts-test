@@ -853,12 +853,23 @@ static func block_layout(formation_type: Formation.Type, count: int, spacing: fl
 		_:
 			return {"columns": clampi(ceili(sqrt(count)), 1, Formation.BOX_COLUMNS), "spacing": spacing * Formation.BOX_SPACING_SCALE, "loose": false}
 
-## Horse stand further apart than foot.
+## Horse stand further apart than foot, and anything with a body of its own
+## size (monsters, beasts, siege) far enough apart to fit it with room to
+## spare, Box's tighter packing included, or the block pulls them into each
+## other.
 static func block_spacing(block: Array) -> float:
 	for unit in block:
-		if not (unit as Unit).is_officer:
-			return CAVALRY_SPACING if (unit as Unit).can_charge else Formation.SPACING
+		var u := unit as Unit
+		if u.is_officer:
+			continue
+		var spacing: float = CAVALRY_SPACING if u.can_charge else Formation.SPACING
+		if u.body_radius > 0.0:
+			spacing = maxf(spacing, (u.body_radius * 2.0 + BIG_BODY_GAP) / Formation.BOX_SPACING_SCALE)
+		return spacing
 	return Formation.SPACING
+
+## Open ground kept between two big bodies standing side by side.
+const BIG_BODY_GAP: float = 0.5
 
 func _apply_shape(formation: int, formation_type: Formation.Type, men: int, spacing: float = Formation.SPACING) -> void:
 	var layout := block_layout(formation_type, men, spacing)

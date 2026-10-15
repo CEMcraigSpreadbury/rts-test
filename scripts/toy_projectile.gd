@@ -1,11 +1,11 @@
 class_name ToyProjectile
 extends Node3D
-## A shot in flight as a chunky plastic toy: an arrow, a ballista bolt or a
-## glowing magic orb. Built from primitive meshes pointing along -Z, so
+## A shot in flight as a chunky plastic toy: an arrow, a ballista bolt, a
+## glowing magic orb or a burning torch thrown at a building. Built from primitive meshes pointing along -Z, so
 ## WorldFeedback._fly_projectile_visual only has to turn it along its arc.
 ## Purely visual; the damage is the host's (Unit._tick_pending_projectiles).
 
-enum Kind { ARROW, BOLT, ORB }
+enum Kind { ARROW, BOLT, ORB, TORCH }
 @export var kind: Kind = Kind.ARROW
 ## The orb's colour, set by the shooter before it is added (Unit.projectile_tint).
 var tint: Color = Color(0.75, 0.5, 1.0)
@@ -24,6 +24,8 @@ func _ready() -> void:
 			_build_arrow(2.2, Color(0.45, 0.3, 0.18))
 		Kind.ORB:
 			_build_orb()
+		Kind.TORCH:
+			_build_torch()
 
 ## Shaft, head and two crossed fletchings, `size` times an arrow.
 func _build_arrow(size: float, wood: Color) -> void:
@@ -60,6 +62,33 @@ func _build_orb() -> void:
 	_trail = _puffs(tint, 24, TRAIL_LIFETIME, false)
 	_trail.local_coords = false
 	add_child(_trail)
+
+## A wooden handle with a flame at its head (the end that leads), trailing
+## and bursting in fire colours.
+func _build_torch() -> void:
+	tint = TORCH_FIRE
+	var handle := CylinderMesh.new()
+	handle.top_radius = 0.035
+	handle.bottom_radius = 0.045
+	handle.height = 0.5
+	handle.radial_segments = 6
+	handle.rings = 1
+	handle.material = _plastic(Color(0.45, 0.3, 0.17))
+	_add_part(handle, Vector3(0.0, 0.0, 0.1), Vector3(-PI * 0.5, 0.0, 0.0))
+	for layer in [[0.11, 0.3, TORCH_FIRE], [0.06, 0.2, Color(1.0, 0.85, 0.4)]]:
+		var flame := CylinderMesh.new()
+		flame.top_radius = 0.0
+		flame.bottom_radius = layer[0]
+		flame.height = layer[1]
+		flame.radial_segments = 6
+		flame.rings = 1
+		flame.material = _plastic(layer[2], 2.0)
+		_add_part(flame, Vector3(0.0, 0.0, -0.15 - layer[1] * 0.5), Vector3(-PI * 0.5, 0.0, 0.0))
+	_trail = _puffs(TORCH_FIRE, 20, TRAIL_LIFETIME, false)
+	_trail.local_coords = false
+	add_child(_trail)
+
+const TORCH_FIRE: Color = Color(1.0, 0.45, 0.1)
 
 func _add_part(mesh: Mesh, at: Vector3, rotation_euler: Vector3) -> void:
 	var part := MeshInstance3D.new()

@@ -47,17 +47,15 @@ static var _cache: Dictionary = {}
 static var _sources: Dictionary = {}
 
 ## For a unit that exists: its rendered figure portrait in `tint` (its own
-## team's colour by default), else its own sheet, cell size, idle row and any
-## crop it sets for itself.
+## team's colour by default). Units are figures now: there is no sprite
+## fallback, so a unit without a figure has no portrait.
 static func of_unit(unit: Unit, tint: Color = Color(0, 0, 0, 0)) -> Texture2D:
 	if unit == null:
 		return null
-	var rendered: Texture2D = rendered_of(unit, owner_tint(unit) if tint.a == 0.0 else tint)
-	if rendered != null:
-		return rendered
-	if unit.sprite_sheet == null:
-		return null
-	return of_sheet(unit.sprite_sheet, unit.sprite_cell_size, unit.idle_row, unit.portrait_region)
+	## A villager takes its figure on entering the tree; one made only to be
+	## pictured (of_scene) never gets that far.
+	unit._take_villager_figure()
+	return rendered_of(unit, owner_tint(unit) if tint.a == 0.0 else tint)
 
 ## The colour of the player who owns `unit`: its team tint, or (before that
 ## is set) its owner's colour from the match.

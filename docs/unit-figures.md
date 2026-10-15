@@ -327,8 +327,13 @@ Done and in game:
   long snout with a pink disc, white tusks curling up, pointed ears, thin
   legs on black trotters). Deer (a slender russet roe buck on long legs,
   neck and head held high, wide level ears with dark rims, short
-  three-tined antlers, cream muzzle, throat, belly and rump). All three
-  await the user's review. Fox and Wolf are deferred.
+  three-tined antlers, cream muzzle, throat, belly and rump). Wolf (a
+  rangy grey wolf on long thin legs, deep chest, dark saddle, head held
+  level on a ruffed neck, pale cheek mask and jaw, tall upright ears, a
+  bushy tail hanging low with a dark tip). Fox (small and low on
+  black-socked legs, a big head with huge black-tipped ears, white cheeks,
+  chin and bib, a great brush tail swept up with a white tip). All five
+  await the user's review.
 - **Beasts:** Griffin (Aldmere: an eagle-headed lion 1.85 m tall, wings
   raised over its back in tawny coverts and brown flight feathers, white
   feathered head, neck and chest ruff, a big hooked golden beak, swept-back
@@ -555,7 +560,7 @@ Next, in this order:
    Phoenix; await review). Then per-unit body radius (plan under Size).
 5. Siege: Ballista and Magic Cannon done (await review). The roster is
    complete apart from the deferred animals.
-6. Wild animals Fox and Wolf (deferred).
+6. Wild animals Fox and Wolf: built, awaiting review.
 7. Per-unit body radius: built (see Size); awaiting the user's test.
 8. Portraits, steps 1 and 2 done (awaiting review): every Aldmere, Dark
    Elf, Beastmen and Star Wanderer unit, the Aldmere, Dark Elf and Star

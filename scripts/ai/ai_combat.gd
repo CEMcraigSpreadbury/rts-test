@@ -173,36 +173,11 @@ func _use_abilities() -> void:
 			var hostiles := _hostiles_near(unit.global_position, ability.activation_range + CAST_REACH_SLACK)
 			if hostiles.size() < min_targets:
 				continue
-			var best_pos := Vector3.ZERO
-			var best_count := 0
-			if ability.shape == Ability.Shape.SELF:
-				## A nova or slam: only worth it with enemies already round it.
-				best_pos = unit.global_position
-				best_count = _hostiles_near(unit.global_position, ability.area_radius + unit.get_body_bulk()).size()
-			for candidate in hostiles:
-				if ability.shape == Ability.Shape.SELF:
-					break
-				var count := 0
-				for other in hostiles:
-					if ability.shape == Ability.Shape.CONE:
-						if _in_cone(unit, ability, candidate.global_position, other.global_position):
-							count += 1
-					elif other.global_position.distance_to(candidate.global_position) <= ability.area_radius:
-						count += 1
-				if count > best_count:
-					best_count = count
-					best_pos = candidate.global_position
-			if best_count >= min_targets and ai.main.request_ability_as(ai.peer_id, unit.get_path(), i, best_pos):
+			## The same aim the player's monsters get (AbilityAutocast).
+			var spot: Dictionary = AbilityAutocast.best_spot(unit, ability, hostiles)
+			if spot.count >= min_targets and ai.main.request_ability_as(ai.peer_id, unit.get_path(), i, spot.pos):
 				abilities_cast += 1
 				break
-
-## Whether `point` falls in `caster`'s breath aimed at `aim_at`.
-func _in_cone(caster: Unit, ability: Ability, aim_at: Vector3, point: Vector3) -> bool:
-	var aim := Vector2(aim_at.x - caster.global_position.x, aim_at.z - caster.global_position.z)
-	var to := Vector2(point.x - caster.global_position.x, point.z - caster.global_position.z)
-	if to.length() > ability.activation_range or aim.length_squared() < 0.0001:
-		return false
-	return absf(aim.angle_to(to)) <= deg_to_rad(ability.cone_angle) * 0.5
 
 ## Living units of anyone hostile (enemy players and neutral guards — never an
 ## ally's) within `radius` of `pos`.

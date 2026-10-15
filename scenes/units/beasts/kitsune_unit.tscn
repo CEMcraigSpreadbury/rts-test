@@ -128,6 +128,7 @@ figure_model_lod1 = ExtResource("fig_model_lod1")
 figure_palette = ExtResource("fig_palette")
 figure_motion = 2
 figure_top = 1.6
+body_radius = 0.6
 
 [node name="Sprite" parent="." index="1"]
 transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 0, 0.754, 0)

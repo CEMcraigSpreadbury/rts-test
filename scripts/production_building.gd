@@ -299,10 +299,13 @@ func _ready() -> void:
 		producibles = offered
 	## Its people's upgrades for what it trains (see RaceTraits).
 	RaceTraits.offer_upgrades(self)
-	## A unit with no icon of its own shows its figure's portrait.
+	## Every unit button shows the unit's figure portrait, never the old
+	## sprite-cut icon a scene may still carry.
 	for item in producibles:
-		if item != null and item.kind == ProducibleItem.Kind.UNIT and item.icon == null and item.unit_scene != null:
-			item.icon = UnitPortrait.of_scene(item.unit_scene.resource_path)
+		if item != null and item.kind == ProducibleItem.Kind.UNIT and item.unit_scene != null:
+			var portrait: Texture2D = UnitPortrait.of_scene(item.unit_scene.resource_path)
+			if portrait != null:
+				item.icon = portrait
 	if health_bar_fill:
 		_fill_base_scale_x = health_bar_fill.scale.x
 	## A Library's readers work the Books inside it as miners work a Mine's

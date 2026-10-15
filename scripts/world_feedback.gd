@@ -474,6 +474,38 @@ func on_unit_projectile_fired(target: Node3D, unit: Unit) -> void:
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
 		_rpc_spawn_projectile_visual.rpc(unit.get_path(), target.get_path())
 
+## A torch thrown at a building (Unit._throw_torch): host-only like a shot,
+## relayed the same way.
+func on_unit_torch_thrown(target: Node3D, unit: Unit) -> void:
+	if not is_instance_valid(target):
+		return
+	_spawn_torch_visual(unit, target)
+	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
+		_rpc_spawn_torch_visual.rpc(unit.get_path(), target.get_path())
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_spawn_torch_visual(thrower_path: NodePath, target_path: NodePath) -> void:
+	var thrower := get_node_or_null(thrower_path) as Unit
+	var target := get_node_or_null(target_path) as Node3D
+	if thrower == null or target == null:
+		return
+	_spawn_torch_visual(thrower, target)
+
+## Lobbed high so it reads as a throw over the short distance, landing on the
+## wall rather than at the building's feet.
+func _spawn_torch_visual(thrower: Unit, target: Node3D) -> void:
+	var torch := ToyProjectile.new()
+	torch.kind = ToyProjectile.Kind.TORCH
+	add_child(torch)
+	var start_pos: Vector3 = thrower.global_position + Vector3(0, 1.2, 0)
+	var end_pos: Vector3 = target.global_position + Vector3(0, 1.0, 0)
+	## Aim at the building's near face, not its middle.
+	var across := Vector3(end_pos.x - start_pos.x, 0.0, end_pos.z - start_pos.z)
+	if across.length() > 1.0:
+		end_pos -= across.normalized() * minf(across.length() - 1.0, 1.2)
+	Sfx.play_at(&"torch", start_pos)
+	_fly_projectile_visual(torch, start_pos, end_pos, Unit.TORCH_FLIGHT, 1.0)
+
 @rpc("authority", "call_remote", "reliable")
 func _rpc_spawn_projectile_visual(shooter_path: NodePath, target_path: NodePath) -> void:
 	var shooter := get_node_or_null(shooter_path) as Unit
@@ -1704,7 +1736,12 @@ const HOVER_RING_BUILDING_MARGIN: float = 0.3
 
 func _hover_ring_radius(node: Node) -> float:
 	if node is Unit:
-		return HOVER_RING_UNIT_RADIUS
+		## As wide as its own selection ring, which is sized off its figure, so
+		## a dragon or a cannon is ringed round its body and not its middle.
+		var unit := node as Unit
+		var ring := unit.selection_ring.mesh as TorusMesh if unit.selection_ring != null else null
+		var ring_radius: float = ring.outer_radius if ring != null else 0.0
+		return maxf(HOVER_RING_UNIT_RADIUS, maxf(ring_radius, unit.get_body_radius() + 0.35))
 	var obstacle: NavigationObstacle3D = node.get_node_or_null("NavigationObstacle3D")
 	var obstacle_radius: float = obstacle.radius + 0.2 if obstacle else 1.0
 	if node is Gatherable and node.is_tree():
