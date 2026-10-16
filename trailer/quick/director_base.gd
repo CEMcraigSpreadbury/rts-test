@@ -8,6 +8,8 @@ extends Node
 ##   saves a 640x360 jpg every 0.5 film-s for a contact sheet.
 ## Film:    godot --path . --fixed-fps 30 --write-movie out.avi <boot>.tscn
 ##   (MJPEG .avi straight out, no PNG dump; size it with override.cfg.)
+## Stills:  godot --path . <boot>.tscn -- --stills=<dir>:<t>,<t>,...
+##   saves a full-size png at each film time (size the window with override.cfg).
 ## Prints TRAILER_START_FRAME so the warm-up can be trimmed.
 
 const WARMUP_FRAMES: int = 150
@@ -32,6 +34,8 @@ var _night_now: float = -1.0
 var _label_timer: float = 0.0
 var _preview_dir: String = ""
 var _next_preview: float = 0.0
+var _stills_dir: String = ""
+var _still_times: Array = []
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -40,6 +44,13 @@ func _ready() -> void:
 		if arg.begins_with("--preview="):
 			_preview_dir = arg.trim_prefix("--preview=")
 			DirAccess.make_dir_recursive_absolute(_preview_dir)
+		elif arg.begins_with("--stills="):
+			var spec: String = arg.trim_prefix("--stills=")
+			var split: int = spec.rfind(":")
+			_stills_dir = spec.left(split)
+			for time in spec.substr(split + 1).split(","):
+				_still_times.append(float(time))
+			DirAccess.make_dir_recursive_absolute(_stills_dir)
 	var layer := CanvasLayer.new()
 	layer.layer = 200
 	add_child(layer)
@@ -131,6 +142,8 @@ func _process(delta: float) -> void:
 		var image := get_viewport().get_texture().get_image()
 		image.resize(640, 360)
 		image.save_jpg("%s/t%05.1f.jpg" % [_preview_dir, t])
+	if not _still_times.is_empty() and t >= _still_times[0]:
+		get_viewport().get_texture().get_image().save_png("%s/still_%05.1f.png" % [_stills_dir, _still_times.pop_front()])
 	if t >= end_at:
 		print("TRAILER_END_FRAME=%d" % Engine.get_process_frames())
 		get_tree().quit()

@@ -1,0 +1,3 @@
+[mcp_servers.godot]
+command = "npx"
+args = ["@coding-solo/godot-mcp"]
