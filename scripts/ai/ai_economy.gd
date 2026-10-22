@@ -54,7 +54,6 @@ const HANDS_PER_FARM: int = 2
 ## More Mills than this and the base is all fields.
 const MAX_MILLS: int = 4
 const MILL_NAME: String = "Mill"
-const FARM_NAME: String = "Farm"
 
 ## A Mill lays out its own fields when it finishes (BuildingType.companion_*),
 ## so feeding more farmers means another Mill.
@@ -206,7 +205,7 @@ func _my_farms() -> Array:
 	var farms: Array = []
 	for node in ai.get_tree().get_nodes_in_group("gatherables"):
 		var farm := node as Gatherable
-		if farm != null and farm.owner_peer_id == ai.peer_id and farm.display_name == FARM_NAME:
+		if farm != null and farm.owner_peer_id == ai.peer_id and farm is FarmField:
 			farms.append(farm)
 	return farms
 

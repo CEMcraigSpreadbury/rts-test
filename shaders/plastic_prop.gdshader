@@ -18,6 +18,17 @@ uniform bool foliage = false;
 // Per-instance recolour, white = as exported. A farm field uses it to show
 // its crop going from bare soil to green to ripe (see farm_field.gd).
 instance uniform vec3 tint : source_color = vec3(1.0);
+// A farm field's crop height: everything above crop_base (the field's soil
+// bed, in the model's own space) is squashed to this share of its height, so
+// the bed keeps its thickness and sits on the ground at every stage.
+instance uniform float crop_height = 1.0;
+instance uniform float crop_base = 0.0;
+
+void vertex() {
+	if (VERTEX.y > crop_base) {
+		VERTEX.y = crop_base + (VERTEX.y - crop_base) * crop_height;
+	}
+}
 
 void fragment() {
 	vec3 albedo = texture(albedo_texture, UV).rgb * albedo_color.rgb * tint;

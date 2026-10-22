@@ -19,13 +19,19 @@ enum Stage { SOWING, GROWING, RIPE }
 @export var grow_seconds: float = 60.0
 @export var ripe_yield: int = 120
 
-## How the crop looks through the cycle: the one field mesh is squashed flat for
-## bare soil and rises as it grows, tinted from earth to green to its own ripe
+## How the crop looks through the cycle: what stands above the field's bed is
+## squashed flat for bare soil and rises as it grows (see crop_base), tinted from earth to green to its own ripe
 ## colour (the tint multiplies the baked texture, so white is as exported).
 const SOIL_HEIGHT: float = 0.06
 const SHOOT_HEIGHT: float = 0.15
-const SOIL_TINT: Color = Color(0.62, 0.45, 0.3)
-const SHOOT_TINT: Color = Color(0.5, 0.95, 0.4)
+## A people's own field can colour its cycle its own way (the Robots' Charge
+## Pad: drained grey cells, charging amber, full).
+@export var soil_tint: Color = Color(0.62, 0.45, 0.3)
+@export var shoot_tint: Color = Color(0.5, 0.95, 0.4)
+## The top of the field's bed in its model's space: only what stands above it
+## is squashed for the crop's height (plastic_prop.gdshader's crop_height), so
+## the bed itself never sinks into the ground.
+@export var crop_base: float = 0.16
 const RIPE_TINT: Color = Color(1.0, 1.0, 1.0)
 
 var stage: Stage = Stage.SOWING
@@ -114,15 +120,12 @@ func _show_stage() -> void:
 	match stage:
 		Stage.SOWING:
 			height = SOIL_HEIGHT
-			tint = SOIL_TINT
+			tint = soil_tint
 		Stage.GROWING:
 			var grown: float = clampf(_stage_time / maxf(grow_seconds, 0.01), 0.0, 1.0)
 			height = lerpf(SHOOT_HEIGHT, 1.0, grown)
-			tint = SHOOT_TINT.lerp(RIPE_TINT, grown * grown)
-	_model_base_scale.y = height
-	## A harvest squash tween owns the scale while it plays; it settles on
-	## _model_base_scale, which now carries the crop's height.
-	if _squash_tween == null or not _squash_tween.is_valid():
-		_model.scale = _model_base_scale
+			tint = shoot_tint.lerp(RIPE_TINT, grown * grown)
 	for mesh in _meshes:
 		mesh.set_instance_shader_parameter(&"tint", tint)
+		mesh.set_instance_shader_parameter(&"crop_height", height)
+		mesh.set_instance_shader_parameter(&"crop_base", crop_base)
