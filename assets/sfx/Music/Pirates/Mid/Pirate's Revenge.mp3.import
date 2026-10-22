@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cn26o86ds4fah"
+path="res://.godot/imported/Pirate's Revenge.mp3-49b1b60310218117157db2a9ee77a34c.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Pirates/Mid/Pirate's Revenge.mp3"
+dest_files=["res://.godot/imported/Pirate's Revenge.mp3-49b1b60310218117157db2a9ee77a34c.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

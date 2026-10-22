@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cqdwxl7rn3mbb"
+path="res://.godot/imported/Iron Banner.mp3-472226cdebbaaf4bfd29ef02e7d2edbd.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Knights/End/Iron Banner.mp3"
+dest_files=["res://.godot/imported/Iron Banner.mp3-472226cdebbaaf4bfd29ef02e7d2edbd.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

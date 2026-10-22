@@ -5,14 +5,22 @@ extends AudioStreamPlayer
 ## but the ambience between tracks. Purely a local, per-peer experience — not
 ## synced across the network, same as other cosmetic-only systems in this
 ## project.
+##
+## The tracks are the local player's faction's: every audio file in
+## MUSIC_ROOT/<Faction.NAMES entry>/Early, /Mid and /End. A faction short of a
+## phase plays its nearest earlier one (no End: Mid again; no Mid: Early).
 
 enum Phase { EARLY, MID, END }
 
-@export var early_game_music: Array[AudioStream] = []
-@export var mid_game_music: Array[AudioStream] = []
-@export var end_game_music: Array[AudioStream] = []
+const MUSIC_ROOT: String = "res://assets/sfx/Music"
+const PHASE_FOLDERS: Array[String] = ["Early", "Mid", "End"]
+const MUSIC_EXTENSIONS: Array[String] = ["mp3", "ogg", "wav"]
+
+var early_game_music: Array[AudioStream] = []
+var mid_game_music: Array[AudioStream] = []
+var end_game_music: Array[AudioStream] = []
 ## Replaces the cycling once the local player has won (see play_outcome).
-@export var victory_music: AudioStream = preload("res://assets/sfx/Music/End/Triumphant March.mp3")
+@export var victory_music: AudioStream = preload("res://assets/sfx/Music/Knights/End/Triumphant March.mp3")
 
 ## How long the match music takes to fade out when the result comes in.
 const OUTCOME_FADE_SECONDS: float = 1.5
@@ -40,7 +48,32 @@ func _ready() -> void:
 	_gap_timer.ignore_time_scale = true
 	_gap_timer.timeout.connect(_play_next)
 	add_child(_gap_timer)
+	_load_faction_music()
 	AudioUtils.play_random(self, early_game_music)
+
+func _load_faction_music() -> void:
+	var race_index: int = Network.players.get(multiplayer.get_unique_id(), {}).get("race_index", 0)
+	var folder := MUSIC_ROOT.path_join(Faction.display_name_for(maxi(race_index, 0)))
+	var phases: Array = []
+	for phase_folder in PHASE_FOLDERS:
+		var tracks := _tracks_in(folder.path_join(phase_folder))
+		phases.append(tracks if not tracks.is_empty() or phases.is_empty() else phases.back())
+	early_game_music = phases[Phase.EARLY]
+	mid_game_music = phases[Phase.MID]
+	end_game_music = phases[Phase.END]
+
+## Goes through ResourceLoader rather than DirAccess so it still finds the
+## tracks in an export, where only their .import remaps sit on disk.
+static func _tracks_in(folder: String) -> Array[AudioStream]:
+	var tracks: Array[AudioStream] = []
+	if not DirAccess.dir_exists_absolute(folder):
+		return tracks
+	for file in ResourceLoader.list_directory(folder):
+		if file.get_extension().to_lower() in MUSIC_EXTENSIONS:
+			var stream := load(folder.path_join(file)) as AudioStream
+			if stream != null:
+				tracks.append(stream)
+	return tracks
 
 func _on_finished() -> void:
 	_gap_timer.start(randf_range(GAP_SECONDS_MIN, GAP_SECONDS_MAX))

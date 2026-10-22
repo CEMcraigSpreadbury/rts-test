@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dhdgdyhpsrsm6"
+path="res://.godot/imported/Robots Relax.mp3-c5b143da387ab6ba7481e3a64e47fa8a.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Robots/Early/Robots Relax.mp3"
+dest_files=["res://.godot/imported/Robots Relax.mp3-c5b143da387ab6ba7481e3a64e47fa8a.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

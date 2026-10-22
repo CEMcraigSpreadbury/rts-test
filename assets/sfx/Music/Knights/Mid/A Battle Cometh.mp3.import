@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dkwm6fjby2pgh"
+path="res://.godot/imported/A Battle Cometh.mp3-23d9a43ff1ef907ba9cfe16c8b23c557.mp3str"
+
+[deps]
+
+source_file="res://assets/sfx/Music/Knights/Mid/A Battle Cometh.mp3"
+dest_files=["res://.godot/imported/A Battle Cometh.mp3-23d9a43ff1ef907ba9cfe16c8b23c557.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4
