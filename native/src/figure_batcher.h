@@ -56,6 +56,10 @@ public:
 	// How a figure moves for what it carries (see Motion): its attack and
 	// cast poses.
 	void set_figure_motion(godot::Node3D *unit, int motion);
+	// Makes `unit`'s figure a set of wheels on `parent`'s: drawn in the
+	// parent figure's pose (its rumble, its topple), spun round local X
+	// through `pivot` by the ground it covers over `radius`.
+	void set_figure_wheel(godot::Node3D *unit, godot::Node3D *parent, const godot::Vector3 &pivot, float radius);
 	// Another figure the unit is drawn as while its sprite plays `role`'s
 	// clips (a villager's "build", "wood", "gold": see Unit._set_work_role),
 	// in the same palette.
@@ -181,6 +185,14 @@ private:
 		godot::Vector3 topple_axis = godot::Vector3(1, 0, 0);
 		godot::Transform3D last_world;
 		bool was_drawn = false;
+		// Its pose in its unit's space last frame (a wheel rides its parent's).
+		godot::Transform3D last_pose;
+		// Wheels (see set_figure_wheel): radius 0 for an ordinary figure.
+		godot::ObjectID spin_parent;
+		godot::Vector3 spin_pivot;
+		float spin_radius = 0.0f;
+		float spin_angle = 0.0f;
+		float forward_step = 0.0f;
 	};
 	struct Corpse {
 		int type = 0;

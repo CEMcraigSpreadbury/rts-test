@@ -10,6 +10,11 @@
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/MagicCannon.glb" id="fig_model"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/MagicCannon_LOD1.glb" id="fig_model_lod1"]
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/siege.png" id="fig_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Soldier.glb" id="crew_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Soldier_LOD1.glb" id="crew_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/aldmere.png" id="crew_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/MagicCannon_wheel0.glb" id="wheel0"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/MagicCannon_wheel0_LOD1.glb" id="wheel0_far"]
 
 
 [sub_resource type="Resource" id="ResourceCost_cannon_wood"]
@@ -66,4 +71,14 @@ figure_model = ExtResource("fig_model")
 figure_model_lod1 = ExtResource("fig_model_lod1")
 figure_palette = ExtResource("fig_palette")
 figure_motion = 4
+aim_turn_rate = 1.2
 figure_top = 2.6
+crew_figure_model = ExtResource("crew_fig")
+crew_figure_model_lod1 = ExtResource("crew_fig_lod1")
+crew_figure_palette = ExtResource("crew_palette")
+crew_figure_offset = Vector3(-0.85, 0, -1.35)
+crew_figure_yaw = -15.0
+wheel_models = Array[PackedScene]([ExtResource("wheel0")])
+wheel_models_lod1 = Array[PackedScene]([ExtResource("wheel0_far")])
+wheel_pivots = PackedVector3Array(0, 0.828, -0.115)
+wheel_radius = 0.828

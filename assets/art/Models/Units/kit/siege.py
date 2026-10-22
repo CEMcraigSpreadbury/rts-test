@@ -151,16 +151,39 @@ def _ballista_upper(lod):
 			@ Matrix.Translation(-BALLISTA_PIVOT))
 
 
-def ballista(lod):
+## Each machine's axles as [(y, z), ...] in the kit's space before it is grown,
+## and their wheels' radius: the wheels are their own figures in game, spun
+## round these hubs as the machine rolls (see split_wheels).
+BALLISTA_AXLES = [(-0.80, 0.40), (0.10, 0.40), (1.00, 0.40)]
+BALLISTA_WHEEL_RADIUS = 0.40
+CANNON_AXLES = [(0.10, 0.72)]
+CANNON_WHEEL_RADIUS = 0.72
+
+
+def split_wheels(bm, wheels, part, scale):
+	"""A machine built with its wheels apart: `part` None puts them back on
+	(the whole machine), "body" leaves them off, an axle's index gives just
+	that axle's wheels. Grown by `scale` round the ground."""
+	if part is None:
+		for w in wheels:
+			geo.merge(bm, w)
+	elif part != "body":
+		bm = wheels[part]
+	return _grow(bm, 0.0, scale)
+
+
+def ballista(lod, part=None):
 	bm = geo.new_bm()
+	wheels = []
 	# The chassis, on three small wheels a side.
 	chassis = geo.box(1.24, 2.50, 0.42, row("wood"), sharp=HARD, bevel=0.035)
 	geo.translate(chassis, (0.0, 0.10, 0.84))
 	geo.merge(bm, chassis)
 	for y in (-0.80, 0.10, 1.00):
-		geo.merge(bm, _cyl_x(-0.80, 0.80, 0.07, y, 0.40, "plate_dark", lod, (8, 6)))
+		axle = _cyl_x(-0.80, 0.80, 0.07, y, 0.40, "plate_dark", lod, (8, 6))
 		for side in (-1.0, 1.0):
-			geo.merge(bm, _wheel(lod, side * 0.75, y, 0.40, 0.40, 0.20, side, segs=(14, 9)))
+			geo.merge(axle, _wheel(lod, side * 0.75, y, 0.40, 0.40, 0.20, side, segs=(14, 9)))
+		wheels.append(axle)
 	# The team's painted side boards, rising into a gunwale, brass trimmed.
 	for side in (-1.0, 1.0):
 		board = geo.box(0.05, 2.36, 0.40, row("team_paint"), sharp=HARD, bevel=0.015)
@@ -193,7 +216,7 @@ def ballista(lod):
 	geo.merge(bm, _cyl_x(-0.38, 0.38, 0.13, 1.02, 1.36, "wood", lod, (12, 8)))
 	geo.merge(bm, _cyl_x(-0.24, 0.24, 0.15, 1.02, 1.36, "string", lod, (12, 8)))
 	geo.merge(bm, _pennant(lod, 0.52, 1.24, 1.10, 2.62))
-	return _grow(bm, 0.0, SIEGE_SCALE)
+	return split_wheels(bm, wheels, part, SIEGE_SCALE)
 
 
 # --- magic cannon -------------------------------------------------------------
@@ -251,12 +274,13 @@ def _cannon_barrel(lod):
 	return bm
 
 
-def magic_cannon(lod):
+def magic_cannon(lod, part=None):
 	bm = geo.new_bm()
 	# Two huge wheels on an iron axle.
-	geo.merge(bm, _cyl_x(-0.95, 0.95, 0.09, 0.10, 0.72, "plate_dark", lod, (10, 6)))
+	axle = _cyl_x(-0.95, 0.95, 0.09, 0.10, 0.72, "plate_dark", lod, (10, 6))
 	for side in (-1.0, 1.0):
-		geo.merge(bm, _wheel(lod, side * 0.80, 0.10, 0.72, 0.72, 0.22, side, spokes=8))
+		geo.merge(axle, _wheel(lod, side * 0.80, 0.10, 0.72, 0.72, 0.22, side, spokes=8))
+	wheels = [axle]
 	# The team's painted carriage cheeks edged in brass, a transom, a trail.
 	for side in (-1.0, 1.0):
 		cheek = geo.plate([(-0.66, 0.50), (-0.66, 1.08), (-0.25, 1.30), (0.42, 1.30), (0.78, 1.00), (1.05, 0.62),
@@ -277,4 +301,4 @@ def magic_cannon(lod):
 	# The barrel, raised a little, with its crystal core.
 	c, s = math.cos(math.radians(CANNON_ELEVATION)), math.sin(math.radians(CANNON_ELEVATION))
 	geo.merge(bm, _cannon_barrel(lod), geo.frame(CANNON_TRUNNION, (0.0, -c, s), (0.0, s, c)))
-	return _grow(bm, 0.0, SIEGE_SCALE)
+	return split_wheels(bm, wheels, part, SIEGE_SCALE)

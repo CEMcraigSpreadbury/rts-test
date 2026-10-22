@@ -186,6 +186,7 @@ void FigureBatcher::_bind_methods() {
 			&FigureBatcher::add_figure);
 	ClassDB::bind_method(D_METHOD("remove_figure", "unit", "leave_corpse"), &FigureBatcher::remove_figure, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("set_figure_motion", "unit", "motion"), &FigureBatcher::set_figure_motion);
+	ClassDB::bind_method(D_METHOD("set_figure_wheel", "unit", "parent", "pivot", "radius"), &FigureBatcher::set_figure_wheel);
 	ClassDB::bind_method(D_METHOD("set_figure_carry", "unit", "carry"), &FigureBatcher::set_figure_carry);
 	ClassDB::bind_method(D_METHOD("set_figure_variant", "unit", "role", "mesh", "lod1"), &FigureBatcher::set_figure_variant);
 	ClassDB::bind_method(D_METHOD("set_team_color", "unit", "team"), &FigureBatcher::set_team_color);
@@ -316,6 +317,16 @@ void FigureBatcher::set_figure_motion(Node3D *unit, int motion) {
 	if (unit == nullptr) return;
 	const auto it = index_of_.find(unit->get_instance_id());
 	if (it != index_of_.end()) entries_[it->second].motion = motion;
+}
+
+void FigureBatcher::set_figure_wheel(Node3D *unit, Node3D *parent, const Vector3 &pivot, float radius) {
+	if (unit == nullptr || parent == nullptr) return;
+	const auto it = index_of_.find(unit->get_instance_id());
+	if (it == index_of_.end()) return;
+	Entry &e = entries_[it->second];
+	e.spin_parent = ObjectID(parent->get_instance_id());
+	e.spin_pivot = pivot;
+	e.spin_radius = std::max(radius, 0.01f);
 }
 
 void FigureBatcher::set_figure_variant(Node3D *unit, const StringName &role, const Ref<Mesh> &mesh,
@@ -873,10 +884,24 @@ void FigureBatcher::_process(double delta) {
 			e.speed += (speed - e.speed) * std::min(1.0f, dt * 10.0f);
 			const Vector3 velocity(moved.x / dt, 0.0f, moved.z / dt);
 			e.velocity += (velocity - e.velocity) * std::min(1.0f, dt * 8.0f);
+			e.forward_step = moved.dot(unit_xf.basis.get_column(2).normalized());
 		}
 		e.last_position = unit_xf.origin;
 		e.has_last_position = true;
-		Transform3D world = unit_xf * pose(e, sprite, dt);
+		Transform3D local = pose(e, sprite, dt);
+		if (e.spin_radius > 0.0f) {
+			// A wheel: spun by the ground covered, on its machine's pose (the
+			// machine's entry may draw after it this frame: a frame behind).
+			if (!e.dying) e.spin_angle = Math::fposmod(e.spin_angle + e.forward_step / e.spin_radius, 2.0f * kPi);
+			e.forward_step = 0.0f;
+			Transform3D body;
+			const auto parent = index_of_.find(uint64_t(e.spin_parent));
+			if (parent != index_of_.end()) body = entries_[parent->second].last_pose;
+			local = body * Transform3D(Basis(), e.spin_pivot) * Transform3D(Basis(Vector3(1, 0, 0), e.spin_angle), Vector3())
+					* Transform3D(Basis(), -e.spin_pivot);
+		}
+		e.last_pose = local;
+		Transform3D world = unit_xf * local;
 		world.origin += e.velocity * e.hold;
 		e.last_world = world;
 		// Hidden by fog of war (or by the unit itself): not drawn, not picked.

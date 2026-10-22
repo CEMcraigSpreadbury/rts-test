@@ -10,6 +10,15 @@
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista.glb" id="fig_model"]
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_LOD1.glb" id="fig_model_lod1"]
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/siege.png" id="fig_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Soldier.glb" id="crew_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Soldier_LOD1.glb" id="crew_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/aldmere.png" id="crew_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_wheel0.glb" id="wheel0"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_wheel0_LOD1.glb" id="wheel0_far"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_wheel1.glb" id="wheel1"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_wheel1_LOD1.glb" id="wheel1_far"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_wheel2.glb" id="wheel2"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/Ballista_wheel2_LOD1.glb" id="wheel2_far"]
 
 
 [sub_resource type="Resource" id="ResourceCost_ballista_wood"]
@@ -65,4 +74,14 @@ figure_model = ExtResource("fig_model")
 figure_model_lod1 = ExtResource("fig_model_lod1")
 figure_palette = ExtResource("fig_palette")
 figure_motion = 4
+aim_turn_rate = 1.2
 figure_top = 2.3
+crew_figure_model = ExtResource("crew_fig")
+crew_figure_model_lod1 = ExtResource("crew_fig_lod1")
+crew_figure_palette = ExtResource("crew_palette")
+crew_figure_offset = Vector3(-0.8, 0, -1.78)
+crew_figure_yaw = -20.0
+wheel_models = Array[PackedScene]([ExtResource("wheel0"), ExtResource("wheel1"), ExtResource("wheel2")])
+wheel_models_lod1 = Array[PackedScene]([ExtResource("wheel0_far"), ExtResource("wheel1_far"), ExtResource("wheel2_far")])
+wheel_pivots = PackedVector3Array(0, 0.46, 0.92, 0, 0.46, -0.115, 0, 0.46, -1.15)
+wheel_radius = 0.46

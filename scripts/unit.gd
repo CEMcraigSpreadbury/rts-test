@@ -260,6 +260,12 @@ var _next_spark_ms: int = 0
 @export var glyph: StringName = &""
 @export var move_speed: float = 3.75
 @export var rotation_speed: float = 10.0
+## Radians a second it turns to bring its aim round onto what it attacks, and
+## it fires only once it is pointed there (within AIM_TOLERANCE). 0: it turns
+## as fast as anyone and snaps square on as it strikes. For the siege engines,
+## which have to be hauled round.
+@export var aim_turn_rate: float = 0.0
+const AIM_TOLERANCE: float = 0.17
 ## Setter (guarded — sprite isn't ready yet the first time Godot applies this
 ## from the scene file during instantiation) so an Objective capture can
 ## re-tint a unit immediately instead of only ever applying once in _ready().
@@ -309,6 +315,10 @@ func _update_team_tint_visual() -> void:
 			Main.sprite_batcher_current.set_team_color(sprite, team_tint)
 		if Main.figure_batcher_current != null:
 			Main.figure_batcher_current.set_team_color(self, team_tint)
+			if _crew_figure != null:
+				Main.figure_batcher_current.set_team_color(_crew_figure, team_tint)
+			for wheel in _wheel_figures:
+				Main.figure_batcher_current.set_team_color(wheel, team_tint)
 	if crew_sprite:
 		crew_sprite.modulate = sprite.modulate
 		if not _death_playing:
@@ -666,6 +676,24 @@ func _play_sprite_pop() -> void:
 ## figure is under the same key in figure_role_models_lod1.
 @export var figure_role_models: Dictionary[StringName, PackedScene] = {}
 @export var figure_role_models_lod1: Dictionary[StringName, PackedScene] = {}
+## A siege engine's crewman, drawn as a figure of his own beside the machine
+## and posed from the crew sprite, so he hops along by himself while the
+## machine rolls. `crew_figure_offset` is where he stands in the unit's own
+## space, `crew_figure_yaw` (degrees) how he is turned; his palette defaults
+## to the unit's.
+@export var crew_figure_model: PackedScene
+@export var crew_figure_model_lod1: PackedScene
+@export var crew_figure_palette: Texture2D
+@export var crew_figure_offset: Vector3 = Vector3.ZERO
+@export var crew_figure_yaw: float = 0.0
+## A machine's wheels, one model per axle (and its far one), drawn apart
+## from its body so they spin as it rolls: each turns round its axle's hub
+## (wheel_pivots, the unit's own space, along its X) by the ground covered
+## over wheel_radius.
+@export var wheel_models: Array[PackedScene] = []
+@export var wheel_models_lod1: Array[PackedScene] = []
+@export var wheel_pivots: PackedVector3Array = PackedVector3Array()
+@export var wheel_radius: float = 0.5
 
 @export_group("Gathering")
 @export var can_gather: bool = true
@@ -811,6 +839,11 @@ var nav_agent = null
 ## Built in _ready when crew_sprite_sheet is set; a child of `sprite` so it
 ## rides along with every recoil, squash and death-knockback tween.
 var crew_sprite: AnimatedSprite3D = null
+## What the crew figure is drawn on (see crew_figure_model): a plain child
+## node, so the batcher moves him with the unit but not with its sprite.
+var _crew_figure: Node3D = null
+## What each axle's wheels are drawn on (see wheel_models).
+var _wheel_figures: Array[Node3D] = []
 @onready var selection_ring: MeshInstance3D = $SelectionRing
 @onready var health_bar: Node3D = $HealthBar
 @onready var health_bar_fill: Sprite3D = $HealthBar/Fill
@@ -1718,12 +1751,15 @@ func _tick_block_fight(delta: float) -> bool:
 	attack_target = target
 	var to_target := target.global_position - global_position
 	if Vector2(to_target.x, to_target.z).length_squared() > 0.0001:
-		rotation.y = lerp_angle(rotation.y, atan2(to_target.x, to_target.z), rotation_speed * delta)
+		if aim_turn_rate > 0.0:
+			rotation.y = rotate_toward(rotation.y, atan2(to_target.x, to_target.z), aim_turn_rate * delta)
+		else:
+			rotation.y = lerp_angle(rotation.y, atan2(to_target.x, to_target.z), rotation_speed * delta)
 	## A man's blows come from the sim (sim_swing), which times them asleep
 	## or awake; only a building, which the sim does not fight, is timed here.
 	if target == building:
 		attack_timer += delta
-		if attack_timer >= effective_cooldown:
+		if attack_timer >= effective_cooldown and _aimed_at(target):
 			_land_swing(effective_cooldown, false)
 	return true
 
@@ -1731,7 +1767,7 @@ func _tick_block_fight(delta: float) -> bool:
 ## his place, strikes `target` — awake or asleep.
 func sim_swing(target: Unit) -> void:
 	if status_activity == Activity.DEAD or status_activity == Activity.CASTING or not sim_follow \
-			or not _fights_from_place() or _stun_remaining > 0.0 or not _is_target_alive(target):
+			or not _fights_from_place() or _stun_remaining > 0.0 or not _is_target_alive(target) 			or not _aimed_at(target):
 		return
 	sim_target = target
 	attack_target = target
@@ -3418,9 +3454,12 @@ func _attach_drawing() -> void:
 			if role_mesh != null:
 				Main.figure_batcher_current.set_figure_variant(self, role, role_mesh, role_far if role_far != null else role_mesh)
 		Main.figure_batcher_current.set_figure_carry(self, CARRY_VARIANTS[carry])
+		_attach_wheels()
 	else:
 		if Main.figure_batcher_current != null:
 			Main.figure_batcher_current.remove_figure(self, false)
+			for wheel in _wheel_figures:
+				Main.figure_batcher_current.remove_figure(wheel, false)
 		if Main.sprite_batcher_current != null:
 			Main.sprite_batcher_current.add_sprite(sprite, team_tint)
 			sprite.visible = not Main.sprite_batcher_current.is_drawing()
@@ -3498,6 +3537,47 @@ func _attach_crew_drawing() -> void:
 		if not _drawn_as_figure:
 			Main.sprite_batcher_current.add_sprite(crew_sprite, team_tint)
 	crew_sprite.visible = not _drawn_as_figure and (Main.sprite_batcher_current == null 			or not Main.sprite_batcher_current.is_drawing())
+	_attach_crew_figure()
+
+## Each axle's wheels as a figure riding the body's (FigureBatcher.set_figure_wheel).
+func _attach_wheels() -> void:
+	var batcher = Main.figure_batcher_current
+	if wheel_models.is_empty() or not batcher.has_method(&"set_figure_wheel"):
+		return
+	for i in wheel_models.size():
+		if i >= _wheel_figures.size():
+			var holder := Node3D.new()
+			holder.name = "Wheels%d" % i
+			add_child(holder)
+			_wheel_figures.append(holder)
+		var mesh: Mesh = figure_mesh(wheel_models[i])
+		var far: Mesh = figure_mesh(wheel_models_lod1[i]) if i < wheel_models_lod1.size() else mesh
+		batcher.add_figure(_wheel_figures[i], sprite, mesh, far, figure_palette, team_tint, _sprite_base_position,
+				_sprite_base_scale, move_speed)
+		batcher.set_figure_motion(_wheel_figures[i], figure_motion)
+		batcher.set_figure_wheel(_wheel_figures[i], self, wheel_pivots[i] if i < wheel_pivots.size() else Vector3.ZERO,
+				wheel_radius)
+
+func _attach_crew_figure() -> void:
+	var batcher = Main.figure_batcher_current
+	if batcher == null or crew_figure_model == null:
+		return
+	if not _drawn_as_figure:
+		if _crew_figure != null:
+			batcher.remove_figure(_crew_figure, false)
+		return
+	if _crew_figure == null:
+		_crew_figure = Node3D.new()
+		_crew_figure.name = "CrewFigure"
+		_crew_figure.position = crew_figure_offset
+		_crew_figure.rotation.y = deg_to_rad(crew_figure_yaw)
+		add_child(_crew_figure)
+	var mesh: Mesh = figure_mesh(crew_figure_model)
+	var lod1: Mesh = figure_mesh(crew_figure_model_lod1) if crew_figure_model_lod1 != null else mesh
+	batcher.add_figure(_crew_figure, crew_sprite, mesh, lod1,
+			crew_figure_palette if crew_figure_palette != null else figure_palette, team_tint,
+			crew_sprite.position, crew_sprite.scale, move_speed)
+	batcher.set_figure_motion(_crew_figure, 0)
 
 ## Keeps the crew behind the machine from this peer's own camera (so, like the
 ## flip itself, worked out locally every frame), mirroring its facing, hit
@@ -3509,6 +3589,9 @@ func _update_crew_sprite(cam_right: Vector3) -> void:
 		var anim: StringName = &"walk" if base_animation(sprite.animation) == "walk" else &"idle"
 		if crew_sprite.animation != anim:
 			crew_sprite.play(anim)
+	## A crew figure reads the sprite's offset as a lunge: it stays put.
+	if _drawn_as_figure and _crew_figure != null:
+		return
 	var behind: Vector3 = cam_right * (crew_offset if sprite.flip_h else -crew_offset)
 	var camera := get_viewport().get_camera_3d()
 	if camera:
@@ -4078,7 +4161,20 @@ func _face_attack_target(delta: float) -> void:
 	if to_target.length_squared() <= 0.0001:
 		return
 	var dir := to_target.normalized()
+	if aim_turn_rate > 0.0:
+		rotation.y = rotate_toward(rotation.y, atan2(dir.x, dir.z), aim_turn_rate * delta)
+		return
 	rotation.y = lerp_angle(rotation.y, atan2(dir.x, dir.z), rotation_speed * delta)
+
+## Whether it is pointed at `target` closely enough to shoot (always, for a
+## unit with no aim_turn_rate).
+func _aimed_at(target: Node3D) -> bool:
+	if aim_turn_rate <= 0.0 or not is_instance_valid(target):
+		return true
+	var to_target := target.global_position - global_position
+	if Vector2(to_target.x, to_target.z).length_squared() <= 0.0001:
+		return true
+	return absf(angle_difference(rotation.y, atan2(to_target.x, to_target.z))) <= AIM_TOLERANCE
 
 func _tick_attacking(delta: float) -> void:
 	if not PerfStats.enabled:
@@ -4135,7 +4231,7 @@ func _attacking_step(delta: float) -> void:
 
 	attack_timer += delta
 	var effective_cooldown := _effective_cooldown()
-	if attack_timer >= effective_cooldown:
+	if attack_timer >= effective_cooldown and _aimed_at(attack_target):
 		_land_swing(effective_cooldown, true)
 
 ## Research attack-speed buffs shrink the effective cooldown (computed live
@@ -4151,7 +4247,7 @@ func _land_swing(effective_cooldown: float, retarget: bool) -> void:
 	## Square on to what it strikes: a figure shows its yaw, and a unit's first
 	## blow (hitting back at someone behind it, say) can come before its turn
 	## toward the target has caught up.
-	if is_instance_valid(attack_target):
+	if is_instance_valid(attack_target) and aim_turn_rate <= 0.0:
 		var to_target := attack_target.global_position - global_position
 		if Vector2(to_target.x, to_target.z).length_squared() > 0.0001:
 			rotation.y = atan2(to_target.x, to_target.z)
