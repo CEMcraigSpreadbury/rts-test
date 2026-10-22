@@ -207,7 +207,8 @@ construction_time = 14.0
 
 [resource]
 script = ExtResource("1_faction_script")
-faction_name = "Human"
+faction_name = "Knights"
+race_name = "Human"
 building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_archery_range"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_storehouse"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_siege_workshop"), SubResource("BuildingType_arcane_sanctum"), SubResource("BuildingType_mill"), SubResource("BuildingType_bestiary"), SubResource("BuildingType_library")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit")])

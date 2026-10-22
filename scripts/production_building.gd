@@ -27,6 +27,15 @@ const DESTROY_SINK_DURATION: float = 1.5
 const MAX_QUEUE_SIZE: int = 7
 
 @export var building_name: String = "Production Building"
+## What players see it called, where its people's word differs from the
+## building_name every rule and AI step goes by (a Pirate "Tavern" is a
+## "Barracks"). Empty: the building_name. See shown_name().
+@export var display_name: String = ""
+## Whose people it belongs to (RaceTraits), for a people's own buildings
+## that stand in for the shared ones. Empty: worked out by RaceTraits.
+@export var race_name: String = ""
+## What a main base trains as its Lord in a Realm match. None: Aldmere's.
+@export var lord_item: ProducibleItem
 ## Which research bonuses apply to this building (see _production_speed,
 ## costs_for and Research._apply_building_stat). Watchtowers need no role —
 ## any building with attack_range > 0 counts as one.
@@ -290,12 +299,16 @@ var _source_materials: Dictionary = {}
 ## Offered by every Town Centre in a Realm match (see Lords).
 const LORD_ITEM: ProducibleItem = preload("res://resources/lord_item.tres")
 
+func shown_name() -> String:
+	return display_name if not display_name.is_empty() else building_name
+
 func _ready() -> void:
 	current_health = max_health
 	## A copy: the scene's list is shared by every Town Centre.
-	if is_main_base and MatchRules.realm() and not producibles.has(LORD_ITEM):
+	var lord: ProducibleItem = lord_item if lord_item != null else LORD_ITEM
+	if is_main_base and MatchRules.realm() and not producibles.has(lord):
 		var offered: Array[ProducibleItem] = producibles.duplicate()
-		offered.append(LORD_ITEM)
+		offered.append(lord)
 		producibles = offered
 	## Its people's upgrades for what it trains (see RaceTraits).
 	RaceTraits.offer_upgrades(self)
@@ -913,6 +926,8 @@ func take_damage(amount: int, attacker: Node3D = null) -> void:
 	if attacker != null and is_instance_valid(attacker) and attacker.is_inside_tree():
 		attacker_path = attacker.get_path()
 	damaged.emit(amount, attacker_path, fatal, false)
+	if attacker is Unit and attacker.race_plunder > 0.0:
+		RaceTraits.plunder_building(attacker, self, mini(amount, current_health))
 	current_health = maxi(current_health - amount, 0)
 	health_fraction = float(current_health) / float(maxi(max_health, 1))
 	if current_health <= 0:

@@ -4,10 +4,10 @@ const LOBBY_SCENE_PATH: String = "res://scenes/lobby.tscn"
 
 var available_maps: Array[MapInfo] = MapInfo.list_all()
 
-## swatch, name, colour, ruler, difficulty, remove. A human row leaves the last
-## two empty rather than omitting them, so every row is the same shape and the
-## panel's width never depends on who is in it.
-const PLAYER_COLUMNS: int = 6
+## swatch, name, colour, race, ruler, difficulty, remove. A human row leaves the
+## last two empty rather than omitting them, so every row is the same shape and
+## the panel's width never depends on who is in it.
+const PLAYER_COLUMNS: int = 7
 const COL_NAME: int = 92
 const COL_PICKER: int = 104
 const COL_REMOVE: int = 40
@@ -65,7 +65,7 @@ func _ready() -> void:
 ## the right, Back and Start in the footer -- the same shell the campaign and
 ## lobby screens use.
 func _build_skirmish_panel() -> void:
-	_skirmish = ModalShell.dress(map_select, "Single Player", "Skirmish", 1080)
+	_skirmish = ModalShell.dress(map_select, "Single Player", "Skirmish", 1200)
 
 	_skirmish.left.add_child(ModalShell.column_head("Map"))
 	map_list = ItemList.new()
@@ -330,6 +330,17 @@ func _add_player_cells(peer_id: int) -> void:
 		color_option.item_selected.connect(Network.set_my_color)
 	ModalShell.bound(color_option, COL_PICKER)
 	row.add_child(color_option)
+
+	var race_option := OptionButton.new()
+	## Item ids are race_index + 1, so Faction.RANDOM (-1) can be one.
+	race_option.add_item(Faction.display_name_for(Faction.RANDOM), Faction.RANDOM + 1)
+	for i in Faction.PLAYABLE.size():
+		race_option.add_item(Faction.display_name_for(i), i + 1)
+	race_option.select(race_option.get_item_index(data.get("race_index", 0) + 1))
+	var pick_race: Callable = (func(i): Network.set_ai_race(peer_id, i)) if Network.is_ai(peer_id) else Network.set_my_race
+	race_option.item_selected.connect(func(i: int): pick_race.call(race_option.get_item_id(i) - 1))
+	ModalShell.bound(race_option, COL_PICKER)
+	row.add_child(race_option)
 
 	var ruler_option := RulerPicker.new(data.get("ruler_index", 0))
 	if Network.is_ai(peer_id):

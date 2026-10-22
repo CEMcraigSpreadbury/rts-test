@@ -17,6 +17,11 @@ extends Node
 ##   Dark Elves      Cruelty: +25% damage against enemies below half health.
 ##   Star Wanderers  Starlit: up to 2 armour as night falls.
 ##   Beastmen        Bloodrage: up to +40% attack speed as they lose health.
+##   Pirates         Plunder: kills pay gold (a share of what the victim cost),
+##                   and so does every blow against an enemy building.
+##   Robots          Clockwork: wound up near their own buildings (+15% attack
+##                   speed), running down over ROBOT_WIND_SECONDS away from
+##                   them (to -30%). Their upkeep is gold, not food.
 
 ## An upgrade offered at every one of its people's military buildings and
 ## applying to all of their units.
@@ -32,6 +37,18 @@ const DARK_ELF_CRUELTY: float = 0.25
 const WOUNDED_FRACTION: float = 0.5
 const STAR_NIGHT_ARMOR: int = 2
 const BEASTMEN_BLOODRAGE: float = 0.4
+## Plunder: this share of a slain unit's wood and gold cost, at least
+## PIRATE_PLUNDER_MIN; and this much gold per point of damage to a building.
+const PIRATE_PLUNDER: float = 0.2
+const PIRATE_PLUNDER_MIN: int = 2
+const PIRATE_BUILDING_PLUNDER: float = 0.12
+## Clockwork: how long a full winding lasts away from home, how near one of
+## their own finished buildings a robot must be to be wound, and the attack
+## speed it has fully wound and fully run down.
+const ROBOT_WIND_SECONDS: float = 90.0
+const ROBOT_WIND_RADIUS: float = 18.0
+const ROBOT_WOUND: float = 0.15
+const ROBOT_RUN_DOWN: float = -0.3
 
 ## How far a Comet Arrow's burst reaches from the unit it hits.
 const SPLASH_RADIUS: float = 2.5
@@ -52,6 +69,8 @@ const GOLD: ResourceType = preload("res://resources/gold_resource_type.tres")
 ##   building_damage: added to the building damage multiplier
 ##   smith: [Unit.UnitCategory, weapon points, armour points] (host, UnitUpgrades)
 ##   carry: more carried per trip   gather: fraction faster gathering
+##   plunder: more of Plunder's share   wind: seconds more a winding lasts
+## An entry's `glyph` names its UiGlyphs icon when it has none of its own.
 const UPGRADES: Array[Dictionary] = [
 	# --- Town Centre (villagers) ---
 	{id = &"tc_loom", race = "Human", at = TOWN_CENTRE, name = "Loom",
@@ -185,6 +204,58 @@ const UPGRADES: Array[Dictionary] = [
 	{id = &"bm_bone_plating", race = "Beastmen", at = RealmRoster.Kind.BESTIARY, name = "Bone Plating",
 		text = "Sand Worms and Skeleton Dragons gain 2 armour.",
 		wood = 150, gold = 180, time = 50.0, effects = {armor = 2}},
+
+	# --- Pirates ---
+	{id = &"pir_grog_rations", race = "Pirates", at = TOWN_CENTRE, name = "Grog Rations", glyph = &"tc_sharp_tools",
+		text = "Deckhands gather 15% faster.",
+		wood = 100, gold = 60, time = 30.0, effects = {gather = 0.15}},
+	{id = &"pir_sea_legs", race = "Pirates", at = TOWN_CENTRE, name = "Sea Legs", glyph = &"tc_wheelbarrow",
+		text = "Deckhands carry 5 more and walk 10% faster.",
+		wood = 100, gold = 50, time = 30.0, effects = {carry = 5, speed = 0.1}},
+	{id = &"pir_pieces_of_eight", race = "Pirates", at = EVERY_KIND, name = "Pieces of Eight", glyph = &"gold",
+		text = "Plunder pays half as much again.",
+		wood = 60, gold = 120, time = 35.0, effects = {plunder = 0.1}},
+	{id = &"pir_rum_courage", race = "Pirates", at = RealmRoster.Kind.BARRACKS, name = "Rum Courage", glyph = &"bloodlust",
+		text = "Tavern crews gain 20% health.",
+		wood = 100, gold = 80, time = 35.0, effects = {health = 0.2}},
+	{id = &"pir_boarding_hooks", race = "Pirates", at = RealmRoster.Kind.BARRACKS, name = "Boarding Hooks", glyph = &"siegebreakers",
+		text = "Tavern crews deal double damage to buildings.",
+		wood = 70, gold = 90, time = 30.0, effects = {building_damage = 1.0}},
+	{id = &"pir_dry_powder", race = "Pirates", at = RealmRoster.Kind.RANGE, name = "Dry Powder", glyph = &"hum_volley",
+		text = "Musketeers and Blunderbusses fire 15% faster.",
+		wood = 60, gold = 130, time = 35.0, effects = {attack_speed = 0.15}},
+	{id = &"pir_hard_shells", race = "Pirates", at = RealmRoster.Kind.STABLES, name = "Hard Shells", glyph = &"hum_barding",
+		text = "Crab Riders gain 2 armour.",
+		wood = 100, gold = 110, time = 35.0, effects = {armor = 2}},
+	{id = &"pir_dark_juju", race = "Pirates", at = RealmRoster.Kind.SANCTUM, name = "Dark Juju", glyph = &"curse",
+		text = "Voodoo Priestesses deal 25% more damage.",
+		wood = 60, gold = 160, time = 40.0, effects = {damage = 0.25}},
+
+	# --- Robots ---
+	{id = &"rob_oiled_gears", race = "Robots", at = TOWN_CENTRE, name = "Oiled Gears", glyph = &"tc_sharp_tools",
+		text = "Worker Bots gather 15% faster.",
+		wood = 100, gold = 60, time = 30.0, effects = {gather = 0.15}},
+	{id = &"rob_spring_legs", race = "Robots", at = TOWN_CENTRE, name = "Spring Legs", glyph = &"tc_wheelbarrow",
+		text = "Worker Bots carry 5 more and walk 10% faster.",
+		wood = 100, gold = 50, time = 30.0, effects = {carry = 5, speed = 0.1}},
+	{id = &"rob_mainspring", race = "Robots", at = EVERY_KIND, name = "Mainspring", glyph = &"renewal",
+		text = "A winding lasts twice as long away from home.",
+		wood = 80, gold = 120, time = 35.0, effects = {wind = ROBOT_WIND_SECONDS}},
+	{id = &"rob_repair_drones", race = "Robots", at = EVERY_KIND, name = "Repair Drones", glyph = &"repair_crews",
+		text = "Robots repair 1 health a second out of combat.",
+		wood = 100, gold = 120, time = 40.0, effects = {regen = 1.0}},
+	{id = &"rob_riveted_plating", race = "Robots", at = RealmRoster.Kind.BARRACKS, name = "Riveted Plating", glyph = &"infantry_armor",
+		text = "Assembly Line robots gain 2 armour.",
+		wood = 100, gold = 150, time = 40.0, effects = {armor = 2}},
+	{id = &"rob_focusing_lens", race = "Robots", at = RealmRoster.Kind.RANGE, name = "Focusing Lens", glyph = &"hum_bodkin",
+		text = "Ray Gunners shoot 3 m further.",
+		wood = 80, gold = 100, time = 30.0, effects = {range = 3.0}},
+	{id = &"rob_turbo_gears", race = "Robots", at = RealmRoster.Kind.STABLES, name = "Turbo Gears", glyph = &"forced_march",
+		text = "Hound Riders run 15% faster.",
+		wood = 80, gold = 120, time = 35.0, effects = {speed = 0.15}},
+	{id = &"rob_high_voltage", race = "Robots", at = RealmRoster.Kind.SANCTUM, name = "High Voltage", glyph = &"chain_lightning",
+		text = "Tesla Bots deal 25% more damage.",
+		wood = 60, gold = 170, time = 40.0, effects = {damage = 0.25}},
 ]
 
 ## On-hit effects an upgrade can hand a unit with none of its own.
@@ -240,6 +311,9 @@ static func _index() -> void:
 		for scene in entry.scenes:
 			if not (scene as String).is_empty():
 				_building_race[scene] = race
+		## Its worker, Lord and siege, which no settlement trains.
+		for unit in entry.get("others", []):
+			_unit_info[unit] = [race, -1]
 
 ## [race, kind] for a unit scene. A Human unit no settlement trains (the
 ## Shieldman, the Officer) goes by its category; anything not of a people
@@ -265,6 +339,8 @@ static func unit_info(scene_path: String, category: int = Unit.UnitCategory.NONE
 static func building_race(building: ProductionBuilding) -> String:
 	if not building.slot_race.is_empty():
 		return building.slot_race
+	if not building.race_name.is_empty():
+		return building.race_name
 	_index()
 	return _building_race.get(building.scene_file_path, "Human")
 
@@ -327,7 +403,7 @@ static func _item(entry: Dictionary) -> ProducibleItem:
 	item.description = entry.text
 	item.kind = ProducibleItem.Kind.UPGRADE
 	## The blacksmith's Gear I/II/III share one icon.
-	var icon_name := String(entry.id)
+	var icon_name := String(entry.get("glyph", entry.id))
 	if icon_name.begins_with("smith_"):
 		icon_name = icon_name.left(icon_name.rfind("_"))
 	item.icon = UiStyle.icon_art("upgrades", icon_name)
@@ -371,6 +447,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_tick -= TICK_SECONDS
 	_tick_regeneration()
+	_tick_clockwork()
 
 ## Host: out of combat for Research's cooldown, and not swinging.
 func _tick_regeneration() -> void:
@@ -383,6 +460,62 @@ func _tick_regeneration() -> void:
 				or now - unit.last_damaged_msec < Research.REGEN_COMBAT_COOLDOWN_MS:
 			continue
 		unit.heal(maxi(roundi((unit.race_regen + unit.lord_regen) * TICK_SECONDS), 1))
+
+## Host: every robot near one of its own finished buildings is wound back up;
+## the rest run down a second's worth.
+func _tick_clockwork() -> void:
+	var homes: Dictionary = {}
+	for node in main.units_root.get_children():
+		var unit := node as Unit
+		if unit == null or not unit.race_clockwork or unit.status_activity == Unit.Activity.DEAD:
+			continue
+		if not homes.has(unit.owner_peer_id):
+			homes[unit.owner_peer_id] = _home_positions(unit.owner_peer_id)
+		var full: float = ROBOT_WIND_SECONDS + unit.race_wind_bonus
+		var near_home := false
+		for at: Vector3 in homes[unit.owner_peer_id]:
+			if at.distance_squared_to(unit.global_position) <= ROBOT_WIND_RADIUS * ROBOT_WIND_RADIUS:
+				near_home = true
+				break
+		unit.wind_left = full if near_home else maxf(unit.wind_left - TICK_SECONDS, 0.0)
+		unit.race_windup = lerpf(ROBOT_RUN_DOWN, ROBOT_WOUND, unit.wind_left / full)
+
+func _home_positions(peer_id: int) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	for node in get_tree().get_nodes_in_group(&"buildings"):
+		var building := node as ProductionBuilding
+		if building != null and building.owner_peer_id == peer_id and not building.is_destroyed \
+				and not building.is_under_construction:
+			out.append(building.global_position)
+	return out
+
+## Host: Plunder for a Pirate's killing blow on `victim`.
+static func plunder_kill(attacker: Unit, victim: Unit) -> void:
+	if attacker.race_plunder <= 0.0 or not Teams.is_enemy(attacker.owner_peer_id, victim.owner_peer_id):
+		return
+	var worth: int = 0
+	for cost in victim.costs:
+		if cost != null and (cost.resource_type == WOOD or cost.resource_type == GOLD):
+			worth += cost.amount
+	_pay_plunder(attacker, maxi(roundi(worth * attacker.race_plunder), PIRATE_PLUNDER_MIN))
+
+## Host: Plunder for a Pirate's blow on an enemy building, paid in whole coins
+## as the damage adds up.
+static func plunder_building(attacker: Unit, building: ProductionBuilding, damage: int) -> void:
+	if attacker.race_plunder <= 0.0 or not Teams.is_enemy(attacker.owner_peer_id, building.owner_peer_id):
+		return
+	attacker.plunder_owed += damage * PIRATE_BUILDING_PLUNDER * attacker.race_plunder / PIRATE_PLUNDER
+	var coins := floori(attacker.plunder_owed)
+	if coins < 1:
+		return
+	attacker.plunder_owed -= coins
+	_pay_plunder(attacker, coins)
+
+static func _pay_plunder(attacker: Unit, gold: int) -> void:
+	ResourceStockpile.add(attacker.owner_peer_id, GOLD, gold)
+	var main := attacker.get_tree().current_scene as Main
+	if main != null and main.feedback != null:
+		main.feedback.show_income_popup(attacker, attacker.owner_peer_id, [[gold, GOLD.display_color]])
 
 ## Every peer, as a unit spawns (after Unit._ready): its people's trait and
 ## every upgrade its owner already holds.
@@ -400,6 +533,13 @@ func apply_all_to(unit: Unit) -> void:
 			unit.race_night_armor = STAR_NIGHT_ARMOR
 		"Beastmen":
 			unit.race_bloodrage = BEASTMEN_BLOODRAGE
+		"Pirates":
+			if unit.can_fight:
+				unit.race_plunder = PIRATE_PLUNDER
+		"Robots":
+			unit.race_clockwork = true
+			unit.wind_left = ROBOT_WIND_SECONDS
+			unit.race_windup = ROBOT_WOUND
 	for entry in UPGRADES:
 		if UnitUnlocks.has(unit.owner_peer_id, entry.id):
 			_apply_to(unit, entry)
@@ -493,6 +633,11 @@ func _apply_to(unit: Unit, entry: Dictionary) -> void:
 				unit.carry_capacity += int(amount)
 			"gather":
 				unit.race_gather += float(amount)
+			"plunder":
+				if unit.race_plunder > 0.0:
+					unit.race_plunder += float(amount)
+			"wind":
+				unit.race_wind_bonus += float(amount)
 	## A sleeping unit (see Unit._maybe_sleep) has to be up to heal around it,
 	## and the sim holds its own copy of range, vision and speed.
 	unit.wake()

@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/wizard_unit.tscn" id="1_base"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateVoodoo.glb" id="2_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateVoodoo_LOD1.glb" id="3_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/pirates.png" id="4_palette"]
+
+[node name="VoodooPriestess" instance=ExtResource("1_base")]
+display_name = "Voodoo Priestess"
+attack_damage = 11
+projectile_tint = Color(0.7, 0.45, 1, 1)
+figure_top = 1.15
+figure_model = ExtResource("2_fig")
+figure_model_lod1 = ExtResource("3_fig_lod1")
+figure_palette = ExtResource("4_palette")

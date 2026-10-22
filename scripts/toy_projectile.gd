@@ -1,14 +1,18 @@
 class_name ToyProjectile
 extends Node3D
 ## A shot in flight as a chunky plastic toy: an arrow, a ballista bolt, a
-## glowing magic orb or a burning torch thrown at a building. Built from primitive meshes pointing along -Z, so
+## glowing magic orb, a burning torch thrown at a building, the Pirates'
+## musket ball, grapeshot and cannonball trailing powder smoke, or the Robots'
+## laser bolt and rocket. Built from primitive meshes pointing along -Z, so
 ## WorldFeedback._fly_projectile_visual only has to turn it along its arc.
 ## Purely visual; the damage is the host's (Unit._tick_pending_projectiles).
 
-enum Kind { ARROW, BOLT, ORB, TORCH }
+enum Kind { ARROW, BOLT, ORB, TORCH, MUSKET_BALL, GRAPESHOT, CANNONBALL, LASER, ROCKET }
 @export var kind: Kind = Kind.ARROW
 ## The orb's colour, set by the shooter before it is added (Unit.projectile_tint).
 var tint: Color = Color(0.75, 0.5, 1.0)
+## Flies flat at its target rather than in an arc (a laser).
+var straight: bool = false
 
 const ORB_RADIUS: float = 0.16
 const TRAIL_LIFETIME: float = 0.4
@@ -26,6 +30,17 @@ func _ready() -> void:
 			_build_orb()
 		Kind.TORCH:
 			_build_torch()
+		Kind.MUSKET_BALL:
+			_build_shot([Vector3.ZERO], 0.06)
+		Kind.GRAPESHOT:
+			_build_shot([Vector3(-0.07, 0.03, 0.0), Vector3(0.07, -0.02, 0.05), Vector3(0.0, 0.06, -0.06),
+					Vector3(0.02, -0.06, 0.08)], 0.045)
+		Kind.CANNONBALL:
+			_build_shot([Vector3.ZERO], 0.17)
+		Kind.LASER:
+			_build_laser()
+		Kind.ROCKET:
+			_build_rocket()
 
 ## Shaft, head and two crossed fletchings, `size` times an arrow.
 func _build_arrow(size: float, wood: Color) -> void:
@@ -89,6 +104,82 @@ func _build_torch() -> void:
 	add_child(_trail)
 
 const TORCH_FIRE: Color = Color(1.0, 0.45, 0.1)
+const POWDER_SMOKE: Color = Color(0.82, 0.8, 0.76)
+const IRON: Color = Color(0.12, 0.12, 0.14)
+
+## Black iron balls (one, or a spray of grapeshot) trailing grey powder smoke.
+func _build_shot(balls: Array, radius: float) -> void:
+	tint = POWDER_SMOKE
+	for at: Vector3 in balls:
+		var ball := SphereMesh.new()
+		ball.radius = radius
+		ball.height = radius * 2.0
+		ball.radial_segments = 10
+		ball.rings = 5
+		ball.material = _plastic(IRON)
+		_add_part(ball, at, Vector3.ZERO)
+	_trail = _puffs(POWDER_SMOKE, 18 if radius > 0.1 else 10, TRAIL_LIFETIME * (1.5 if radius > 0.1 else 1.0), false)
+	_trail.local_coords = false
+	add_child(_trail)
+
+## A glowing amber bolt of light, flying flat.
+func _build_laser() -> void:
+	straight = true
+	tint = Color(1.0, 0.7, 0.25)
+	var core := CapsuleMesh.new()
+	core.radius = 0.05
+	core.height = 0.9
+	core.radial_segments = 8
+	core.rings = 2
+	core.material = _plastic(Color(1.0, 0.92, 0.6), 2.5)
+	_add_part(core, Vector3.ZERO, Vector3(-PI * 0.5, 0.0, 0.0))
+	var glow := CapsuleMesh.new()
+	glow.radius = 0.09
+	glow.height = 1.0
+	glow.radial_segments = 8
+	glow.rings = 2
+	var halo := _plastic(tint, 2.0).duplicate() as StandardMaterial3D
+	halo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo.albedo_color = Color(tint, 0.45)
+	glow.material = halo
+	_add_part(glow, Vector3.ZERO, Vector3(-PI * 0.5, 0.0, 0.0))
+
+## A toy rocket: a cream body, a red-orange nose and fins, a flame behind.
+func _build_rocket() -> void:
+	tint = TORCH_FIRE
+	var body := CylinderMesh.new()
+	body.top_radius = 0.09
+	body.bottom_radius = 0.09
+	body.height = 0.55
+	body.radial_segments = 8
+	body.rings = 1
+	body.material = _plastic(Color(0.95, 0.9, 0.78))
+	_add_part(body, Vector3.ZERO, Vector3(-PI * 0.5, 0.0, 0.0))
+	var nose := CylinderMesh.new()
+	nose.top_radius = 0.0
+	nose.bottom_radius = 0.09
+	nose.height = 0.2
+	nose.radial_segments = 8
+	nose.rings = 1
+	nose.material = _plastic(Color(0.95, 0.4, 0.1))
+	_add_part(nose, Vector3(0.0, 0.0, -0.37), Vector3(-PI * 0.5, 0.0, 0.0))
+	for i in 3:
+		var fin := BoxMesh.new()
+		fin.size = Vector3(0.02, 0.14, 0.14)
+		fin.material = _plastic(Color(0.95, 0.4, 0.1))
+		var angle := TAU * i / 3.0
+		_add_part(fin, Vector3(cos(angle) * 0.1, sin(angle) * 0.1, 0.24), Vector3(0.0, 0.0, angle + PI * 0.5))
+	var flame := CylinderMesh.new()
+	flame.top_radius = 0.0
+	flame.bottom_radius = 0.07
+	flame.height = 0.22
+	flame.radial_segments = 6
+	flame.rings = 1
+	flame.material = _plastic(Color(1.0, 0.75, 0.3), 2.0)
+	_add_part(flame, Vector3(0.0, 0.0, 0.38), Vector3(PI * 0.5, 0.0, 0.0))
+	_trail = _puffs(POWDER_SMOKE, 24, TRAIL_LIFETIME * 1.5, false)
+	_trail.local_coords = false
+	add_child(_trail)
 
 func _add_part(mesh: Mesh, at: Vector3, rotation_euler: Vector3) -> void:
 	var part := MeshInstance3D.new()

@@ -1,0 +1,13 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/lord_unit.tscn" id="1_base"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateCaptain.glb" id="2_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateCaptain_LOD1.glb" id="3_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/pirates.png" id="4_palette"]
+
+[node name="Captain" instance=ExtResource("1_base")]
+display_name = "Captain"
+figure_top = 0.92
+figure_model = ExtResource("2_fig")
+figure_model_lod1 = ExtResource("3_fig_lod1")
+figure_palette = ExtResource("4_palette")

@@ -28,9 +28,14 @@ import headgear
 import horse
 import monsters
 import parts
+import pirates
 import poses
+import robots
 import siege
 import star_wanderers
+from geo import SMOOTH
+from palette import row
+from parts import seg
 
 
 def _head(b, lod, on_head, hair="hair"):
@@ -870,30 +875,531 @@ def phoenix(lod, base=False):
 
 # --- siege ---------------------------------------------------------------------
 
-def _crewman(lod, x, y, yaw=0.0):
-	"""The machine's crew: the Aldmere Soldier (the crew sprite is the
-	swordsman), standing on the ground beside it."""
-	bm = soldier(lod)
-	geo.rotate(bm, yaw, 'Z')
-	return geo.translate(bm, (x, y, 0.0))
+## A siege engine's crew is not on its model: the unit draws its crewman as a
+## figure of its own beside the machine, hopping along by himself (see
+## Unit.crew_figure_model and the scenes' crew_figure_offset).
 
 
-def ballista(lod, base=False):
+def ballista(lod, base=False, part=None):
 	"""Ballista (Siege Workshop): a huge wheeled bolt-thrower with an
-	oversized bolt loaded, the team's painted boards, fletching and pennant,
-	a Soldier crewman at its winch (see siege.py)."""
-	bm = siege.ballista(lod)
-	geo.merge(bm, _crewman(lod, -0.80, 1.78, -20.0))
-	return bm
+	oversized bolt loaded, the team's painted boards, fletching and pennant
+	(see siege.py)."""
+	return siege.ballista(lod, part)
 
 
-def magic_cannon(lod, base=False):
+def magic_cannon(lod, base=False, part=None):
 	"""Magic Cannon (Siege Workshop): a brass arcane cannon with glowing rune
 	rings and a crystal core on a two-wheeled carriage, the team's painted
-	cheeks and breech, a Soldier crewman at its trail (see siege.py)."""
-	bm = siege.magic_cannon(lod)
-	geo.merge(bm, _crewman(lod, -0.85, 1.35, -15.0))
-	return bm
+	cheeks and breech (see siege.py)."""
+	return siege.magic_cannon(lod, part)
+
+
+# --- pirates ----------------------------------------------------------------
+
+def _pirate_body(b, lod, sash=True, belt=False, peg=False, arms=True):
+	"""Breeches over black boots (or a peg on the left), the striped shirt
+	open at the neck, the team's sash (or a broad buckled belt)."""
+	feet = pirates.boots(b, lod)
+	pieces = [pirates.breeches(b, lod)]
+	if peg:
+		geo.delete_faces(feet, lambda f: f.calc_center_median().x > 0.0)
+		pieces.append(pirates.peg_leg(b, lod, 1.0))
+	pieces += [feet, pirates.striped_shirt(b, lod), pirates.open_collar(b, lod)]
+	if sash:
+		pieces.append(pirates.sash(b, lod))
+	if belt:
+		pieces.append(pirates.buckle_belt(b, lod))
+	if arms:
+		pieces.append(pirates.shirt_arms(b, lod))
+	return pieces
+
+
+def _pirate_head(b, lod, on_head, hair="hair", patch=None, ring=-1.0):
+	"""The head with its face (an eye patch over one eye when `patch` gives
+	the side), hair, a gold earring and what it wears, tipped back."""
+	head = parts.head(b, lod)
+	pieces = [head, parts.face(b, lod, head)]
+	if patch is not None:
+		pieces.append(pirates.eye_patch(b, lod, head, patch))
+	if hair:
+		pieces.append(parts.hair(b, lod, hair))
+	if ring:
+		pieces.append(pirates.earring(b, lod, ring))
+	pieces += on_head
+	for piece in pieces:
+		geo.transform(piece, b.head_matrix())
+	return pieces
+
+
+def _deckhand(lod, base, held):
+	b = (poses.basket if held == "basket" else poses.empty_handed if held is None else poses.tool)(parts.Body())
+	pieces = _pirate_head(b, lod, [pirates.bandana(b, lod)], hair=None, ring=0.0)
+	pieces += _pirate_body(b, lod)
+	if held is not None:
+		tool = getattr(gear, held)(b, lod)
+		fist, factor = (b.l_fist, BASKET_SCALE) if held == "basket" else (b.r_fist, TOOL_SCALE)
+		geo.transform(tool, Matrix.Translation(fist) @ Matrix.Scale(factor, 4) @ Matrix.Translation(-fist))
+		pieces.append(tool)
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_deckhand(lod, base=False):
+	"""Deckhand (Pirates' worker): the team's bandana, a striped shirt, rolled
+	breeches, the team's sash; empty-handed."""
+	return _deckhand(lod, base, None)
+
+
+def pirate_deckhand_food(lod, base=False):
+	return _deckhand(lod, base, "basket")
+
+
+def pirate_deckhand_build(lod, base=False):
+	return _deckhand(lod, base, "hammer")
+
+
+def pirate_deckhand_wood(lod, base=False):
+	return _deckhand(lod, base, "axe")
+
+
+def pirate_deckhand_gold(lod, base=False):
+	return _deckhand(lod, base, "pick")
+
+
+def _deckhand_carrying(lod, base, load, pose):
+	b = pose(parts.Body())
+	pieces = _pirate_head(b, lod, [pirates.bandana(b, lod)], hair=None, ring=0.0)
+	pieces += _pirate_body(b, lod) + [getattr(gear, load)(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_deckhand_carry_food(lod, base=False):
+	return _deckhand_carrying(lod, base, "carried_basket", poses.carry_front)
+
+
+def pirate_deckhand_carry_wood(lod, base=False):
+	return _deckhand_carrying(lod, base, "log_bundle", poses.carry_shoulder)
+
+
+def pirate_deckhand_carry_gold(lod, base=False):
+	return _deckhand_carrying(lod, base, "gold_chunk", poses.carry_front)
+
+
+def pirate_swabbie(lod, base=False):
+	"""Swabbie (Tavern): the team's bandana and sash, a gold earring, a
+	broad brass-hilted cutlass up and a little painted buckler."""
+	b = parts.Body()
+	pieces = _pirate_head(b, lod, [pirates.bandana(b, lod)], hair=None)
+	pieces += _pirate_body(b, lod) + [pirates.cutlass(b, lod), pirates.buckler(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_harpooner(lod, base=False):
+	"""Harpooner (Tavern, spear): a knitted cap in the team's colour, a big
+	ginger beard, a whaling harpoon stood taller than him."""
+	b = poses.polearm(parts.Body())
+	on_head = [pirates.watch_cap(b, lod), headgear.beard(b, lod, long=False, row_name="beard")]
+	pieces = _pirate_head(b, lod, on_head, ring=0.0)
+	pieces += _pirate_body(b, lod, sash=True) + [pirates.harpoon(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+class BruteBody(parts.Body):
+	"""A huge round-bellied deck brute: wide shoulders, short legs set wide,
+	the head sunk a little, big bare arms."""
+	foot_x = 0.090
+	hem_z = 0.185
+	waist_z = 0.300
+	shoulder_z = 0.480
+	neck_z = 0.540
+	torso_depth = 0.86
+	head_centre = Vector((0.0, 0.0, 0.712))
+	neck_pivot = Vector((0.0, 0.0, 0.568))
+	brow_z = 0.760
+	r_shoulder = Vector((-0.190, 0.0, 0.462))
+	r_elbow = Vector((-0.262, 0.026, 0.372))
+	r_wrist = Vector((-0.270, -0.066, 0.330))
+	r_fist = Vector((-0.272, -0.100, 0.322))
+	l_shoulder = Vector((0.190, 0.0, 0.462))
+	l_elbow = Vector((0.262, 0.012, 0.370))
+	l_wrist = Vector((0.272, -0.010, 0.280))
+	l_fist = Vector((0.274, -0.020, 0.254))
+	sword_axis = Vector((-0.30, -0.10, 1.0)).normalized()
+
+	def torso_profile(self):
+		h, w, s, n = self.hem_z, self.waist_z, self.shoulder_z, self.neck_z
+		return [
+			(0.200, h), (0.214, h + 0.010), (0.222, h + 0.040), (0.226, h + 0.080),
+			(0.222, w), (0.214, w + 0.060), (0.204, w + 0.110),
+			(0.192, s - 0.012), (0.150, s + 0.024), (0.086, n), (0.0, n + 0.004),
+		]
+
+
+def pirate_brute(lod, base=False):
+	"""Anchor Brute (Tavern, heavy): a huge bald bruiser with a great black
+	beard and a gold earring, his shirt torn off at the shoulder, the team's
+	sash over a broad belt, swinging a whole boat anchor."""
+	b = BruteBody()
+	on_head = [pirates.bald_cap(b, lod), headgear.beard(b, lod, long=True, row_name="beard_dark")]
+	pieces = _pirate_head(b, lod, on_head, hair=None)
+	pieces += _pirate_body(b, lod, sash=True, belt=True, arms=False)
+	arms = pirates.shirt_arms(b, lod, sleeve="skin")
+	pieces += [gear.grow(arms, (0.0, 0.0, b.shoulder_z), 1.0), pirates.anchor(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_musketeer(lod, base=False):
+	"""Musketeer (Gun Deck): a black tricorn with a team plume and band, a
+	pointed ginger beard, a long musket levelled, a powder horn."""
+	b = poses.crossbow(parts.Body())
+	pieces = _pirate_head(b, lod, [pirates.tricorn(b, lod), pirates.stubble_beard(b, lod)])
+	pieces += _pirate_body(b, lod) + [pirates.musket(b, lod), pirates.powder_horn(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_blunderbuss(lod, base=False):
+	"""Blunderbuss (Gun Deck): the team's bandana and an eye patch, a black
+	moustache, a short gun with a great flared brass bell."""
+	b = poses.crossbow(parts.Body())
+	pieces = _pirate_head(b, lod, [pirates.bandana(b, lod), pirates.stubble_beard(b, lod, "beard_dark")],
+			hair=None, patch=1.0)
+	pieces += _pirate_body(b, lod, sash=True, belt=True) + [pirates.musket(b, lod, length=0.40, bell=True)]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_crab_rider(lod, base=False):
+	"""Crab Rider (Crab Pen, cavalry): a swabbie in the team's bandana with
+	a cutlass raised, astride a giant coral crab with its claws up, eyes on
+	stalks and the team's saddle cloth over its shell."""
+	b = poses.sword_only(parts.Body())
+	b.l_elbow = Vector((0.190, -0.040, 0.370))
+	b.l_wrist = Vector((0.120, -0.130, 0.370))
+	b.l_fist = Vector((0.090, -0.160, 0.370))
+	lift = Vector((0.0, 0.0, b.base_height + pirates.CRAB_SEAT + 0.005 - b.hem_z))
+	pieces = _pirate_head(b, lod, [pirates.bandana(b, lod)], hair=None)
+	pieces += [pirates.striped_shirt(b, lod), pirates.open_collar(b, lod), pirates.sash(b, lod),
+			pirates.shirt_arms(b, lod), pirates.cutlass(b, lod)]
+	for piece in pieces:
+		geo.translate(piece, lift)
+	for joint in ("l_fist", "l_wrist", "l_elbow", "r_fist", "r_wrist", "r_elbow"):
+		setattr(b, joint, getattr(b, joint) + lift)
+	legs = horse.rider_legs(b, lod)
+	pirates._recolour(legs, "leather", "boot")
+	geo.translate(legs, (0.0, 0.0, pirates.CRAB_SEAT - horse.SEAT))
+	pieces += [pirates.crab(b, lod), pirates.crab_saddle(b, lod), legs]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_voodoo(lod, base=False):
+	"""Voodoo Priestess (Voodoo Hut, caster): a tall wound head wrap in the
+	team's colour, gold earrings, a long sand-coloured skirt with the team's
+	hem, bone-bead necklaces, a horned-skull juju staff glowing violet."""
+	b = poses.staff(parts.Body())
+	on_head = [pirates.head_wrap(b, lod), pirates.earring(b, lod, 1.0)]
+	pieces = _pirate_head(b, lod, on_head, hair="hair")
+	pieces += [clothes.robe(b, lod, cloth="robe", hem="team_cloth"), clothes.wide_sleeves(b, lod, "robe"),
+			pirates.bead_necklace(b, lod), pirates.juju_staff(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def pirate_cannon(lod, base=False, part=None):
+	"""Cannon Cart (Shipwright, siege): a stubby black ship's gun on a truck
+	carriage painted in the team's colour, a keg and shot at its tail."""
+	return pirates.cannon_cart(lod, part)
+
+
+def pirate_captain(lod, base=False):
+	"""Captain (Pirates' Lord): a great black tricorn with the team's plume,
+	a thick black beard, a long frock coat in the team's colour with gold
+	cuffs, a cutlass up, a hook for a left hand, a peg leg and a parrot on his
+	shoulder."""
+	b = poses.sword_only(parts.Body())
+	on_head = [pirates.tricorn(b, lod), headgear.beard(b, lod, long=True, row_name="beard_dark")]
+	pieces = _pirate_head(b, lod, on_head, hair="hair")
+	pieces += _pirate_body(b, lod, sash=False, belt=True, peg=True, arms=False)
+	arms = pirates.shirt_arms(b, lod, sleeve="team_cloth", rolled=False)
+	geo.delete_faces(arms, lambda f: (f.calc_center_median() - b.l_fist).length < 0.045)
+	pieces += [arms, pirates.coat_cuffs(b, lod), pirates.coat(b, lod), pirates.cravat(b, lod), pirates.cutlass(b, lod),
+			pirates.hook(b, lod, b.l_wrist, b.l_elbow),
+			pirates.parrot(b, lod, Vector((-0.150, 0.030, b.shoulder_z + 0.080)))]
+	return _assemble(b, pieces, lod, base)
+
+
+# --- robots -----------------------------------------------------------------
+
+class TinBody(parts.Body):
+	"""A clockwork tin toy: a straight-sided can of a body on stubby legs,
+	rounded off at the shoulders under a collar ring."""
+	foot_x = 0.072
+	torso_depth = 0.84
+	# The tin head is squarer and shorter than a face: seated lower, on the collar.
+	head_centre = Vector((0.0, 0.0, 0.684))
+	neck_pivot = Vector((0.0, 0.0, 0.548))
+	brow_z = 0.732
+
+	def torso_profile(self):
+		h, w, s, n = self.hem_z, self.waist_z, self.shoulder_z, self.neck_z
+		return [
+			(0.150, h), (0.160, h + 0.012), (0.160, h + 0.060), (0.156, w),
+			(0.160, w + 0.060), (0.162, s - 0.040), (0.154, s - 0.004), (0.126, s + 0.030),
+			(0.092, n - 0.010), (0.0, n + 0.004),
+		]
+
+
+class BoilerBody(TinBody):
+	"""A big round boiler of a robot: a fat drum body on short wide legs, its
+	head small and low on top, heavy arms."""
+	foot_x = 0.098
+	hem_z = 0.170
+	waist_z = 0.290
+	shoulder_z = 0.500
+	neck_z = 0.560
+	torso_depth = 0.92
+	head_centre = Vector((0.0, 0.0, 0.708))
+	head_size = Vector((0.290, 0.260, 0.270))
+	neck_pivot = Vector((0.0, 0.0, 0.580))
+	brow_z = 0.750
+	r_shoulder = Vector((-0.230, 0.0, 0.470))
+	r_elbow = Vector((-0.290, 0.030, 0.380))
+	r_wrist = Vector((-0.292, -0.060, 0.330))
+	r_fist = Vector((-0.292, -0.094, 0.322))
+	l_shoulder = Vector((0.230, 0.0, 0.470))
+	l_elbow = Vector((0.290, 0.020, 0.380))
+	l_wrist = Vector((0.300, -0.040, 0.300))
+	l_fist = Vector((0.300, -0.060, 0.280))
+	sword_axis = Vector((-0.28, -0.12, 1.0)).normalized()
+
+	def torso_profile(self):
+		h, w, s, n = self.hem_z, self.waist_z, self.shoulder_z, self.neck_z
+		return [
+			(0.190, h), (0.212, h + 0.020), (0.226, h + 0.080), (0.232, w + 0.040),
+			(0.230, w + 0.110), (0.220, s - 0.030), (0.196, s + 0.010), (0.140, s + 0.040),
+			(0.096, n - 0.010), (0.0, n + 0.004),
+		]
+
+
+class MechanistBody(TinBody):
+	"""The Grand Mechanist: tall and upright on longer legs, a narrow chest,
+	the head carried high."""
+	foot_x = 0.066
+	hem_z = 0.230
+	waist_z = 0.360
+	shoulder_z = 0.520
+	neck_z = 0.585
+	head_centre = Vector((0.0, 0.0, 0.756))
+	neck_pivot = Vector((0.0, 0.0, 0.612))
+	brow_z = 0.804
+	r_shoulder = Vector((-0.150, 0.0, 0.502))
+	r_elbow = Vector((-0.210, 0.010, 0.420))
+	r_wrist = Vector((-0.225, -0.070, 0.430))
+	r_fist = Vector((-0.228, -0.100, 0.430))
+	l_shoulder = Vector((0.150, 0.0, 0.502))
+	l_elbow = Vector((0.207, 0.012, 0.410))
+	l_wrist = Vector((0.214, -0.012, 0.322))
+	l_fist = Vector((0.214, -0.020, 0.296))
+	pole_axis = Vector((0.0, -0.05, 1.0)).normalized()
+
+
+def _robot_head(b, lod, on_head, k=1.0, bolts=True, monocle=False):
+	"""The tin head with its lamp eyes and grille, ear bolts, and what it
+	wears, tipped back together."""
+	head = robots.tin_head(b, lod, k)
+	pieces = [head, robots.tin_face(b, lod, head)]
+	if bolts:
+		pieces.append(robots.ear_bolts(b, lod))
+	if monocle:
+		pieces.append(robots.monocle(b, lod, head))
+	pieces += on_head
+	for piece in pieces:
+		geo.transform(piece, b.head_matrix())
+	return pieces
+
+
+def _robot_body(b, lod, hand="mitt", key=1.0, legs=True, panel=True, k=1.0, hands=(True, True)):
+	pieces = [robots.tin_torso(b, lod, panel=panel), robots.ribbed_arms(b, lod, hand=hand, k=k, hands=hands)]
+	if legs:
+		pieces.append(robots.piston_legs(b, lod))
+	if key:
+		pieces.append(robots.wind_key(b, lod, key))
+	return pieces
+
+
+def _worker_bot(lod, base, held):
+	b = (poses.basket if held == "basket" else poses.empty_handed if held is None else poses.tool)(TinBody())
+	pieces = _robot_head(b, lod, [robots.antenna(b, lod, ball="crystal", height=0.12)])
+	pieces += _robot_body(b, lod)
+	if held is not None:
+		tool = getattr(robots, ROBOT_TOOLS[held])(b, lod)
+		fist, factor = (b.l_fist, BASKET_SCALE) if held == "basket" else (b.r_fist, TOOL_SCALE)
+		geo.transform(tool, Matrix.Translation(fist) @ Matrix.Scale(factor, 4) @ Matrix.Translation(-fist))
+		pieces.append(tool)
+	return _assemble(b, pieces, lod, base)
+
+
+## A Worker Bot's tool for each of the villager's: a chainsaw fells trees, a
+## laser drill mines, a spanner builds; it gathers battery cells, not apples.
+ROBOT_TOOLS = {"basket": "battery_pack", "hammer": "spanner", "axe": "chainsaw", "pick": "laser_drill"}
+
+
+def robot_worker(lod, base=False):
+	"""Worker Bot (Robots' worker): a little tin bot with an amber lamp on its
+	antenna, the team's chest panel and a brass key; empty-handed."""
+	return _worker_bot(lod, base, None)
+
+
+def robot_worker_food(lod, base=False):
+	return _worker_bot(lod, base, "basket")
+
+
+def robot_worker_build(lod, base=False):
+	return _worker_bot(lod, base, "hammer")
+
+
+def robot_worker_wood(lod, base=False):
+	return _worker_bot(lod, base, "axe")
+
+
+def robot_worker_gold(lod, base=False):
+	return _worker_bot(lod, base, "pick")
+
+
+def _worker_carrying(lod, base, load, pose):
+	b = pose(TinBody())
+	pieces = _robot_head(b, lod, [robots.antenna(b, lod, ball="crystal", height=0.12)])
+	pieces += _robot_body(b, lod) + [getattr(gear, load)(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_worker_carry_food(lod, base=False):
+	b = poses.carry_front(TinBody())
+	pieces = _robot_head(b, lod, [robots.antenna(b, lod, ball="crystal", height=0.12)])
+	pieces += _robot_body(b, lod) + [robots.battery_crate(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_worker_carry_wood(lod, base=False):
+	return _worker_carrying(lod, base, "log_bundle", poses.carry_shoulder)
+
+
+def robot_worker_carry_gold(lod, base=False):
+	return _worker_carrying(lod, base, "gold_chunk", poses.carry_front)
+
+
+def robot_trooper(lod, base=False):
+	"""Tin Trooper (Assembly Line): a toy soldier robot in a tall shako of
+	the team's enamel, a chrome saber up and a round painted tin shield."""
+	b = TinBody()
+	pieces = _robot_head(b, lod, [robots.shako(b, lod)])
+	pieces += _robot_body(b, lod) + [robots.saber(b, lod), robots.tin_shield(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_driller(lod, base=False):
+	"""Drill Bot (Assembly Line, spear): a miner's dome helmet with an amber
+	lamp, its right arm ending in a huge chrome drill thrust forward."""
+	b = poses.sword_only(TinBody())
+	b.r_elbow = Vector((-0.200, -0.030, 0.380))
+	b.r_wrist = Vector((-0.190, -0.130, 0.380))
+	b.r_fist = Vector((-0.188, -0.160, 0.382))
+	helmet = geo.new_bm()
+	z = b.head_centre.z + b.head_size.z * 0.18
+	dome = geo.ellipsoid(0.186, 0.172, 0.150, seg(lod, 14, 10), seg(lod, 6, 4), row("cloth"), sharp=SMOOTH)
+	geo.delete_faces(dome, lambda f: f.calc_center_median().z < 0.0)
+	geo.translate(dome, (0.0, 0.0, z))
+	geo.merge(helmet, dome)
+	geo.merge(helmet, geo.lathe([(0.186, z - 0.012), (0.204, z - 0.004), (0.204, z + 0.010), (0.184, z + 0.016)],
+			seg(lod, 14, 10), row("team_paint"), sharp=40, sy=0.93))
+	lamp = geo.lathe([(0.0, 0.0), (0.040, 0.0), (0.044, 0.030), (0.0, 0.034)], seg(lod, 10, 7), sharp=40, phase=0.0,
+			ring_swatches=[row("brass"), row("brass"), row("crystal")])
+	geo.transform(lamp, geo.frame(Vector((0.0, -0.150, z + 0.070)), (0.0, -1.0, 0.25), (0.0, 0.0, 1.0)))
+	geo.merge(helmet, lamp)
+	pieces = _robot_head(b, lod, [helmet])
+	pieces += _robot_body(b, lod, hands=(False, True))
+	pieces.append(robots.drill(b, lod, b.r_wrist, Vector((0.05, -1.0, 0.12)).normalized(), size=1.25))
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_boiler(lod, base=False):
+	"""Boiler Bot (Assembly Line, heavy): a fat riveted boiler of a robot
+	with a smoke stack up its back, a small head, a pincer and a huge
+	spanner swung up like a club."""
+	b = BoilerBody()
+	pieces = _robot_head(b, lod, [robots.antenna(b, lod, height=0.10)], k=0.92)
+	pieces += _robot_body(b, lod, hand=("mitt", "pincer"), key=1.2, k=1.25)
+	pieces += [robots.boiler_stack(b, lod), robots.wrench(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_ray_gunner(lod, base=False):
+	"""Ray Gunner (Ray Works): a radar dish on its head, a cream toy ray gun
+	with orange fins levelled at the waist."""
+	b = poses.crossbow(TinBody())
+	pieces = _robot_head(b, lod, [robots.radar_dish(b, lod)])
+	pieces += _robot_body(b, lod) + [robots.ray_gun(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_tesla(lod, base=False):
+	"""Tesla Bot (Tesla Lab, caster): a tesla coil crackling violet on its
+	head, a coil-tipped rod in hand."""
+	b = poses.staff(TinBody())
+	pieces = _robot_head(b, lod, [robots.tesla_crown(b, lod)])
+	pieces += _robot_body(b, lod) + [robots.coil_staff(b, lod)]
+	return _assemble(b, pieces, lod, base)
+
+
+## The hound is built at a horse's size and grown so it carries its rider.
+HOUND_SCALE = 1.25
+
+
+def robot_hound_rider(lod, base=False):
+	"""Hound Rider (Garage, cavalry): a little tin knight with the team's
+	antenna ball and an upright chrome lance, on a clockwork hound with
+	brass ears, its own key and the team's saddle plate."""
+	b = poses.rider_lance(TinBody())
+	seat = robots.HOUND_SEAT * HOUND_SCALE
+	lift = Vector((0.0, 0.0, b.base_height + seat + 0.005 - b.hem_z))
+	pieces = _robot_head(b, lod, [robots.antenna(b, lod)])
+	pieces += _robot_body(b, lod, legs=False, key=0.9)
+	lance = gear.lance(b, lod)
+	pirates._recolour(lance, "wood_light", "steel")
+	pirates._recolour(lance, "wood", "steel")
+	pieces.append(lance)
+	for piece in pieces:
+		geo.translate(piece, lift)
+	for joint in ("l_fist", "l_wrist", "l_elbow", "r_fist", "r_wrist", "r_elbow"):
+		setattr(b, joint, getattr(b, joint) + lift)
+	legs = horse.rider_legs(b, lod)
+	for src, dst in (("leather", "plate_dark"), ("boot", "cloth"), ("cloth_dark", "steel")):
+		pirates._recolour(legs, src, dst)
+	geo.translate(legs, (0.0, 0.0, seat - horse.SEAT))
+	mount = [robots.hound(b, lod), robots.hound_saddle(b, lod)]
+	for piece in mount:
+		beasts._grow(piece, 0.0, HOUND_SCALE)
+	pieces += mount + [legs]
+	return _assemble(b, pieces, lod, base)
+
+
+def robot_rocket(lod, base=False, part=None):
+	"""Rocket Wagon (Foundry, siege): a tin wagon with a tilted rack of four
+	big cream rockets banded in the team's enamel."""
+	return robots.rocket_wagon(lod, part)
+
+
+def robot_mechanist(lod, base=False):
+	"""Grand Mechanist (Robots' Lord): a tall tin gentleman in a chrome top
+	hat banded in the team's enamel, a brass monocle and moustache, a long
+	team cape, a coil-topped cane and the biggest brass key of all."""
+	b = poses.staff(MechanistBody())
+	c = b.head_centre
+	tache = geo.new_bm()
+	for side in (-1.0, 1.0):
+		pts = [Vector((side * 0.008, c.y - 0.150, c.z - 0.052)), Vector((side * 0.046, c.y - 0.148, c.z - 0.060)),
+				Vector((side * 0.080, c.y - 0.134, c.z - 0.030)), Vector((side * 0.074, c.y - 0.126, c.z - 0.010))]
+		geo.merge(tache, geo.tube(pts, [0.016, 0.014, 0.008, 0.0], seg(lod, 6, 4), row("brass"), sharp=SMOOTH))
+	pieces = _robot_head(b, lod, [robots.top_hat(b, lod), tache], monocle=True)
+	pieces += _robot_body(b, lod, key=1.7)
+	pieces += [clothes.cape(b, lod, collar="brass"), robots.coil_staff(b, lod)]
+	return _assemble(b, pieces, lod, base)
 
 
 ## `portrait`: the point the portrait camera looks at (the head, in the
@@ -903,6 +1409,8 @@ _DARK_ELF = dict(_FOOT, palette="dark_elves")
 _BEASTMEN = dict(_FOOT, palette="beastmen", portrait=(0.0, -0.03, 0.64))
 _STAR = dict(_FOOT, palette="star_wanderers")
 _MOUNTED = {"palette": "aldmere", "portrait": (0.0, -0.05, 1.18), "portrait_distance": 1.9, "mounted": True}
+_PIRATE = dict(_FOOT, palette="pirates")
+_ROBOT = dict(_FOOT, palette="robots", portrait=(0.0, 0.0, 0.66))
 ## `ready`: built by default. The rest are recipes in progress (written,
 ## not yet reviewed or exported): build one by name to work on it.
 UNITS = {
@@ -998,4 +1506,60 @@ UNITS = {
 			portrait_distance=12.0, ready=True),
 	"Horseman": dict(_MOUNTED, build=horseman, ready=True),
 	"Cavalier": dict(_MOUNTED, build=cavalier, ready=True),
+	"PirateDeckhand": dict(_PIRATE, build=pirate_deckhand, ready=True),
+	"PirateDeckhand_food": dict(_PIRATE, build=pirate_deckhand_food, portrait=None, ready=True),
+	"PirateDeckhand_build": dict(_PIRATE, build=pirate_deckhand_build, portrait=None, ready=True),
+	"PirateDeckhand_wood": dict(_PIRATE, build=pirate_deckhand_wood, portrait=None, ready=True),
+	"PirateDeckhand_gold": dict(_PIRATE, build=pirate_deckhand_gold, portrait=None, ready=True),
+	"PirateDeckhand_carry_food": dict(_PIRATE, build=pirate_deckhand_carry_food, portrait=None, ready=True),
+	"PirateDeckhand_carry_wood": dict(_PIRATE, build=pirate_deckhand_carry_wood, portrait=None, ready=True),
+	"PirateDeckhand_carry_gold": dict(_PIRATE, build=pirate_deckhand_carry_gold, portrait=None, ready=True),
+	"PirateSwabbie": dict(_PIRATE, build=pirate_swabbie, ready=True),
+	"PirateHarpooner": dict(_PIRATE, build=pirate_harpooner, portrait=(0.0, 0.0, 0.70), ready=True),
+	"PirateBrute": dict(_PIRATE, build=pirate_brute, portrait=(0.0, -0.02, 0.66), portrait_distance=2.3, ready=True),
+	"PirateMusketeer": dict(_PIRATE, build=pirate_musketeer, portrait=(0.0, 0.0, 0.70), ready=True),
+	"PirateBlunderbuss": dict(_PIRATE, build=pirate_blunderbuss, ready=True),
+	"PirateVoodoo": dict(_PIRATE, build=pirate_voodoo, portrait=(0.0, 0.0, 0.76), portrait_distance=2.3, ready=True),
+	"PirateCaptain": dict(_PIRATE, build=pirate_captain, portrait=(0.0, 0.0, 0.72), portrait_distance=2.3, ready=True),
+	"PirateCrabRider": dict(_MOUNTED, palette="pirates", build=pirate_crab_rider, portrait=(0.0, -0.10, 1.02),
+			portrait_distance=2.6, ready=True),
+	"PirateCannon": dict(_MOUNTED, palette="pirates", build=pirate_cannon, portrait=(0.0, 0.0, 0.90),
+			portrait_distance=9.0, ready=True),
+	"RobotWorker": dict(_ROBOT, build=robot_worker, ready=True),
+	"RobotWorker_food": dict(_ROBOT, build=robot_worker_food, portrait=None, ready=True),
+	"RobotWorker_build": dict(_ROBOT, build=robot_worker_build, portrait=None, ready=True),
+	"RobotWorker_wood": dict(_ROBOT, build=robot_worker_wood, portrait=None, ready=True),
+	"RobotWorker_gold": dict(_ROBOT, build=robot_worker_gold, portrait=None, ready=True),
+	"RobotWorker_carry_food": dict(_ROBOT, build=robot_worker_carry_food, portrait=None, ready=True),
+	"RobotWorker_carry_wood": dict(_ROBOT, build=robot_worker_carry_wood, portrait=None, ready=True),
+	"RobotWorker_carry_gold": dict(_ROBOT, build=robot_worker_carry_gold, portrait=None, ready=True),
+	"RobotTrooper": dict(_ROBOT, build=robot_trooper, portrait=(0.0, 0.0, 0.74), ready=True),
+	"RobotDriller": dict(_ROBOT, build=robot_driller, ready=True),
+	"RobotBoiler": dict(_ROBOT, build=robot_boiler, portrait=(0.0, 0.0, 0.68), portrait_distance=2.4, ready=True),
+	"RobotRayGunner": dict(_ROBOT, build=robot_ray_gunner, ready=True),
+	"RobotTesla": dict(_ROBOT, build=robot_tesla, portrait=(0.0, 0.0, 0.78), portrait_distance=2.3, ready=True),
+	"RobotMechanist": dict(_ROBOT, build=robot_mechanist, portrait=(0.0, 0.0, 0.84), portrait_distance=2.4,
+			ready=True),
+	"RobotHoundRider": dict(_MOUNTED, palette="robots", build=robot_hound_rider, portrait=(0.0, -0.10, 1.10),
+			portrait_distance=2.4, ready=True),
+	"RobotRocket": dict(_MOUNTED, palette="robots", build=robot_rocket, portrait=(0.0, 0.0, 0.90),
+			portrait_distance=9.0, ready=True),
 }
+
+
+def _parts(name, spec, axles):
+	"""A machine whose wheels spin in game: its UNITS entry becomes the body,
+	and one wheels-only entry per axle is added beside it ("<Name>_wheel<i>").
+	Its portrait would now render without wheels: keep the one rendered from
+	the whole machine (don't pass --portraits for these)."""
+	whole = spec["build"]
+	UNITS[name] = dict(spec, build=lambda lod, base=False: whole(lod, base, "body"))
+	for i in range(axles):
+		UNITS["%s_wheel%d" % (name, i)] = dict(spec, build=lambda lod, base=False, i=i: whole(lod, base, i),
+				portrait=None)
+
+
+_parts("Ballista", UNITS["Ballista"], len(siege.BALLISTA_AXLES))
+_parts("MagicCannon", UNITS["MagicCannon"], len(siege.CANNON_AXLES))
+_parts("PirateCannon", UNITS["PirateCannon"], len(pirates.CART_AXLES))
+_parts("RobotRocket", UNITS["RobotRocket"], len(robots.WAGON_AXLES))

@@ -113,15 +113,20 @@ static func growth_multiplier(heads: int) -> float:
 ## Food and gold a unit costs to keep, per minute, before growth_multiplier.
 ## Summons, animals and anything nobody owns cost nothing; villagers eat
 ## VILLAGER_FOOD.
+const ROBOT_OIL: float = 0.5
+
 static func upkeep_of(unit: Unit) -> Vector2:
 	if unit.owner_peer_id <= 0 or unit.summoned or unit.hunt_meat > 0:
 		return Vector2.ZERO
 	if unit.status_activity == Unit.Activity.DEAD:
 		return Vector2.ZERO
 	if unit.can_gather:
-		return Vector2(VILLAGER_FOOD, 0.0)
+		return Vector2(0.0, VILLAGER_FOOD * ROBOT_OIL) if unit.race_clockwork else Vector2(VILLAGER_FOOD, 0.0)
 	var food: float = unit.population_cost * FOOD_PER_POPULATION
 	var gold: float = unit.population_cost * GOLD_PER_ELITE_POPULATION if unit.population_cost >= ELITE_POPULATION else 0.0
+	## Robots eat nothing; they are kept oiled with gold instead, at half the rate.
+	if unit.race_clockwork:
+		return Vector2(0.0, gold + food * ROBOT_OIL)
 	return Vector2(food, gold)
 
 func _physics_process(delta: float) -> void:

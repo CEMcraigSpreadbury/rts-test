@@ -1,0 +1,34 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/crossbowman_unit.tscn" id="1_base"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateBlunderbuss.glb" id="2_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateBlunderbuss_LOD1.glb" id="3_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/pirates.png" id="4_palette"]
+[ext_resource type="Script" path="res://scripts/resource_cost.gd" id="5_cost"]
+[ext_resource type="Resource" path="res://resources/wood_resource_type.tres" id="6_wood"]
+[ext_resource type="Resource" path="res://resources/gold_resource_type.tres" id="7_gold"]
+[ext_resource type="PackedScene" path="res://scenes/effects/projectile_grapeshot.tscn" id="shot"]
+
+[sub_resource type="Resource" id="Cost_wood"]
+script = ExtResource("5_cost")
+resource_type = ExtResource("6_wood")
+amount = 20
+
+[sub_resource type="Resource" id="Cost_gold"]
+script = ExtResource("5_cost")
+resource_type = ExtResource("7_gold")
+amount = 20
+
+[node name="Blunderbuss" instance=ExtResource("1_base")]
+display_name = "Blunderbuss"
+max_health = 48
+attack_damage = 8
+attack_range = 9.0
+aggro_range = 10.0
+attack_cooldown = 2.4
+projectile_tint = Color(0.3, 0.3, 0.32, 1)
+figure_model = ExtResource("2_fig")
+figure_model_lod1 = ExtResource("3_fig_lod1")
+figure_palette = ExtResource("4_palette")
+costs = Array[Resource]([SubResource("Cost_wood"), SubResource("Cost_gold")])
+projectile_scene = ExtResource("shot")

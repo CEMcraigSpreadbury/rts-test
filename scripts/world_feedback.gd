@@ -530,6 +530,8 @@ func _spawn_projectile_visual(shooter: Unit, target: Node3D) -> void:
 	var dist: float = start_pos.distance_to(end_pos)
 	var duration: float = maxf(dist / maxf(shooter.projectile_speed, 0.01), 0.05)
 	var arc_height: float = clampf(dist * 0.15, 0.2, 1.5)
+	if projectile is ToyProjectile and projectile.straight:
+		arc_height = 0.0
 	_fly_projectile_visual(projectile, start_pos, end_pos, duration, arc_height)
 
 ## Arcs a projectile (a ToyProjectile) from start_pos to end_pos, pointing it

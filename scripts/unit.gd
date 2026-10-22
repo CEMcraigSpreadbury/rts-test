@@ -865,6 +865,57 @@ func play_select_sound() -> void:
 ## than a Dictionary because the arrays are @export vars, which can't be
 ## referenced from a const.
 func command_lines_for(kind: String) -> Array[CommandLine]:
+	var own := _own_command_lines(kind)
+	if own.is_empty() or not RACE_COMMAND_LINES.has(race_name):
+		return own
+	var key := "%s|%s" % [race_name, kind]
+	if not _race_command_lines.has(key):
+		var lines: Array[CommandLine] = []
+		for text in RACE_COMMAND_LINES[race_name].get(kind, []):
+			var line := CommandLine.new()
+			line.text = text
+			lines.append(line)
+		_race_command_lines[key] = lines
+	return _race_command_lines[key]
+
+## A people's own words in place of unit.tscn's human ones, for the units that
+## speak at all (a silent beast stays silent). Text only: the human clips
+## would say something else under them. Aldmere ("Human") keeps its voiced lines.
+const RACE_COMMAND_LINES: Dictionary = {
+	"Pirates": {
+		"move": ["Aye!", "Aye aye, Cap'n!", "Hoist the sails!", "Heave ho!", "Shiver me timbers!"],
+		"attack": ["Arrr!", "No quarter!", "Board 'em!", "Dead men tell no tales!", "Fire the cannons!"],
+		"patrol": ["Keepin' watch!", "Eyes on the horizon!", "Crow's nest, aye!", "All hands on deck!"],
+		"build": ["Batten it down!", "Swab that deck!", "Bring the planks!", "Ship-shape it be!"],
+	},
+	"Robots": {
+		"move": ["Beep boop!", "Affirmative.", "Relocating.", "Coordinates received.", "Executing."],
+		"attack": ["Target acquired.", "Exterminate!", "Hostile detected.", "Engaging.", "Beep boop... BOOM!"],
+		"patrol": ["Scanning.", "Perimeter loop engaged.", "Sensors online.", "Sweeping sector."],
+		"build": ["Assembling.", "Constructing.", "Bolts tightened.", "Blueprint loaded."],
+	},
+	"Beastmen": {
+		"move": ["Grrr!", "We run!", "Hrrm, going.", "Follow the scent!", "Pack moves!"],
+		"attack": ["RAAAH!", "Blood and bone!", "Rip them!", "For the herd!", "Hunt them down!"],
+		"patrol": ["Sniffing...", "Prowling.", "Ears up!", "Pack watches."],
+		"build": ["Stack the stones!", "Hrrm, build.", "Big den!", "Mud and timber!"],
+	},
+	"Dark Elves": {
+		"move": ["As you command.", "Into the shadows.", "Swiftly.", "Unseen.", "It is done."],
+		"attack": ["Their blood is ours!", "Show no mercy!", "Strike from the dark!", "Suffer!", "For the Spire!"],
+		"patrol": ["The shadows watch.", "Nothing escapes us.", "Ever vigilant.", "Silent watch."],
+		"build": ["It shall rise.", "Dark stone, cold steel.", "As you will it.", "A fitting spire."],
+	},
+	"Star Wanderers": {
+		"move": ["By starlight!", "The stars guide us.", "We wander on.", "Onward!", "As the heavens will."],
+		"attack": ["For the stars!", "Light burns!", "Fall, darkness!", "Starfall!", "Shine!"],
+		"patrol": ["Under the stars.", "We keep the night.", "Watching the skies.", "Starwatch."],
+		"build": ["Raised beneath the stars.", "Star-forged!", "Let it shine.", "A gate to the heavens."],
+	},
+}
+static var _race_command_lines: Dictionary = {}
+
+func _own_command_lines(kind: String) -> Array[CommandLine]:
 	match kind:
 		"move": return move_command_lines
 		"attack": return attack_command_lines
@@ -1501,6 +1552,16 @@ var race_splash: float = 0.0
 var race_charge_bonus: float = 0.0
 var race_charge_heal: int = 0
 var race_fast_brace: bool = false
+## Pirates' Plunder: the share of a slain enemy's cost it pays, and the
+## fraction of a coin its blows on buildings have earned so far.
+var race_plunder: float = 0.0
+var plunder_owed: float = 0.0
+## Robots' Clockwork (host-set by RaceTraits each second): seconds of winding
+## left, the extra seconds a full winding lasts, and the attack speed it gives.
+var race_clockwork: bool = false
+var wind_left: float = 0.0
+var race_wind_bonus: float = 0.0
+var race_windup: float = 0.0
 ## Health a second out of combat from his Lord (a Mystic's, see Lords).
 var lord_regen: float = 0.0
 
@@ -2898,6 +2959,8 @@ func take_damage(amount: int, attacker: Node3D = null, directional: bool = true)
 	if attacker is Unit and attacker.race_lifesteal > 0.0:
 		attacker.heal(roundi(amount * attacker.race_lifesteal))
 	if status_current_health <= 0:
+		if attacker is Unit and attacker.race_plunder > 0.0:
+			RaceTraits.plunder_kill(attacker, self)
 		_die(attacker)
 		return
 	if can_fight and attacker != null and is_instance_valid(attacker):
@@ -4237,7 +4300,7 @@ func _attacking_step(delta: float) -> void:
 ## Research attack-speed buffs shrink the effective cooldown (computed live
 ## each tick, not baked into the exported stat).
 func _effective_cooldown() -> float:
-	return attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED) + _rage_attack_speed())
+	return attack_cooldown / (1.0 + buffs.amount(ResearchNode.Buff.ATTACK_SPEED) + _rage_attack_speed() + race_windup)
 
 ## One blow (or shot) at attack_target: charge and brace, damage, on-hit
 ## effects. `retarget` looks for the next enemy when this one falls — the old

@@ -344,8 +344,8 @@ func add_ai_player(difficulty: int = AiDifficulty.NORMAL) -> int:
 	if players.size() >= MAX_PLAYERS:
 		return 0
 	var id := _free_ai_peer_id()
-	players[id] = {"name": "", "color": _first_free_color(), "ruler_index": Ruler.RANDOM, "ready": true,
-			"ai": true, "difficulty": clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)}
+	players[id] = {"name": "", "color": _first_free_color(), "ruler_index": Ruler.RANDOM, "race_index": Faction.RANDOM,
+			"ready": true, "ai": true, "difficulty": clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)}
 	_renumber_ai_players()
 	_broadcast_ai_players()
 	player_updated.emit(id)
@@ -535,6 +535,7 @@ func resolve_random_rulers() -> void:
 	for id in players:
 		if players[id].get("ruler_index", 0) == Ruler.RANDOM:
 			_apply_ruler_change(id, randi() % count)
+	resolve_random_races()
 
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_request_ruler(index: int) -> void:
@@ -554,6 +555,51 @@ func _apply_ruler_change(peer_id: int, index: int) -> void:
 func _rpc_ruler_changed(peer_id: int, index: int) -> void:
 	if players.has(peer_id):
 		players[peer_id]["ruler_index"] = index
+	player_updated.emit(peer_id)
+
+## --- Race selection (lobby / single player setup) ---
+##
+## The same host-relay shape as Ruler selection. `index` is a Faction.PLAYABLE
+## index or Faction.RANDOM; a player with none plays Knights.
+
+func set_my_race(index: int) -> void:
+	if is_host():
+		_apply_race_change(my_peer_id(), index)
+	else:
+		_rpc_request_race.rpc_id(1, index)
+
+func set_ai_race(peer_id: int, index: int) -> void:
+	if not is_ai(peer_id) or (multiplayer.multiplayer_peer != null and not is_host()):
+		return
+	_apply_race_change(peer_id, index)
+
+## Host, just before the match loads (from resolve_random_rulers): every
+## "Random" race becomes a real one.
+func resolve_random_races() -> void:
+	if multiplayer.multiplayer_peer != null and not is_host():
+		return
+	for id in players:
+		if players[id].get("race_index", 0) == Faction.RANDOM:
+			_apply_race_change(id, randi() % Faction.PLAYABLE.size())
+
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_request_race(index: int) -> void:
+	if is_host():
+		_apply_race_change(multiplayer.get_remote_sender_id(), index)
+
+func _apply_race_change(peer_id: int, index: int) -> void:
+	if not players.has(peer_id):
+		return
+	index = clampi(index, Faction.RANDOM, Faction.PLAYABLE.size() - 1)
+	players[peer_id]["race_index"] = index
+	player_updated.emit(peer_id)
+	if is_host():
+		_rpc_race_changed.rpc(peer_id, index)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_race_changed(peer_id: int, index: int) -> void:
+	if players.has(peer_id):
+		players[peer_id]["race_index"] = index
 	player_updated.emit(peer_id)
 
 ## --- Team color selection (lobby only) ---

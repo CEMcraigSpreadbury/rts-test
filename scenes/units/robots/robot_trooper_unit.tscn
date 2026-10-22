@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/soldier_unit.tscn" id="1_base"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotTrooper.glb" id="2_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotTrooper_LOD1.glb" id="3_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="4_palette"]
+
+[node name="TinTrooper" instance=ExtResource("1_base")]
+display_name = "Tin Trooper"
+max_health = 62
+attack_damage = 5
+move_speed = 2.8
+figure_top = 0.98
+figure_model = ExtResource("2_fig")
+figure_model_lod1 = ExtResource("3_fig_lod1")
+figure_palette = ExtResource("4_palette")

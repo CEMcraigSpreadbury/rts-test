@@ -1,0 +1,32 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/magic_cannon_unit.tscn" id="1_base"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotRocket.glb" id="2_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotRocket_LOD1.glb" id="3_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="4_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker.glb" id="crew_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_LOD1.glb" id="crew_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="crew_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotRocket_wheel0.glb" id="wheel0"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotRocket_wheel0_LOD1.glb" id="wheel0_far"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotRocket_wheel1.glb" id="wheel1"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotRocket_wheel1_LOD1.glb" id="wheel1_far"]
+[ext_resource type="PackedScene" path="res://scenes/effects/projectile_rocket.tscn" id="shot"]
+
+[node name="RocketWagon" instance=ExtResource("1_base")]
+display_name = "Rocket Wagon"
+projectile_tint = Color(1, 0.6, 0.25, 1)
+figure_top = 1.8
+figure_model = ExtResource("2_fig")
+figure_model_lod1 = ExtResource("3_fig_lod1")
+figure_palette = ExtResource("4_palette")
+crew_figure_model = ExtResource("crew_fig")
+crew_figure_model_lod1 = ExtResource("crew_fig_lod1")
+crew_figure_palette = ExtResource("crew_palette")
+crew_figure_offset = Vector3(-1.0, 0, -1.45)
+crew_figure_yaw = -15.0
+wheel_models = Array[PackedScene]([ExtResource("wheel0"), ExtResource("wheel1")])
+wheel_models_lod1 = Array[PackedScene]([ExtResource("wheel0_far"), ExtResource("wheel1_far")])
+wheel_pivots = PackedVector3Array(0, 0.408, 0.85, 0, 0.408, -0.714)
+wheel_radius = 0.408
+projectile_scene = ExtResource("shot")

@@ -83,6 +83,41 @@ const RACES: Dictionary = {
 			["res://scenes/units/beasts/sand_worm_unit.tscn", "res://scenes/units/beasts/skeleton_dragon_unit.tscn"],
 		],
 	},
+	## The playable peoples (Faction.PLAYABLE): no settlement is theirs, but
+	## RaceTraits reads who their units are from here. `others`: what they
+	## train that no settlement would (the worker, the Lord, siege).
+	"Pirates": {
+		"scenes": ["res://scenes/buildings/pirates/pirate_barracks_building.tscn",
+				"res://scenes/buildings/pirates/pirate_range_building.tscn",
+				"res://scenes/buildings/pirates/pirate_stables_building.tscn",
+				"res://scenes/buildings/pirates/pirate_sanctum_building.tscn", ""],
+		"units": [
+			["res://scenes/units/pirates/pirate_swabbie_unit.tscn", "res://scenes/units/pirates/pirate_harpooner_unit.tscn",
+					"res://scenes/units/pirates/pirate_brute_unit.tscn"],
+			["res://scenes/units/pirates/pirate_musketeer_unit.tscn", "res://scenes/units/pirates/pirate_blunderbuss_unit.tscn"],
+			["res://scenes/units/pirates/pirate_crab_rider_unit.tscn"],
+			["res://scenes/units/pirates/pirate_voodoo_unit.tscn"],
+			[],
+		],
+		"others": ["res://scenes/units/pirates/pirate_deckhand_unit.tscn", "res://scenes/units/pirates/pirate_captain_unit.tscn",
+				"res://scenes/units/pirates/pirate_cannon_unit.tscn"],
+	},
+	"Robots": {
+		"scenes": ["res://scenes/buildings/robots/robot_barracks_building.tscn",
+				"res://scenes/buildings/robots/robot_range_building.tscn",
+				"res://scenes/buildings/robots/robot_stables_building.tscn",
+				"res://scenes/buildings/robots/robot_sanctum_building.tscn", ""],
+		"units": [
+			["res://scenes/units/robots/robot_trooper_unit.tscn", "res://scenes/units/robots/robot_driller_unit.tscn",
+					"res://scenes/units/robots/robot_boiler_unit.tscn"],
+			["res://scenes/units/robots/robot_ray_gunner_unit.tscn"],
+			["res://scenes/units/robots/robot_hound_rider_unit.tscn"],
+			["res://scenes/units/robots/robot_tesla_unit.tscn"],
+			[],
+		],
+		"others": ["res://scenes/units/robots/robot_worker_unit.tscn", "res://scenes/units/robots/robot_mechanist_unit.tscn",
+				"res://scenes/units/robots/robot_rocket_unit.tscn"],
+	},
 }
 
 ## The military buildings `race` can put up, in Kind order.

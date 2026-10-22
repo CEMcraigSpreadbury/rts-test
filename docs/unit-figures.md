@@ -222,6 +222,20 @@ The target look is in `docs/art-reference/reference-diorama-3.png`.
 
 Done and in game:
 
+- **Pirates and Robots (playable races, playtest build, 2026-10-22):**
+  `kit/pirates.py` and `kit/robots.py`, palettes `pirates` and `robots`, the
+  recipes at the end of `units.py` (`Pirate*`, `Robot*`, with worker role and
+  carry variants). Pirates: striped shirts, bandanas and tricorns, the team's
+  sash; Deckhand, Swabbie, Harpooner, Anchor Brute (chop), Musketeer,
+  Blunderbuss, Crab Rider (on `pirates.crab`), Voodoo Priestess, Cannon Cart
+  (roll), Captain (Lord). Robots: tin toys with the shared eyes in brass lamp
+  rims, a team enamel chest panel and a brass wind-up key; Worker Bot, Tin
+  Trooper, Drill Bot (thrust), Boiler Bot (chop), Ray Gunner, Hound Rider (on
+  `robots.hound`, grown by `HOUND_SCALE`), Tesla Bot, Rocket Wagon (roll),
+  Grand Mechanist (Lord). Unit scenes in `scenes/units/pirates|robots` inherit
+  the Aldmere unit each stands in for. Buildings: `Races/Pirates|Robots/kit/`
+  (`*_buildings.py` builds all 16 in one run). Not yet reviewed by the user.
+
 - **Aldmere:** Soldier, Villager (with build, wood and gold variants), Archer,
   Spearman, Shieldman, Halberdier, Crossbowman, Officer, Lord, Wizard,
   Arch Mage, Horseman, Cavalier.

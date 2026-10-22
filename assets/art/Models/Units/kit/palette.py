@@ -488,9 +488,78 @@ SIEGE.update({
 	"crystal": ((50, 150, 220), (120, 222, 255), (236, 252, 255)),
 })
 
+## Pirates (kit/pirates.py): a toy pirate playset. Sun-browned skin, dark
+## hair, ginger and black beards, a cream shirt banded in charcoal stripes
+## (plate_dark), worn brown breeches (cloth_dark), sea-worn ship's wood, black
+## boots, bright brass. Reused rows: coat / coat_dark the Crab Rider's coral
+## orange shell (kept on orange so it never reads as the red team), hoof its
+## black claw tips; fur_red and fruit_green the parrot's orange and gold;
+## arcane the Voodoo Priestess's violet juju, bone her skulls and beads.
+PIRATES = dict(ALDMERE)
+PIRATES.update({
+	"skin": ((170, 108, 78), (218, 160, 118), (246, 198, 160)),
+	"blush": ((196, 112, 92), (214, 130, 106), (232, 156, 128)),
+	"hair": ((30, 22, 22), (56, 40, 34), (90, 68, 56)),
+	"hair_dark": ((22, 16, 16), (40, 30, 26), (68, 54, 46)),
+	"beard": ((140, 62, 26), (194, 98, 44), (234, 148, 82)),
+	"beard_dark": ((20, 16, 16), (38, 30, 28), (66, 56, 50)),
+	"cloth": ((178, 166, 140), (234, 224, 200), (255, 250, 234)),
+	"cloth_dark": ((56, 42, 34), (90, 70, 54), (126, 102, 80)),
+	"plate_dark": ((26, 26, 30), (46, 46, 52), (80, 80, 88)),
+	"leather": ((88, 54, 32), (134, 88, 54), (176, 130, 84)),
+	"leather_dark": ((40, 26, 20), (70, 46, 32), (104, 72, 50)),
+	"boot": ((18, 16, 16), (36, 32, 30), (64, 58, 54)),
+	"wood": ((84, 52, 30), (136, 92, 56), (180, 134, 88)),
+	"wood_light": ((150, 112, 70), (204, 162, 108), (238, 206, 152)),
+	"steel": ((70, 72, 80), (140, 144, 152), (206, 210, 216)),
+	"blade": ((128, 132, 142), (204, 208, 216), (252, 252, 255)),
+	"brass": ((140, 86, 22), (220, 162, 52), (255, 230, 136)),
+	"coat": ((176, 70, 30), (232, 118, 52), (255, 172, 108)),
+	"coat_dark": ((104, 36, 20), (158, 64, 32), (204, 104, 60)),
+	"hoof": ((20, 16, 18), (40, 34, 34), (72, 64, 62)),
+	"fur_red": ((200, 96, 20), (246, 146, 38), (255, 200, 110)),
+	"fruit_green": ((200, 150, 20), (246, 204, 52), (255, 240, 150)),
+	"arcane": ((104, 48, 168), (162, 96, 230), (222, 182, 255)),
+	"bone": ((180, 168, 140), (234, 226, 202), (252, 250, 238)),
+	"robe": ((150, 120, 86), (204, 176, 132), (236, 214, 176)),
+	"robe_dark": ((44, 30, 26), (76, 54, 44), (112, 86, 70)),
+})
+
+## Robots (kit/robots.py): clockwork tin toys. Painted tin plate (skin, the
+## body's silver lithographed tin), chrome (steel), cream enamel (cloth),
+## orange enamel accents (fruit), black rubber (leather, leather_dark), dark
+## gunmetal joints (plate_dark), bright brass keys and gears, amber lamp
+## glow (crystal), electric violet for the Tesla Bot (arcane). The shared
+## big dark eyes sit on a face plate. coat / coat_dark / mane: the Hound's
+## gunmetal-and-silver body and brass ears.
+ROBOTS = dict(ALDMERE)
+ROBOTS.update({
+	"skin": ((112, 116, 128), (182, 186, 196), (234, 236, 242)),
+	"blush": ((214, 120, 116), (232, 146, 138), (246, 176, 166)),
+	"mouth": ((24, 24, 30), (44, 44, 52), (72, 72, 82)),
+	"steel": ((96, 100, 112), (196, 200, 210), (255, 255, 255)),
+	"trim": ((92, 96, 106), (150, 154, 164), (208, 210, 218)),
+	"cloth": ((182, 170, 142), (236, 228, 206), (255, 252, 238)),
+	"cloth_dark": ((40, 42, 48), (66, 68, 76), (98, 100, 110)),
+	"plate_dark": ((30, 32, 38), (56, 58, 66), (96, 98, 108)),
+	"leather": ((22, 22, 26), (40, 40, 46), (68, 68, 76)),
+	"leather_dark": ((14, 14, 18), (28, 28, 32), (50, 50, 56)),
+	"boot": ((20, 20, 24), (40, 40, 46), (70, 70, 78)),
+	"sole": ((10, 10, 12), (22, 22, 26), (40, 40, 44)),
+	"brass": ((150, 92, 24), (226, 170, 56), (255, 236, 144)),
+	"fruit": ((196, 90, 20), (240, 136, 36), (255, 196, 110)),
+	"crystal": ((236, 150, 30), (255, 200, 64), (255, 246, 176)),
+	"arcane": ((140, 100, 240), (186, 156, 255), (240, 230, 255)),
+	"wood": ((84, 56, 34), (132, 92, 58), (176, 132, 88)),
+	"coat": ((60, 62, 72), (104, 108, 120), (160, 164, 176)),
+	"coat_dark": ((30, 32, 38), (52, 54, 62), (86, 88, 98)),
+	"mane": ((150, 92, 24), (226, 170, 56), (255, 236, 144)),
+	"glint": ((236, 240, 250), (255, 255, 255), (255, 255, 255)),
+})
+
 PALETTES = {"aldmere": ALDMERE, "gnolls": GNOLLS, "dark_elves": DARK_ELVES, "beastmen": BEASTMEN,
 		"star_wanderers": STAR_WANDERERS, "animals": ANIMALS, "monsters": MONSTERS,
-		"siege": SIEGE}
+		"siege": SIEGE, "pirates": PIRATES, "robots": ROBOTS}
 ## The team colours a palette is previewed with outside the game (Blender
 ## renders): Network.TEAM_COLORS[0] and [1], blue and red.
 PREVIEW_TEAM = (0.25, 0.55, 1.0)

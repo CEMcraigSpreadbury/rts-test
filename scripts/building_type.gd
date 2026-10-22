@@ -4,6 +4,9 @@ extends Resource
 ## footprint used for the placement ghost / overlap check.
 
 @export var building_name: String = "Building"
+## What players see it called when its people's word differs (see
+## ProductionBuilding.display_name). Empty: the building_name.
+@export var display_name: String = ""
 ## Shown on its command-card button; left null until real icon art exists,
 ## in which case the button falls back to showing just its hotkey letter.
 @export var icon: Texture2D
@@ -87,3 +90,6 @@ func _peek_costs(target_scene: PackedScene, fallback: Array[ResourceCost]) -> Ar
 	var result: Array[ResourceCost] = temp.costs
 	temp.free()
 	return result
+
+func shown_name() -> String:
+	return display_name if not display_name.is_empty() else building_name

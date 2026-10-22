@@ -1,0 +1,218 @@
+[gd_resource type="Resource" script_class="Faction" format=3]
+
+[ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="1_faction_script"]
+[ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="2_kl0dp"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_town_center_building.tscn" id="3_town_center"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_barracks_building.tscn" id="4_barracks"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_house_building.tscn" id="5_house"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_mine_building.tscn" id="7_mine"]
+[ext_resource type="PackedScene" uid="uid://c10y275vh27ta" path="res://scenes/resource_nodes/gold_deposit.tscn" id="8_gold_deposit"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_stables_building.tscn" id="9_stables"]
+[ext_resource type="PackedScene" path="res://scenes/units/robots/robot_worker_unit.tscn" id="10_unit"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_blacksmith_building.tscn" id="11_blacksmith"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_wall_segment.tscn" id="12_wall_segment"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_wall_corner.tscn" id="13_wall_corner"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_wall_gate.tscn" id="14_wall_gate"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_watchtower_building.tscn" id="15_watchtower"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_siege_workshop_building.tscn" id="16_siege_workshop"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_range_building.tscn" id="17_archery_range"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_storehouse_building.tscn" id="18_storehouse"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_sanctum_building.tscn" id="20_arcane_sanctum"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_mill_building.tscn" id="21_mill"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_farm_building.tscn" id="22_farm"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/bestiary.png" id="icon_bestiary"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/arcane_sanctum.png" id="icon_arcane_sanctum"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/archery_range.png" id="icon_archery_range"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/barracks.png" id="icon_barracks"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/blacksmith.png" id="icon_blacksmith"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/gate.png" id="icon_gate"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/house.png" id="icon_house"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/mine.png" id="icon_mine"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/siege_workshop.png" id="icon_siege_workshop"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/stables.png" id="icon_stables"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/storehouse.png" id="icon_storehouse"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/town_center.png" id="icon_town_center"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/wall.png" id="icon_wall"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/watchtower.png" id="icon_watchtower"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/mill.png" id="icon_buildings_mill"]
+[ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/library.png" id="icon_library"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_library_building.tscn" id="24_library"]
+
+[sub_resource type="Resource" id="BuildingType_towncenter"]
+script = ExtResource("2_building_type_script")
+building_name = "Town Center"
+display_name = "Central Core"
+description = "Builds Worker Bots and takes in every resource they gather."
+icon = ExtResource("icon_town_center")
+glyph = &"town_center"
+scene = ExtResource("3_town_center")
+footprint_radius = 2.4
+construction_time = 10.0
+
+[sub_resource type="Resource" id="BuildingType_barracks"]
+script = ExtResource("2_building_type_script")
+building_name = "Barracks"
+display_name = "Assembly Line"
+description = "Builds Tin Troopers, Drill Bots and Boiler Bots."
+icon = ExtResource("icon_barracks")
+glyph = &"barracks"
+scene = ExtResource("4_barracks")
+footprint_radius = 2.4
+construction_time = 7.0
+
+[sub_resource type="Resource" id="BuildingType_archery_range"]
+script = ExtResource("2_building_type_script")
+building_name = "Archery Range"
+display_name = "Ray Works"
+description = "Builds Ray Gunners."
+icon = ExtResource("icon_archery_range")
+glyph = &"range"
+scene = ExtResource("17_archery_range")
+footprint_radius = 2.4
+construction_time = 7.0
+
+[sub_resource type="Resource" id="BuildingType_house"]
+script = ExtResource("2_building_type_script")
+building_name = "House"
+display_name = "Charging Pod"
+description = "Raises your population cap by 10."
+icon = ExtResource("icon_house")
+glyph = &"house"
+scene = ExtResource("5_house")
+footprint_radius = 1.6
+
+[sub_resource type="Resource" id="BuildingType_mine"]
+script = ExtResource("2_building_type_script")
+building_name = "Mine"
+display_name = "Drill Rig"
+description = "Built on a gold deposit so Villagers can mine it."
+icon = ExtResource("icon_mine")
+glyph = &"mine"
+scene = ExtResource("7_mine")
+footprint_radius = 1.4
+construction_time = 6.0
+requires_deposit = true
+deposit_scene = ExtResource("8_gold_deposit")
+
+[sub_resource type="Resource" id="BuildingType_storehouse"]
+script = ExtResource("2_building_type_script")
+building_name = "Storehouse"
+display_name = "Depot"
+description = "A drop-off point for wood and gold."
+icon = ExtResource("icon_storehouse")
+glyph = &"storehouse"
+scene = ExtResource("18_storehouse")
+footprint_radius = 1.8
+
+[sub_resource type="Resource" id="BuildingType_stables"]
+script = ExtResource("2_building_type_script")
+building_name = "Stables"
+display_name = "Garage"
+description = "Builds Hound Riders."
+icon = ExtResource("icon_stables")
+glyph = &"stables"
+scene = ExtResource("9_stables")
+footprint_radius = 2.4
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_blacksmith"]
+script = ExtResource("2_building_type_script")
+building_name = "Blacksmith"
+display_name = "Machine Shop"
+description = "Forges weapon and armour upgrades and the gear for new units."
+icon = ExtResource("icon_blacksmith")
+glyph = &"blacksmith"
+scene = ExtResource("11_blacksmith")
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_library"]
+script = ExtResource("2_building_type_script")
+building_name = "Library"
+display_name = "Data Bank"
+description = "Villagers sent inside read for research."
+icon = ExtResource("icon_library")
+glyph = &"research"
+scene = ExtResource("24_library")
+footprint_radius = 2.0
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_wall"]
+script = ExtResource("2_building_type_script")
+building_name = "Wall"
+display_name = "Fence"
+description = "A tin fence that holds enemies back."
+icon = ExtResource("icon_wall")
+glyph = &"wall"
+scene = ExtResource("12_wall_segment")
+footprint_radius = 0.9
+construction_time = 3.0
+is_wall = true
+wall_corner_scene = ExtResource("13_wall_corner")
+wall_gate_scene = ExtResource("14_wall_gate")
+
+[sub_resource type="Resource" id="BuildingType_gate"]
+script = ExtResource("2_building_type_script")
+building_name = "Gate"
+display_name = "Fence Gate"
+description = "Turns a wall segment into a gate your own units can pass."
+icon = ExtResource("icon_gate")
+glyph = &"gate"
+scene = ExtResource("14_wall_gate")
+is_gate_tool = true
+gate_target_scenes = Array[PackedScene]([ExtResource("12_wall_segment"), ExtResource("13_wall_corner")])
+
+[sub_resource type="Resource" id="BuildingType_watchtower"]
+script = ExtResource("2_building_type_script")
+building_name = "Watchtower"
+display_name = "Zap Tower"
+description = "A tower that shoots nearby enemies."
+icon = ExtResource("icon_watchtower")
+glyph = &"watchtower"
+scene = ExtResource("15_watchtower")
+footprint_radius = 1.3
+construction_time = 8.0
+
+[sub_resource type="Resource" id="BuildingType_siege_workshop"]
+script = ExtResource("2_building_type_script")
+building_name = "Siege Workshop"
+display_name = "Foundry"
+description = "Builds Rocket Wagons for breaking buildings."
+icon = ExtResource("icon_siege_workshop")
+glyph = &"siege_workshop"
+scene = ExtResource("16_siege_workshop")
+footprint_radius = 2.4
+construction_time = 10.0
+
+[sub_resource type="Resource" id="BuildingType_arcane_sanctum"]
+script = ExtResource("2_building_type_script")
+building_name = "Arcane Sanctum"
+display_name = "Tesla Lab"
+description = "Builds Tesla Bots."
+icon = ExtResource("icon_arcane_sanctum")
+glyph = &"sanctum"
+scene = ExtResource("20_arcane_sanctum")
+footprint_radius = 2.4
+construction_time = 12.0
+
+[sub_resource type="Resource" id="BuildingType_mill"]
+script = ExtResource("2_building_type_script")
+building_name = "Mill"
+display_name = "Fuel Depot"
+description = "Takes in battery cells, and comes with three Charge Pads to charge them on."
+icon = ExtResource("icon_buildings_mill")
+glyph = &"mill"
+scene = ExtResource("21_mill")
+footprint_radius = 1.6
+construction_time = 8.0
+companion_scene = ExtResource("22_farm")
+companion_offsets = PackedVector3Array(-3.6, 0, 0, 3.6, 0, 0, 0, 0, 3.6)
+companion_radius = 1.4
+
+[resource]
+script = ExtResource("1_faction_script")
+faction_name = "Robots"
+race_name = "Robots"
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_archery_range"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_storehouse"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_siege_workshop"), SubResource("BuildingType_arcane_sanctum"), SubResource("BuildingType_mill"), SubResource("BuildingType_library")])
+starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
+starting_units = Array[PackedScene]([ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit")])

@@ -1,0 +1,30 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/units/unit.tscn" id="1_base"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker.glb" id="2_fig"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_LOD1.glb" id="3_fig_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="4_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_food.glb" id="r0"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_food_LOD1.glb" id="f0"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_build.glb" id="r1"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_build_LOD1.glb" id="f1"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_wood.glb" id="r2"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_wood_LOD1.glb" id="f2"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_gold.glb" id="r3"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_gold_LOD1.glb" id="f3"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_food.glb" id="r4"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_food_LOD1.glb" id="f4"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_wood.glb" id="r5"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_wood_LOD1.glb" id="f5"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_gold.glb" id="r6"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_gold_LOD1.glb" id="f6"]
+
+[node name="WorkerBot" instance=ExtResource("1_base")]
+display_name = "Worker Bot"
+max_health = 30
+figure_top = 0.86
+figure_model = ExtResource("2_fig")
+figure_model_lod1 = ExtResource("3_fig_lod1")
+figure_palette = ExtResource("4_palette")
+figure_role_models = Dictionary[StringName, PackedScene]({&"food": ExtResource("r0"), &"build": ExtResource("r1"), &"wood": ExtResource("r2"), &"gold": ExtResource("r3"), &"carry_food": ExtResource("r4"), &"carry_wood": ExtResource("r5"), &"carry_gold": ExtResource("r6")})
+figure_role_models_lod1 = Dictionary[StringName, PackedScene]({&"food": ExtResource("f0"), &"build": ExtResource("f1"), &"wood": ExtResource("f2"), &"gold": ExtResource("f3"), &"carry_food": ExtResource("f4"), &"carry_wood": ExtResource("f5"), &"carry_gold": ExtResource("f6")})

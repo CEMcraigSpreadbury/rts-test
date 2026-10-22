@@ -984,11 +984,13 @@ func get_team_tint(peer_id: int) -> Color:
 	var team_index: int = team_index_by_peer.get(peer_id, 0)
 	return Network.TEAM_COLORS[team_index % Network.TEAM_COLORS.size()]
 
-## Everyone plays the same roster — players differ by Ruler instead (see
-## Ruler). Still a per-peer lookup so a Ruler-specific roster would only need
-## to change this.
-func _faction_for_peer(_peer_id: int) -> Faction:
-	return available_factions[0]
+## The people this player picked in setup (Network.players "race_index", see
+## Faction.PLAYABLE); anyone who never picked plays the map's own roster.
+func _faction_for_peer(peer_id: int) -> Faction:
+	var race_index: int = Network.players.get(peer_id, {}).get("race_index", 0)
+	if race_index <= 0:
+		return available_factions[0]
+	return Faction.for_index(race_index)
 
 ## Gap between starting units placed past a spawn point's last unit marker —
 ## wider than two avoidance radii (see the spawn jitter note in
@@ -2566,6 +2568,9 @@ func raycast(screen_pos: Vector2, collision_mask: int = 0xFFFFFFFF) -> Dictionar
 	var unit_hit: Dictionary = sprite_batcher.pick(from, dir, basis.x, basis.y)
 	if figure_batcher != null:
 		var figure_hit: Dictionary = figure_batcher.pick(from, dir)
+		## A siege engine's crew figure stands for its machine.
+		if not figure_hit.is_empty() and not (figure_hit.collider is Unit) and figure_hit.collider is Node 				and (figure_hit.collider as Node).get_parent() is Unit:
+			figure_hit.collider = (figure_hit.collider as Node).get_parent()
 		if not figure_hit.is_empty() and (unit_hit.is_empty() or float(figure_hit.distance) < float(unit_hit.distance)):
 			unit_hit = figure_hit
 	if unit_hit.is_empty():
@@ -4021,6 +4026,10 @@ func _set_rally_point(screen_pos: Vector2) -> void:
 	if result.is_empty():
 		return
 	var target_path := _resolve_order_target_path(result)
+	## A tree or a unit is hit up its trunk or figure: the banner stands at
+	## its foot, on the ground, not up in the branches.
+	if result.collider is Gatherable or result.collider is Unit:
+		result.position = (result.collider as Node3D).global_position
 	for building in selected_building_group():
 		building.rally_point = result.position
 		building.rally_target_path = target_path

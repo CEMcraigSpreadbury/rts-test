@@ -291,7 +291,7 @@ func flash_missing_resources(costs: Array[ResourceCost]) -> void:
 ## building, and the action panel with its producibles if it's ours.
 func show_building(building: ProductionBuilding) -> void:
 	_show_info_header()
-	info_panel_name_label.text = building.building_name
+	info_panel_name_label.text = building.shown_name()
 	_update_portrait(building.team_tint, "", _building_icon_of(building), _building_glyph_of(building))
 	_clear_command_column()
 	_build_building_info(building)
@@ -484,9 +484,9 @@ func _populate_construction_buttons() -> void:
 		var place: Callable = main.placement.on_construction_button_pressed.bind(building_type)
 		var slot: CommandSlot
 		if building_type.glyph != &"":
-			slot = _make_glyph_button(hotkey, building_type.building_name, building_type.glyph, place, _tooltip_costs(costs)) as CommandSlot
+			slot = _make_glyph_button(hotkey, building_type.shown_name(), building_type.glyph, place, _tooltip_costs(costs)) as CommandSlot
 		else:
-			slot = _make_command_button(hotkey, building_type.building_name, _tooltip_costs(costs), building_type.icon, place) as CommandSlot
+			slot = _make_command_button(hotkey, building_type.shown_name(), _tooltip_costs(costs), building_type.icon, place) as CommandSlot
 		if not can_afford_locally(costs):
 			slot.state = CommandSlot.State.UNAFFORDABLE
 		_construction_slots.append([slot, costs])
@@ -649,9 +649,10 @@ func _building_glyph_of(building: ProductionBuilding) -> StringName:
 		return building.settlement.glyph()
 	if building.slot_kind >= 0:
 		return RealmRoster.KIND_GLYPHS[building.slot_kind]
-	for building_type in main.my_faction().building_types:
-		if building_type.scene != null and building_type.scene.resource_path == building.scene_file_path:
-			return building_type.glyph
+	for faction in Faction.list_all():
+		for building_type in faction.building_types:
+			if building_type.scene != null and building_type.scene.resource_path == building.scene_file_path:
+				return building_type.glyph
 	return SLOT_BUILDING_GLYPHS.get(building.building_name, &"")
 
 func _building_icon(building_name: String) -> Texture2D:
