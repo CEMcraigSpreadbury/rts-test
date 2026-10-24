@@ -94,6 +94,7 @@ func _ready() -> void:
 	_place_camera()
 	var town_centre := _place(TOWN_CENTRE.instantiate(), CENTRE_XZ, 0.0)
 	GroundStamps.stamp_building(town_centre, TOWN_CENTRE_RADIUS)
+	town_centre.add_child(BuildingMotion.new(town_centre))
 	var groves: Array[Array] = []
 	for grove in GROVES:
 		groves.append(_plant_grove(CENTRE_XZ + grove[0], grove[1], grove[2]))

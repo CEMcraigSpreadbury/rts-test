@@ -20,9 +20,9 @@ amount = 20
 
 [node name="CrabRider" instance=ExtResource("1_base")]
 display_name = "Crab Rider"
-max_health = 80
-attack_damage = 7
-move_speed = 4.0
+max_health = 65
+attack_damage = 8
+move_speed = 5.0
 figure_top = 1.15
 figure_model = ExtResource("2_fig")
 figure_model_lod1 = ExtResource("3_fig_lod1")

@@ -1,19 +1,10 @@
 class_name AiResearch
 extends RefCounted
-## Spends the AI's research points down a fixed path through its Ruler's tree,
-## and casts the powers it owns. Plays by a human's rules: every purchase and
-## cast goes through Research.buy_as / cast_as with this AI's peer id, so the
-## requirements, cost, cooldown and vision checks all apply.
+## Buys the AI's faction powers in order as its research points allow, and
+## casts the ones it owns. Plays by a human's rules: every purchase and cast
+## goes through Research.buy_as / cast_as with this AI's peer id, so the
+## order, cost, cooldown and vision checks all apply.
 
-## Buy order per Ruler (by Ruler.ruler_name), as indices into Ruler.nodes —
-## every node's requirement comes before it. Army first for the Warlord,
-## economy first for the Steward, spells first for the Mystic. A Ruler with no
-## path here just buys whatever it can, in tree order.
-const PATHS: Dictionary = {
-	"Warlord": [2, 0, 1, 4, 6, 5, 9, 8, 11, 7, 10, 3],
-	"Steward": [0, 2, 4, 6, 1, 5, 7, 11, 9, 3, 8, 10],
-	"Mystic": [0, 3, 6, 1, 4, 9, 2, 11, 7, 5, 8, 10],
-}
 ## A unit counts as hurt for Healing Light below this share of its health.
 const HURT_FRACTION: float = 0.7
 ## Sanctuary waits for a fight that's going badly.
@@ -27,7 +18,7 @@ const FORTIFY_THREAT_RADIUS: float = 10.0
 const BOUNTIFUL_MIN_VILLAGERS: int = 4
 ## Busy production buildings in the ring before Industrious Age is worth it.
 const INDUSTRIOUS_MIN_BUILDINGS: int = 2
-## Muster looks this many times further out than its own radius for a fight.
+## A summoning power looks this many times further out than its own radius for a fight.
 const MUSTER_SEARCH_SCALE: float = 3.0
 
 var ai: AiPlayer
@@ -39,40 +30,39 @@ func _init(p_ai: AiPlayer) -> void:
 	ai = p_ai
 
 func think() -> void:
-	var ruler := Research.ruler_for(ai.peer_id)
-	if ruler == null:
-		return
-	_buy_next(ruler)
-	_cast_powers(ruler)
+	var powers := Research.powers_for(ai.peer_id)
+	_buy_next(powers)
+	_cast_powers(powers)
+	_steer_lance()
 
 ## --- Buying ---
 
-func _buy_next(ruler: Ruler) -> void:
+func _buy_next(powers: Array[ResearchNode]) -> void:
 	var research: Research = ai.main.research
-	var owned := research.owned_by(ai.peer_id)
-	var path: Array = PATHS.get(ruler.ruler_name, range(ruler.nodes.size()))
-	for index in path:
-		if owned.has(index):
-			continue
-		var node: ResearchNode = ruler.nodes[index]
-		if not Research.requirements_met(ruler, node, owned):
-			continue
-		## One at a time, in order — the next node waits for its points
-		## rather than being skipped for something cheaper further down.
-		if ResourceStockpile.can_afford(ai.peer_id, Research.node_costs(node)) and research.buy_as(ai.peer_id, index):
-			nodes_bought += 1
+	var index := research.owned_by(ai.peer_id).size()
+	if index >= powers.size():
 		return
+	if ResourceStockpile.can_afford(ai.peer_id, Research.node_costs(powers[index])) and research.buy_as(ai.peer_id, index):
+		nodes_bought += 1
 
 ## --- Casting ---
 
-func _cast_powers(ruler: Ruler) -> void:
+func _cast_powers(powers: Array[ResearchNode]) -> void:
 	var research: Research = ai.main.research
 	for index in research.owned_by(ai.peer_id):
-		var node: ResearchNode = ruler.nodes[index]
-		if node.kind != ResearchNode.Kind.POWER or not research.is_power_ready(ai.peer_id, index):
+		var node: ResearchNode = powers[index]
+		if not research.is_power_ready(ai.peer_id, index):
 			continue
 		var target: Variant = _power_target(node)
-		if target != null and research.cast_as(ai.peer_id, index, target):
+		if target == null:
+			continue
+		var end: Vector3 = target
+		if node.aim == ResearchNode.Aim.LINE:
+			## Run the line through the crowd, the way the army faces it.
+			var dir := _line_heading(target)
+			end = target + dir * node.line_length * 0.5
+			target = target - dir * node.line_length * 0.5
+		if research.cast_as(ai.peer_id, index, target, end):
 			powers_cast[node.node_name] = powers_cast.get(node.node_name, 0) + 1
 
 ## Where `node` is worth casting right now, or null.
@@ -80,6 +70,14 @@ func _power_target(node: ResearchNode) -> Variant:
 	var min_units: int = ai.profile.ability_min_targets
 	if min_units <= 0:
 		return null
+	match node.set_piece:
+		&"volley", &"treasure", &"lance", &"colossus", &"charge", &"sword":
+			return _best_spot(_positions(ai.combat.visible_enemies), node.radius, min_units)
+		&"galleon":
+			return _best_spot(_positions(ai.combat.visible_enemies), node.radius, min_units + 2)
+		&"ghost_crew", &"overclock":
+			## Where its own army is in the thick of it.
+			return _best_spot(_positions(_fighting(ai.army)), node.radius, min_units)
 	if node.hit_ability != null or node.affects_enemy_units:
 		return _best_spot(_positions(ai.combat.visible_enemies), node.radius, min_units)
 	if node.affects_own_buildings:
@@ -100,6 +98,32 @@ func _power_target(node: ResearchNode) -> Variant:
 		var losing := _fighting(ai.army).filter(func(u): return _health_fraction(u) < SANCTUARY_HURT_FRACTION)
 		return _best_spot(_positions(losing), node.radius, min_units)
 	return _best_spot(_positions(_fighting(ai.army)), node.radius, min_units)
+
+## From the AI's army (or its base) toward `target`, flat.
+func _line_heading(target: Vector3) -> Vector3:
+	var from: Variant = null
+	var best := INF
+	for unit in ai.army:
+		if not is_instance_valid(unit):
+			continue
+		var d: float = Research._flat_distance(unit.global_position, target)
+		if d < best:
+			best = d
+			from = unit.global_position
+	if from == null and not ai.my_buildings.is_empty() and is_instance_valid(ai.my_buildings[0]):
+		from = ai.my_buildings[0].global_position
+	var dir: Vector3 = target - (from if from != null else target + Vector3.BACK)
+	dir.y = 0.0
+	return dir.normalized() if dir.length_squared() > 0.01 else Vector3.FORWARD
+
+## A Lance of this AI's in the sky: point it at the thickest crowd it can see.
+func _steer_lance() -> void:
+	var effects: PowerEffects = ai.main.power_effects
+	if effects == null or not effects.is_steering(ai.peer_id):
+		return
+	var spot: Variant = _best_spot(_positions(ai.combat.visible_enemies), PowerEffects.LANCE_RADIUS * 2.0, 1)
+	if spot != null:
+		effects.set_steer(ai.peer_id, spot)
 
 func _building_target(node: ResearchNode) -> Variant:
 	var picked: Array = []

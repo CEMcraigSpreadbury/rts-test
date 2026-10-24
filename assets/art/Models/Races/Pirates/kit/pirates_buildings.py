@@ -34,6 +34,7 @@ common.COLOURS.update({
 	'Trunk': (0.33, 0.19, 0.08), 'Coconut': (0.17, 0.08, 0.03), 'Shell': (0.85, 0.55, 0.45),
 	'Juju': (0.34, 0.08, 0.69), 'Coral': (0.85, 0.24, 0.05), 'Fish': (0.6, 0.62, 0.6), 'Ember': (1.0, 0.25, 0.02),
 	'Stone': (0.4, 0.33, 0.22), 'StoneDark': (0.26, 0.21, 0.14),
+	'Lagoon': (0.02, 0.2, 0.13), 'LagoonLight': (0.08, 0.42, 0.26),
 })
 common.GLOSSY = common.GLOSSY + ('Juju', 'Fish')
 
@@ -155,19 +156,23 @@ def plank_door(frame, w=0.6, h=0.95):
 
 # --- props ------------------------------------------------------------------
 
-def jolly_roger(x, y, z, pole=1.1, size=0.5):
-	"""A tall pole flying the black flag: a bone skull over crossed bones."""
+def jolly_roger(x, y, z, pole=1.1, size=0.5, wave=None):
+	"""A tall pole flying the black flag: a bone skull over crossed bones.
+	`wave` names the flag as a moving part (common.moving) swinging about the
+	pole."""
 	cylinder(0.04, pole, (x, y, z + pole / 2), 'PlankDark', verts=8, bevel=0.0)
 	sphere(0.06, (x, y, z + pole + 0.04), 'Gold')
 	fz = z + pole - size * 0.4
-	box((size, 0.035, size * 0.66), (x + size / 2 + 0.04, y, fz), 'Black', bevel=0.012)
-	f = Matrix.Translation((x + size / 2 + 0.04, y - 0.025, fz))
-	sphere(size * 0.13, (0, 0, size * 0.06), 'Bone', matrix=f)
-	box((size * 0.16, 0.03, size * 0.1), (0, 0, -size * 0.05), 'Bone', bevel=0.01, matrix=f)
-	for a in (35, -35):
-		box((size * 0.5, 0.03, size * 0.06), (0, 0, -size * 0.12), 'Bone', rot=(0, a, 0), bevel=0.01, matrix=f)
-	for side in (-1, 1):
-		box((size * 0.05, 0.04, size * 0.05), (side * size * 0.05, -0.005, size * 0.07), 'Black', bevel=0.005, matrix=f)
+	with moving(wave, (x, y, fz)):
+		box((size, 0.035, size * 0.66), (x + size / 2 + 0.04, y, fz), 'Black', bevel=0.012)
+		f = Matrix.Translation((x + size / 2 + 0.04, y - 0.025, fz))
+		sphere(size * 0.13, (0, 0, size * 0.06), 'Bone', matrix=f)
+		box((size * 0.16, 0.03, size * 0.1), (0, 0, -size * 0.05), 'Bone', bevel=0.01, matrix=f)
+		for a in (35, -35):
+			box((size * 0.5, 0.03, size * 0.06), (0, 0, -size * 0.12), 'Bone', rot=(0, a, 0), bevel=0.01, matrix=f)
+		for side in (-1, 1):
+			box((size * 0.05, 0.04, size * 0.05), (side * size * 0.05, -0.005, size * 0.07), 'Black', bevel=0.005,
+					matrix=f)
 
 
 def chest(x, y, z, rot=0.0, gold=True):
@@ -229,10 +234,12 @@ def rope_coil(x, y, z):
 		torus(0.16 - k * 0.02, 0.035, (x, y, z + 0.035 + k * 0.05), 'Rope')
 
 
-def lantern(x, y, z):
-	box((0.14, 0.14, 0.18), (x, y, z), 'Ember', bevel=0.03)
-	box((0.18, 0.18, 0.04), (x, y, z + 0.11), 'IronDark', bevel=0.015)
-	box((0.16, 0.16, 0.03), (x, y, z - 0.1), 'IronDark', bevel=0.01)
+def lantern(x, y, z, swing=None):
+	"""`swing` names it as a moving part (common.moving) rocking from its top."""
+	with moving(swing, (x, y, z + 0.13), (0, 1, 0)):
+		box((0.14, 0.14, 0.18), (x, y, z), 'Ember', bevel=0.03)
+		box((0.18, 0.18, 0.04), (x, y, z + 0.11), 'IronDark', bevel=0.015)
+		box((0.16, 0.16, 0.03), (x, y, z - 0.1), 'IronDark', bevel=0.01)
 
 
 def barrels(x, y, z, n=3, seed=1):
@@ -252,7 +259,7 @@ def skull_post(x, y, z, h=0.9):
 		sphere(0.035, (x + side * 0.045, y - 0.1, z + h + 0.07), 'Black')
 
 
-def mast(x, y, z, h, yard=1.4, sail=True, nest=True, flag=True):
+def mast(x, y, z, h, yard=1.4, sail=True, nest=True, flag=True, wave=None):
 	"""A mast with a yard, a square team sail bellied forward, a crow's nest."""
 	cylinder(0.09, h, (x, y, z + h / 2), 'Plank', verts=10, bevel=0.02)
 	yz = z + h * 0.72
@@ -287,7 +294,7 @@ def mast(x, y, z, h, yard=1.4, sail=True, nest=True, flag=True):
 		cylinder(0.3, 0.26, (x, y, nz_), 'Plank', verts=12, bevel=0.03)
 		torus(0.3, 0.035, (x, y, nz_ + 0.13), 'Rope')
 	if flag:
-		jolly_roger(x, y, z + h, pole=0.5, size=0.45)
+		jolly_roger(x, y, z + h, pole=0.5, size=0.45, wave=wave)
 
 
 # --- buildings ---------------------------------------------------------------
@@ -341,27 +348,41 @@ HULL_BANDS = [(0.0, 0.10, 'PlankDark'), (0.10, 0.22, 'Plank'), (0.22, 0.32, 'Tea
 
 def galleon_hull(g, nt=28, na=10):
 	"""The hull in its bands (one object each, so each takes its material),
-	each band a little proud of the one below it, and a keel strip."""
-	ts = [-0.995 + 1.99 * i / nt for i in range(nt + 1)]
+	the dark wales and team stripe proud of the planking and lapped over its
+	edges so no seam shows, a flat transom closing the stern, and a keel
+	strip. The two sides meet at the bow's point."""
+	ts = [-0.995 + 1.995 * i / nt for i in range(nt + 1)]
 	for c0, c1, mat_name in HULL_BANDS:
 		proud = 0.025 if mat_name in ('PlankDark', 'TeamColor') else 0.0
+		if proud > 0.0:
+			c0, c1 = max(0.0, c0 - 0.02), min(1.0, c1 + 0.02)
 		verts, faces = [], []
 		steps = max(2, round((c1 - c0) * na))
+		cols = steps + 1
 		for side in (-1.0, 1.0):
 			base = len(verts)
 			for i, t in enumerate(ts):
+				w = g.half_width(t)
+				h = g.deck_z(t) - g.keel_z(t)
 				for j in range(steps + 1):
 					c = c0 + (c1 - c0) * j / steps
 					a = side * math.acos(max(-1.0, min(1.0, c)))
 					x, y, z = g.point(t, a)
-					w = g.half_width(t)
-					verts.append((x, y + side * proud * (1.0 if w > 0.05 else 0.0), z))
-			cols = steps + 1
+					# Out along the cross-section's normal, easing to nothing
+					# toward the bow's point so the two sides still meet.
+					ny, nz = math.sin(a) * h, -math.cos(a) * w
+					n = math.hypot(ny, nz) or 1.0
+					k = proud * min(1.0, w / 0.3) / n
+					verts.append((x - (proud if i == 0 else 0.0), y + ny * k, z + nz * k))
 			for i in range(nt):
 				for j in range(steps):
 					v0 = base + i * cols + j
 					quad = (v0, v0 + cols, v0 + cols + 1, v0 + 1)
 					faces.append(quad if side > 0 else tuple(reversed(quad)))
+		# The transom: port's stern column across to starboard's.
+		s = len(ts) * cols
+		for j in range(steps):
+			faces.append((j, s + j, s + j + 1, j + 1))
 		_mesh_obj('hull', verts, faces, mat_name)
 	keel = [(t * g.L * 0.5, 0.0, g.keel_z(t) - 0.04) for t in ts]
 	for p0, p1 in zip(keel, keel[1:]):
@@ -379,7 +400,7 @@ def galleon_deck(g, nt=24):
 		verts, faces = [], []
 		for i in range(nt + 1):
 			t = -0.97 + 1.94 * i / nt
-			w = g.half_width(t) * 0.94
+			w = g.half_width(t) * 0.99
 			z = g.deck_z(t) - 0.16
 			verts += [(t * g.L * 0.5, u0 * w, z), (t * g.L * 0.5, u1 * w, z)]
 		for i in range(nt):
@@ -403,14 +424,17 @@ def rope(p0, p1, r=0.02):
 			rot=tuple(math.degrees(v) for v in rot))
 
 
-def ship_wheel(x, y, z, rot=0.0):
+def ship_wheel(x, y, z, rot=0.0, rock=None):
+	"""The helm on its post; `rock` names the wheel as a moving part
+	(common.moving) turning on its axle."""
 	f = _t(x, y, z) @ _rz(rot)
 	box((0.1, 0.1, 0.6), (0, 0.06, -0.3), 'PlankDark', matrix=f)
-	torus(0.24, 0.035, (0, 0, 0), 'Plank', rot=(90, 0, 0), matrix=f)
-	for k in range(8):
-		a = k * 45
-		box((0.035, 0.035, 0.66), (0, -0.01, 0), 'PlankLight', rot=(0, a, 0), bevel=0.0, matrix=f)
-	sphere(0.06, (0, -0.03, 0), 'Gold', matrix=f)
+	with moving(rock, (x, y, z), f.to_3x3() @ Vector((0, 1, 0))):
+		torus(0.24, 0.035, (0, 0, 0), 'Plank', rot=(90, 0, 0), matrix=f)
+		for k in range(8):
+			a = k * 45
+			box((0.035, 0.035, 0.66), (0, -0.01, 0), 'PlankLight', rot=(0, a, 0), bevel=0.0, matrix=f)
+		sphere(0.06, (0, -0.03, 0), 'Gold', matrix=f)
 
 
 def rowboat(x, y, rot=0.0):
@@ -455,11 +479,11 @@ def town_centre():
 		box((0.3, 0.06, 0.38), (0, 0, 0), 'Window', bevel=0.03, matrix=f)
 		box((0.38, 0.08, 0.06), (0, -0.03, 0.22), 'Gold', bevel=0.02, matrix=f)
 		box((0.38, 0.08, 0.06), (0, -0.03, -0.22), 'Gold', bevel=0.02, matrix=f)
-	lantern(sx - 0.68, 0.0, sz + 1.0)
-	ship_wheel(sx + 0.75, 0.0, sz + 0.55, rot=90)
+	lantern(sx - 0.68, 0.0, sz + 1.0, swing='anim_sway_9_17_lantern')
+	ship_wheel(sx + 0.75, 0.0, sz + 0.55, rot=90, rock='anim_sway_40_50_helm')
 	# Two masts: the main with its team sail, crow's nest and the Jolly Roger,
 	# a shorter foremast with a second sail.
-	mast(0.15, 0.0, dz, 3.2, yard=1.8)
+	mast(0.15, 0.0, dz, 3.2, yard=1.8, wave='anim_sway_24_26_flag0')
 	mast(1.35, 0.0, g.deck_z(0.54) - 0.16, 2.3, yard=1.3, nest=False, flag=False)
 	# Rigging from the mastheads down to the rails.
 	for mx, top in ((0.15, dz + 3.0), (1.35, g.deck_z(0.54) + 2.0)):
@@ -483,15 +507,16 @@ def town_centre():
 	cylinder(0.04, 0.6, (ax, ay - 0.06, az - 0.15), 'IronDark', verts=6, bevel=0.0)
 	torus(0.18, 0.04, (ax, ay - 0.06, az - 0.45), 'IronDark', rot=(90, 0, 0))
 	# Heel her over onto her front side, bow up a little, and settle her
-	# keel into the sand.
+	# keel into the sand, her moving parts' pivots with her.
 	ship = PARTS[first:]
+	pivots = [pivot for _, pivot, _ in ANIMS]
 	tilt = Matrix.Rotation(math.radians(13.0), 4, 'X') @ Matrix.Rotation(math.radians(-3.0), 4, 'Y')
-	for obj in ship:
+	for obj in ship + pivots:
 		obj.matrix_world = tilt @ obj.matrix_world
 	bpy.context.view_layer.update()
 	low = min((obj.matrix_world @ Vector(c)).z for obj in ship for c in obj.bound_box)
 	settle = Matrix.Translation((0.1, 0.35, -low - 0.28))
-	for obj in ship:
+	for obj in ship + pivots:
 		obj.matrix_world = settle @ obj.matrix_world
 	# Sand heaped round where she lies.
 	for i in range(14):
@@ -758,29 +783,42 @@ def mill():
 
 def mine():
 	new_scene(41)
-	# In front of the gold deposit (the deposit sits at the origin): a
-	# treasure dig with a hoist over the hole and the spoil heaped up.
-	box((2.5, 2.2, 0.14), (0.1, -1.5, 0.07), 'Sand', bevel=0.07)
-	cylinder(0.6, 0.06, (-0.1, -1.3, 0.15), 'Black', verts=16, bevel=0.0)
-	for k in range(8):
-		a = math.radians(k * 45)
-		box((0.3, 0.12, 0.12), (-0.1 + math.cos(a) * 0.62, -1.3 + math.sin(a) * 0.62, 0.2), 'PlankDark', rot=(0, 0, k * 45 + 90),
-				bevel=0.02)
-	for x in (-0.75, 0.55):
-		cylinder(0.06, 1.3, (x, -1.3, 0.8), 'Plank', verts=8, rot=(0, (1 if x < 0 else -1) * 12, 0), bevel=0.0)
-	cylinder(0.05, 1.5, (-0.1, -1.3, 1.38), 'PlankDark', verts=8, rot=(0, 90, 0), bevel=0.0)
-	cylinder(0.12, 0.3, (-0.1, -1.3, 1.38), 'Rope', verts=10, rot=(0, 90, 0), bevel=0.0)
-	cylinder(0.015, 0.6, (-0.1, -1.3, 1.05), 'Rope', verts=4, bevel=0.0)
-	cylinder(0.14, 0.2, (-0.1, -1.3, 0.72), 'Plank', verts=10, bevel=0.02)
-	# A red X marks the spot, the spoil heap and an overflowing chest.
+	# A smugglers' cave dug into the front of the gold deposit (the deposit
+	# sits at the origin): a ship-timber mouth in a heap of sandstone, a plank
+	# walk out to a chest of loot and a red X dug into the sand. It stays low,
+	# like the Aldmere mine, so the deposit still shows behind it; the mouth
+	# is clear of the deposit's front boulder.
+	EY = -1.5
+	for x, y, s, h in ((-0.75, EY + 0.05, 0.5, 0.75), (0.7, EY + 0.08, 0.48, 0.7), (-0.95, EY - 0.25, 0.38, 0.4),
+			(0.9, EY - 0.22, 0.36, 0.42), (-0.5, EY + 0.25, 0.55, 1.15), (0.45, EY + 0.28, 0.55, 1.1),
+			(0.0, EY + 0.35, 0.7, 1.4)):
+		box((s, s * 0.9, h), (x, y, h / 2), 'Stone' if random.random() < 0.6 else 'StoneDark',
+				rot=(0, 0, random.uniform(-20, 20)), bevel=min(0.12, s * 0.25), segments=3)
+	box((0.8, 0.12, 0.95), (0, EY - 0.1, 0.48), 'Black', bevel=0.02)
+	# The mouth framed in old hull timbers, a skull nailed over it.
+	for x, a in ((-0.48, 4), (0.48, -4)):
+		box((0.18, 0.2, 1.1), (x, EY - 0.18, 0.55), 'PlankDark', rot=(0, a, 0), bevel=0.05)
+	box((1.3, 0.24, 0.2), (0, EY - 0.18, 1.18), 'Plank', rot=(0, 3, 0), bevel=0.06)
+	sphere(0.13, (0, EY - 0.34, 1.2), 'Bone')
+	box((0.13, 0.1, 0.08), (0, EY - 0.38, 1.1), 'Bone', bevel=0.02)
+	for side in (-1, 1):
+		sphere(0.035, (side * 0.045, EY - 0.46, 1.22), 'Black')
+	lantern(0.62, EY - 0.32, 0.95)
+	# A plank walk out of the mouth.
+	for i in range(5):
+		box((0.62, 0.22, 0.05), (random.uniform(-0.03, 0.03), EY - 0.35 - i * 0.27, 0.03),
+				'Plank' if i % 2 else 'PlankLight', rot=(0, 0, random.uniform(-6, 6)), bevel=0.02, segments=2)
+	# X marks the spot, the spoil heap with a spade in it, and the loot.
 	for a in (45, -45):
-		box((0.7, 0.12, 0.03), (0.75, -2.2, 0.15), 'Red', rot=(0, 0, a), bevel=0.01)
-	sphere(0.45, (-0.75, -2.15, 0.14), 'SandDark')
-	PARTS[-1].scale = (1.0, 0.8, 0.5)
-	chest(0.85, -0.65, 0.14, rot=25)
-	for x, a in ((-0.95, 20), (-0.75, -15)):
-		cylinder(0.025, 0.7, (x, -0.65, 0.45), 'Plank', verts=6, rot=(a, 0, 0), bevel=0.0)
-		box((0.14, 0.03, 0.18), (x, -0.65 - math.sin(math.radians(a)) * 0.33, 0.12), 'Iron', bevel=0.01)
+		box((0.7, 0.13, 0.03), (0.75, EY - 1.35, 0.015), 'Red', rot=(0, 0, a), bevel=0.01)
+	sphere(0.4, (-0.8, EY - 1.15, 0.0), 'Sand')
+	PARTS[-1].scale = (1.0, 0.85, 0.55)
+	box((0.04, 0.04, 0.6), (-0.7, EY - 1.15, 0.45), 'Plank', rot=(15, 10, 0), bevel=0.0)
+	box((0.16, 0.03, 0.2), (-0.72, EY - 1.08, 0.18), 'Iron', rot=(15, 10, 0), bevel=0.01)
+	chest(0.85, EY - 0.55, 0.0, rot=-20)
+	barrel(-0.95, EY - 0.6, z=0.0, r=0.15, h=0.36)
+	rope_coil(-0.55, EY - 0.65, 0.0)
+	jolly_roger(1.05, EY - 0.05, 0.4, pole=0.9, size=0.4)
 	export('Mine')
 
 
@@ -869,11 +907,67 @@ def wall_gate():
 	export('WallGate')
 
 
+def bestiary():
+	new_scene(45)
+	# Kraken Cove: a keeper's shack on stilts beside a rock-ringed lagoon pool
+	# caged by the ribs of an old wreck. The pool's water (green, never blue:
+	# the team shader's hue window) is the cage floor the kraken stands on.
+	box((4.6, 2.5, 0.14), (-0.05, 0, 0.07), 'Sand', bevel=0.07)
+	GX, R, FZ = 1.0, 1.0, 0.3
+	cylinder(R + 0.05, 0.16, (GX, 0, 0.2), 'Lagoon', verts=28, bevel=0.03)
+	torus(R * 0.6, 0.03, (GX, 0, FZ - 0.01), 'LagoonLight')
+	for k in range(14):
+		a = math.radians(k * 360 / 14 + random.uniform(-6, 6))
+		s = random.uniform(0.32, 0.42)
+		box((s, s * 0.85, 0.36 + random.uniform(-0.05, 0.06)), (GX + math.cos(a) * (R + 0.12), math.sin(a) * (R + 0.12), 0.2),
+				'Stone' if k % 3 else 'StoneDark', rot=(0, 0, math.degrees(a) + random.uniform(-15, 15)), bevel=0.1, segments=3)
+	# The wreck's ribs: hull frames curving up out of the rocks over the pool,
+	# tied along the top by a keel beam.
+	TOP = 1.9
+	n = 14
+	for i in range(4):
+		x = GX - 0.75 + i * 0.5
+		for k in range(n):
+			a = math.radians(180 * (k + 0.5) / n)
+			y, z = -math.cos(a) * (R + 0.08), 0.3 + math.sin(a) * (TOP - 0.3)
+			dy, dz = (R + 0.08) * math.sin(a), (TOP - 0.3) * math.cos(a)
+			tilt = math.degrees(math.atan2(dz, dy))
+			step = math.hypot(dy, dz) * math.pi / n
+			box((0.13, step + 0.06, 0.12), (x, y, z), 'PlankDark' if i % 2 else 'Plank', rot=(tilt, 0, 0), bevel=0.03,
+					segments=2)
+	cylinder(0.08, 1.9, (GX, 0, TOP + 0.02), 'PlankDark', verts=8, rot=(0, 90, 0), bevel=0.02)
+	for x in (GX - 0.55, GX + 0.55):
+		torus(0.09, 0.03, (x, 0, TOP + 0.02), 'Rope', rot=(0, 90, 0))
+	jolly_roger(GX + 0.9, 0, TOP + 0.05, pole=0.7, size=0.42)
+	# The keeper's shack.
+	CX = -1.3
+	for sx in (-1, 1):
+		for sy in (-1, 1):
+			cylinder(0.07, 0.5, (CX + sx * 0.55, 0.15 + sy * 0.5, 0.35), 'PlankDark', verts=8, bevel=0.0)
+	box((1.4, 1.3, 0.1), (CX, 0.15, 0.6), 'Plank', bevel=0.03)
+	plank_walls(0.6, 0.55, 1.6, cx=CX, cy=0.2, z0=0.65)
+	sail_roof(1.6, 0.55, 1.6, cx=CX, cy=0.2, pitch=34.0, hx=0.6)
+	plank_door(face(CX, -0.37, 0.65, '-y'), w=0.48, h=0.75)
+	for i in range(3):
+		box((0.5, 0.18, 0.06), (CX, -0.55 - i * 0.16, 0.5 - i * 0.16), 'PlankLight', bevel=0.02)
+	# Feed for it: fish in a barrel and a bucket, a gaff, rope, a skull post.
+	barrels(-2.0, -0.85, 0.14, 2, 5)
+	for i in range(3):
+		box((0.18, 0.06, 0.06), (-1.95 + i * 0.05, -0.85, 0.56 + i * 0.04), 'Fish', rot=(0, 0, i * 40), bevel=0.025)
+	cylinder(0.15, 0.24, (-0.15, -0.95, 0.26), 'Plank', verts=10, bevel=0.02, radius2=0.18)
+	box((0.18, 0.06, 0.06), (-0.15, -0.95, 0.42), 'Fish', rot=(0, 30, 20), bevel=0.025)
+	rope_coil(0.15, 1.0, 0.14)
+	skull_post(-0.25, 0.95, 0.14, h=0.8)
+	cylinder(0.025, 1.3, (-0.3, -0.6, 0.7), 'Plank', verts=6, rot=(0, 25, 0), bevel=0.0)
+	export('Bestiary', extras=(spot('BeastSpot', (GX, 0, FZ), 1.75),))
+
+
 BUILDINGS = {
 	'TownCentre': town_centre, 'House': house, 'Barracks': barracks, 'ArcheryRange': archery_range,
 	'Stables': stables, 'ArcaneSanctum': arcane_sanctum, 'SiegeWorkshop': siege_workshop,
 	'Blacksmith': blacksmith, 'Library': library, 'Mill': mill, 'Mine': mine, 'Storehouse': storehouse,
 	'Watchtower': watchtower, 'WallSegment': wall_segment, 'WallCorner': wall_corner, 'WallGate': wall_gate,
+	'Bestiary': bestiary,
 }
 
 if __name__ == '__main__':

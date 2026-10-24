@@ -1,5 +1,9 @@
 [gd_resource type="Resource" script_class="Faction" format=3]
 
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="ps"]
+[ext_resource type="Resource" path="res://resources/powers/robots_1_overclock.tres" id="power_1"]
+[ext_resource type="Resource" path="res://resources/powers/robots_2_orbital_lance.tres" id="power_2"]
+[ext_resource type="Resource" path="res://resources/powers/robots_3_colossus_drop.tres" id="power_3"]
 [ext_resource type="Script" uid="uid://cttidq8h020il" path="res://scripts/faction.gd" id="1_faction_script"]
 [ext_resource type="Script" uid="uid://cn1q8d7jedd03" path="res://scripts/building_type.gd" id="2_building_type_script"]
 [ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="2_kl0dp"]
@@ -38,7 +42,9 @@
 [ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/mill.png" id="icon_buildings_mill"]
 [ext_resource type="Texture2D" path="res://assets/ui/icons/buildings/library.png" id="icon_library"]
 [ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_library_building.tscn" id="24_library"]
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_telepad_building.tscn" id="25_telepad"]
 
+[ext_resource type="PackedScene" path="res://scenes/buildings/robots/robot_bestiary_building.tscn" id="26_bestiary"]
 [sub_resource type="Resource" id="BuildingType_towncenter"]
 script = ExtResource("2_building_type_script")
 building_name = "Town Center"
@@ -209,10 +215,31 @@ companion_scene = ExtResource("22_farm")
 companion_offsets = PackedVector3Array(-3.6, 0, 0, 3.6, 0, 0, 0, 0, 3.6)
 companion_radius = 1.4
 
+[sub_resource type="Resource" id="BuildingType_telepad"]
+script = ExtResource("2_building_type_script")
+building_name = "Telepad"
+description = "Two Telepads are linked. Robots sent onto one step out of the other."
+glyph = &"telepad"
+scene = ExtResource("25_telepad")
+footprint_radius = 2.0
+construction_time = 10.0
+
+[sub_resource type="Resource" id="BuildingType_bestiary"]
+script = ExtResource("2_building_type_script")
+building_name = "Bestiary"
+display_name = "Tank Depot"
+description = "Trains Robo Tanks."
+icon = ExtResource("icon_bestiary")
+glyph = &"bestiary"
+scene = ExtResource("26_bestiary")
+footprint_radius = 2.4
+construction_time = 14.0
+
 [resource]
 script = ExtResource("1_faction_script")
+powers = Array[ExtResource("ps")]([ExtResource("power_1"), ExtResource("power_2"), ExtResource("power_3")])
 faction_name = "Robots"
 race_name = "Robots"
-building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_archery_range"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_storehouse"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_siege_workshop"), SubResource("BuildingType_arcane_sanctum"), SubResource("BuildingType_mill"), SubResource("BuildingType_library")])
+building_types = Array[ExtResource("2_building_type_script")]([SubResource("BuildingType_towncenter"), SubResource("BuildingType_barracks"), SubResource("BuildingType_archery_range"), SubResource("BuildingType_house"), SubResource("BuildingType_mine"), SubResource("BuildingType_storehouse"), SubResource("BuildingType_stables"), SubResource("BuildingType_blacksmith"), SubResource("BuildingType_wall"), SubResource("BuildingType_gate"), SubResource("BuildingType_watchtower"), SubResource("BuildingType_siege_workshop"), SubResource("BuildingType_arcane_sanctum"), SubResource("BuildingType_mill"), SubResource("BuildingType_library"), SubResource("BuildingType_telepad"), SubResource("BuildingType_bestiary")])
 starting_buildings = Array[PackedScene]([ExtResource("3_town_center")])
 starting_units = Array[PackedScene]([ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit"), ExtResource("10_unit")])

@@ -60,8 +60,9 @@ func _collect_meshes(node: Node) -> void:
 	for child in node.get_children():
 		_collect_meshes(child)
 
-func _pop_tilt() -> float:
-	return 0.0
+## A field doesn't give under a farmer's blows.
+func play_harvest_squash(_from: Vector3 = Vector3.INF, _strength: float = 1.0) -> void:
+	pass
 
 func is_yielding() -> bool:
 	return stage == Stage.RIPE

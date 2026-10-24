@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+[ext_resource type="PackedScene" path="res://scenes/units/robots/robot_colossus_unit.tscn" id="2_colossus"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "Colossus Drop"
+description = "A drop pod slams down and a towering war mech steps out, yours to command for 45s before it self-destructs."
+glyph = &"telepad"
+tier = 3
+cost = 70
+cooldown = 240.0
+radius = 6.0
+duration = 45.0
+telegraph = 1.5
+set_piece = &"colossus"
+summon_scene = ExtResource("2_colossus")
+effect_color = Color(1, 0.6, 0.2, 1)

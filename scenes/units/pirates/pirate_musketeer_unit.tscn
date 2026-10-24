@@ -7,8 +7,10 @@
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_musket_ball.tscn" id="shot"]
 
 [node name="Musketeer" instance=ExtResource("1_base")]
+max_health = 32
+move_speed = 3.2
 display_name = "Musketeer"
-attack_damage = 10
+attack_damage = 11
 attack_range = 18.0
 attack_cooldown = 3.2
 projectile_tint = Color(0.3, 0.3, 0.32, 1)

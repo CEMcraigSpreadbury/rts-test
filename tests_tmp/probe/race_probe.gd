@@ -21,7 +21,7 @@ func _ready() -> void:
 	for race in [2, 0]:
 		var id := Network.add_ai_player(Network.AiDifficulty.NORMAL)
 		Network.set_ai_race(id, race)
-	Network.resolve_random_rulers()
+	Network.resolve_random_races()
 	(func():
 		var m: Node = load(info.scene_path).instantiate()
 		get_tree().root.add_child(m)

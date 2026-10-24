@@ -1,6 +1,6 @@
 class_name TimedBuffs
 extends RefCounted
-## Short-lived Ruler power effects on one unit or building (see
+## Short-lived faction power effects on one unit or building (see
 ## ResearchNode.Buff), timed on Research.now() so they hold while single player
 ## is paused. Host-only, like the combat and production they change. A second
 ## hit of the same buff refreshes it, keeping whichever amount is stronger.

@@ -166,7 +166,7 @@ func play_harvest_squash(from: Vector3 = Vector3.INF, strength: float = 1.0) -> 
 	_squash_tween = create_tween()
 	_squash_tween.tween_method(_apply_pop, 0.0, POP_SECONDS, POP_SECONDS)
 
-## How far this node leans under a blow; a field of crops only squashes.
+## How far this node leans under a blow.
 func _pop_tilt() -> float:
 	return POP_TILT
 

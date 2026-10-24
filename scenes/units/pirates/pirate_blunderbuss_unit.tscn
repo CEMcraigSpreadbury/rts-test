@@ -20,9 +20,10 @@ resource_type = ExtResource("7_gold")
 amount = 20
 
 [node name="Blunderbuss" instance=ExtResource("1_base")]
+move_speed = 2.9
 display_name = "Blunderbuss"
-max_health = 48
-attack_damage = 8
+max_health = 40
+attack_damage = 10
 attack_range = 9.0
 aggro_range = 10.0
 attack_cooldown = 2.4

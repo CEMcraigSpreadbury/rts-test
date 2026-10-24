@@ -6,8 +6,10 @@
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/pirates.png" id="4_palette"]
 
 [node name="VoodooPriestess" instance=ExtResource("1_base")]
+max_health = 42
+move_speed = 3.0
 display_name = "Voodoo Priestess"
-attack_damage = 11
+attack_damage = 13
 projectile_tint = Color(0.7, 0.45, 1, 1)
 figure_top = 1.15
 figure_model = ExtResource("2_fig")

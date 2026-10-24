@@ -1567,3 +1567,170 @@ def lightning_dragon(b, lod):
 	for piece in (_lightning_limbs(lod, g), _lightning_team(lod, pts, radii, frames), _lightning_head(lod, g)):
 		geo.merge(bm, piece)
 	return _grow(bm, g, LIGHTNING_DRAGON_SCALE)
+
+
+# --- kraken ------------------------------------------------------------------
+
+KRAKEN_SCALE = 1.6
+## The mantle: its centre (before growing, over the ground) and the axis it
+## leans back along; the face sits under its front.
+KRAKEN_MANTLE = Vector((0.0, 0.090, 0.600))
+KRAKEN_AXIS = Vector((0.0, 0.52, 0.85)).normalized()
+KRAKEN_MANTLE_R = (0.255, 0.265, 0.330)
+KRAKEN_FACE = Vector((0.0, -0.090, 0.390))
+
+
+def _curl_points(p, t, n, r0, sweep, steps):
+	"""A tentacle tip rolling up from `p` (heading `t`) toward the side `n`,
+	its radius shrinking from `r0` as it turns `sweep` radians; and the curl's
+	centre, for the suckers on its inside."""
+	t, n = Vector(t).normalized(), Vector(n).normalized()
+	c = Vector(p) + n * r0
+	pts = []
+	for i in range(1, steps + 1):
+		a = sweep * i / steps
+		r = r0 * (1.0 - 0.55 * i / steps)
+		pts.append(c - n * r * math.cos(a) + t * r * math.sin(a))
+	return pts, c
+
+
+def _tentacle(lod, path, r_root, curl_t, curl_n, curl_r, sweep=4.6, suckers=True):
+	"""A chunky tapering tentacle through `path`, its tip curled up (see
+	_curl_points), pale suckers set along the inside of the curl."""
+	body = _catmull([Vector(q) for q in path], 3)
+	tip, c = _curl_points(body[-1], curl_t, curl_n, curl_r, sweep, seg(lod, 9, 5))
+	pts = body + tip
+	n = len(pts)
+	radii = [max(r_root * (1.0 - 0.86 * (i / (n - 1)) ** 0.9), 0.006) for i in range(n)]
+	radii[-1] = 0.0
+	bm = geo.tube(pts, radii, seg(lod, 10, 6), row("fur"), sharp=SMOOTH)
+	if suckers and lod == 0:
+		for i in range(len(body) - 1, n - 2):
+			inward = (c - pts[i]).normalized()
+			r = radii[i]
+			geo.merge(bm, geo.disc(r * 0.55, r * 0.55, 7, row("fur_light"), dome=r * 0.18, depth=0.003),
+					geo.frame(pts[i] + inward * r * 0.86, inward, curl_t))
+	return bm
+
+
+def _kraken_legs(lod, g):
+	"""Six crawling tentacles splayed round the head, lying along the ground
+	and rolled up at the tips, and two raised to strike, hooked forward."""
+	bm = geo.new_bm()
+	root_z = g + 0.260
+	for side in (-1.0, 1.0):
+		for ang, reach in ((-62.0, 0.56), (-8.0, 0.62), (48.0, 0.56)):
+			a = math.radians(ang)
+			d = Vector((side * math.cos(a), math.sin(a), 0.0))
+			root = Vector((d.x * 0.120, 0.050 + d.y * 0.120, root_z))
+			path = [root, root + d * 0.170 + Vector((0.0, 0.0, 0.030)),
+					root + d * reach * 0.62 - Vector((0.0, 0.0, 0.150)),
+					Vector((root.x, root.y, g + 0.050)) + d * reach]
+			geo.merge(bm, _tentacle(lod, path, 0.085, d, (0.0, 0.0, 1.0), 0.090))
+		# The striker: up out of the front of the body, over and forward.
+		root = Vector((side * 0.160, -0.180, g + 0.300))
+		path = [root, root + Vector((side * 0.180, -0.110, 0.110)), root + Vector((side * 0.330, -0.180, 0.360)),
+				root + Vector((side * 0.370, -0.220, 0.580))]
+		geo.merge(bm, _tentacle(lod, path, 0.078, (side * 0.15, -0.35, 1.0), (side * -0.10, -1.0, -0.20), 0.085,
+				sweep=4.2))
+	return bm
+
+
+def _kraken_head(lod, g):
+	"""The big bulbous mantle leaning back over a round face, plum spots on
+	it, the shared big eyes under a heavy frowning brow, a curled siphon."""
+	bm = geo.new_bm()
+	M = KRAKEN_MANTLE + Vector((0.0, 0.0, g))
+	mantle = geo.ellipsoid(*KRAKEN_MANTLE_R, seg(lod, 16, 10), seg(lod, 9, 6), row("fur"), sharp=SMOOTH)
+	geo.transform(mantle, geo.frame(M, KRAKEN_AXIS, (0.0, 1.0, 0.0)))
+	geo.merge(bm, mantle)
+	F = KRAKEN_FACE + Vector((0.0, 0.0, g))
+	face = geo.ellipsoid(0.275, 0.245, 0.215, seg(lod, 16, 10), seg(lod, 8, 5), row("fur"), sharp=SMOOTH)
+	geo.translate(face, F)
+	geo.merge(bm, face)
+	skirt = geo.ellipsoid(0.230, 0.220, 0.090, seg(lod, 14, 9), 4, row("fur_dark"), sharp=SMOOTH)
+	geo.translate(skirt, (0.0, -0.020, g + 0.230))
+	geo.merge(bm, skirt)
+	tree = geo.bvh(mantle)
+	if lod == 0:
+		for x, y, z, rad in ((0.150, 0.180, 0.760, 0.040), (-0.170, 0.120, 0.700, 0.034), (0.050, 0.300, 0.840, 0.036),
+				(-0.080, 0.260, 0.900, 0.028), (0.210, 0.040, 0.600, 0.030), (-0.220, 0.020, 0.580, 0.036),
+				(0.110, 0.380, 0.640, 0.032), (-0.140, 0.330, 0.560, 0.028)):
+			p = Vector((x, y, z + g))
+			_decal(bm, tree, M + (p - M) * 3.0, M - p, rad, rad * 0.85, "fur_dark", lod=lod)
+	geo.merge(bm, animals._eyes(lod, face, F, 0.105, 0.030, rx=0.062, ry=0.074))
+	for side in (-1.0, 1.0):
+		brow = geo.tube([F + Vector((side * 0.040, -0.220, 0.135)), F + Vector((side * 0.110, -0.205, 0.150)),
+				F + Vector((side * 0.185, -0.160, 0.128))], [0.024, 0.028, 0.018], seg(lod, 7, 5), row("fur_dark"),
+				sharp=SMOOTH)
+		geo.merge(bm, brow)
+	siphon = geo.tube([F + Vector((0.205, -0.080, -0.030)), F + Vector((0.275, -0.100, -0.010)),
+			F + Vector((0.300, -0.090, 0.040))], [0.040, 0.034, 0.030], seg(lod, 8, 5), row("fur"), sharp=SMOOTH,
+			cap_end=row("fur_dark"))
+	geo.merge(bm, siphon)
+	return bm
+
+
+def _kraken_team(lod, g):
+	"""The team's pirate bandana over the mantle's crown, knotted at the back
+	with two tails, and a Jolly Roger in the team's colour on a pole lashed
+	behind, a bone-white skull and crossbones on both faces."""
+	bm = geo.new_bm()
+	M = KRAKEN_MANTLE + Vector((0.0, 0.0, g))
+	to_world = geo.frame(M, KRAKEN_AXIS, (0.0, 1.0, 0.0))
+	rx, ry, rz = KRAKEN_MANTLE_R
+	cap = geo.ellipsoid(rx + 0.012, ry + 0.012, rz + 0.012, seg(lod, 16, 10), seg(lod, 9, 6), row("team_cloth"),
+			sharp=SMOOTH)
+	# Cut level with the brow in front, lower behind, where it is knotted.
+	geo.delete_faces(cap, lambda f: f.calc_center_median().z < 0.120 - 0.120 * f.calc_center_median().y / ry)
+	geo.merge(bm, geo.flipped(cap, row("team_cloth_dark"), inset=0.006), to_world)
+	geo.merge(bm, cap, to_world)
+	knot = to_world @ Vector((0.0, ry + 0.010, 0.050))
+	ball = geo.ellipsoid(0.050, 0.040, 0.044, seg(lod, 8, 6), 4, row("team_cloth_dark"), sharp=SMOOTH)
+	geo.translate(ball, knot)
+	geo.merge(bm, ball)
+	for side in (-1.0, 1.0):
+		tail = [knot, knot + Vector((side * 0.050, 0.060, -0.040)), knot + Vector((side * 0.080, 0.110, -0.130)),
+				knot + Vector((side * 0.070, 0.150, -0.220))]
+		geo.merge(bm, _curl(tail, [0.036, 0.052, 0.050, 0.036], lod, "team_cloth", flatten=0.25,
+				up=(side * 0.4, 0.0, 1.0)))
+	# The Jolly Roger: a pole lashed up the back of the mantle.
+	foot = Vector((0.115, 0.330, g + 0.420))
+	top = Vector((0.130, 0.380, g + 1.330))
+	geo.merge(bm, geo.tube([foot, top], [0.018, 0.016], seg(lod, 7, 5), row("wood"), sharp=SMOOTH,
+			cap_end=row("wood")))
+	knob = geo.ellipsoid(0.030, 0.030, 0.030, seg(lod, 8, 5), 4, row("brass"), sharp=SMOOTH)
+	geo.translate(knob, top + Vector((0.0, 0.0, 0.020)))
+	geo.merge(bm, knob)
+	for z in (0.560, 0.640):
+		lash = geo.tube([Vector((0.0, 0.0, -0.012)), Vector((0.0, 0.0, 0.012))], [0.026, 0.026], seg(lod, 8, 5),
+				row("leather"), sharp=40)
+		geo.merge(bm, lash, Matrix.Translation(foot.lerp(top, (z - 0.420) / 0.910)))
+	flag = geo.plate([(0.0, 0.0), (0.400, 0.010), (0.340, -0.140), (0.410, -0.290), (0.0, -0.300)], 0.014,
+			row("team_cloth"), row("team_cloth"), row("team_cloth_dark"), sharp=40)
+	geo.rotate(flag, 90.0, 'Z')
+	geo.translate(flag, top + Vector((0.0, 0.016, -0.050)))
+	geo.merge(bm, flag)
+	for side in (-1.0, 1.0):
+		at = top + Vector((side * 0.009, 0.200, -0.190))
+		skull = geo.disc(0.062, 0.058, seg(lod, 10, 6), row("bone"), dome=0.003, depth=0.002)
+		geo.merge(bm, skull, geo.frame(at + Vector((0.0, 0.0, 0.020)), (side, 0.0, 0.0), (0.0, 0.0, 1.0)))
+		if lod == 0:
+			for dy in (-0.022, 0.022):
+				eye = geo.disc(0.014, 0.016, 6, row("eye"), dome=0.001, depth=0.001, simple=True)
+				geo.merge(bm, eye, geo.frame(at + Vector((side * 0.004, dy, 0.024)), (side, 0.0, 0.0),
+						(0.0, 0.0, 1.0)))
+		for k in (-1.0, 1.0):
+			bone = geo.box(0.006, 0.150, 0.022, row("bone"), sharp=40)
+			geo.rotate(bone, 35.0 * k, 'X')
+			geo.translate(bone, at + Vector((side * 0.004, 0.0, -0.060)))
+			geo.merge(bm, bone)
+	return bm
+
+
+def kraken(b, lod):
+	g = b.base_height
+	bm = geo.new_bm()
+	for piece in (_kraken_legs(lod, g), _kraken_head(lod, g), _kraken_team(lod, g)):
+		geo.merge(bm, piece)
+	return _grow(bm, g, KRAKEN_SCALE)

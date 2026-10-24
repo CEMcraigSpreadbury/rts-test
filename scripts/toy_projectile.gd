@@ -36,7 +36,7 @@ func _ready() -> void:
 			_build_shot([Vector3(-0.07, 0.03, 0.0), Vector3(0.07, -0.02, 0.05), Vector3(0.0, 0.06, -0.06),
 					Vector3(0.02, -0.06, 0.08)], 0.045)
 		Kind.CANNONBALL:
-			_build_shot([Vector3.ZERO], 0.17)
+			_build_shot([Vector3.ZERO], 0.28)
 		Kind.LASER:
 			_build_laser()
 		Kind.ROCKET:

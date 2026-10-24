@@ -106,7 +106,7 @@ func resolve_players() -> Dictionary:
 	if humans.is_empty():
 		humans.append(1)
 		if not Network.players.has(1):
-			Network.players[1] = {"name": "You", "color": Network.TEAM_COLORS[0], "ruler_index": 0, "ready": true}
+			Network.players[1] = {"name": "You", "color": Network.TEAM_COLORS[0], "ready": true}
 
 	var taken: Array = Network.players.keys()
 	var mapping: Dictionary = {}
@@ -137,7 +137,6 @@ func resolve_players() -> Dictionary:
 				"name": "%s (AI)" % slot.name if is_human_seat else String(slot.name),
 				"color": _slot_color(slot),
 				"team": slot.team,
-				"ruler_index": _slot_ruler(slot, i),
 				"ready": true,
 				"ai": true,
 				"difficulty": difficulty,
@@ -150,16 +149,6 @@ func resolve_players() -> Dictionary:
 
 func _slot_color(slot: ScenarioSlot) -> Color:
 	return Network.TEAM_COLORS[clampi(slot.color_index, 0, Network.TEAM_COLORS.size() - 1)]
-
-## A slot left on "random" picks from its own index rather than randi(), so
-## every machine resolves the same Ruler without being told.
-func _slot_ruler(slot: ScenarioSlot, slot_index: int) -> int:
-	var count := Ruler.list_all().size()
-	if count <= 0:
-		return 0
-	if slot.ruler_index < 0:
-		return slot_index % count
-	return mini(slot.ruler_index, count - 1)
 
 ## The lowest id from Network.FIRST_AI_PEER_ID up that isn't taken.
 func _free_peer_id(taken: Array) -> int:

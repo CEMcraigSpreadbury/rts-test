@@ -6,8 +6,9 @@
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="4_palette"]
 
 [node name="DrillBot" instance=ExtResource("1_base")]
+move_speed = 1.7
 display_name = "Drill Bot"
-max_health = 48
+max_health = 55
 attack_damage = 5
 figure_top = 0.82
 figure_model = ExtResource("2_fig")

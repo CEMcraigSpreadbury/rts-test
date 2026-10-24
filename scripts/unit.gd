@@ -299,7 +299,7 @@ func _resting_modulate() -> Color:
 	if _status_tint_until_ms > GameClock.msec():
 		base *= Color.WHITE.lerp(_status_tint, _STATUS_TINT_STRENGTH)
 	if _buff_tint_until_ms > GameClock.msec():
-		base *= Color.WHITE.lerp(_buff_tint, _BUFF_TINT_STRENGTH)
+		base *= Color.WHITE.lerp(_buff_tint, _buff_tint_strength)
 	return base
 
 ## Called from both team_tint's and owner_peer_id's setters (order of property
@@ -756,7 +756,7 @@ func _play_sprite_pop() -> void:
 ## time, slow and stun parts of an Ability are used here.
 @export var on_hit_ability: Ability = null
 ## Strips every timed buff off whatever it hits (the Dark Elf Spellstealer),
-## which is what makes it the answer to a Ruler's power buffs.
+## which is what makes it the answer to a faction power's buffs.
 @export var strips_buffs: bool = false
 ## Heals nearby allies for this much every heal_aura_interval seconds (the
 ## Star Wanderer Priestess). 0 disables it.
@@ -1191,10 +1191,11 @@ const STUN_STAR_SPIN_SPEED: float = 5.0
 
 var _status_tint: Color = Color.WHITE
 var _status_tint_until_ms: int = 0
-## A Ruler power's buff (or Curse) on this unit — lighter than the status
+## A faction power's buff (or Curse) on this unit — lighter than the status
 ## tint, so it reads as a wash of colour rather than a burn or chill.
 const _BUFF_TINT_STRENGTH: float = 0.3
 var _buff_tint: Color = Color.WHITE
+var _buff_tint_strength: float = _BUFF_TINT_STRENGTH
 var _buff_tint_until_ms: int = 0
 var _dot_until_ms: int = 0
 var _stun_until_ms: int = 0
@@ -1223,10 +1224,13 @@ func show_status_effects(dot_seconds: float, slow_seconds: float, stun_seconds: 
 		_stun_stars.visible = true
 
 ## Every peer, relayed by WorldFeedback.relay_buff_tints.
-func show_buff_tint(color: Color, seconds: float) -> void:
+## `strength` 0..1: how far the whole body goes to `color` (Overclock turns
+## them properly red; most powers only wash them with it).
+func show_buff_tint(color: Color, seconds: float, strength: float = _BUFF_TINT_STRENGTH) -> void:
 	if _death_playing:
 		return
 	_buff_tint = color
+	_buff_tint_strength = strength
 	_buff_tint_until_ms = maxi(_buff_tint_until_ms, GameClock.msec() + int(seconds * 1000.0))
 	_update_team_tint_visual()
 
@@ -1562,8 +1566,6 @@ var race_clockwork: bool = false
 var wind_left: float = 0.0
 var race_wind_bonus: float = 0.0
 var race_windup: float = 0.0
-## Health a second out of combat from his Lord (a Mystic's, see Lords).
-var lord_regen: float = 0.0
 
 ## The sim block (formation) he marches in when it has a few men in it and he
 ## is not in a regiment, else -1: a loose block gets a standard too (see
@@ -2649,7 +2651,7 @@ func apply_zone_tick(ability: Ability, source) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.linger_damage_per_second > 0:
-		take_damage(_warded(ability.linger_damage_per_second), source if is_instance_valid(source) else null, false)
+		take_damage(ability.linger_damage_per_second, source if is_instance_valid(source) else null, false)
 	if status_activity == Activity.DEAD:
 		return
 	var slow_seconds := 0.0
@@ -2669,7 +2671,7 @@ func apply_ability_hit(ability: Ability, source) -> void:
 	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
 		return
 	if ability.area_damage > 0:
-		take_damage(_warded(ability.area_damage), source if is_instance_valid(source) else null, false)
+		take_damage(ability.area_damage, source if is_instance_valid(source) else null, false)
 	if status_activity == Activity.DEAD:
 		return
 	if ability.dot_damage_per_second > 0 and ability.dot_duration > 0.0:
@@ -2702,7 +2704,7 @@ func _tick_status_effects(delta: float) -> void:
 		if dot["ticks_left"] <= 0:
 			_dots.remove_at(i)
 		var source = dot["source"]
-		take_damage(_warded(dot["dps"]), source if is_instance_valid(source) else null, false)
+		take_damage(dot["dps"], source if is_instance_valid(source) else null, false)
 		if status_activity == Activity.DEAD:
 			_dots.clear()
 			return
@@ -2710,7 +2712,7 @@ func _tick_status_effects(delta: float) -> void:
 ## Host-only: when this unit last took damage — Research's out-of-combat
 ## regeneration waits on it.
 var last_damaged_msec: int = -100000
-## Host-only Ruler power effects currently on this unit.
+## Host-only power effects currently on this unit.
 var buffs := TimedBuffs.new()
 ## Host-only: spawned by a power (Muster) rather than trained — reserves no
 ## population and is worth nothing to its killer.
@@ -2738,13 +2740,9 @@ func heal(amount: int) -> void:
 func is_monster() -> bool:
 	return not abilities.is_empty()
 
-## A monster's cooldown shortened by its owner's research (Spirit Link).
 func ability_cooldown(ability: Ability) -> float:
-	if not is_monster():
-		return ability.cooldown
-	return ability.cooldown * (1.0 - Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_COOLDOWN_REDUCTION))
+	return ability.cooldown
 
-## Ability damage taken, after this unit's owner's Warding.
 ## --- Cavalry charge ---
 
 ## Ready to charge, with its target (its own, or its block's) close enough to
@@ -2832,6 +2830,25 @@ func receive_charge(charger: Unit) -> void:
 		_stun_remaining = maxf(_stun_remaining, down)
 		status_applied.emit(0.0, 0.0, down, CHARGE_STUN_COLOR)
 
+## Host only: a power's blow (a trampling charge, a ship's bow wave, a blast).
+## Thrown `distance` along `direction` and down for `stun` seconds after he
+## lands; siege and monsters are too heavy to throw and are only stunned.
+func power_knock(direction: Vector3, distance: float, stun: float) -> void:
+	if not is_multiplayer_authority() or status_activity == Activity.DEAD:
+		return
+	wake()
+	var heavy := armor_class == ArmorClass.SIEGE or armor_class == ArmorClass.MONSTER
+	direction.y = 0.0
+	var thrown_for := 0.0
+	if not heavy and distance > 0.0 and direction.length_squared() > 0.0001:
+		_knockback_velocity = direction.normalized() * (2.0 * distance / CHARGE_THROW_TIME)
+		_knockback_remaining = CHARGE_THROW_TIME
+		thrown_for = CHARGE_THROW_TIME
+		thrown.emit(CHARGE_THROW_HEIGHT, CHARGE_THROW_TIME)
+	if stun > 0.0:
+		_stun_remaining = maxf(_stun_remaining, thrown_for + stun)
+		status_applied.emit(0.0, 0.0, thrown_for + stun, CHARGE_STUN_COLOR)
+
 ## --- Spear brace ---
 
 ## Whether `charger` runs onto this unit's spears: any spear unit, from any
@@ -2876,10 +2893,6 @@ func _flank_multiplier(from_position: Vector3) -> float:
 	if d >= FLANK_ARC_DOT:
 		return 1.0
 	return FLANK_DAMAGE_MULTIPLIER if d > REAR_ARC_DOT else REAR_DAMAGE_MULTIPLIER
-
-func _warded(amount: int) -> int:
-	var reduction := Research.bonus(owner_peer_id, ResearchNode.Stat.ABILITY_DAMAGE_REDUCTION)
-	return maxi(roundi(amount * (1.0 - reduction)), 1) if reduction > 0.0 else amount
 
 func _slow_multiplier() -> float:
 	return 1.0 - _slow_fraction if _slow_remaining > 0.0 else 1.0
@@ -3416,6 +3429,8 @@ func _process(delta: float) -> void:
 	PerfStats.add_section(&"unit visuals", Time.get_ticks_usec() - start)
 
 func _process_visuals(delta: float) -> void:
+	if _ghost_mesh != null:
+		_update_ghost(delta)
 	_update_health_bar_visual()
 	_update_status_visuals(delta)
 	## Driven off the sprite's own already-cross-peer-correct animation state
@@ -3469,6 +3484,78 @@ const FIGURE_STAR_ROOM: float = 0.15
 var _drawn_as_figure: bool = false
 var _sprite_ring_mesh: Mesh = null
 var _sprite_health_bar_y: float = 0.0
+
+## Every peer: a Ghost Crew ghost is drawn on its own rather than with the
+## other figures, its whole figure in one see-through `material`, floating and
+## turning to face the way it drifts.
+var _ghost_mesh: MeshInstance3D = null
+var _ghost_last_position: Vector3 = Vector3.INF
+var _ghost_time: float = 0.0
+const GHOST_FLOAT: float = 0.3
+const GHOST_BOB: float = 0.12
+const GHOST_LUNGE: float = 0.45
+
+func show_as_ghost(material: Material) -> void:
+	var mesh := figure_mesh(figure_model)
+	if _ghost_mesh != null or mesh == null:
+		return
+	if Main.figure_batcher_current != null:
+		Main.figure_batcher_current.remove_figure(self, false)
+		for wheel in _wheel_figures:
+			Main.figure_batcher_current.remove_figure(wheel, false)
+	if Main.sprite_batcher_current != null:
+		Main.sprite_batcher_current.remove_sprite(sprite)
+	sprite.visible = false
+	_drawn_as_figure = false
+	_ghost_mesh = MeshInstance3D.new()
+	_ghost_mesh.mesh = mesh
+	_ghost_mesh.material_override = material
+	_ghost_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_ghost_mesh)
+	_ghost_mesh.top_level = true
+	_ghost_mesh.global_position = global_position
+	_ghost_time = randf() * TAU
+
+func _update_ghost(delta: float) -> void:
+	_ghost_time += delta
+	var drift := global_position - _ghost_last_position if _ghost_last_position != Vector3.INF else Vector3.ZERO
+	_ghost_last_position = global_position
+	drift.y = 0.0
+	var yaw := _ghost_mesh.rotation.y
+	if drift.length_squared() > 0.000025:
+		yaw = lerp_angle(yaw, atan2(drift.x, drift.z), 1.0 - exp(-8.0 * delta))
+	elif attack_target != null and is_instance_valid(attack_target):
+		var to: Vector3 = attack_target.global_position - global_position
+		yaw = lerp_angle(yaw, atan2(to.x, to.z), 1.0 - exp(-8.0 * delta))
+	## Its moves, off the hidden sprite's clip the way a figure's are: a lunge
+	## along its facing on each swing or shot, a lift for a cast, a quicker
+	## bob on the move.
+	var lunge := 0.0
+	var pitch := 0.0
+	var lift := 0.0
+	var anim := base_animation(sprite.animation)
+	var frames := sprite.sprite_frames.get_frame_count(sprite.animation) if sprite.sprite_frames != null else 0
+	var p := clampf((sprite.frame + sprite.frame_progress) / maxf(frames, 1.0), 0.0, 1.0) if sprite.is_playing() else 0.0
+	match anim:
+		"attack":
+			var strike := sin(clampf((p - 0.3) / 0.4, 0.0, 1.0) * PI)
+			var windup := sin(clampf(p / 0.3, 0.0, 1.0) * PI) if p < 0.3 else 0.0
+			lunge = strike * GHOST_LUNGE - windup * GHOST_LUNGE * 0.3
+			pitch = strike * 0.45 - windup * 0.2
+		"cast":
+			lift = sin(p * PI) * 0.35
+			pitch = -sin(p * PI) * 0.2
+		"walk":
+			lift = absf(sin(_ghost_time * 9.0)) * 0.1
+	var facing := Vector3(sin(yaw), 0.0, cos(yaw))
+	var sink := 0.0
+	if status_activity == Activity.DEAD:
+		## Fades down into the ground as it goes.
+		sink = minf(_ghost_mesh.get_meta(&"sink", 0.0) + delta * 1.5, 2.0)
+		_ghost_mesh.set_meta(&"sink", sink)
+		_ghost_mesh.scale = Vector3.ONE * maxf(1.0 - sink * 0.5, 0.01)
+	_ghost_mesh.global_position = global_position + facing * lunge 			+ Vector3.UP * (GHOST_FLOAT + sin(_ghost_time * 2.6) * GHOST_BOB + lift - sink)
+	_ghost_mesh.rotation = Vector3(sin(_ghost_time * 1.9) * 0.06 + pitch, yaw, 0.0)
 
 ## Every unit that has a figure drawn as it, or (off) as its sprite.
 static func set_figures(on: bool, tree: SceneTree) -> void:
@@ -3833,9 +3920,8 @@ func _tick_gathering(delta: float) -> void:
 
 	gather_timer += delta
 	var interval: float = target_resource.resource_type.gather_interval / maxf(gather_level, 1.0) \
-			/ (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.GATHER_SPEED) + buffs.amount(ResearchNode.Buff.GATHER_SPEED) \
-				+ (race_gather if target_resource.resource_type != Research.RESOURCE else 0.0)) \
-			/ _reading_speed(target_resource)
+			/ (1.0 + buffs.amount(ResearchNode.Buff.GATHER_SPEED) \
+				+ (race_gather if target_resource.resource_type != Research.RESOURCE else 0.0))
 	if gather_timer >= interval:
 		gather_timer = 0.0
 		var amount: int = target_resource.resource_type.gather_amount_per_tick * gather_level
@@ -3854,13 +3940,6 @@ func _tick_gathering(delta: float) -> void:
 	if status_carried_amount >= carry_capacity or not is_instance_valid(target_resource) \
 			or (status_carried_amount > 0 and not target_resource.is_yielding()):
 		_head_to_dropoff()
-
-## How much faster than usual this unit reads at `node` (Guilds, the old
-## trickle node, now speeds Library reading instead); 1 anywhere else.
-func _reading_speed(node: Gatherable) -> float:
-	if node.resource_type != Research.RESOURCE:
-		return 1.0
-	return 1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.RESEARCH_TRICKLE)
 
 func _head_to_dropoff() -> void:
 	if status_carried_amount <= 0:
@@ -4003,15 +4082,10 @@ func get_body_bulk() -> float:
 	return maxf(0.0, get_body_radius() - NavigationBlockers.UNIT_BODY_RADIUS)
 
 ## Live Blacksmith weapon-upgrade bonus on top of the exported stat (computed
-## live, not baked into the field itself) — then the owner's research: more against buildings
-## (Siegebreakers), more while badly hurt (Relentless).
+## live, not baked into the field itself) — then buffs, race traits and Lords.
 func _effective_attack_damage(target: Node3D = null) -> int:
 	var damage := attack_damage + UnitUpgrades.get_weapon_bonus(owner_peer_id, unit_category)
 	var extra := 0.0
-	if target is ProductionBuilding:
-		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.BUILDING_DAMAGE)
-	if status_current_health < max_health * Research.LOW_HEALTH_FRACTION:
-		extra += Research.bonus(owner_peer_id, ResearchNode.Stat.LOW_HEALTH_DAMAGE)
 	extra += buffs.amount(ResearchNode.Buff.DAMAGE)
 	if race_wounded_bonus > 0.0 and target is Unit \
 			and target.status_current_health < target.max_health * RaceTraits.WOUNDED_FRACTION:
@@ -4026,10 +4100,8 @@ func _effective_attack_damage(target: Node3D = null) -> int:
 	if can_gather and target is Unit and target.hunt_meat > 0:
 		result = roundi(result * HUNTING_DAMAGE)
 	## Realm: an army its side can't feed fights weaker (RealmEconomy).
-	if MatchRules.realm():
-		var main := get_tree().current_scene
-		if main is Main and main.realm_economy != null and main.realm_economy.is_starving(owner_peer_id):
-			result = maxi(roundi(result * STARVING_DAMAGE), 1)
+	if starving:
+		result = maxi(roundi(result * STARVING_DAMAGE), 1)
 	return result
 
 ## Game that never starts a fight (deer, fox, boar): left alone unless a unit
@@ -4040,8 +4112,15 @@ func is_harmless_game() -> bool:
 ## A villager's blows against game: hunting is work, not a brawl.
 const HUNTING_DAMAGE: float = 3.0
 
-## Damage dealt by a starving army's men, as a share.
+## Damage dealt by a starving army's men, and their pace, as shares.
 const STARVING_DAMAGE: float = 0.8
+const STARVING_SPEED: float = 0.5
+## Host only: its side can't feed it and it eats (Robots don't). Set by
+## RealmEconomy each upkeep charge.
+var starving: bool = false
+
+func starving_speed() -> float:
+	return STARVING_SPEED if starving else 1.0
 
 func _head_to_target() -> void:
 	if not _is_target_alive(attack_target) or (_in_hold_fight() and not _hold_can_reach(attack_target)):
@@ -4762,6 +4841,8 @@ func _die(attacker: Node3D = null) -> void:
 		main.realm_economy.award_hunt(self, attacker)
 	if main is Main and main.lords != null:
 		main.lords.on_death(self, attacker)
+	if main is Main and main.power_effects != null:
+		main.power_effects.on_unit_died(self)
 	if main is Main and main.research != null:
 		var credit: int = power_credit_peer if Research.now() - power_credit_time <= Research.POWER_CREDIT_SECONDS else 0
 		main.research.award_kill(self, attacker, credit)
@@ -4956,7 +5037,7 @@ func _sim_slide() -> void:
 	if _unclamped_time > 0.0:
 		_unclamped_time -= delta
 		flags |= ArmySim.MOTION_UNCLAMPED
-	var speed := move_speed * _slow_multiplier() * _buff_speed_multiplier() * RoadNet.speed_at(global_position)
+	var speed := move_speed * _slow_multiplier() * _buff_speed_multiplier() * starving_speed() * RoadNet.speed_at(global_position)
 	## A charge's knockback carries a man off his place for its moment.
 	var solo_walking := sim_solo and not sim_follow and _solo_walking()
 	if (sim_follow or solo_walking) and flags == 0 and _knockback_remaining <= 0.0:

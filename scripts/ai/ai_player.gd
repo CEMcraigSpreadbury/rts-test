@@ -12,7 +12,7 @@ extends Node
 ## Split into parts that each own one job, run in priority order every think
 ## (see _think): AiEconomy (houses, villagers, worker jobs), AiBaseBuilder
 ## (build order, site finding, rally points), AiMilitary (army production),
-## AiCombat (defend/attack/abilities), AiResearch (Ruler tree and powers).
+## AiCombat (defend/attack/abilities), AiResearch (faction powers).
 ## Spending is prioritised through `reserved`: a higher-priority want that
 ## can't be afforded yet sets its cost aside, and everything after it only
 ## spends what's left, so the army never starves the next House.

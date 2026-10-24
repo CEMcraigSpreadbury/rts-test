@@ -20,9 +20,9 @@ amount = 25
 
 [node name="AnchorBrute" instance=ExtResource("1_base")]
 display_name = "Anchor Brute"
-max_health = 85
-attack_damage = 10
-move_speed = 2.0
+max_health = 70
+attack_damage = 11
+move_speed = 2.4
 figure_motion = 6
 figure_top = 0.9
 damage_type = 5

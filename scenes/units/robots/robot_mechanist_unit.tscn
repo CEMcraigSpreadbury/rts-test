@@ -6,6 +6,8 @@
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="4_palette"]
 
 [node name="GrandMechanist" instance=ExtResource("1_base")]
+move_speed = 2.7
+max_health = 300
 display_name = "Grand Mechanist"
 figure_top = 1.05
 figure_model = ExtResource("2_fig")

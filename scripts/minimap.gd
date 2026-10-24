@@ -62,7 +62,8 @@ var _redraw_timer: float = 0.0
 
 ## FogOfWar.fog_texture is one "how explored" byte per cell rather than a
 ## colour, so the terrain and fog are drawn by this child through a shader
-## that turns it into the same colours the 3D fog uses. Behind the parent, so
+## that dims the terrain picture: unexplored ground is shown darker rather than
+## black, so the map's layout is always readable. Behind the parent, so
 ## the dots drawn in _draw go on top. The fog texture updates in place, so this
 ## needs no redrawing of its own.
 const FOG_SHADER_CODE: String = """
@@ -72,8 +73,8 @@ uniform sampler2D terrain_tex : source_color, filter_linear;
 uniform bool use_terrain_tex = false;
 void fragment() {
 	float explored = texture(TEXTURE, UV).r;
-	vec3 fog_rgb = vec3(5.0, 8.0, 5.0) / 255.0 * explored;
-	float fog_alpha = mix(1.0, 0.6, explored);
+	vec3 fog_rgb = vec3(5.0, 8.0, 5.0) / 255.0;
+	float fog_alpha = mix(0.65, 0.3, explored);
 	vec3 ground = use_terrain_tex ? texture(terrain_tex, UV).rgb : terrain_color.rgb;
 	COLOR = vec4(mix(ground, fog_rgb, fog_alpha), 1.0);
 }

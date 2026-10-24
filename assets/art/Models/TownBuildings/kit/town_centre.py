@@ -123,7 +123,7 @@ for x in (-ROOF_X / 2 - 0.02, ROOF_X / 2 + 0.02):
 				rot=(PITCH * -s, 0, 0))
 	box((0.1, 0.12, 0.7), (x + (0.03 if x > 0 else -0.03), 0, WALL_TOP + 0.45), 'Wood')
 	box((0.1, 0.3, 0.3), (x + (0.03 if x > 0 else -0.03), 0, WALL_TOP + 0.55), 'Window', bevel=0.02)
-flag(0, 0, RIDGE + 0.2, 1.2)
+flag(0, 0, RIDGE + 0.2, 1.2, wave='anim_sway_24_28_flag0')
 
 # --- corner towers ----------------------------------------------------------
 TW = 1.0
@@ -163,7 +163,7 @@ for tx in (-1.85, 1.85):
 					box((0.28, 0.28, 0.3), (tx - off + i * off, ty - off + j * off, top + 0.15),
 							'Stone' if (i + j) % 2 else 'StoneDark', bevel=0.05)
 			box((TW + 0.12, TW + 0.12, 0.16), (tx, ty, TOWER_TOP - 0.2), 'TeamColor', bevel=0.04)
-			flag(tx, ty, top, 1.1)
+			flag(tx, ty, top, 1.1, wave='anim_sway_20_%d_flag%d' % (22 if tx < 0 else 25, 1 if tx < 0 else 2))
 			banner(0.55, 0.75, face(tx, ty - TW / 2 - 0.04, TOWER_TOP - 0.36, '-y'))
 		else:
 			# A tall team-blue spire with a gold finial.

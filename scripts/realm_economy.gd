@@ -14,8 +14,9 @@ extends Node
 ## can show what food really does a minute: income less upkeep.
 ##
 ## An army that can't be fed isn't killed by it: the side is marked starving
-## (is_starving), and its men fight weaker (Unit.STARVING_DAMAGE). Unpaid wages just leave the
-## purse at zero for now.
+## (is_starving), and every unit of it that eats fights weaker and marches
+## slower (Unit.starving), tinted HUNGRY_TINT so it shows. Unpaid wages just
+## leave the purse at zero for now.
 ##
 ## Also pays food for hunting.
 ##
@@ -50,6 +51,8 @@ const ELITE_POPULATION: int = 2
 const GOLD_PER_ELITE_POPULATION: float = 1.0
 ## What each side starts a Realm match with, on top of Main.STARTING_RESOURCES.
 const STARTING_FOOD: int = 200
+## The wash a starving unit wears.
+const HUNGRY_TINT := Color(0.55, 0.75, 0.25)
 
 var main: Main
 
@@ -62,9 +65,10 @@ const REPLENISH_SAFE_RADIUS: float = 20.0
 var _replenish_timer: float = REPLENISH_SECONDS
 
 var _timer: float = UPKEEP_INTERVAL
-## peer_id -> fractional food / gold owed but not yet charged.
+## peer_id -> fractional food / gold / oil owed but not yet charged.
 var _food_carry: Dictionary = {}
 var _gold_carry: Dictionary = {}
+var _oil_carry: Dictionary = {}
 ## peer_id -> true while their army goes hungry. Host only.
 var _starving: Dictionary = {}
 ## peer_id -> Vector2(food, gold) per minute at the last charge. Host only.
@@ -124,7 +128,8 @@ static func upkeep_of(unit: Unit) -> Vector2:
 		return Vector2(0.0, VILLAGER_FOOD * ROBOT_OIL) if unit.race_clockwork else Vector2(VILLAGER_FOOD, 0.0)
 	var food: float = unit.population_cost * FOOD_PER_POPULATION
 	var gold: float = unit.population_cost * GOLD_PER_ELITE_POPULATION if unit.population_cost >= ELITE_POPULATION else 0.0
-	## Robots eat nothing; they are kept oiled with gold instead, at half the rate.
+	## Robots eat nothing; they are kept oiled instead, at half the rate: gold,
+	## or spare food (_charge_oil).
 	if unit.race_clockwork:
 		return Vector2(0.0, gold + food * ROBOT_OIL)
 	return Vector2(food, gold)
@@ -145,6 +150,10 @@ func _physics_process(delta: float) -> void:
 		rates[peer_id] = Vector2.ZERO
 	## peer_id -> population that eats.
 	var heads: Dictionary = {}
+	## peer_id -> the share of its gold upkeep that is Robots' oil (see _charge_oil).
+	var oil: Dictionary = {}
+	## Units that eat, to be told whether they are fed.
+	var eaters: Array[Unit] = []
 	for node in get_tree().get_nodes_in_group(&"units"):
 		var unit := node as Unit
 		if unit == null or not rates.has(unit.owner_peer_id):
@@ -153,16 +162,43 @@ func _physics_process(delta: float) -> void:
 		if upkeep == Vector2.ZERO:
 			continue
 		rates[unit.owner_peer_id] += upkeep
+		if upkeep.x > 0.0:
+			eaters.append(unit)
+		if unit.race_clockwork:
+			oil[unit.owner_peer_id] = float(oil.get(unit.owner_peer_id, 0.0)) + upkeep.y
 		heads[unit.owner_peer_id] = int(heads.get(unit.owner_peer_id, 0)) + unit.population_cost
 	for peer_id in rates:
-		rates[peer_id] *= growth_multiplier(int(heads.get(peer_id, 0)))
+		var growth: float = growth_multiplier(int(heads.get(peer_id, 0)))
+		rates[peer_id] *= growth
+		if oil.has(peer_id):
+			oil[peer_id] *= growth
 	_rates = rates
 	for peer_id in rates:
 		var rate: Vector2 = rates[peer_id]
+		var robot_oil: float = oil.get(peer_id, 0.0)
 		var fed := _charge(peer_id, FOOD, rate.x, _food_carry)
-		_charge(peer_id, GOLD, rate.y, _gold_carry)
+		_charge(peer_id, GOLD, rate.y - robot_oil, _gold_carry)
+		_charge_oil(peer_id, robot_oil)
 		_starving[peer_id] = not fed
 		_send(peer_id, roundi(rate.x), roundi(rate.y), not fed, roundi(food_income_per_minute(peer_id)))
+	_mark_starving(eaters)
+
+## Tells every unit that eats whether its side fed it, re-pacing the blocks
+## when that changed, and keeps the hungry ones tinted until the next charge.
+func _mark_starving(eaters: Array[Unit]) -> void:
+	var changed := false
+	var hungry: Array = []
+	for unit in eaters:
+		var now_starving: bool = _starving.get(unit.owner_peer_id, false)
+		if unit.starving != now_starving:
+			unit.starving = now_starving
+			changed = true
+		if now_starving:
+			hungry.append(unit)
+	if changed and main.army_bridge != null:
+		main.army_bridge.refresh_block_speeds()
+	if not hungry.is_empty() and main.feedback != null:
+		main.feedback.relay_buff_tints(hungry, HUNGRY_TINT, UPKEEP_INTERVAL + 0.5)
 
 ## Takes one interval's worth of `per_minute` from the stockpile. False when
 ## there wasn't enough to cover it (what there was is still taken).
@@ -179,6 +215,24 @@ func _charge(peer_id: int, type: ResourceType, per_minute: float, carry: Diction
 	if cost.amount > 0:
 		ResourceStockpile.spend(peer_id, [cost] as Array[ResourceCost])
 	return held >= whole
+
+## Robots' oil is gold upkeep that food can pay too: after the side's
+## recruits have eaten, spare food goes on oil first, then gold. So a
+## Robot side's Charge Pads and Granaries are never wasted.
+func _charge_oil(peer_id: int, per_minute: float) -> void:
+	var owed: float = per_minute * UPKEEP_INTERVAL / 60.0 + float(_oil_carry.get(peer_id, 0.0))
+	var whole: int = floori(owed)
+	_oil_carry[peer_id] = owed - whole
+	if whole <= 0:
+		return
+	var from_food: int = mini(whole, ResourceStockpile.get_amount(peer_id, FOOD))
+	for pair in [[FOOD, from_food], [GOLD, mini(whole - from_food, ResourceStockpile.get_amount(peer_id, GOLD))]]:
+		if pair[1] <= 0:
+			continue
+		var cost := ResourceCost.new()
+		cost.resource_type = pair[0]
+		cost.amount = pair[1]
+		ResourceStockpile.spend(peer_id, [cost] as Array[ResourceCost])
 
 func _send(peer_id: int, food: int, gold: int, starving: bool, income: int) -> void:
 	var state := [food, gold, starving, income]

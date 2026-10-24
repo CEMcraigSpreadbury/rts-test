@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "Royal Volley"
+description = "The sky goes dark with arrows over a wide area. Shreds massed infantry, glances off heavy armour."
+glyph = &"hum_volley"
+tier = 1
+cost = 20
+cooldown = 90.0
+radius = 10.0
+telegraph = 1.2
+set_piece = &"volley"
+effect_color = Color(0.95, 0.85, 0.55, 1)

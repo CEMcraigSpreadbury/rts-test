@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "Overclock"
+description = "Your units in the area run red-hot: much faster attacks and movement for 12s, then they seize up for 4s."
+glyph = &"efficient_workshops"
+tier = 1
+cost = 20
+cooldown = 90.0
+radius = 9.0
+set_piece = &"overclock"
+buffs = {1: 0.7, 3: 0.45}
+effect_color = Color(1, 0.4, 0.2, 1)

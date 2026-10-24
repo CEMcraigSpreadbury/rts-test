@@ -20,6 +20,7 @@
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/PirateDeckhand_carry_gold_LOD1.glb" id="f6"]
 
 [node name="Deckhand" instance=ExtResource("1_base")]
+move_speed = 4.1
 display_name = "Deckhand"
 figure_top = 0.8
 figure_model = ExtResource("2_fig")

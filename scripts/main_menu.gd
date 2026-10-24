@@ -4,7 +4,7 @@ const LOBBY_SCENE_PATH: String = "res://scenes/lobby.tscn"
 
 var available_maps: Array[MapInfo] = MapInfo.list_all()
 
-## swatch, name, colour, race, ruler, difficulty, remove. A human row leaves the
+## swatch, name, colour, race, difficulty, remove. A human row leaves the
 ## last two empty rather than omitting them, so every row is the same shape and
 ## the panel's width never depends on who is in it.
 const PLAYER_COLUMNS: int = 7
@@ -32,6 +32,7 @@ var _add_ai_button: Button
 ## The campaign's mission list, built only when there is a campaign to show.
 var _campaign_menu: CampaignMenu = null
 var _credits: CreditsScreen
+var _races: RacesScreen
 ## The first-launch "play the tutorial?" panel, or null once it has been answered.
 var _tutorial_offer: PanelContainer = null
 
@@ -54,6 +55,7 @@ func _ready() -> void:
 	Network.player_updated.connect(_refresh_players.unbind(1))
 	Network.player_disconnected.connect(_refresh_players.unbind(2))
 	_build_campaign_button()
+	_build_races_button()
 	_build_credits()
 	map_select.visible = false
 	options_menu.visible = false
@@ -154,6 +156,33 @@ func _on_campaign_menu_closed() -> void:
 	_campaign_menu.get_parent().visible = false
 	menu.visible = true
 
+## --- Races ---
+
+## A Races entry under Single Player: each people's playstyle, trait and army.
+func _build_races_button() -> void:
+	_races = RacesScreen.new()
+	_races.closed.connect(_on_races_closed)
+	_centre_panel(_races)
+
+	var button := Button.new()
+	button.name = "RacesButton"
+	button.text = "Races"
+	button.theme_type_variation = &"NavButton"
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	button.pressed.connect(_on_races_pressed)
+	menu.add_child(button)
+	menu.move_child(button, $Menu/SinglePlayerButton.get_index() + 1)
+
+func _on_races_pressed() -> void:
+	menu.visible = false
+	_races.get_parent().visible = true
+	_races.open()
+
+func _on_races_closed() -> void:
+	_races.get_parent().visible = false
+	menu.visible = true
+
 ## --- First launch ---
 
 ## Asked once, the first time the menu opens, unless the tutorial (the
@@ -187,7 +216,7 @@ func _offer_tutorial() -> void:
 	play.primary = true
 	play.pressed.connect(func():
 		_close_tutorial_offer()
-		CampaignMenu.launch(tutorial, Network.campaign_difficulty, 0))
+		CampaignMenu.launch(tutorial, Network.campaign_difficulty))
 	shell.footer.add_child(play)
 
 	_centre_panel(_tutorial_offer)
@@ -250,7 +279,7 @@ func _on_start_pressed() -> void:
 	if _selected_map_index() < 0 or not Network.can_start_match():
 		return
 	Network.set_match_settings(_settings_row.get_mode(), _settings_row.get_target())
-	Network.resolve_random_rulers()
+	Network.resolve_random_races()
 	SceneLoader.change_scene(available_maps[_selected_map_index()].scene_path)
 
 func _show_map_default(mode: int) -> void:
@@ -341,14 +370,6 @@ func _add_player_cells(peer_id: int) -> void:
 	race_option.item_selected.connect(func(i: int): pick_race.call(race_option.get_item_id(i) - 1))
 	ModalShell.bound(race_option, COL_PICKER)
 	row.add_child(race_option)
-
-	var ruler_option := RulerPicker.new(data.get("ruler_index", 0))
-	if Network.is_ai(peer_id):
-		ruler_option.ruler_picked.connect(func(i): Network.set_ai_ruler(peer_id, i))
-	else:
-		ruler_option.ruler_picked.connect(Network.set_my_ruler)
-	ModalShell.bound(ruler_option, COL_PICKER)
-	row.add_child(ruler_option)
 
 	if not Network.is_ai(peer_id):
 		## The two AI-only columns still take their width, so the pickers above

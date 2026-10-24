@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "Charge of the Old Kings"
+description = "Drag a line: a row of spectral knights thunders down it, trampling and scattering everything in the way."
+glyph = &"charge"
+tier = 2
+cost = 40
+cooldown = 150.0
+radius = 7.0
+aim = 1
+line_length = 44.0
+line_width = 11.0
+telegraph = 1.5
+set_piece = &"charge"
+effect_color = Color(0.6, 0.85, 1, 1)

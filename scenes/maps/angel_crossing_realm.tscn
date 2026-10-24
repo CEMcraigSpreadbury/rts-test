@@ -2123,34 +2123,34 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -81.13118, -0.2147328, -30.96
 [node name="Objective3" parent="Objectives" unique_id=1892500983 instance=ExtResource("14_vx0qp")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 88.80472, -0.5831128, 46.666016)
 
-[node name="Objective4" parent="Objectives" unique_id=334163322 instance=ExtResource("14_vx0qp")]
+[node name="Objective4" parent="Objectives" unique_id=334163322 instance=ExtResource("14_vx0qp") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.568909, -0.029986795, -60.385925)
 
-[node name="Objective5" parent="Objectives" unique_id=1901560089 instance=ExtResource("14_vx0qp")]
+[node name="Objective5" parent="Objectives" unique_id=1901560089 instance=ExtResource("14_vx0qp") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.6326904, 0.70530117, 40.62625)
 
-[node name="Objective6" parent="Objectives" unique_id=347232646 instance=ExtResource("15_lqxo7")]
+[node name="Objective6" parent="Objectives" unique_id=347232646 instance=ExtResource("15_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -213.51494, -0.17945403, -158.87982)
 
-[node name="Objective7" parent="Objectives" unique_id=1351695639 instance=ExtResource("15_lqxo7")]
+[node name="Objective7" parent="Objectives" unique_id=1351695639 instance=ExtResource("15_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 171.16733, -0.09100939, 217.31003)
 
-[node name="Objective8" parent="Objectives" unique_id=825224474 instance=ExtResource("15_lqxo7")]
+[node name="Objective8" parent="Objectives" unique_id=825224474 instance=ExtResource("15_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4.494232, 8.393458, -158.73213)
 
-[node name="Objective9" parent="Objectives" unique_id=992817859 instance=ExtResource("15_lqxo7")]
+[node name="Objective9" parent="Objectives" unique_id=992817859 instance=ExtResource("15_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 68.35266, 2.4742322, 103.74625)
 
-[node name="Objective10" parent="Objectives" unique_id=172190830 instance=ExtResource("16_qqj0x")]
+[node name="Objective10" parent="Objectives" unique_id=172190830 instance=ExtResource("16_qqj0x") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -111.873566, 4.423715, -133.26273)
 
-[node name="Objective11" parent="Objectives" unique_id=306043650 instance=ExtResource("16_qqj0x")]
+[node name="Objective11" parent="Objectives" unique_id=306043650 instance=ExtResource("16_qqj0x") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 106.793, 4.2032638, 156.12137)
 
-[node name="Objective12" parent="Objectives" unique_id=1596037676 instance=ExtResource("16_qqj0x")]
+[node name="Objective12" parent="Objectives" unique_id=1596037676 instance=ExtResource("16_qqj0x") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -70.26247, 0.16221753, -215.29797)
 
-[node name="Objective13" parent="Objectives" unique_id=99470721 instance=ExtResource("16_qqj0x")]
+[node name="Objective13" parent="Objectives" unique_id=99470721 instance=ExtResource("16_qqj0x") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.8581238, 8.3772955, 159.03314)
 
 [node name="Scenery" type="Node3D" parent="." unique_id=1234713773]

@@ -4,6 +4,7 @@
 
 # Windows DLL-lock artefacts left behind when an addon .dll is in use
 *.TMP
+*.dll.old
 
 # Native sim build (godot-cpp is a local copy; see native/SConstruct)
 native/godot-cpp/

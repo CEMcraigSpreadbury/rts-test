@@ -564,7 +564,7 @@ func _tick_gold(delta: float) -> void:
 	var main := get_tree().current_scene
 	if main.has_method("is_peer_active") and not main.is_peer_active(owner_peer_id):
 		return
-	var mult := (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.POINT_GOLD)) * _tier_income() * _night_bonus() * delta
+	var mult := _tier_income() * _night_bonus() * delta
 	_gold_fraction += gold_per_second * mult
 	_wood_fraction += wood_per_second * mult
 	var whole_gold := int(_gold_fraction)

@@ -39,8 +39,6 @@ enum Kind {
 ## DEFENDERS only: how far a placed unit will chase before going back to where
 ## it was put. 0 lets them chase as far as they like.
 @export var defender_leash_radius: float = 14.0
-## Index into Ruler.list_all(), or -1 for a random one.
-@export var ruler_index: int = -1
 ## HUMAN only: when nobody is there to play it, an allied AI takes the seat so
 ## a co-op mission still works solo. Turn it off for a seat that should simply
 ## stand empty with fewer players.

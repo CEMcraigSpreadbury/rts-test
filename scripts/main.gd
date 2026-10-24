@@ -209,9 +209,12 @@ var _patrol_started_this_session: bool = false
 ## own state since the ability belongs to one unit, not the whole current
 ## selection. {"unit": Unit, "ability_index": int} or {}.
 var _armed_ability: Dictionary = {}
-## pending_order_mode == "power": which of the local Ruler's nodes the next
+## pending_order_mode == "power": which of the local faction's powers the next
 ## left-click casts (see arm_power).
 var _armed_power_index: int = -1
+## A LINE power being aimed: where the button went down (the line's middle,
+## which it turns about as the drag goes round), or null.
+var _power_drag_start: Variant = null
 ## Purely local UI state: which units/buildings belong to each numbered
 ## control group (Ctrl+1-9 assigns, 1-9 selects / recalls camera).
 var control_groups: Dictionary = {}
@@ -346,6 +349,8 @@ var chat: ChatConsole
 var weather: Weather
 var day_night: DayNight
 var research: Research
+var power_effects: PowerEffects
+var power_fx: PowerFx
 var realm_economy: RealmEconomy
 var lords: Lords
 var wildlife: Wildlife
@@ -369,6 +374,22 @@ func _enter_tree() -> void:
 	## (a Shrine rolling monsters, a building pricing an item) runs in _ready,
 	## after both. An ordinary match leaves this null and gets the defaults.
 	MatchRules.current = null
+	_drop_other_mode_sites()
+
+## A map can carry sites for only one kind of match: the extra settlements its
+## campaign missions use ("campaign_only") and the skirmish Shrine standing
+## where a mission's City does ("skirmish_only"). The other kind's go here,
+## before any of them enters the tree. The Scenario node is already a child,
+## although it has not installed its rules yet.
+func _drop_other_mode_sites() -> void:
+	var objectives: Node = get_node_or_null(^"Objectives")
+	if objectives == null:
+		return
+	var drop: StringName = &"skirmish_only" if get_node_or_null(^"Scenario") is Scenario else &"campaign_only"
+	for site in objectives.get_children():
+		if site.is_in_group(drop):
+			objectives.remove_child(site)
+			site.free()
 
 ## --- Game speed (single player) ---
 ## Pause (the game stands still but the camera, selection and orders still
@@ -696,6 +717,16 @@ func _add_components() -> void:
 	research.name = "Research"
 	add_child(research)
 
+	power_effects = PowerEffects.new()
+	power_effects.main = self
+	power_effects.name = "PowerEffects"
+	add_child(power_effects)
+
+	power_fx = PowerFx.new()
+	power_fx.main = self
+	power_fx.name = "PowerFx"
+	add_child(power_fx)
+
 	realm_economy = RealmEconomy.new()
 	realm_economy.main = self
 	realm_economy.name = "RealmEconomy"
@@ -860,9 +891,6 @@ func _adopt_scenario_entities() -> void:
 			else:
 				entity.reparent(buildings_root, true)
 				_register_placed_building(entity)
-			## Already in the tree, so the usual ready-hook in the spawn
-			## functions can't do it.
-			research.apply_all_to(entity)
 
 ## A garrison stays a garrison: a DEFENDERS unit will chase what attacks it,
 ## then come back to where it was put. The post is a node of its own because
@@ -1084,8 +1112,6 @@ func _spawn_unit_from_data(data: Dictionary) -> Node:
 	unit.status_applied.connect(feedback.relay_status_effects.bind(unit))
 	unit.thrown.connect(feedback.relay_thrown.bind(unit))
 	unit.impact.connect(feedback.relay_impact)
-	## After Unit._ready has set its health, so research raises it from there.
-	unit.ready.connect(research.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
 	unit.ready.connect(race_traits.apply_all_to.bind(unit), CONNECT_ONE_SHOT)
 	return unit
 
@@ -1163,7 +1189,6 @@ func _spawn_building_from_data(data: Dictionary) -> Node:
 		building.damaged.connect(feedback.relay_damage_number.bind(building))
 		building.construction_finished.connect(_on_building_construction_finished.bind(building))
 		building.projectile_fired.connect(feedback.on_building_projectile_fired.bind(building))
-		building.ready.connect(research.apply_all_to.bind(building), CONNECT_ONE_SHOT)
 		if multiplayer.is_server() and building.is_main_base:
 			main_base_count_by_peer[data.peer_id] = main_base_count_by_peer.get(data.peer_id, 0) + 1
 		if data.has("deposit_path"):
@@ -1456,7 +1481,7 @@ static func _format_duration(seconds: float) -> String:
 		return "%d:%02d:%02d" % [total / 3600, (total / 60) % 60, total % 60]
 	return "%d:%02d" % [total / 60, total % 60]
 
-## Replays this same map with the same players, rulers and settings. The host
+## Replays this same map with the same players, races and settings. The host
 ## decides for everyone, as it does when starting a match from the lobby.
 var _rematch_button: Button = null
 
@@ -2594,6 +2619,9 @@ func _resolve_order_target_path(result: Dictionary) -> NodePath:
 			((Teams.is_enemy(my_peer_id(), result.collider.owner_peer_id) and result.collider.can_be_attacked()) \
 				or result.collider.is_under_construction or is_instance_valid(result.collider.linked_deposit)):
 		return result.collider.get_path()
+	## One of your own linked Telepads: the host sends the units through it.
+	elif result.collider is Telepad and (result.collider as Telepad).can_send(my_peer_id()):
+		return result.collider.get_path()
 	return NodePath()
 
 ## A right-click is a move order by default, but right-clicking something
@@ -2957,7 +2985,7 @@ func selection_regiment_action() -> RegimentAction:
 				in_regiment = unit
 		elif unit.is_officer:
 			loose_officers.append(unit)
-		elif unit.can_fight:
+		elif unit.can_fight and not unit.can_gather:
 			loose_men.append(unit)
 	if in_regiment != null:
 		if loose_officers.is_empty() and loose_men.is_empty():
@@ -3024,7 +3052,7 @@ func toggle_regiment_as(sender_id: int, unit_paths: Array[NodePath]) -> void:
 				regiment = existing
 		elif unit.is_officer:
 			loose_officers.append(unit)
-		elif unit.can_fight:
+		elif unit.can_fight and not unit.can_gather:
 			loose_men.append(unit)
 	if regiment != null:
 		if loose_officers.is_empty() and loose_men.is_empty():
@@ -3116,7 +3144,7 @@ func form_regiment(peer_id: int, units: Array[Unit]) -> Regiment:
 		if unit.is_officer:
 			if officer == null:
 				officer = unit
-		elif unit.can_fight:
+		elif unit.can_fight and not unit.can_gather:
 			men.append(unit)
 	men = largest_same_type(men)
 	## Raised at the strength of the men given, up to Regiment.MAX_SIZE.
@@ -3270,9 +3298,17 @@ func issue_command_as(sender_id: int, unit_paths: Array[NodePath], target_path: 
 			PerfStats.record_command((Time.get_ticks_usec() - perf_start) / 1000.0, units.size())
 		return
 
+	## Onto one of their own linked Telepads: they walk to it and through.
+	var telepad := target_node as Telepad
+	if telepad != null and (attack_move_fallback or append or not telepad.can_send(sender_id)):
+		telepad = null
+	if telepad != null:
+		world_pos = telepad.global_position
 	## A ground order: the sim marches it, block by block (ArmyBridge.order_blocks).
 	var blocks_start := Time.get_ticks_usec() if PerfStats.enabled else 0
 	army_bridge.order_blocks(movers, world_pos, attack_move_fallback, append, formation_type, facing)
+	if telepad != null:
+		telepad.add_travellers(movers)
 	if PerfStats.enabled:
 		PerfStats.record_event(&"order: blocks", Time.get_ticks_usec() - blocks_start)
 	if attack_move_fallback and not append:
@@ -3522,12 +3558,28 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		pending_order_mode = ""
 		_armed_ability = {}
+		_power_drag_start = null
+		return
+	## A LINE power casts when the drag is let go, along it.
+	if pending_order_mode == "power" and _power_drag_start != null and event is InputEventMouseButton 			and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		var centre: Vector3 = _power_drag_start
+		var release := raycast(event.position)
+		## Read before disarming: get_armed_power only answers while armed.
+		var power := get_armed_power()
+		_power_drag_start = null
+		pending_order_mode = ""
+		if power == null:
+			return
+		var line := Research.line_centred(power, centre, release.position if not release.is_empty() else centre)
+		research.request_cast(_armed_power_index, line[0], line[1])
+		play_command_sound()
 		return
 	if not (event is InputEventMouseButton and event.pressed):
 		return
 	if event.button_index == MOUSE_BUTTON_RIGHT:
 		pending_order_mode = ""
 		_armed_ability = {}
+		_power_drag_start = null
 		return
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return
@@ -3549,6 +3601,11 @@ func _handle_pending_order_input(event: InputEvent) -> void:
 			## Only somewhere the player can currently see; a miss keeps the
 			## power armed for another try, like a blocked building placement.
 			var result := raycast(event.position)
+			var power := get_armed_power()
+			if power != null and power.aim == ResearchNode.Aim.LINE:
+				if not result.is_empty():
+					_power_drag_start = result.position
+				return
 			if result.is_empty() or not fog_of_war.is_visible_at(result.position):
 				play_placement_blocked_sound()
 				return
@@ -3721,16 +3778,21 @@ func arm_power(node_index: int) -> void:
 	if research.power_cooldown_remaining_fraction(node_index) > 0.0:
 		return
 	_armed_power_index = node_index
+	_power_drag_start = null
 	pending_order_mode = "power"
 	play_command_sound()
 
 ## The power the next left-click will cast, or null — read every frame by
 ## WorldFeedback for the targeting ring.
+## Where the armed LINE power's drag began, or null before the button goes down.
+func get_power_drag_start() -> Variant:
+	return _power_drag_start if pending_order_mode == "power" else null
+
 func get_armed_power() -> ResearchNode:
 	if pending_order_mode != "power" or _armed_power_index < 0:
 		return null
-	var ruler := Research.ruler_for(my_peer_id())
-	return ruler.nodes[_armed_power_index] if ruler != null and _armed_power_index < ruler.nodes.size() else null
+	var powers := Research.powers_for(my_peer_id())
+	return powers[_armed_power_index] if _armed_power_index < powers.size() else null
 
 func on_producible_button_pressed(building: ProductionBuilding, item_index: int) -> void:
 	var item := building.producibles[item_index]
@@ -4025,6 +4087,12 @@ func _set_rally_point(screen_pos: Vector2) -> void:
 	var result := raycast(screen_pos)
 	if result.is_empty():
 		return
+	## One Telepad right-clicked with another selected: the two are linked.
+	if selected_building is Telepad and result.collider is Telepad and result.collider != selected_building 			and (result.collider as Telepad).owner_peer_id == my_peer_id():
+		_rpc_link_telepads.rpc_id(1, selected_building.get_path(), (result.collider as Node).get_path())
+		feedback.spawn_rally_dust((result.collider as Node3D).global_position)
+		AudioUtils.play_random(command_audio_player, on_rally_set_sound_effects)
+		return
 	var target_path := _resolve_order_target_path(result)
 	## A tree or a unit is hit up its trunk or figure: the banner stands at
 	## its foot, on the ground, not up in the branches.
@@ -4047,6 +4115,19 @@ func _rpc_set_rally_point(building_path: NodePath, world_pos: Vector3, target_pa
 	if sender_id == 0:
 		sender_id = my_peer_id()
 	set_rally_point_as(sender_id, building_path, world_pos, target_path)
+
+@rpc("any_peer", "call_local", "reliable")
+func _rpc_link_telepads(pad_path: NodePath, other_path: NodePath) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = my_peer_id()
+	var pad := get_node_or_null(pad_path) as Telepad
+	var other := get_node_or_null(other_path) as Telepad
+	if pad == null or other == null or pad.owner_peer_id != sender_id or pad.is_destroyed or other.is_destroyed 			or pad.is_under_construction or other.is_under_construction:
+		return
+	pad.link_to(other)
 
 func set_rally_point_as(sender_id: int, building_path: NodePath, world_pos: Vector3, target_path: NodePath) -> void:
 	if not multiplayer.is_server():

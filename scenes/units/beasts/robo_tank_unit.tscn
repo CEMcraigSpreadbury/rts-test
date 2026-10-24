@@ -1,0 +1,72 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" uid="uid://c8n1w7q1yj0kx" path="res://scenes/units/unit.tscn" id="1_unit"]
+[ext_resource type="Texture2D" path="res://assets/art/MiniDarkElves/Outline/MiniMagicCannon-Sheet.png" id="2_sheet"]
+[ext_resource type="Script" uid="uid://38isavcq5ovb" path="res://scripts/resource_cost.gd" id="3_cost_script"]
+[ext_resource type="Resource" uid="uid://djwkmt27yu7x4" path="res://resources/gold_resource_type.tres" id="4_gold"]
+[ext_resource type="Resource" uid="uid://dyauvdobfesb8" path="res://resources/wood_resource_type.tres" id="4_wood"]
+[ext_resource type="Script" uid="uid://cwr1faia14hr" path="res://scripts/command_line.gd" id="109_command_line"]
+[ext_resource type="PackedScene" path="res://scenes/effects/projectile_cannonball.tscn" id="5_shot"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank.glb" id="fig_model"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_LOD1.glb" id="fig_model_lod1"]
+[ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="fig_palette"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_wheel0.glb" id="wheel0"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_wheel0_LOD1.glb" id="wheel0_far"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_wheel1.glb" id="wheel1"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_wheel1_LOD1.glb" id="wheel1_far"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_wheel2.glb" id="wheel2"]
+[ext_resource type="PackedScene" path="res://assets/art/Models/Units/RoboTank_wheel2_LOD1.glb" id="wheel2_far"]
+
+[sub_resource type="Resource" id="ResourceCost_gold"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_gold")
+amount = 180
+
+[sub_resource type="Resource" id="ResourceCost_wood"]
+script = ExtResource("3_cost_script")
+resource_type = ExtResource("4_wood")
+amount = 140
+
+[node name="RoboTank" instance=ExtResource("1_unit")]
+move_command_lines = Array[ExtResource("109_command_line")]([])
+attack_command_lines = Array[ExtResource("109_command_line")]([])
+patrol_command_lines = Array[ExtResource("109_command_line")]([])
+build_command_lines = Array[ExtResource("109_command_line")]([])
+display_name = "Robo Tank"
+move_speed = 3.6
+costs = Array[ExtResource("3_cost_script")]([SubResource("ResourceCost_gold"), SubResource("ResourceCost_wood")])
+population_cost = 3
+sprite_sheet = ExtResource("2_sheet")
+idle_row = 0
+idle_frame_count = 1
+walk_row = 1
+walk_frame_count = 6
+attack_row = 2
+attack_frame_count = 15
+death_row = 3
+death_frame_count = 5
+gather_frame_count = 0
+can_gather = false
+can_build = false
+max_health = 300
+attack_damage = 16
+attack_range = 9.0
+attack_cooldown = 2.4
+aggro_range = 11
+damage_type = 1
+armor_class = 6
+unit_category = 0
+vision_range = 14
+projectile_speed = 12.0
+projectile_scene = ExtResource("5_shot")
+projectile_tint = Color(0.25, 0.25, 0.28, 1)
+figure_model = ExtResource("fig_model")
+figure_model_lod1 = ExtResource("fig_model_lod1")
+figure_palette = ExtResource("fig_palette")
+figure_motion = 4
+figure_top = 1.5
+body_radius = 0.75
+wheel_models = Array[PackedScene]([ExtResource("wheel0"), ExtResource("wheel1"), ExtResource("wheel2")])
+wheel_models_lod1 = Array[PackedScene]([ExtResource("wheel0_far"), ExtResource("wheel1_far"), ExtResource("wheel2_far")])
+wheel_pivots = PackedVector3Array(0, 0.208, 0.576, 0, 0.208, 0, 0, 0.208, -0.576)
+wheel_radius = 0.208

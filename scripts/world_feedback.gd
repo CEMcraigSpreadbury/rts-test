@@ -1764,9 +1764,13 @@ func _visual_radius(node: Node3D) -> float:
 	return furthest
 
 ## Sprite3D health bars and GPUParticles3D aren't MeshInstance3D, so they're
-## skipped for free — only real geometry counts toward the size.
+## skipped for free — only real geometry counts toward the size. So are
+## top-level overlays hung off it (a Telepad's link arc out to its partner and
+## its recharge ring, another hover ring): they aren't the building.
 func _collect_mesh_instances(node: Node) -> Array[MeshInstance3D]:
 	var found: Array[MeshInstance3D] = []
+	if node is Node3D and (node as Node3D).top_level:
+		return found
 	if node is MeshInstance3D:
 		found.append(node)
 	for child in node.get_children():
@@ -1808,6 +1812,10 @@ var _ability_circle_texture: ImageTexture = null
 var _ability_circle_emission_texture: ImageTexture = null
 var _ability_target_decal: Decal = null
 var _ability_cone_decal: Decal = null
+## A LINE power's aim: a long box centred on where the drag began.
+var _line_target_decal: Decal = null
+var _line_texture: ImageTexture = null
+var _line_emission_texture: ImageTexture = null
 ## Wedge textures for cone previews, by whole-degree angle.
 var _cone_textures: Dictionary = {}
 
@@ -1821,9 +1829,26 @@ func update_ability_target_decal() -> void:
 		hit = main.raycast(get_viewport().get_mouse_position())
 	if _ability_cone_decal:
 		_ability_cone_decal.visible = false
+	if _line_target_decal:
+		_line_target_decal.visible = false
 	if hit.is_empty():
 		if _ability_target_decal:
 			_ability_target_decal.visible = false
+		return
+	if power != null and power.aim == ResearchNode.Aim.LINE:
+		if _ability_target_decal:
+			_ability_target_decal.visible = false
+		var drag_start: Variant = main.get_power_drag_start()
+		var centre: Vector3 = drag_start if drag_start != null else hit.position
+		var line := Research.line_centred(power, centre, hit.position if drag_start != null else centre)
+		var start: Vector3 = line[0]
+		var end: Vector3 = line[1]
+		if _line_target_decal == null:
+			_line_target_decal = make_line_decal()
+			add_child(_line_target_decal)
+		place_line_decal(_line_target_decal, start, end, power.line_width)
+		_line_target_decal.modulate = Color(power.effect_color, ABILITY_TARGET_DECAL_ALPHA)
+		_line_target_decal.visible = true
 		return
 	if ability != null and ability.shape == Ability.Shape.CONE and main.get_armed_caster() != null:
 		if _ability_target_decal:
@@ -2539,7 +2564,7 @@ func _rain_fireballs(ability: Ability, target_pos: Vector3, delay: float) -> voi
 			at = target_pos
 		get_tree().create_timer(maxf(when, 0.01)).timeout.connect(_drop_fireball.bind(at, ability.effect_color))
 
-## A Ruler power on a 3D style: it comes from the sky.
+## A faction power on a 3D style: it comes from the sky.
 func _toy_power_impact(ability: Ability, pos: Vector3) -> void:
 	match ability.effect_style:
 		Ability.EffectStyle.LIGHTNING:
@@ -2567,7 +2592,7 @@ func _spawn_stream(process: ParticleProcessMaterial, mesh: Mesh, from_pos: Vecto
 			particles.emitting = false)
 	get_tree().create_timer(BREATH_TIME + lifetime + 0.1).timeout.connect(particles.queue_free)
 
-## A Ruler power landing — the ground flash and sparks an area ability gets,
+## A faction power landing — the ground flash and sparks an area ability gets,
 ## with no caster or projectile, since a power comes from nowhere.
 const POWER_EFFECT_DURATION: float = 1.4
 const POWER_PARTICLE_LIFETIME: float = 1.0
@@ -2580,24 +2605,26 @@ func relay_power_effect(target_pos: Vector3, radius: float, color: Color) -> voi
 ## Host: a slight wash of a lasting power's colour over everything it just
 ## landed on (War Cry, Fortify, Curse, ...), for as long as it lasts, on every
 ## peer — see Unit/ProductionBuilding.show_buff_tint.
-func relay_buff_tints(targets: Array, color: Color, seconds: float) -> void:
+## `strength` is how far a unit's whole body goes to the colour (see
+## Unit.show_buff_tint).
+func relay_buff_tints(targets: Array, color: Color, seconds: float, strength: float = Unit._BUFF_TINT_STRENGTH) -> void:
 	var paths: Array[NodePath] = []
 	for target in targets:
 		if is_instance_valid(target) and target.is_inside_tree():
 			paths.append(target.get_path())
-	_show_buff_tints(paths, color, seconds)
+	_show_buff_tints(paths, color, seconds, strength)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
-		_rpc_buff_tints.rpc(paths, color, seconds)
+		_rpc_buff_tints.rpc(paths, color, seconds, strength)
 
 @rpc("authority", "call_remote", "reliable")
-func _rpc_buff_tints(paths: Array, color: Color, seconds: float) -> void:
-	_show_buff_tints(paths, color, seconds)
+func _rpc_buff_tints(paths: Array, color: Color, seconds: float, strength: float) -> void:
+	_show_buff_tints(paths, color, seconds, strength)
 
-func _show_buff_tints(paths: Array, color: Color, seconds: float) -> void:
+func _show_buff_tints(paths: Array, color: Color, seconds: float, strength: float) -> void:
 	for path in paths:
 		var node := get_node_or_null(path)
 		if node != null and node.has_method(&"show_buff_tint"):
-			node.show_buff_tint(color, seconds)
+			node.show_buff_tint(color, seconds, strength)
 
 @rpc("authority", "call_remote", "reliable")
 func _rpc_power_effect(target_pos: Vector3, radius: float, color: Color) -> void:
@@ -2606,7 +2633,7 @@ func _rpc_power_effect(target_pos: Vector3, radius: float, color: Color) -> void
 ## A power that hits like an area ability (Smite, Wrath of the Heavens) gets
 ## that ability's whole impact — flash, shake, effect sprites, burning pool.
 ## Sent as the caster's peer id and node index; each peer looks the Ability up
-## in its own copy of that Ruler's tree.
+## in its own copy of that faction's powers.
 func relay_power_ability_impact(peer_id: int, node_index: int, target_pos: Vector3) -> void:
 	_play_power_ability_impact(peer_id, node_index, target_pos)
 	if multiplayer.is_server() and multiplayer.multiplayer_peer != null:
@@ -2617,10 +2644,10 @@ func _rpc_power_ability_impact(peer_id: int, node_index: int, target_pos: Vector
 	_play_power_ability_impact(peer_id, node_index, target_pos)
 
 func _play_power_ability_impact(peer_id: int, node_index: int, target_pos: Vector3) -> void:
-	var ruler := Research.ruler_for(peer_id)
-	if ruler == null or node_index < 0 or node_index >= ruler.nodes.size():
+	var powers := Research.powers_for(peer_id)
+	if node_index < 0 or node_index >= powers.size():
 		return
-	var ability: Ability = ruler.nodes[node_index].hit_ability
+	var ability: Ability = powers[node_index].hit_ability
 	if ability != null and ability.effect_style != Ability.EffectStyle.PLAIN:
 		_toy_power_impact(ability, target_pos)
 	elif ability != null:
@@ -2938,6 +2965,52 @@ func _build_formation_arrow_textures() -> void:
 	emission.generate_mipmaps()
 	_formation_arrow_texture = ImageTexture.create_from_image(albedo)
 	_formation_arrow_emission_texture = ImageTexture.create_from_image(emission)
+
+## A LINE power's strip, the same filled-with-a-rim look as the ability circle.
+func make_line_decal() -> Decal:
+	_build_line_textures()
+	var decal := Decal.new()
+	decal.texture_albedo = _line_texture
+	decal.texture_emission = _line_emission_texture
+	decal.emission_energy = 0.6
+	decal.upper_fade = 0.15
+	decal.lower_fade = 0.15
+	return decal
+
+## From `start` to `end`, `width` across.
+func place_line_decal(decal: Decal, start: Vector3, end: Vector3, width: float) -> void:
+	var dir := end - start
+	dir.y = 0.0
+	var length := maxf(dir.length(), 0.1)
+	decal.size = Vector3(width, ABILITY_DECAL_HEIGHT, length)
+	decal.global_position = start.lerp(end, 0.5)
+	decal.global_basis = Basis.looking_at(dir.normalized() if dir.length_squared() > 0.0001 else Vector3.FORWARD, Vector3.UP)
+
+func _build_line_textures() -> void:
+	if _line_texture:
+		return
+	const W: int = 64
+	const H: int = 256
+	const FILL_ALPHA: float = 0.3
+	var albedo := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
+	var emission := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
+	for y in H:
+		for x in W:
+			var dx: float = absf((x + 0.5) / W * 2.0 - 1.0)
+			var dy: float = absf((y + 0.5) / H * 2.0 - 1.0)
+			var rim := maxf(smoothstep(0.78, 0.9, dx), smoothstep(0.95, 0.98, dy))
+			var alpha: float = lerpf(FILL_ALPHA, 1.0, rim) * (1.0 - smoothstep(0.93, 1.0, dx)) * (1.0 - smoothstep(0.985, 1.0, dy))
+			## Chevrons down its length, pointing the way it runs (toward the
+			## decal's -Z, its far end).
+			var chevron := fmod((y + 0.5) / H * 8.0 - dx * 0.6 + 8.0, 1.0)
+			if chevron < 0.12 and dx < 0.7:
+				alpha = maxf(alpha, 0.65)
+			albedo.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+			emission.set_pixel(x, y, Color(alpha, alpha, alpha, 1.0))
+	albedo.generate_mipmaps()
+	emission.generate_mipmaps()
+	_line_texture = ImageTexture.create_from_image(albedo)
+	_line_emission_texture = ImageTexture.create_from_image(emission)
 
 func _make_ability_decal() -> Decal:
 	var decal := Decal.new()

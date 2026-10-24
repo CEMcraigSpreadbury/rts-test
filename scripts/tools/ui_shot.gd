@@ -127,7 +127,7 @@ func _ready() -> void:
 		if realm:
 			Network.set_match_settings(Network.GameMode.REALM, 0)
 		Network.add_ai_player()
-		Network.resolve_random_rulers()
+		Network.resolve_random_races()
 
 	var director := Node.new()
 	director.name = "UiShotDirector"

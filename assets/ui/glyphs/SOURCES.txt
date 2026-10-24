@@ -212,3 +212,4 @@ unit_boar.svg <- caro-asercion/boar.svg
 unit_deer.svg <- caro-asercion/deer-head.svg
 unit_fox.svg <- caro-asercion/fox.svg
 unit_wolf.svg <- lorc/direwolf.svg
+telepad.svg <- lorc/teleport.svg

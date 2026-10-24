@@ -20,6 +20,7 @@
 [ext_resource type="PackedScene" path="res://assets/art/Models/Units/RobotWorker_carry_gold_LOD1.glb" id="f6"]
 
 [node name="WorkerBot" instance=ExtResource("1_base")]
+move_speed = 3.5
 display_name = "Worker Bot"
 max_health = 30
 figure_top = 0.86

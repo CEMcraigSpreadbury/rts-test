@@ -6,9 +6,7 @@ extends Node
 ## and better armoured. That radius is his army; there is no roster to manage.
 ##
 ## He learns: kills made near him and settlements taken near him are
-## experience, and each level makes his command stronger. Your Ruler gives every
-## Lord a lean (a Warlord's hit harder, a Steward's are tougher, a Mystic's
-## heal out of combat). When he falls, the next Lord you raise, after
+## experience, and each level makes his command stronger. When he falls, the next Lord you raise, after
 ## REHIRE_SECONDS, takes up his level.
 ##
 ## All host-only; Unit.lord_level and lord_progress are replicated for the HUD.
@@ -27,11 +25,6 @@ const XP_PER_CAPTURE: float = 30.0
 const DAMAGE_BASE: float = 0.05
 const DAMAGE_PER_LEVEL: float = 0.03
 const ARMOR_BASE: int = 1
-## A Ruler's lean.
-const WARLORD_DAMAGE: float = 0.05
-const STEWARD_ARMOR: int = 1
-## A Mystic's men heal this much a second out of combat near him.
-const MYSTIC_REGEN: float = 1.0
 const REHIRE_SECONDS: float = 60.0
 ## One Lord to start with, one more per this many settlements held.
 const SETTLEMENTS_PER_LORD: int = 2
@@ -87,27 +80,17 @@ func _physics_process(delta: float) -> void:
 			continue
 		unit.lord_damage = 0.0
 		unit.lord_armor = 0
-		unit.lord_regen = 0.0
 		if unit.is_lord and unit.status_activity != Unit.Activity.DEAD:
 			lords.append(unit)
 	for lord in lords:
 		_take_up_fallen(lord)
 		var damage: float = DAMAGE_BASE + DAMAGE_PER_LEVEL * (lord.lord_level - 1)
 		var armor: int = ARMOR_BASE + (lord.lord_level - 1) / 2
-		var regen: float = 0.0
-		match _ruler_name(lord.owner_peer_id):
-			"Warlord":
-				damage += WARLORD_DAMAGE
-			"Steward":
-				armor += STEWARD_ARMOR
-			"Mystic":
-				regen += MYSTIC_REGEN
 		for unit in UnitGrid.units_near(get_tree(), lord.global_position, COMMAND_RADIUS):
 			if unit == lord or unit.owner_peer_id != lord.owner_peer_id or unit.can_gather:
 				continue
 			unit.lord_damage = maxf(unit.lord_damage, damage)
 			unit.lord_armor = maxi(unit.lord_armor, armor)
-			unit.lord_regen = maxf(unit.lord_regen, regen)
 
 ## A new Lord inherits the best one his side has lost, once.
 func _take_up_fallen(lord: Unit) -> void:
@@ -118,10 +101,6 @@ func _take_up_fallen(lord: Unit) -> void:
 	if not fallen.is_empty():
 		_fallen.erase(lord.owner_peer_id)
 		_gain(lord, float(fallen[1]))
-
-static func _ruler_name(peer_id: int) -> String:
-	var ruler: Ruler = Research.ruler_for(peer_id)
-	return ruler.ruler_name if ruler != null else ""
 
 func _gain(lord: Unit, xp: float) -> void:
 	lord.lord_xp += xp

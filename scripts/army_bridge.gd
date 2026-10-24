@@ -371,6 +371,18 @@ func _set_block_speed(formation: int, speed: float) -> void:
 	_block_speed[formation] = speed
 	sim.set_speed(formation, speed * RoadNet.speed_at(_formation_point(formation)))
 
+## After RealmEconomy starts or stops feeding a side: every block's pace
+## again, from its slowest man.
+func refresh_block_speeds() -> void:
+	for formation in _block_speed.keys():
+		var speed: float = INF
+		for id in sim.get_formation_members(formation):
+			var unit: Unit = _units_by_id[id] if id < _units_by_id.size() else null
+			if unit != null:
+				speed = minf(speed, unit.move_speed * unit.starving_speed())
+		if speed < INF:
+			_set_block_speed(formation, speed)
+
 ## A marching block quickens on a road and slows off it, by where it stands
 ## now. A few times a second is plenty for something the size of a road.
 func _update_road_speeds(delta: float) -> void:
@@ -652,7 +664,7 @@ func solo_move(unit: Unit, target: Vector3) -> void:
 		formation = sim.release(unit.sim_id, here)
 	if formation < 0:
 		return
-	_set_block_speed(formation, unit.move_speed * unit._slow_multiplier() * unit._buff_speed_multiplier())
+	_set_block_speed(formation, unit.move_speed * unit._slow_multiplier() * unit._buff_speed_multiplier() * unit.starving_speed())
 	sim.order_move(formation, Vector2(target.x, target.z), false, 0.0)
 
 ## A group attack on `target`: every block goes in (Very War's attack order),
@@ -673,7 +685,7 @@ func attack_blocks(units: Array[Unit], target: Node3D, formation_type: Formation
 		var speed: float = INF
 		var reach: float = INF
 		for unit in block:
-			speed = minf(speed, unit.move_speed)
+			speed = minf(speed, unit.move_speed * unit.starving_speed())
 			if not unit.is_officer:
 				reach = minf(reach, unit.attack_range)
 		if target is ProductionBuilding:
@@ -771,7 +783,7 @@ func _order_block(block: Array[Unit], dest: Vector3, forward: Vector3, attack_mo
 			return
 	var speed: float = INF
 	for unit in block:
-		speed = minf(speed, unit.move_speed)
+		speed = minf(speed, unit.move_speed * unit.starving_speed())
 	## The block leads at its men's own pace; they run a little over it to
 	## catch their places up (Very War's feel).
 	_set_block_speed(formation, speed)

@@ -421,6 +421,20 @@ Done and in game:
   Both on mounted motion, seen in game once; await review. New Star
   Wanderers rows: fur, fur_dark, fur_light, bone, beard, beard_dark.
   The beasts are complete. All eight await the user's review.
+  Kraken (Pirates, `beasts.kraken`, 2026-10-23: a coral purple-red kraken
+  crawling on six tentacles rolled up at the tips, two raised and hooked
+  forward to strike, a big mantle leaning back with plum spots, the shared
+  eyes under a frowning brow; the team's bandana knotted at the back and a
+  team Jolly Roger on a pole; palette rows `fur`, `fur_dark`, `fur_light`
+  repainted on Pirates; drawn 1.6x). Robo Tank (Robots, `robots.robo_tank`:
+  a tin tank on rubber tracks with chrome road wheels that spin in game
+  (3 axles, `_parts`), team-enamel mudguards, skirts, glacis and turret
+  band, a turret-head with the shared eyes over a stubby brass-muzzled
+  cannon, an amber antenna lamp, two ribbed arms, a wind-up key; roll
+  motion, fires a cannonball; drawn 1.6x). Scenes in `scenes/units/beasts`;
+  no Bestiary building or roster entry yet. Portraits of the whole tank
+  need the wheels on: build with a script that resets `UNITS["RoboTank"]`
+  to `robo_tank(lod, base, None)` before running build.py.
 - **Monsters** (`kit/monsters.py`, palette `monsters`): trained at the
   neutral Shrine by any race, so owned: each wears its owner's team
   colour on a harness, on one shared palette with team rows (Gnoll rows

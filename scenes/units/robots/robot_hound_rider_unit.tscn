@@ -6,9 +6,10 @@
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/robots.png" id="4_palette"]
 
 [node name="HoundRider" instance=ExtResource("1_base")]
+attack_damage = 7
 display_name = "Hound Rider"
-max_health = 70
-move_speed = 4.8
+max_health = 88
+move_speed = 4.2
 figure_top = 1.25
 figure_model = ExtResource("2_fig")
 figure_model_lod1 = ExtResource("3_fig_lod1")

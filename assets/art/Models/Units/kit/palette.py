@@ -523,6 +523,11 @@ PIRATES.update({
 	"bone": ((180, 168, 140), (234, 226, 202), (252, 250, 238)),
 	"robe": ((150, 120, 86), (204, 176, 132), (236, 214, 176)),
 	"robe_dark": ((44, 30, 26), (76, 54, 44), (112, 86, 70)),
+	# The Kraken (beasts.kraken): coral purple-red flesh, plum spots, pale
+	# pink suckers. Never blue (the team shader's hue window).
+	"fur": ((108, 30, 68), (186, 62, 94), (232, 118, 126)),
+	"fur_dark": ((70, 24, 58), (112, 42, 86), (152, 74, 114)),
+	"fur_light": ((204, 128, 138), (246, 186, 180), (255, 226, 214)),
 })
 
 ## Robots (kit/robots.py): clockwork tin toys. Painted tin plate (skin, the

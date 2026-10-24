@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_laser.tscn" id="shot"]
 
 [node name="RayGunner" instance=ExtResource("1_base")]
+move_speed = 2.6
+max_health = 38
 display_name = "Ray Gunner"
 attack_damage = 5
 attack_range = 17.0

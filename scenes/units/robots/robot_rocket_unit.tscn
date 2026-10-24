@@ -14,6 +14,8 @@
 [ext_resource type="PackedScene" path="res://scenes/effects/projectile_rocket.tscn" id="shot"]
 
 [node name="RocketWagon" instance=ExtResource("1_base")]
+move_speed = 2.0
+max_health = 70
 display_name = "Rocket Wagon"
 projectile_tint = Color(1, 0.6, 0.25, 1)
 figure_top = 1.8

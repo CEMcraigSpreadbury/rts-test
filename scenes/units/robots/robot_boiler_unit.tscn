@@ -16,13 +16,13 @@ amount = 20
 [sub_resource type="Resource" id="Cost_gold"]
 script = ExtResource("5_cost")
 resource_type = ExtResource("7_gold")
-amount = 30
+amount = 25
 
 [node name="BoilerBot" instance=ExtResource("1_base")]
 display_name = "Boiler Bot"
-max_health = 95
+max_health = 105
 attack_damage = 9
-move_speed = 1.9
+move_speed = 1.8
 figure_motion = 6
 figure_top = 0.9
 damage_type = 5

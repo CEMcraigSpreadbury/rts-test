@@ -1,19 +1,22 @@
 class_name PowerBar
 extends VBoxContainer
-## A column under the resource bar: the local player's unlocked Ruler powers —
-## one command-card button each, in tree order, hotkeyed from
+## A column under the resource bar: the local player's unlocked faction powers —
+## one command-card button each, in buying order, hotkeyed from
 ## Main.POWER_HOTKEYS, with the same cooldown sweep a unit ability gets.
 ## Clicking (or the hotkey) arms the power; the next left-click on the ground
 ## casts it there (see Main.arm_power).
 
-## Just under the stockpile, which is one row tall (y 22-70).
+## Left edge, and the starting height before it is first lined up under the
+## stockpile (see _process).
 const BAR_POSITION: Vector2 = Vector2(26.7, 84.0)
+## Gap below the stockpile (or the starving banner under it).
+const GAP_BELOW: float = 12.0
 const SEPARATION: int = 7
 const RESEARCH_BUTTON_PATH := ^"UI/BottomBar/UtilityButtons/ResearchButton"
 
 var main: Main
 
-## [{button: Button, index: int (into the Ruler's nodes), sweep: ColorRect}]
+## [{button: Button, index: int (into the faction's powers), sweep: ColorRect}]
 var _entries: Array = []
 
 func _ready() -> void:
@@ -34,12 +37,10 @@ func _rebuild() -> void:
 		remove_child(entry["button"])
 		entry["button"].queue_free()
 	_entries.clear()
-	var ruler := Research.ruler_for(main.my_peer_id())
-	if ruler == null:
-		return
-	for index in ruler.nodes.size():
-		var node: ResearchNode = ruler.nodes[index]
-		if node.kind != ResearchNode.Kind.POWER or not main.research.my_owned.has(index):
+	var powers := Research.powers_for(main.my_peer_id())
+	for index in powers.size():
+		var node: ResearchNode = powers[index]
+		if not main.research.my_owned.has(index):
 			continue
 		var slot := _entries.size()
 		var hotkey_label: String = OS.get_keycode_string(Main.POWER_HOTKEYS[slot]) if slot < Main.POWER_HOTKEYS.size() else ""
@@ -55,6 +56,11 @@ func _rebuild() -> void:
 		_entries.append({"button": button, "index": index, "sweep": main.hud._add_cooldown_sweep(button)})
 
 func _process(_delta: float) -> void:
+	var above: Control = main.hud.stockpile
+	if main.hud._starving_banner != null and main.hud._starving_banner.visible:
+		above = main.hud._starving_banner
+	if above != null:
+		global_position.y = above.get_global_rect().end.y + GAP_BELOW
 	for entry in _entries:
 		var remaining: float = main.research.power_cooldown_remaining_fraction(entry["index"])
 		entry["button"].disabled = remaining > 0.0

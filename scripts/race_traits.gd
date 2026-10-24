@@ -21,11 +21,15 @@ extends Node
 ##                   and so does every blow against an enemy building.
 ##   Robots          Clockwork: wound up near their own buildings (+15% attack
 ##                   speed), running down over ROBOT_WIND_SECONDS away from
-##                   them (to -30%). Their upkeep is gold, not food.
+##                   them (to -30%). Their upkeep is oil, not food: spare
+##                   food pays it, then gold. They never go hungry.
 
 ## An upgrade offered at every one of its people's military buildings and
 ## applying to all of their units.
 const EVERY_KIND: int = -1
+## Regeneration waits this long after a unit last took damage, and never heals
+## a unit mid-swing.
+const REGEN_COMBAT_COOLDOWN_MS: int = 5000
 ## A Human Blacksmith line (Unit.UnitCategory-wide, through UnitUpgrades).
 const SMITHY: int = -2
 ## A Town Centre line, for villagers only (whatever builds and gathers).
@@ -213,7 +217,7 @@ const UPGRADES: Array[Dictionary] = [
 		text = "Deckhands carry 5 more and walk 10% faster.",
 		wood = 100, gold = 50, time = 30.0, effects = {carry = 5, speed = 0.1}},
 	{id = &"pir_pieces_of_eight", race = "Pirates", at = EVERY_KIND, name = "Pieces of Eight", glyph = &"gold",
-		text = "Plunder pays half as much again.",
+		text = "50% more gold from Plunder.",
 		wood = 60, gold = 120, time = 35.0, effects = {plunder = 0.1}},
 	{id = &"pir_rum_courage", race = "Pirates", at = RealmRoster.Kind.BARRACKS, name = "Rum Courage", glyph = &"bloodlust",
 		text = "Tavern crews gain 20% health.",
@@ -230,6 +234,9 @@ const UPGRADES: Array[Dictionary] = [
 	{id = &"pir_dark_juju", race = "Pirates", at = RealmRoster.Kind.SANCTUM, name = "Dark Juju", glyph = &"curse",
 		text = "Voodoo Priestesses deal 25% more damage.",
 		wood = 60, gold = 160, time = 40.0, effects = {damage = 0.25}},
+	{id = &"pir_briny_hide", race = "Pirates", at = RealmRoster.Kind.BESTIARY, name = "Briny Hide", glyph = &"hum_barding",
+		text = "Krakens gain 20% health.",
+		wood = 140, gold = 180, time = 45.0, effects = {health = 0.2}},
 
 	# --- Robots ---
 	{id = &"rob_oiled_gears", race = "Robots", at = TOWN_CENTRE, name = "Oiled Gears", glyph = &"tc_sharp_tools",
@@ -256,6 +263,9 @@ const UPGRADES: Array[Dictionary] = [
 	{id = &"rob_high_voltage", race = "Robots", at = RealmRoster.Kind.SANCTUM, name = "High Voltage", glyph = &"chain_lightning",
 		text = "Tesla Bots deal 25% more damage.",
 		wood = 60, gold = 170, time = 40.0, effects = {damage = 0.25}},
+	{id = &"rob_heavy_shells", race = "Robots", at = RealmRoster.Kind.BESTIARY, name = "Heavy Shells", glyph = &"hum_volley",
+		text = "Robo Tanks deal 25% more damage.",
+		wood = 150, gold = 200, time = 50.0, effects = {damage = 0.25}},
 ]
 
 ## On-hit effects an upgrade can hand a unit with none of its own.
@@ -454,12 +464,12 @@ func _tick_regeneration() -> void:
 	var now := GameClock.msec()
 	for node in main.units_root.get_children():
 		var unit := node as Unit
-		if unit == null or unit.race_regen + unit.lord_regen <= 0.0 or unit.status_activity == Unit.Activity.DEAD:
+		if unit == null or unit.race_regen <= 0.0 or unit.status_activity == Unit.Activity.DEAD:
 			continue
 		if unit.status_current_health >= unit.max_health or unit.status_activity == Unit.Activity.ATTACKING \
-				or now - unit.last_damaged_msec < Research.REGEN_COMBAT_COOLDOWN_MS:
+				or now - unit.last_damaged_msec < REGEN_COMBAT_COOLDOWN_MS:
 			continue
-		unit.heal(maxi(roundi((unit.race_regen + unit.lord_regen) * TICK_SECONDS), 1))
+		unit.heal(maxi(roundi(unit.race_regen * TICK_SECONDS), 1))
 
 ## Host: every robot near one of its own finished buildings is wound back up;
 ## the rest run down a second's worth.

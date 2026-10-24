@@ -7,9 +7,9 @@
 
 [node name="TinTrooper" instance=ExtResource("1_base")]
 display_name = "Tin Trooper"
-max_health = 62
+max_health = 68
 attack_damage = 5
-move_speed = 2.8
+move_speed = 2.7
 figure_top = 0.98
 figure_model = ExtResource("2_fig")
 figure_model_lod1 = ExtResource("3_fig_lod1")

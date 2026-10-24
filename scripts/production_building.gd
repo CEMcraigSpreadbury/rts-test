@@ -287,7 +287,7 @@ var _drop_tween: Tween
 var _next_squash_msec: int = 0
 var _flash_meshes: Array[MeshInstance3D] = []
 var _flash_material: StandardMaterial3D
-## A Ruler power's buff on this building (see show_buff_tint): the same kind
+## A faction power's buff on this building (see show_buff_tint): the same kind
 ## of overlay as the hit flash, faint and in the power's colour.
 const BUFF_TINT_ALPHA: float = 0.22
 var _buff_material: StandardMaterial3D = null
@@ -336,6 +336,7 @@ func _ready() -> void:
 		_show_beast_on_display.call_deferred()
 	## After the model is collected, so its meshes are never taken for the model's.
 	add_child(BuildingTorches.new(self))
+	add_child(BuildingMotion.new(self, self))
 	for particles in [placement_particles, construction_particles]:
 		if particles:
 			RoundParticle.apply(particles.draw_pass_1)
@@ -559,7 +560,7 @@ func _clear_hit_flash() -> void:
 			mesh.material_overlay = overlay
 
 ## Every peer, relayed by WorldFeedback.relay_buff_tints.
-func show_buff_tint(color: Color, seconds: float) -> void:
+func show_buff_tint(color: Color, seconds: float, _strength: float = 0.0) -> void:
 	if _flash_meshes.is_empty() or is_destroyed:
 		return
 	if _buff_material == null:
@@ -614,21 +615,9 @@ func costs_for(item: ProducibleItem) -> Array[ResourceCost]:
 	## otherwise losing them all with no food in store ends its economy.
 	if item.is_worker() and not _side_has_workers():
 		return []
-	var base: Array[ResourceCost] = item.get_costs()
-	var discount := Research.bonus(owner_peer_id, ResearchNode.Stat.COST_REDUCTION)
-	if role == Role.SHRINE and item.kind == ProducibleItem.Kind.UNIT:
-		discount += Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_COST_REDUCTION)
-	if discount <= 0.0:
-		return MatchRules.active().scaled_costs(owner_peer_id, base)
-	var result: Array[ResourceCost] = []
-	for cost in base:
-		var discounted := ResourceCost.new()
-		discounted.resource_type = cost.resource_type
-		discounted.amount = roundi(cost.amount * (1.0 - discount))
-		result.append(discounted)
-	return MatchRules.active().scaled_costs(owner_peer_id, result)
+	return MatchRules.active().scaled_costs(owner_peer_id, item.get_costs())
 
-## Host-only Ruler power effects currently on this building.
+## Host-only power effects currently on this building.
 var buffs := TimedBuffs.new()
 
 ## Host only. Never past max health.
@@ -638,15 +627,9 @@ func heal(amount: int) -> void:
 	current_health = mini(current_health + amount, max_health)
 	health_fraction = float(current_health) / float(maxi(max_health, 1))
 
-## Research (Drill Sergeants, Arcane Tutelage) plus any Industrious Age on it.
+## Its slot level's speed, plus any power's PRODUCTION_SPEED buff on it.
 func _production_speed() -> float:
-	var speed := (1.0 + buffs.amount(ResearchNode.Buff.PRODUCTION_SPEED)) * RealmRoster.train_speed(slot_race, slot_kind, slot_level)
-	match role:
-		Role.MILITARY:
-			speed += Research.bonus(owner_peer_id, ResearchNode.Stat.MILITARY_TRAIN_SPEED)
-		Role.SHRINE:
-			speed += Research.bonus(owner_peer_id, ResearchNode.Stat.MONSTER_TRAIN_SPEED)
-	return speed
+	return (1.0 + buffs.amount(ResearchNode.Buff.PRODUCTION_SPEED)) * RealmRoster.train_speed(slot_race, slot_kind, slot_level)
 
 ## The settlement this building belongs to (Realm), or null. Its production
 ## stops while the settlement is contested, and its hall offers the slots.
@@ -1129,8 +1112,7 @@ func _process(delta: float) -> void:
 
 		if not builders.is_empty():
 			construction_progress = clampf(
-				construction_progress + (builder_effort(builders.size()) / maxf(construction_time, 0.01)) \
-						* (1.0 + Research.bonus(owner_peer_id, ResearchNode.Stat.BUILD_SPEED)) * delta, 0.0, 1.0
+				construction_progress + (builder_effort(builders.size()) / maxf(construction_time, 0.01)) * delta, 0.0, 1.0
 			)
 		if construction_progress >= 1.0:
 			is_under_construction = false

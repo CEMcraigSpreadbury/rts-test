@@ -790,3 +790,342 @@ def battery_crate(b, lod):
 			geo.merge(bm, cell)
 	geo.translate(bm, b.load_centre + Vector((0.0, 0.0, -0.02)))
 	return bm
+
+
+# --- the Robo Tank (Bestiary) -------------------------------------------------
+
+TANK_SCALE = 1.6
+
+
+## The tank's road-wheel axles [(y, z), ...] before it is grown, and their radius.
+TANK_AXLES = [(-0.36, 0.13), (0.0, 0.13), (0.36, 0.13)]
+TANK_WHEEL_RADIUS = 0.13
+
+
+def _road_wheel(lod, x, y, z, r, w, side):
+	"""A chrome road wheel on a track's outer face: a black rubber rim, a
+	brass hub and three dark bolt slots, so its spin reads."""
+	from siege import _cyl_x
+	bm = geo.new_bm()
+	geo.merge(bm, _cyl_x(x - w * 0.5, x + w * 0.5, r, y, z, "leather", lod, (16, 10)))
+	geo.merge(bm, _cyl_x(x - w * 0.5 - 0.008, x + w * 0.5 + 0.008, r - 0.030, y, z, "steel", lod, (16, 10)))
+	geo.merge(bm, _cyl_x(x - w * 0.5 - 0.020, x + w * 0.5 + 0.020, r * 0.34, y, z, "brass", lod, (10, 6)))
+	face = x + side * (w * 0.5 + 0.010)
+	for k in range(3):
+		a = 2.0 * math.pi * k / 3.0
+		d = Vector((0.0, math.cos(a), math.sin(a)))
+		slot = geo.box(0.012, 0.030, 0.050, row("plate_dark"), HARD)
+		geo.merge(bm, slot, geo.frame(Vector((face, y, z)) + d * r * 0.62, d, (1.0, 0.0, 0.0)))
+	return bm
+
+
+def _track(lod, x):
+	"""One rubber track loop round its wheels, tread cleats on its top and
+	ends, a team-enamel mudguard and side skirt over it."""
+	bm = geo.new_bm()
+	half, r, w = 0.50, 0.150, 0.170
+	# A stadium loop in the YZ plane, extruded along X.
+	n = seg(lod, 8, 5)
+	outline = []
+	for i in range(n + 1):
+		a = math.pi * 0.5 + math.pi * i / n
+		outline.append((-half + math.cos(a) * r, 0.150 + math.sin(a) * r))
+	for i in range(n + 1):
+		a = -math.pi * 0.5 + math.pi * i / n
+		outline.append((half + math.cos(a) * r, 0.150 + math.sin(a) * r))
+	belt = geo.plate([(y, z) for y, z in outline], w, row("leather"), sharp=50)
+	geo.rotate(belt, 90.0, 'Z')
+	geo.translate(belt, (x, 0.0, 0.0))
+	geo.merge(bm, belt)
+	if lod == 0:
+		for k in range(9):
+			y = -half + 2.0 * half * k / 8.0
+			cleat = geo.box(w + 0.010, 0.030, 0.022, row("boot"), HARD)
+			geo.translate(cleat, (x, y, 0.300))
+			geo.merge(bm, cleat)
+	side = 1.0 if x > 0 else -1.0
+	guard = geo.box(w + 0.050, 2.0 * half + 0.200, 0.032, row("team_paint"), SMOOTH, bevel=0.012)
+	for v in guard.verts:
+		if abs(v.co.y) > half:
+			v.co.z -= (abs(v.co.y) - half) * 0.6
+	geo.translate(guard, (x, 0.0, 0.335))
+	geo.merge(bm, guard)
+	skirt = geo.box(0.022, 2.0 * half + 0.040, 0.080, row("team_paint"), SMOOTH, bevel=0.008)
+	geo.translate(skirt, (x + side * (w * 0.5 + 0.030), 0.0, 0.310))
+	geo.merge(bm, skirt)
+	return bm
+
+
+def _tank_turret(lod):
+	"""A big rounded tin head of a turret: the shared eyes in brass lamp rims
+	and a grille, a stubby fat cannon under them with a brass muzzle, a team
+	enamel band and hatch, an antenna with an amber lamp."""
+	from siege import _cyl
+	bm = geo.new_bm()
+	C = Vector((0.0, 0.020, 0.720))
+	head = geo.box(1.0, 1.0, 1.0, row("skin"), SMOOTH)
+	head = geo.subdivided(head, seg(lod, 2, 1))
+	size = Vector((0.500, 0.470, 0.330))
+	geo.fit(head, size, C)
+	for v in head.verts:
+		d = v.co - C
+		for i, h in enumerate((size.x * 0.5, size.y * 0.5, size.z * 0.5)):
+			t = d[i] / h
+			d[i] = h * math.copysign(min(1.0, abs(t) ** 0.75), t)
+		v.co = C + d
+	geo.merge(bm, head)
+	ring = geo.box(0.540, 0.510, 0.050, row("plate_dark"), SMOOTH, bevel=0.020)
+	geo.translate(ring, (0.0, 0.020, 0.560))
+	geo.merge(bm, ring)
+	band = geo.box(0.512, 0.482, 0.060, row("team_paint"), SMOOTH, bevel=0.022)
+	geo.translate(band, (0.0, 0.020, 0.640))
+	geo.merge(bm, band)
+	hatch = geo.lathe([(0.0, 0.0), (0.110, 0.0), (0.112, 0.022), (0.080, 0.040), (0.0, 0.046)], seg(lod, 14, 8),
+			row("team_paint"), sharp=50, phase=0.0)
+	geo.translate(hatch, (0.0, 0.080, C.z + size.z * 0.5 - 0.012))
+	geo.merge(bm, hatch)
+	knob = geo.ellipsoid(0.026, 0.026, 0.022, 7, 4, row("brass"), sharp=SMOOTH)
+	geo.translate(knob, (0.0, 0.080, C.z + size.z * 0.5 + 0.040))
+	geo.merge(bm, knob)
+	# The face, on the front of the turret.
+	tree = geo.bvh(head)
+
+	def place(x, z, part, lift=0.0):
+		loc, nrm = geo.project(tree, (x, -1.0, z), (0.0, 1.0, 0.0))
+		if loc is not None:
+			geo.merge(bm, part, geo.frame(loc + nrm * lift, nrm, (0.0, 0.0, 1.0)))
+
+	eye_z = C.z + 0.050
+	for side in (-1.0, 1.0):
+		place(side * 0.110, eye_z, geo.disc(0.060, 0.070, seg(lod, 12, 8), row("brass"), dome=0.006, depth=0.003))
+		place(side * 0.110, eye_z, geo.disc(0.044, 0.054, seg(lod, 10, 6), row("eye"), dome=0.008), lift=0.005)
+		if lod == 0:
+			place(side * 0.110 + 0.014, eye_z + 0.020, geo.disc(0.013, 0.013, 5, row("glint"), dome=0.002,
+					depth=0.0015, simple=True), lift=0.014)
+			place(side * 0.190, eye_z - 0.085, geo.disc(0.028, 0.016, 7, row("blush"), dome=0.001, depth=0.002,
+					simple=True))
+	# The cannon: low on the face, a stubby barrel with a fat brass muzzle.
+	mount = geo.ellipsoid(0.090, 0.060, 0.080, seg(lod, 10, 6), 4, row("plate_dark"), sharp=SMOOTH)
+	geo.translate(mount, (0.0, C.y - size.y * 0.5 + 0.010, C.z - 0.080))
+	geo.merge(bm, mount)
+	y0 = C.y - size.y * 0.5
+	geo.merge(bm, _cyl((0.0, y0, C.z - 0.080), (0.0, y0 - 0.360, C.z - 0.060), 0.052, "steel", lod, (14, 8)))
+	geo.merge(bm, geo.lathe([(0.050, 0.0), (0.078, 0.010), (0.080, 0.080), (0.062, 0.090), (0.040, 0.090),
+			(0.040, 0.050)], seg(lod, 14, 8), row("brass"), sharp=40, phase=0.0),
+			geo.frame(Vector((0.0, y0 - 0.320, C.z - 0.062)), (0.0, -1.0, 0.055), (0.0, 0.0, 1.0)))
+	bore = geo.disc(0.036, 0.036, seg(lod, 10, 6), row("mouth"), dome=-0.010, depth=0.002)
+	geo.merge(bm, bore, geo.frame(Vector((0.0, y0 - 0.411, C.z - 0.057)), (0.0, -1.0, 0.055), (0.0, 0.0, 1.0)))
+	# The antenna, back right, with its amber lamp.
+	base = Vector((0.160, C.y + 0.140, C.z + size.z * 0.5 - 0.020))
+	geo.merge(bm, geo.tube([base, base + Vector((0.010, 0.020, 0.300))], [0.012, 0.008], seg(lod, 6, 4),
+			row("steel"), sharp=SMOOTH))
+	lamp = geo.ellipsoid(0.042, 0.042, 0.042, seg(lod, 9, 6), 5, row("crystal"), sharp=SMOOTH)
+	geo.translate(lamp, base + Vector((0.010, 0.020, 0.330)))
+	geo.merge(bm, lamp)
+	cup = geo.lathe([(0.0, -0.020), (0.036, -0.020), (0.044, 0.004)], seg(lod, 9, 6), row("brass"), sharp=40,
+			phase=0.0)
+	geo.translate(cup, base + Vector((0.010, 0.020, 0.300)))
+	geo.merge(bm, cup)
+	return bm
+
+
+def robo_tank(lod, part=None):
+	"""A squat tin toy tank on two rubber tracks, chrome road wheels on their
+	faces (they spin in game), team-enamel mudguards and glacis, a big
+	rounded turret-head with the shared eyes over a stubby cannon, an antenna
+	lamp, two little ribbed robot arms waving from the hull and a brass
+	wind-up key at its back."""
+	from siege import _cyl, split_wheels
+	bm = geo.new_bm()
+	wheels = []
+	for y, z in TANK_AXLES:
+		axle = geo.new_bm()
+		for x in (-0.380, 0.380):
+			side = 1.0 if x > 0 else -1.0
+			geo.merge(axle, _road_wheel(lod, x + side * 0.100, y, z, TANK_WHEEL_RADIUS, 0.040, side))
+		wheels.append(axle)
+	for x in (-0.380, 0.380):
+		geo.merge(bm, _track(lod, x))
+	hull = geo.box(0.600, 1.040, 0.240, row("skin"), SMOOTH, bevel=0.060 if lod == 0 else 0.040, bevel_segments=2)
+	for v in hull.verts:
+		if v.co.y < -0.30 and v.co.z > 0.0:
+			v.co.y += 0.12 * (v.co.z / 0.12)
+	geo.translate(hull, (0.0, 0.020, 0.420))
+	geo.merge(bm, hull)
+	glacis = geo.box(0.440, 0.200, 0.020, row("team_paint"), SMOOTH, bevel=0.008)
+	geo.rotate(glacis, 63.0, 'X')
+	geo.translate(glacis, (0.0, -0.452, 0.426))
+	geo.merge(bm, glacis)
+	if lod == 0:
+		for x in (-0.250, 0.250):
+			for y in (-0.300, -0.050, 0.200, 0.420):
+				rivet = geo.ellipsoid(0.012, 0.012, 0.010, 5, 3, row("brass"), sharp=40)
+				geo.translate(rivet, (x, y, 0.542))
+				geo.merge(bm, rivet)
+	# Two headlamps on the glacis, either side of the cannon.
+	for side in (-1.0, 1.0):
+		lamp = geo.lathe([(0.0, 0.0), (0.040, 0.0), (0.044, 0.030), (0.0, 0.034)], seg(lod, 10, 6), row("crystal"),
+				sharp=40, phase=0.0)
+		geo.merge(bm, lamp, geo.frame(Vector((side * 0.250, -0.418, 0.470)), (0.0, -0.894, 0.447), (0.0, 0.0, 1.0)))
+	geo.merge(bm, _tank_turret(lod))
+	# Little ribbed robot arms out of the hull's front corners, mitts up.
+	for side in (-1.0, 1.0):
+		sh = Vector((side * 0.300, -0.200, 0.480))
+		el = sh + Vector((side * 0.130, -0.060, 0.060))
+		wr = el + Vector((side * 0.020, -0.090, 0.150))
+		geo.merge(bm, geo.ellipsoid(0.040, 0.040, 0.040, seg(lod, 8, 5), 4, row("plate_dark"), sharp=SMOOTH),
+				Matrix.Translation(sh))
+		for a, c in ((sh, el), (el, wr)):
+			geo.merge(bm, geo.tube([a, c], [0.024, 0.022], seg(lod, 7, 5), row("steel"), sharp=SMOOTH))
+			if lod == 0:
+				for t in (0.33, 0.66):
+					ring = geo.tube([Vector((0.0, 0.0, -0.006)), Vector((0.0, 0.0, 0.006))], [0.030, 0.030], 7,
+							row("plate_dark"), sharp=40)
+					geo.merge(bm, ring, geo.frame(a.lerp(c, t), c - a, (0.0, 0.0, 1.0)))
+		mitt = geo.ellipsoid(0.044, 0.040, 0.050, seg(lod, 8, 5), 4, row("cloth"), sharp=SMOOTH)
+		geo.translate(mitt, wr + Vector((0.0, 0.0, 0.030)))
+		geo.merge(bm, mitt)
+	# The race's brass wind-up key on the back.
+	key = geo.new_bm()
+	geo.merge(key, geo.tube([Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.110))], [0.022, 0.022], seg(lod, 6, 5),
+			row("brass"), sharp=SMOOTH))
+	for side in (-1.0, 1.0):
+		lobe = geo.lathe([(0.0, -0.016), (0.080, -0.016), (0.088, 0.0), (0.080, 0.016), (0.0, 0.016)],
+				seg(lod, 12, 8), row("brass"), sharp=50, phase=0.0, sx=0.8)
+		geo.rotate(lobe, 90.0, 'Y')
+		geo.translate(lobe, (0.0, side * 0.074, 0.140))
+		geo.merge(key, lobe)
+	geo.rotate(key, -90.0, 'X')
+	geo.translate(key, (0.0, 0.540, 0.440))
+	geo.merge(bm, key)
+	return split_wheels(bm, wheels, part, TANK_SCALE)
+
+
+# --- colossus (Colossus Drop power) -------------------------------------------
+
+COLOSSUS_SCALE = 3.1
+
+
+def colossus(lod):
+	"""The Colossus Drop's war mech: a walking tin giant on piston legs, a
+	barrel torso with a glowing reactor in the team's enamel chest plate, a
+	small tin head (the shared eyes) under a lamp antenna, rocket pods on both
+	shoulders, a ray-cannon arm and a great iron fist, twin brass stacks and
+	the race's wind-up key on its back. Built a man high and grown
+	COLOSSUS_SCALE times."""
+	import parts as _parts
+	bm = geo.new_bm()
+	# Feet: broad iron slabs, enamel toe caps.
+	for side in (-1.0, 1.0):
+		foot = geo.box(0.300, 0.440, 0.110, row("plate_dark"), SMOOTH, bevel=0.035, bevel_segments=2)
+		geo.translate(foot, (side * 0.250, -0.040, 0.055))
+		geo.merge(bm, foot)
+		toe = geo.box(0.280, 0.120, 0.090, row("team_paint"), SMOOTH, bevel=0.030, bevel_segments=2)
+		geo.translate(toe, (side * 0.250, -0.230, 0.070))
+		geo.merge(bm, toe)
+		ankle = Vector((side * 0.250, 0.0, 0.120))
+		knee = Vector((side * 0.270, -0.050, 0.520))
+		hip = Vector((side * 0.220, 0.000, 0.900))
+		geo.merge(bm, geo.tube([ankle, knee], [0.085, 0.095], seg(lod, 12, 8), row("steel"), sharp=SMOOTH))
+		geo.merge(bm, geo.tube([knee, hip], [0.115, 0.130], seg(lod, 12, 8), row("skin"), sharp=SMOOTH))
+		cop = geo.ellipsoid(0.120, 0.110, 0.110, seg(lod, 10, 7), seg(lod, 6, 4), row("plate_dark"), sharp=SMOOTH)
+		geo.translate(cop, knee + Vector((0.0, -0.030, 0.0)))
+		geo.merge(bm, cop)
+		# A piston up the back of each shin.
+		geo.merge(bm, geo.tube([ankle + Vector((0.0, 0.100, 0.020)), knee + Vector((0.0, 0.110, -0.040))],
+				[0.030, 0.030], seg(lod, 7, 5), row("brass"), sharp=SMOOTH))
+	pelvis = geo.box(0.560, 0.360, 0.180, row("plate_dark"), SMOOTH, bevel=0.050, bevel_segments=2)
+	geo.translate(pelvis, (0.0, 0.0, 0.950))
+	geo.merge(bm, pelvis)
+	# The barrel torso, its enamel chest plate and the reactor.
+	torso = geo.box(0.880, 0.600, 0.600, row("skin"), SMOOTH, bevel=0.150 if lod == 0 else 0.100, bevel_segments=3)
+	geo.translate(torso, (0.0, 0.0, 1.340))
+	geo.merge(bm, torso)
+	plate = geo.box(0.620, 0.060, 0.400, row("team_paint"), SMOOTH, bevel=0.025, bevel_segments=2)
+	geo.translate(plate, (0.0, -0.300, 1.360))
+	geo.merge(bm, plate)
+	rim = geo.lathe([(0.0, -0.020), (0.120, -0.020), (0.130, 0.0), (0.120, 0.020), (0.0, 0.020)],
+			seg(lod, 16, 10), row("brass"), sharp=50, phase=0.0)
+	geo.rotate(rim, 90.0, 'X')
+	geo.translate(rim, (0.0, -0.335, 1.370))
+	geo.merge(bm, rim)
+	core = geo.ellipsoid(0.095, 0.050, 0.095, seg(lod, 14, 9), seg(lod, 6, 4), row("crystal"), sharp=SMOOTH)
+	geo.translate(core, (0.0, -0.350, 1.370))
+	geo.merge(bm, core)
+	if lod == 0:
+		for x in (-0.270, 0.270):
+			for z in (1.200, 1.360, 1.520):
+				rivet = geo.ellipsoid(0.018, 0.014, 0.018, 6, 4, row("brass"), sharp=40)
+				geo.translate(rivet, (x, -0.332, z))
+				geo.merge(bm, rivet)
+	# The head: the race's tin box head and eyes, small on the great body.
+	b = _parts.Body()
+	head = tin_head(b, lod)
+	geo.merge(head, tin_face(b, lod, head))
+	geo.merge(head, antenna(b, lod, ball="crystal", height=0.14))
+	c = b.head_centre
+	geo.transform(head, Matrix.Translation((0.0, -0.060, 1.800)) @ Matrix.Scale(0.95, 4) @ Matrix.Translation(-c))
+	geo.merge(bm, head)
+	neck = geo.tube([Vector((0.0, -0.030, 1.620)), Vector((0.0, -0.050, 1.700))], [0.090, 0.080], seg(lod, 10, 7),
+			row("plate_dark"), sharp=SMOOTH)
+	geo.merge(bm, neck)
+	# Shoulders: a rocket pod on each, six tubes facing forward.
+	for side in (-1.0, 1.0):
+		pod = geo.box(0.300, 0.380, 0.250, row("team_paint"), SMOOTH, bevel=0.040, bevel_segments=2)
+		geo.translate(pod, (side * 0.560, 0.020, 1.720))
+		geo.merge(bm, pod)
+		for i in range(3):
+			for j in range(2):
+				tube = geo.tube([Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.030))], [0.040, 0.040], seg(lod, 8, 5),
+						row("plate_dark"), sharp=SMOOTH, cap_end=row("leather_dark"))
+				geo.merge(bm, tube, geo.frame(Vector((side * 0.560 + (i - 1) * 0.085, -0.180, 1.680 + j * 0.090)),
+						(0.0, -1.0, 0.0), (0.0, 0.0, 1.0)))
+		ball = geo.ellipsoid(0.120, 0.120, 0.120, seg(lod, 10, 7), seg(lod, 6, 4), row("plate_dark"), sharp=SMOOTH)
+		geo.translate(ball, (side * 0.500, 0.000, 1.520))
+		geo.merge(bm, ball)
+	# Arms: the left a ray cannon, the right an iron fist.
+	for side in (-1.0, 1.0):
+		sh = Vector((side * 0.540, 0.000, 1.500))
+		el = Vector((side * 0.620, -0.080, 1.180))
+		geo.merge(bm, geo.tube([sh, el], [0.085, 0.080], seg(lod, 10, 7), row("steel"), sharp=SMOOTH))
+		elbow = geo.ellipsoid(0.090, 0.090, 0.090, seg(lod, 9, 6), seg(lod, 5, 4), row("plate_dark"), sharp=SMOOTH)
+		geo.translate(elbow, el)
+		geo.merge(bm, elbow)
+		if side < 0.0:
+			muzzle = el + Vector((0.0, -0.480, 0.020))
+			geo.merge(bm, geo.tube([el, muzzle], [0.110, 0.080], seg(lod, 12, 8), row("skin"), sharp=SMOOTH))
+			for t in (0.3, 0.6):
+				ring = geo.tube([Vector((0.0, 0.0, -0.015)), Vector((0.0, 0.0, 0.015))], [0.115, 0.115], seg(lod, 12, 8),
+						row("brass"), sharp=40)
+				geo.merge(bm, ring, geo.frame(el.lerp(muzzle, t), muzzle - el, (0.0, 0.0, 1.0)))
+			lens = geo.ellipsoid(0.065, 0.040, 0.065, seg(lod, 10, 7), seg(lod, 5, 4), row("arcane"), sharp=SMOOTH)
+			geo.translate(lens, muzzle + Vector((0.0, -0.020, 0.0)))
+			geo.merge(bm, lens)
+		else:
+			wrist = el + Vector((0.040, -0.120, -0.280))
+			geo.merge(bm, geo.tube([el, wrist], [0.085, 0.095], seg(lod, 10, 7), row("skin"), sharp=SMOOTH))
+			fist = geo.box(0.230, 0.220, 0.220, row("plate_dark"), SMOOTH, bevel=0.070, bevel_segments=3)
+			geo.translate(fist, wrist + Vector((0.0, -0.030, -0.090)))
+			geo.merge(bm, fist)
+			for i in range(4):
+				knuckle = geo.ellipsoid(0.030, 0.030, 0.030, 6, 4, row("brass"), sharp=40)
+				geo.translate(knuckle, wrist + Vector((-0.075 + i * 0.050, -0.140, -0.050)))
+				geo.merge(bm, knuckle)
+	# Twin brass stacks and the wind-up key on the back.
+	for side in (-1.0, 1.0):
+		geo.merge(bm, geo.tube([Vector((side * 0.200, 0.300, 1.450)), Vector((side * 0.220, 0.330, 1.900))],
+				[0.060, 0.070], seg(lod, 10, 7), row("brass"), sharp=SMOOTH, cap_end=row("leather_dark")))
+	key = geo.new_bm()
+	geo.merge(key, geo.tube([Vector((0.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.160))], [0.035, 0.035], seg(lod, 6, 5),
+			row("brass"), sharp=SMOOTH))
+	for side in (-1.0, 1.0):
+		lobe = geo.lathe([(0.0, -0.025), (0.130, -0.025), (0.140, 0.0), (0.130, 0.025), (0.0, 0.025)],
+				seg(lod, 12, 8), row("brass"), sharp=50, phase=0.0, sx=0.8)
+		geo.rotate(lobe, 90.0, 'Y')
+		geo.translate(lobe, (0.0, side * 0.115, 0.200))
+		geo.merge(key, lobe)
+	geo.rotate(key, -90.0, 'X')
+	geo.translate(key, (0.0, 0.300, 1.250))
+	geo.merge(bm, key)
+	geo.scale(bm, COLOSSUS_SCALE, COLOSSUS_SCALE, COLOSSUS_SCALE)
+	return bm

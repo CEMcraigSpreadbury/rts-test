@@ -6,6 +6,9 @@
 [ext_resource type="Texture2D" path="res://assets/art/Models/Units/palettes/pirates.png" id="4_palette"]
 
 [node name="Captain" instance=ExtResource("1_base")]
+attack_damage = 14
+max_health = 230
+move_speed = 3.3
 display_name = "Captain"
 figure_top = 0.92
 figure_model = ExtResource("2_fig")

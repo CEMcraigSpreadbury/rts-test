@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "Orbital Lance"
+description = "A beam from orbit that follows your cursor for 6s, carving a burning trench through units and buildings."
+glyph = &"chain_lightning"
+tier = 2
+cost = 40
+cooldown = 150.0
+radius = 3.0
+telegraph = 0.8
+steerable = true
+set_piece = &"lance"
+effect_color = Color(0.45, 0.9, 1, 1)

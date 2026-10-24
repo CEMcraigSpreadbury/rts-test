@@ -14,7 +14,7 @@ signal player_connected(peer_id: int)
 ## player_data is that peer's now-removed `players` entry, passed along since
 ## by the time this fires the entry is already gone from `players` itself.
 signal player_disconnected(peer_id: int, player_data: Dictionary)
-## Fired when a player's own entry in `players` changes in place (ruler_index,
+## Fired when a player's own entry in `players` changes in place (race_index,
 ## color or ready) — lets the lobby refresh one row instead of the whole list.
 signal player_updated(peer_id: int)
 ## Fired when the lobby's chosen map changes (host picked one, or a client
@@ -57,10 +57,10 @@ const TEAM_COLORS: Array[Color] = [
 ]
 const TEAM_COLOR_NAMES: Array[String] = ["Blue", "Red", "Green", "Yellow"]
 
-## peer_id -> { "name": String, "color": Color, "ruler_index": int, "ready": bool }
+## peer_id -> { "name": String, "color": Color, "race_index": int, "ready": bool }
 ## The colour doubles as the team — players sharing one are allies (see Teams).
 ## A scenario may add an explicit "team" int, which overrides that.
-## ruler_index is a Ruler.list_all() index, or Ruler.RANDOM until the match starts.
+## race_index is a Faction.PLAYABLE index, or Faction.RANDOM until the match starts.
 ## AI players are entries here too, with "ai": true and "difficulty" (see
 ## add_ai_player) — keyed by a made-up peer id that no real connection has.
 var players: Dictionary = {}
@@ -127,7 +127,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	players.clear()
-	players[1] = {"name": "Host", "color": TEAM_COLORS[0], "ruler_index": 0, "ready": false}
+	players[1] = {"name": "Host", "color": TEAM_COLORS[0], "ready": false}
 	return OK
 
 func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
@@ -229,7 +229,7 @@ func _on_steam_lobby_created(connection: int, lobby_id: int) -> void:
 	peer.call("create_host", 0)
 	multiplayer.multiplayer_peer = peer
 	players.clear()
-	players[my_peer_id()] = {"name": Steamworks.steam_username, "color": TEAM_COLORS[0], "ruler_index": 0, "ready": false}
+	players[my_peer_id()] = {"name": Steamworks.steam_username, "color": TEAM_COLORS[0], "ready": false}
 	_quick_play_searching = false
 	steam_lobby_ready.emit(lobby_id)
 
@@ -287,7 +287,7 @@ func leave_game() -> void:
 func start_offline() -> void:
 	leave_game()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	players[1] = {"name": "You", "color": TEAM_COLORS[0], "ruler_index": 0, "ready": true}
+	players[1] = {"name": "You", "color": TEAM_COLORS[0], "ready": true}
 	## Single player has no lobby to pick these in — always the defaults
 	## rather than whatever a previous lobby left behind.
 	game_mode = GameMode.REALM
@@ -344,7 +344,7 @@ func add_ai_player(difficulty: int = AiDifficulty.NORMAL) -> int:
 	if players.size() >= MAX_PLAYERS:
 		return 0
 	var id := _free_ai_peer_id()
-	players[id] = {"name": "", "color": _first_free_color(), "ruler_index": Ruler.RANDOM, "race_index": Faction.RANDOM,
+	players[id] = {"name": "", "color": _first_free_color(), "race_index": Faction.RANDOM,
 			"ready": true, "ai": true, "difficulty": clampi(difficulty, 0, AI_DIFFICULTY_NAMES.size() - 1)}
 	_renumber_ai_players()
 	_broadcast_ai_players()
@@ -436,7 +436,7 @@ func _on_peer_connected(id: int) -> void:
 		var ai_data: Dictionary = players[id]
 		players.erase(id)
 		players[_free_ai_peer_id()] = ai_data
-	players[id] = {"name": "Player %d" % id, "color": Color.WHITE, "ruler_index": 0, "ready": false}
+	players[id] = {"name": "Player %d" % id, "color": Color.WHITE, "ready": false}
 	if is_host():
 		## Humans come first: a lobby AIs had filled drops its newest AI to
 		## make room — before the colour pick below, so the one it frees is up
@@ -462,7 +462,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 func _on_connected_ok() -> void:
 	var display_name: String = Steamworks.steam_username if (Steamworks.is_available and _steam_lobby_id != 0) else "Me"
-	players[my_peer_id()] = {"name": display_name, "color": Color.WHITE, "ruler_index": 0, "ready": false}
+	players[my_peer_id()] = {"name": display_name, "color": Color.WHITE, "ready": false}
 	connected_to_server.emit()
 	if display_name != "Me":
 		_rpc_report_identity.rpc_id(1, display_name)
@@ -480,7 +480,7 @@ func _on_server_disconnected() -> void:
 ## Lets the host learn a joining Steam player's real display name (their own
 ## peer id isn't known to the joiner ahead of time, so this can't be filled
 ## in any earlier than this) and re-broadcast it to everyone else — same
-## host-relay pattern as Ruler selection below.
+## host-relay pattern as race selection below.
 @rpc("any_peer", "call_remote", "reliable")
 func _rpc_report_identity(display_name: String) -> void:
 	if not is_host():
@@ -504,62 +504,13 @@ func _sync_player_list(current_players: Dictionary) -> void:
 	for id in current_players:
 		players[id] = current_players[id]
 
-## --- Ruler selection (lobby / single player setup) ---
-
+## --- Race selection (lobby / single player setup) ---
+##
 ## Godot's high-level multiplayer here is star-topology (every RPC actually
 ## routes through the host — a client can't reach other clients directly,
 ## the same constraint main.gd's unit-animation relay works around). So a
 ## client proposes its choice to the host, which applies it and re-broadcasts;
-## the host applies its own choice directly. `index` is a Ruler.list_all()
-## index or Ruler.RANDOM.
-func set_my_ruler(index: int) -> void:
-	if is_host():
-		_apply_ruler_change(my_peer_id(), index)
-	else:
-		_rpc_request_ruler.rpc_id(1, index)
-
-## Host-side Ruler change for an AI (a human picks their own above).
-func set_ai_ruler(peer_id: int, index: int) -> void:
-	if not is_ai(peer_id) or (multiplayer.multiplayer_peer != null and not is_host()):
-		return
-	_apply_ruler_change(peer_id, index)
-
-## Host, just before the match loads: every "Random" pick becomes a real
-## Ruler, broadcast like any other change so every peer loads the same trees.
-func resolve_random_rulers() -> void:
-	if multiplayer.multiplayer_peer != null and not is_host():
-		return
-	var count := Ruler.list_all().size()
-	if count == 0:
-		return
-	for id in players:
-		if players[id].get("ruler_index", 0) == Ruler.RANDOM:
-			_apply_ruler_change(id, randi() % count)
-	resolve_random_races()
-
-@rpc("any_peer", "call_remote", "reliable")
-func _rpc_request_ruler(index: int) -> void:
-	if is_host():
-		_apply_ruler_change(multiplayer.get_remote_sender_id(), index)
-
-func _apply_ruler_change(peer_id: int, index: int) -> void:
-	if not players.has(peer_id):
-		return
-	index = clampi(index, Ruler.RANDOM, Ruler.list_all().size() - 1)
-	players[peer_id]["ruler_index"] = index
-	player_updated.emit(peer_id)
-	if is_host():
-		_rpc_ruler_changed.rpc(peer_id, index)
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_ruler_changed(peer_id: int, index: int) -> void:
-	if players.has(peer_id):
-		players[peer_id]["ruler_index"] = index
-	player_updated.emit(peer_id)
-
-## --- Race selection (lobby / single player setup) ---
-##
-## The same host-relay shape as Ruler selection. `index` is a Faction.PLAYABLE
+## the host applies its own choice directly. `index` is a Faction.PLAYABLE
 ## index or Faction.RANDOM; a player with none plays Knights.
 
 func set_my_race(index: int) -> void:
@@ -573,8 +524,8 @@ func set_ai_race(peer_id: int, index: int) -> void:
 		return
 	_apply_race_change(peer_id, index)
 
-## Host, just before the match loads (from resolve_random_rulers): every
-## "Random" race becomes a real one.
+## Host, just before the match loads: every "Random" race becomes a real one,
+## broadcast like any other change so every peer loads the same faction.
 func resolve_random_races() -> void:
 	if multiplayer.multiplayer_peer != null and not is_host():
 		return
@@ -604,7 +555,7 @@ func _rpc_race_changed(peer_id: int, index: int) -> void:
 
 ## --- Team color selection (lobby only) ---
 ##
-## Same host-relay shape as Ruler selection above. Sharing a colour is allowed
+## Same host-relay shape as race selection above. Sharing a colour is allowed
 ## and is how team games are set up: the colour IS the team (see Teams), so two
 ## players on Blue play as allies and everyone on a different colour is the old
 ## free-for-all. Only the host sees everyone's current pick, so the host alone
@@ -719,7 +670,7 @@ func _rpc_match_settings_changed(mode: int, target: int) -> void:
 ## Quick Play can match a player with a stranger who isn't at their keyboard
 ## yet, so the host's Start button now waits for every connected player to
 ## mark themselves ready instead of being available immediately — same
-## request/relay pattern as Ruler selection above.
+## request/relay pattern as race selection above.
 
 func set_my_ready(ready: bool) -> void:
 	if is_host():

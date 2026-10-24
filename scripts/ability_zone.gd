@@ -54,7 +54,7 @@ func _tick() -> void:
 			victims.append(unit)
 	for victim in victims:
 		if is_instance_valid(victim):
-			## No caster left to credit (a Ruler power never had one, and a
+			## No caster left to credit (a faction power never had one, and a
 			## monster can die while its ground burns) — the kill still goes
 			## to the zone's owner (see Unit.power_credit_peer).
 			if not is_instance_valid(source):

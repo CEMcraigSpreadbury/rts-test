@@ -7,9 +7,9 @@
 
 [node name="Swabbie" instance=ExtResource("1_base")]
 display_name = "Swabbie"
-max_health = 50
+max_health = 45
 attack_damage = 6
-move_speed = 3.2
+move_speed = 3.3
 figure_model = ExtResource("2_fig")
 figure_model_lod1 = ExtResource("3_fig_lod1")
 figure_palette = ExtResource("4_palette")

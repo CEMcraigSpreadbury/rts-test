@@ -1,7 +1,7 @@
 class_name CampaignMenu
 extends PanelContainer
 ## The campaign screen: its missions, the chosen one's briefing, the
-## difficulty and Ruler to play it with, and Begin.
+## difficulty to play it on, and Begin.
 ##
 ## Built in code like the other menu panels; everything it shows comes from
 ## the Campaign resource and its ScenarioInfos.
@@ -16,7 +16,6 @@ var _list: ItemList
 var _mission_title: Label
 var _mission_text: Label
 var _difficulty: OptionButton
-var _ruler: RulerPicker
 var _start_button: Button
 ## Index into the campaign's missions, or -1.
 var _selected: int = -1
@@ -57,8 +56,6 @@ func _init() -> void:
 		_difficulty.add_item(difficulty_name)
 	_difficulty.select(Network.campaign_difficulty)
 	settings.add_child(_difficulty)
-	_ruler = RulerPicker.new(0)
-	settings.add_child(_ruler)
 
 	var back := UiButton.new()
 	back.text = "Back"
@@ -109,14 +106,13 @@ func _on_start_pressed() -> void:
 	var info: ScenarioInfo = _campaign.missions[_selected]
 	if _selected >= _campaign.unlocked_count() or info.scene_path.is_empty():
 		return
-	launch(info, _difficulty.selected, _ruler.selected_ruler())
+	launch(info, _difficulty.selected)
 
 ## Starts a mission. Also used by the main menu's first-launch tutorial offer,
 ## which skips this screen.
-static func launch(info: ScenarioInfo, difficulty: int, ruler_index: int) -> void:
+static func launch(info: ScenarioInfo, difficulty: int) -> void:
 	Network.start_offline()
 	Network.campaign_difficulty = difficulty
 	Network.current_scenario_id = info.id
-	Network.set_my_ruler(ruler_index)
-	Network.resolve_random_rulers()
+	Network.resolve_random_races()
 	SceneLoader.change_scene(info.scene_path)

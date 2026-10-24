@@ -17,6 +17,7 @@
 [ext_resource type="PackedScene" path="res://scenes/settlements/dark_elf_settlement.tscn" id="14_lqxo7"]
 [ext_resource type="PackedScene" path="res://scenes/objective.tscn" id="16_j527u"]
 [ext_resource type="PackedScene" path="res://scenes/settlements/beastmen_settlement.tscn" id="17_xi6sa"]
+[ext_resource type="PackedScene" path="res://scenes/shrine_objective.tscn" id="shrine"]
 [ext_resource type="PackedScene" path="res://assets/art/Trees/tree_pine_low_2.glb" id="18_3ag8d"]
 [ext_resource type="PackedScene" path="res://assets/art/Trees/tree_pine_low.glb" id="19_t3wr4"]
 [ext_resource type="PackedScene" path="res://assets/art/Props/stump_1.glb" id="20_8tlk4"]
@@ -19896,14 +19897,18 @@ transform = Transform3D(-0.79179585, 0, 0.61078584, 0, 1, 0, -0.61078584, 0, -0.
 
 [node name="Objectives" type="Node3D" parent="." unique_id=212632669]
 
-[node name="Objective1" parent="Objectives" unique_id=282376302 instance=ExtResource("16_j527u")]
+[node name="Shrine" parent="Objectives" instance=ExtResource("shrine") groups=["skirmish_only"]]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+favour_per_second = 2.0
+
+[node name="Objective1" parent="Objectives" unique_id=282376302 instance=ExtResource("16_j527u") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6933244e-28, 0)
 start_tier = 2
 
-[node name="Objective2" parent="Objectives" unique_id=1725333263 instance=ExtResource("14_lqxo7")]
+[node name="Objective2" parent="Objectives" unique_id=1725333263 instance=ExtResource("14_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -110.992004, 0.006331414, 294.4487)
 
-[node name="Objective3" parent="Objectives" unique_id=1543703486 instance=ExtResource("14_lqxo7")]
+[node name="Objective3" parent="Objectives" unique_id=1543703486 instance=ExtResource("14_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 110.99203, 0.006329832, -294.4487)
 
 [node name="Objective4" parent="Objectives" unique_id=1855684208 instance=ExtResource("17_xi6sa")]
@@ -19914,32 +19919,32 @@ start_tier = 1
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 213.21428, 0.5414768, -8.366487)
 start_tier = 1
 
-[node name="Objective6" parent="Objectives" unique_id=611935285 instance=ExtResource("16_j527u")]
+[node name="Objective6" parent="Objectives" unique_id=611935285 instance=ExtResource("16_j527u") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 101.90818, 0.4202394, 333.41214)
 start_tier = 1
 
-[node name="Objective7" parent="Objectives" unique_id=1908932531 instance=ExtResource("16_j527u")]
+[node name="Objective7" parent="Objectives" unique_id=1908932531 instance=ExtResource("16_j527u") groups=["campaign_only"]]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, -101.90815, 0.42023495, -333.41214)
 start_tier = 1
 
-[node name="Objective8" parent="Objectives" unique_id=959307302 instance=ExtResource("16_j527u")]
+[node name="Objective8" parent="Objectives" unique_id=959307302 instance=ExtResource("16_j527u") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -183.09174, -0.33672574, 335.18805)
 
-[node name="Objective9" parent="Objectives" unique_id=1427438637 instance=ExtResource("16_j527u")]
+[node name="Objective9" parent="Objectives" unique_id=1427438637 instance=ExtResource("16_j527u") groups=["campaign_only"]]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 183.09177, -0.3367202, -335.18802)
 
-[node name="Objective10" parent="Objectives" unique_id=477464848 instance=ExtResource("17_xi6sa")]
+[node name="Objective10" parent="Objectives" unique_id=477464848 instance=ExtResource("17_xi6sa") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -298.6135, 0.062865995, -87.237816)
 start_tier = 1
 
-[node name="Objective11" parent="Objectives" unique_id=446688554 instance=ExtResource("17_xi6sa")]
+[node name="Objective11" parent="Objectives" unique_id=446688554 instance=ExtResource("17_xi6sa") groups=["campaign_only"]]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 298.6135, 0.06286508, 87.23784)
 start_tier = 1
 
-[node name="Objective12" parent="Objectives" unique_id=1795036982 instance=ExtResource("14_lqxo7")]
+[node name="Objective12" parent="Objectives" unique_id=1795036982 instance=ExtResource("14_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -105.85911, 0.00085623196, 95.15378)
 
-[node name="Objective13" parent="Objectives" unique_id=2039723121 instance=ExtResource("14_lqxo7")]
+[node name="Objective13" parent="Objectives" unique_id=2039723121 instance=ExtResource("14_lqxo7") groups=["campaign_only"]]
 transform = Transform3D(-1, 0, 8.742278e-08, 0, 1, 0, -8.742278e-08, 0, -1, 105.859116, 0.00085662823, -95.15377)
 
 [node name="Scenery" type="Node3D" parent="." unique_id=661571094]

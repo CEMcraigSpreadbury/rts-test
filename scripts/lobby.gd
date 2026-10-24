@@ -221,23 +221,6 @@ func _refresh_player_list(_peer_id: int = -1) -> void:
 		ModalShell.bound(name_label, 110)
 		row.add_child(name_label)
 
-		## Your own Ruler, or — for the host — an AI's.
-		var ruler_index: int = Network.players[id].get("ruler_index", 0)
-		if id == Network.my_peer_id() or (is_ai and is_host):
-			var ruler_option := RulerPicker.new(ruler_index)
-			if is_ai:
-				ruler_option.ruler_picked.connect(func(i): Network.set_ai_ruler(id, i))
-			else:
-				ruler_option.ruler_picked.connect(Network.set_my_ruler)
-			ModalShell.bound(ruler_option, 104)
-			row.add_child(ruler_option)
-		else:
-			var ruler_label := Label.new()
-			ruler_label.text = Ruler.display_name_for(ruler_index)
-			ruler_label.clip_text = true
-			ModalShell.bound(ruler_label, 104)
-			row.add_child(ruler_label)
-
 		var swatch := ColorRect.new()
 		swatch.color = Network.players[id].get("color", Color.WHITE)
 		swatch.custom_minimum_size = Vector2(26.0, 26.0)
@@ -303,7 +286,7 @@ func _on_start_pressed() -> void:
 	Network.mark_steam_lobby_in_progress()
 	## Before the buttons lock below: each resolved pick refreshes the player
 	## list, which would otherwise re-enable Start.
-	Network.resolve_random_rulers()
+	Network.resolve_random_races()
 	start_button.disabled = true
 	map_option.disabled = true
 	_add_ai_button.disabled = true

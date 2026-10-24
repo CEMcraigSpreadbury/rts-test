@@ -100,6 +100,11 @@ var _population_used: int = 0
 var _population_cap: int = 0
 ## Realm only: food brought in less food eaten, per minute (see RealmEconomy).
 var _food_net: int = 0
+## Realm only: the local side can't feed its army, and the red banner under
+## the stockpile that says so.
+var _starving: bool = false
+var _starving_banner: PanelContainer
+var _starving_pulse: Tween
 ## The army's cards along the bottom of the screen.
 var unit_cards: UiUnitCardStrip
 
@@ -117,6 +122,7 @@ func setup() -> void:
 	ResourceStockpile.changed.connect(_on_stockpile_changed)
 	Population.changed.connect(_on_population_changed)
 	main.realm_economy.upkeep_changed.connect(_on_upkeep_changed)
+	_build_starving_banner()
 	## An unlock is granted at one building and opens buttons on another, so
 	## the selected building's own item_completed never fires for it.
 	UnitUnlocks.unlocks_changed.connect(_on_unlocks_changed)
@@ -198,9 +204,57 @@ func _on_population_changed(used: int, cap: int) -> void:
 	_population_cap = cap
 	_update_resource_label()
 
-func _on_upkeep_changed(food_per_minute: int, _gold_per_minute: int, _starving: bool, food_income: int) -> void:
+func _on_upkeep_changed(food_per_minute: int, _gold_per_minute: int, starving: bool, food_income: int) -> void:
 	_food_net = food_income - food_per_minute
+	_starving = starving
 	_update_resource_label()
+	_show_starving(starving)
+
+## Under the stockpile, in the danger red: what hunger is costing the army.
+func _build_starving_banner() -> void:
+	_starving_banner = PanelContainer.new()
+	_starving_banner.name = "StarvingBanner"
+	_starving_banner.add_theme_stylebox_override(&"panel", UiStyle.key_box(UiStyle.DANGER))
+	_starving_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_starving_banner.visible = false
+	var pad := MarginContainer.new()
+	pad.add_theme_constant_override("margin_left", UiStyle.SPACE_L)
+	pad.add_theme_constant_override("margin_right", UiStyle.SPACE_L)
+	pad.add_theme_constant_override("margin_top", UiStyle.SPACE_XS)
+	pad.add_theme_constant_override("margin_bottom", UiStyle.SPACE_XS + UiStyle.LIP)
+	_starving_banner.add_child(pad)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UiStyle.SPACE_M)
+	pad.add_child(row)
+	var title := Label.new()
+	title.text = "STARVING"
+	title.add_theme_font_override("font", UiStyle.font_display())
+	title.add_theme_font_size_override("font_size", UiStyle.SIZE_BUTTON)
+	title.add_theme_color_override("font_color", UiStyle.INK)
+	row.add_child(title)
+	var cost := Label.new()
+	cost.text = "Army −50% speed, −20% damage"
+	cost.add_theme_font_override("font", UiStyle.font_data_bold())
+	cost.add_theme_font_size_override("font_size", UiStyle.SIZE_BODY)
+	cost.add_theme_color_override("font_color", UiStyle.INK)
+	cost.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(cost)
+	main.get_node(^"UI").add_child(_starving_banner)
+	var stockpile_rect: Control = stockpile
+	_starving_banner.position = Vector2(stockpile_rect.offset_left, stockpile_rect.offset_bottom + UiStyle.SPACE_S)
+
+func _show_starving(starving: bool) -> void:
+	if _starving_banner == null or _starving_banner.visible == starving:
+		return
+	_starving_banner.visible = starving
+	if _starving_pulse != null:
+		_starving_pulse.kill()
+		_starving_pulse = null
+	_starving_banner.modulate.a = 1.0
+	if starving:
+		_starving_pulse = create_tween().set_loops()
+		_starving_pulse.tween_property(_starving_banner, "modulate:a", 0.55, 0.6)
+		_starving_pulse.tween_property(_starving_banner, "modulate:a", 1.0, 0.6)
 
 func _update_resource_label() -> void:
 	var entries: Array = []
@@ -215,6 +269,8 @@ func _update_resource_label() -> void:
 			if realm:
 				var food := _stockpile_entry(resource_type, false)
 				food["rate"] = _food_net
+				if _starving:
+					food["flash"] = true
 				entries.append(food)
 			continue
 		entries.append(_stockpile_entry(resource_type, false))

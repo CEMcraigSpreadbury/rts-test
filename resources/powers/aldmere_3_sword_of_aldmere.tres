@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "The Sword of Aldmere"
+description = "A giant sword falls from the clouds and flattens the enemy. For 60s your units near it hit harder, armour up and heal."
+glyph = &"army_of_legend"
+tier = 3
+cost = 70
+cooldown = 240.0
+radius = 10.0
+telegraph = 2.0
+set_piece = &"sword"
+buffs = {2: 2.0, 4: 0.25}
+effect_color = Color(1, 0.86, 0.4, 1)

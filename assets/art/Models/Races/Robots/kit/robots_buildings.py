@@ -125,27 +125,32 @@ def tin_door(frame, w=0.62, h=0.95):
 		box((0.22, 0.03, 0.03), (0, -0.1, h * 0.55), 'Gold', rot=(0, a, 0), bevel=0.005, matrix=frame)
 
 
-def gear(r, frame, teeth=10, mat='Gold', depth=0.08):
-	"""A brass cog flat on a wall (frame faces out along -Y)."""
-	cylinder(r, depth, (0, -depth / 2, 0), mat, verts=24, rot=(90, 0, 0), bevel=0.02, matrix=frame)
-	for k in range(teeth):
-		a = 360.0 * k / teeth
-		f = frame @ Matrix.Rotation(math.radians(a), 4, 'Y')
-		box((r * 0.32, depth, r * 0.32), (0, -depth / 2, r + r * 0.1), mat, bevel=0.02, segments=2, matrix=f)
-	cylinder(r * 0.3, depth + 0.04, (0, -depth / 2 - 0.02, 0), 'TinDark', verts=12, rot=(90, 0, 0), bevel=0.01,
-			matrix=frame)
+def gear(r, frame, teeth=10, mat='Gold', depth=0.08, spin=None, clockwise=True):
+	"""A brass cog flat on a wall (frame faces out along -Y); `spin` names it
+	as a moving part (common.moving) turning on its hub."""
+	axis = frame.to_3x3() @ Vector((0, -1 if clockwise else 1, 0))
+	with moving(spin, frame.translation, axis):
+		cylinder(r, depth, (0, -depth / 2, 0), mat, verts=24, rot=(90, 0, 0), bevel=0.02, matrix=frame)
+		for k in range(teeth):
+			a = 360.0 * k / teeth
+			f = frame @ Matrix.Rotation(math.radians(a), 4, 'Y')
+			box((r * 0.32, depth, r * 0.32), (0, -depth / 2, r + r * 0.1), mat, bevel=0.02, segments=2, matrix=f)
+		cylinder(r * 0.3, depth + 0.04, (0, -depth / 2 - 0.02, 0), 'TinDark', verts=12, rot=(90, 0, 0), bevel=0.01,
+				matrix=frame)
 
 
-def wind_key(x, y, z, size=1.0, rot=0.0):
-	"""A giant brass wind-up key standing up out of a roof."""
+def wind_key(x, y, z, size=1.0, rot=0.0, spin=None):
+	"""A giant brass wind-up key standing up out of a roof; `spin` names it as
+	a moving part (common.moving) turning on its shaft."""
 	s = size
 	f = _t(x, y, z) @ _rz(rot)
-	cylinder(0.08 * s, 0.5 * s, (0, 0, 0.25 * s), 'Gold', verts=10, bevel=0.01, matrix=f)
-	cylinder(0.16 * s, 0.08 * s, (0, 0, 0.06 * s), 'Gold', verts=12, bevel=0.02, matrix=f)
-	for side in (-1, 1):
-		torus(0.24 * s, 0.09 * s, (side * 0.26 * s, 0, 0.62 * s), 'Gold', rot=(90, 0, 0), matrix=f)
-		cylinder(0.2 * s, 0.1 * s, (side * 0.26 * s, 0, 0.62 * s), 'Gold', verts=14, rot=(90, 0, 0), bevel=0.02,
-				matrix=f)
+	with moving(spin, (x, y, z)):
+		cylinder(0.08 * s, 0.5 * s, (0, 0, 0.25 * s), 'Gold', verts=10, bevel=0.01, matrix=f)
+		cylinder(0.16 * s, 0.08 * s, (0, 0, 0.06 * s), 'Gold', verts=12, bevel=0.02, matrix=f)
+		for side in (-1, 1):
+			torus(0.24 * s, 0.09 * s, (side * 0.26 * s, 0, 0.62 * s), 'Gold', rot=(90, 0, 0), matrix=f)
+			cylinder(0.2 * s, 0.1 * s, (side * 0.26 * s, 0, 0.62 * s), 'Gold', verts=14, rot=(90, 0, 0), bevel=0.02,
+					matrix=f)
 
 
 def stack(x, y, z0, top, r=0.18):
@@ -156,11 +161,14 @@ def stack(x, y, z0, top, r=0.18):
 	cylinder(r + 0.08, 0.14, (x, y, top + 0.05), 'Black', verts=12, radius2=r + 0.02, bevel=0.02)
 
 
-def antenna(x, y, z, h=0.9, ball='TeamColor'):
-	cylinder(0.035, h, (x, y, z + h / 2), 'TinLight', verts=8, bevel=0.0)
-	for k in range(3):
-		torus(0.08 - k * 0.015, 0.02, (x, y, z + h * (0.3 + k * 0.2)), 'Gold')
-	sphere(0.12, (x, y, z + h + 0.08), ball)
+def antenna(x, y, z, h=0.9, ball='TeamColor', wobble=None):
+	"""A springy aerial; `wobble` names it as a moving part (common.moving)
+	rocking side to side on its foot."""
+	with moving(wobble, (x, y, z), (1, 0, 0)):
+		cylinder(0.035, h, (x, y, z + h / 2), 'TinLight', verts=8, bevel=0.0)
+		for k in range(3):
+			torus(0.08 - k * 0.015, 0.02, (x, y, z + h * (0.3 + k * 0.2)), 'Gold')
+		sphere(0.12, (x, y, z + h + 0.08), ball)
 
 
 def pipe(points, r=0.07, mat='TinDark'):
@@ -222,7 +230,7 @@ def town_centre():
 	# The Central Core: a great tin drum with a team dome and a giant key.
 	drum(1.45, PZ, 2.5)
 	dome(1.5, 0, 0, 2.5, squash=0.6)
-	wind_key(0, 0, 3.3, size=1.0)
+	wind_key(0, 0, 3.3, size=1.0, spin='anim_spin_40_key')
 	for a in (-50, 50, 180):
 		f = _rz(a) @ _t(0, -1.48, 1.45) @ _rz(0)
 		lamp_window(f, r=0.2)
@@ -232,8 +240,10 @@ def town_centre():
 	for side in (-1, 1):
 		tin_box(0.55, 0.55, PZ, 2.0, cx=side * 1.55, cy=0.6, mat='Enamel')
 		box((1.2, 1.2, 0.18), (side * 1.55, 0.6, 2.05), 'TeamColor', bevel=0.06)
-		gear(0.38, face(side * 1.55, 0.04, 1.2, '-y'), teeth=9)
-		antenna(side * 1.55, 0.6, 2.14, h=0.8 if side < 0 else 1.1, ball='Lamp' if side < 0 else 'TeamColor')
+		gear(0.38, face(side * 1.55, 0.04, 1.2, '-y'), teeth=9, spin='anim_spin_60_gear%d' % (side > 0),
+				clockwise=side < 0)
+		antenna(side * 1.55, 0.6, 2.14, h=0.8 if side < 0 else 1.1, ball='Lamp' if side < 0 else 'TeamColor',
+				wobble='anim_sway_7_%d_antenna%d' % (11 if side < 0 else 14, side > 0))
 	stack(1.2, 1.3, 1.0, 3.4)
 	pipe([(1.2, 1.3, 1.6), (0.8, 1.1, 1.6), (0.8, 0.9, 2.0)])
 	for x in (-1.7, 1.7):
@@ -591,12 +601,83 @@ def charge_pad():
 	export('ChargePad')
 
 
+def telepad():
+	"""The Telepad: a round tin platform glowing violet, ringed by three tesla
+	coils that hold a spinning brass halo over it. Two are linked in the game
+	and robots stepping on one come out of the other."""
+	new_scene(68)
+	plate(1.9, 1.9)
+	drum(1.45, PZ, PZ + 0.32, mat='TinDark', band='Hazard')
+	cylinder(1.12, 0.06, (0, 0, PZ + 0.35), 'Volt', verts=32, bevel=0.01)
+	torus(1.18, 0.07, (0, 0, PZ + 0.37), 'Gold')
+	for r in (0.75, 0.38):
+		torus(r, 0.035, (0, 0, PZ + 0.39), 'TinLight')
+	top = 2.0
+	for k in range(3):
+		a = math.radians(90 + k * 120)
+		x, y = math.cos(a) * 1.62, math.sin(a) * 1.62
+		coil(x, y, PZ, top, r=0.24)
+		pipe([(x * 0.93, y * 0.93, PZ + 0.2), (x * 0.82, y * 0.82, PZ + 0.2)], r=0.06)
+	with moving('anim_spin_45_halo', (0, 0, PZ + top + 0.1)):
+		torus(1.3, 0.06, (0, 0, PZ + top + 0.1), 'Gold')
+		for k in range(6):
+			a = math.radians(30 + k * 60)
+			sphere(0.1, (math.cos(a) * 1.3, math.sin(a) * 1.3, PZ + top + 0.1), 'Volt')
+	for side in ('-x', '+x'):
+		f = face(1.9 if side == '+x' else -1.9, 0, PZ + 0.0, side)
+		hazard_sign(f @ _t(0, -0.06, 0.05), w=0.42)
+	export('Telepad')
+
+
+def bestiary():
+	new_scene(69)
+	# The Tank Depot: a control booth beside a hazard-ringed test pad under a
+	# yellow gantry crane, its hook and a robot arm hanging over the pad. The
+	# pad's top is the cage floor the tank stands on.
+	plate(2.2, 1.15)
+	GX, FZ = 0.95, PZ + 0.1
+	drum(1.0, PZ, FZ, cx=GX, mat='TinDark', band='Hazard', verts=24)
+	for r in (0.7, 0.35):
+		torus(r, 0.03, (GX, 0, FZ + 0.01), 'TinLight')
+	TOP = 2.1
+	for sx in (-1, 1):
+		for sy in (-1, 1):
+			box((0.14, 0.14, TOP - PZ), (GX + sx * 1.05, sy * 0.9, (TOP + PZ) / 2), 'Hazard', bevel=0.03)
+		box((0.16, 1.96, 0.18), (GX + sx * 1.05, 0, TOP), 'Hazard', bevel=0.04)
+		for sy in (-1, 1):
+			box((0.05, 0.05, 0.9), (GX + sx * 1.05, sy * 0.45, TOP - 0.45), 'Hazard', rot=(sy * 45, 0, 0), bevel=0.0)
+	box((2.3, 0.2, 0.2), (GX, 0, TOP + 0.12), 'TinDark', bevel=0.04)
+	box((0.36, 0.36, 0.26), (GX - 0.45, 0, TOP - 0.05), 'Orange', bevel=0.06)
+	cylinder(0.015, 0.4, (GX - 0.45, 0, TOP - 0.38), 'Black', verts=4, bevel=0.0)
+	torus(0.08, 0.025, (GX - 0.45, 0, TOP - 0.62), 'Gold', rot=(90, 0, 0))
+	# A two-link robot arm folded down from the beam.
+	sphere(0.12, (GX + 0.55, 0, TOP - 0.02), 'TinLight')
+	box((0.12, 0.12, 0.6), (GX + 0.65, 0, TOP - 0.3), 'TeamColor', rot=(0, 20, 0), bevel=0.04)
+	sphere(0.09, (GX + 0.75, 0, TOP - 0.58), 'TinLight')
+	box((0.1, 0.1, 0.4), (GX + 0.68, 0, TOP - 0.76), 'TeamColor', rot=(0, -25, 0), bevel=0.035)
+	for side in (-1, 1):
+		box((0.04, 0.12, 0.16), (GX + 0.6 + side * 0.06, 0, TOP - 0.98), 'Gold', bevel=0.015)
+	# The booth: a tin box, a team roof, a lamp window on the pad.
+	CX = -1.3
+	tin_box(0.7, 0.75, PZ, 1.5, cx=CX, cy=0.1)
+	box((1.6, 1.7, 0.14), (CX, 0.1, 1.55), 'TeamColor', bevel=0.05)
+	tin_door(face(CX - 0.15, -0.69, PZ, '-y'), w=0.5, h=0.85)
+	lamp_window(face(CX + 0.74, 0.1, 1.0, '+x'), r=0.18)
+	dial(face(CX + 0.35, -0.69, 1.05, '-y'), r=0.14)
+	antenna(CX - 0.3, 0.4, 1.62, h=0.6, ball='Lamp')
+	wind_key(CX + 0.3, 0.4, 1.62, size=0.6)
+	bolt_crate(-0.25, -0.85, PZ, 0.34, 15)
+	bolt_crate(-0.2, -0.82, PZ + 0.34, 0.26, -10)
+	oil_can(-2.05, -0.8, PZ)
+	export('Bestiary', extras=(spot('BeastSpot', (GX, 0, FZ), 1.85),))
+
+
 BUILDINGS = {
 	'TownCentre': town_centre, 'House': house, 'Barracks': barracks, 'ArcheryRange': archery_range,
 	'Stables': stables, 'ArcaneSanctum': arcane_sanctum, 'SiegeWorkshop': siege_workshop,
 	'Blacksmith': blacksmith, 'Library': library, 'Mill': mill, 'Mine': mine, 'Storehouse': storehouse,
 	'Watchtower': watchtower, 'WallSegment': wall_segment, 'WallCorner': wall_corner, 'WallGate': wall_gate,
-	'ChargePad': charge_pad,
+	'ChargePad': charge_pad, 'Telepad': telepad, 'Bestiary': bestiary,
 }
 
 if __name__ == '__main__':

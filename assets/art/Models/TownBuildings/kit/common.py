@@ -9,6 +9,7 @@
 # Blender is Z up with a building's front facing -Y, which exports to Godot +Z.
 # A building script does `from common import *`, builds, then export(name).
 import bpy, bmesh, sys, os, math, random
+from contextlib import contextmanager
 from mathutils import Matrix, Vector
 
 KIT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -35,6 +36,8 @@ GLOSSY = ('Gold', 'GoldDeep', 'Iron', 'IronDark', 'Orb', 'Arcane')
 
 MATS = {}
 PARTS = []
+# The moving parts: (node name, pivot empty, its parts) for each, see moving().
+ANIMS = []
 # The plinth top every building stands on.
 PZ = 0.3
 
@@ -52,6 +55,7 @@ def new_scene(seed=7):
 	bpy.ops.wm.read_factory_settings(use_empty=True)
 	MATS.clear()
 	PARTS.clear()
+	ANIMS.clear()
 
 
 def mat(name):
@@ -401,11 +405,34 @@ def quoins(x, y, z0, z1, size=0.3):
 		box((sx, sy, step - 0.04), (x, y, z0 + step * (k + 0.5)), 'StoneDark' if k % 3 == 1 else 'Stone', bevel=0.05)
 
 
-def flag(x, y, z_base, pole):
+def flag(x, y, z_base, pole, wave=None):
+	"""A pole and its team flag; `wave` names the flag as a moving part
+	(see moving()) that swings about the pole."""
 	cylinder(0.045, pole, (x, y, z_base + pole / 2), 'Wood', verts=8, bevel=0.0)
 	sphere(0.07, (x, y, z_base + pole + 0.04), 'Gold')
-	box((0.5, 0.04, 0.32), (x + 0.27, y, z_base + pole - 0.2), 'TeamColor', bevel=0.015)
-	box((0.1, 0.045, 0.32), (x + 0.47, y, z_base + pole - 0.2), 'TeamColorDark', bevel=0.015)
+	with moving(wave, (x, y, z_base + pole - 0.2)):
+		box((0.5, 0.04, 0.32), (x + 0.27, y, z_base + pole - 0.2), 'TeamColor', bevel=0.015)
+		box((0.1, 0.045, 0.32), (x + 0.47, y, z_base + pole - 0.2), 'TeamColorDark', bevel=0.015)
+
+
+@contextmanager
+def moving(name, pivot, axis=(0, 0, 1)):
+	"""Parts made inside are exported apart from the building, joined into a
+	node of their own called `name`, which the game animates by it (see
+	scripts/building_motion.gd): anim_spin_<degrees a second>_<id>, or
+	anim_sway_<degrees either way>_<tenths of a second a swing>_<id>. Its
+	origin is `pivot` and its own Z (Godot's Y) is `axis`, what it turns about.
+	A name of None leaves the parts in the building."""
+	if name is None:
+		yield None
+		return
+	empty = bpy.data.objects.new(name + '.pivot', None)
+	bpy.context.scene.collection.objects.link(empty)
+	turn = Vector((0, 0, 1)).rotation_difference(Vector(axis)).to_matrix().to_4x4()
+	empty.matrix_world = Matrix.Translation(pivot) @ turn
+	start = len(PARTS)
+	yield empty
+	ANIMS.append((name, empty, PARTS[start:]))
 
 
 # --- props ------------------------------------------------------------------
@@ -445,20 +472,48 @@ def fence(x0, y0, x1, y1, z=0.0, h=0.55):
 
 
 # --- export -----------------------------------------------------------------
-def export(name):
+def _join(objs, name):
+	bpy.ops.object.select_all(action='DESELECT')
+	for obj in objs:
+		obj.select_set(True)
+	bpy.context.view_layer.objects.active = objs[0]
+	bpy.ops.object.join()
+	joined = bpy.context.active_object
+	joined.name = name
+	joined.data.name = name
+	return joined
+
+
+def export(name, extras=()):
+	"""`extras`: empties exported beside the mesh (a Bestiary's BeastSpot)."""
 	for obj in PARTS:
 		bpy.context.view_layer.objects.active = obj
 		for mod in list(obj.modifiers):
 			bpy.ops.object.modifier_apply(modifier=mod.name)
-	bpy.ops.object.select_all(action='DESELECT')
-	for obj in PARTS:
-		obj.select_set(True)
-	bpy.context.view_layer.objects.active = PARTS[0]
-	bpy.ops.object.join()
-	keep = bpy.context.active_object
-	keep.name = name
-	keep.data.name = name
+	moved = [obj for _, _, parts in ANIMS for obj in parts]
+	keep = _join([obj for obj in PARTS if obj not in moved], name)
 	bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+	nodes = [keep]
+	# Each moving part about its pivot, the pivot's turn left on the node.
+	for node_name, pivot, parts in ANIMS:
+		part = _join(parts, node_name)
+		part.data.transform(pivot.matrix_world.inverted() @ part.matrix_world)
+		part.matrix_world = pivot.matrix_world
+		nodes.append(part)
+	bpy.ops.object.select_all(action='DESELECT')
+	for node in list(nodes) + list(extras):
+		node.select_set(True)
 	out = out_path(name)
-	print('BUILT', name, 'faces', len(keep.data.polygons), 'dims', tuple(round(d, 2) for d in keep.dimensions), '->', out)
+	print('BUILT', name, 'faces', len(keep.data.polygons), 'dims', tuple(round(d, 2) for d in keep.dimensions),
+			'moving', [node.name for node in nodes[1:]], '->', out)
 	bpy.ops.export_scene.gltf(filepath=out, export_format='GLB', use_selection=True)
+
+
+def spot(name, loc, scale):
+	"""An empty for export(extras=...): a Bestiary's BeastSpot marks the cage
+	floor's centre, scaled to the cage's width."""
+	e = bpy.data.objects.new(name, None)
+	bpy.context.scene.collection.objects.link(e)
+	e.location = loc
+	e.scale = (scale, scale, scale)
+	return e

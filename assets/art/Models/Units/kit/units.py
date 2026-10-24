@@ -747,6 +747,26 @@ def fox_animal(lod, base=False):
 
 # --- bestiary beasts ---------------------------------------------------------
 
+def kraken(lod, base=False):
+	"""Kraken (Pirates): a coral kraken crawling on its tentacles, two raised
+	to strike, the team's bandana and Jolly Roger (see beasts.py)."""
+	b = parts.Body()
+	return _assemble(b, [beasts.kraken(b, lod)], lod, base)
+
+
+def colossus(lod, base=False):
+	"""Colossus (the Robots' Colossus Drop power): a towering tin war mech on
+	piston legs, rocket pods, a ray-cannon arm and an iron fist (see
+	robots.py)."""
+	return robots.colossus(lod)
+
+
+def robo_tank(lod, base=False, part=None):
+	"""Robo Tank (Robots): a tin toy tank on rubber tracks, a turret-head with
+	the shared eyes over a stubby cannon, team-enamel panels (see robots.py)."""
+	return robots.robo_tank(lod, part)
+
+
 def griffin(lod, base=False):
 	"""Griffin (Aldmere): an eagle-headed lion with raised wings, the team's
 	saddle cloth and breast collar (see beasts.py)."""
@@ -1544,6 +1564,12 @@ UNITS = {
 			portrait_distance=2.4, ready=True),
 	"RobotRocket": dict(_MOUNTED, palette="robots", build=robot_rocket, portrait=(0.0, 0.0, 0.90),
 			portrait_distance=9.0, ready=True),
+	"Kraken": dict(_MOUNTED, palette="pirates", build=kraken, portrait=(0.0, -0.30, 0.90),
+			portrait_distance=5.2, ready=True),
+	"RoboTank": dict(_MOUNTED, palette="robots", build=robo_tank, portrait=(0.0, -0.20, 1.05),
+			portrait_distance=5.0, ready=True),
+	"Colossus": dict(_MOUNTED, palette="robots", build=colossus, portrait=(0.0, -0.20, 5.40),
+			portrait_distance=14.0, ready=True),
 }
 
 
@@ -1563,3 +1589,4 @@ _parts("Ballista", UNITS["Ballista"], len(siege.BALLISTA_AXLES))
 _parts("MagicCannon", UNITS["MagicCannon"], len(siege.CANNON_AXLES))
 _parts("PirateCannon", UNITS["PirateCannon"], len(pirates.CART_AXLES))
 _parts("RobotRocket", UNITS["RobotRocket"], len(robots.WAGON_AXLES))
+_parts("RoboTank", UNITS["RoboTank"], len(robots.TANK_AXLES))

@@ -2,8 +2,7 @@ class_name Faction
 extends Resource
 ## What a player can build/produce and what they start the match with: one
 ## per playable people, picked per player in the lobby / single player setup
-## (Network.players "race_index", see PLAYABLE). The Ruler is picked on top
-## of it and is the same for every people.
+## (Network.players "race_index", see PLAYABLE).
 
 ## The playable peoples in race_index order: Knights first, so a player who
 ## never picked (a scenario, the campaign, an old lobby) plays it.
@@ -31,6 +30,8 @@ const RANDOM: int = -1
 ## Spawned at each of a map's PlayerSpawnPoint unit markers, in order.
 ## Usually two entries (Villager equivalent).
 @export var starting_units: Array[PackedScene] = []
+## Its three powers in the Research panel, bought in this order (see Research).
+@export var powers: Array[ResearchNode] = []
 
 static var _all: Array[Faction] = []
 

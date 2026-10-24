@@ -4,7 +4,7 @@ extends RefCounted
 ## side may build or train, how far its research goes, its population cap.
 ## An ordinary skirmish uses the defaults, which change nothing.
 ##
-## Reached statically (MatchRules.active()) the way Research.bonus and Teams
+## Reached statically (MatchRules.active()) the way Research.powers_for and Teams
 ## are, because the things that ask — a Shrine rolling its monsters, a
 ## building pricing an item — run during _ready, before Main has finished
 ## setting itself up. Main clears `current` as each match loads and a

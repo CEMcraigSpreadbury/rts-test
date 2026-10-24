@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ResearchNode" format=3]
+
+[ext_resource type="Script" path="res://scripts/research_node.gd" id="1_node"]
+
+[resource]
+script = ExtResource("1_node")
+node_name = "Cursed Treasure"
+description = "A glittering chest no enemy nearby can resist. They crowd in, and it blows them sky-high."
+glyph = &"gold"
+tier = 1
+cost = 20
+cooldown = 90.0
+radius = 6.5
+set_piece = &"treasure"
+effect_color = Color(1, 0.75, 0.2, 1)
